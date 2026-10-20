@@ -30,3 +30,6 @@ frontend/bundle-size.json
 
 # Local planning notes
 docs/superpowers/plans/
+
+# AI Coach provider credential cache (live refresh token)
+coach-auth/
