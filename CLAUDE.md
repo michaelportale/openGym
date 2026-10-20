@@ -6,31 +6,31 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 openGym is a self-hosted gym & body-weight tracker PWA. Two containers (`api` + `web`) plus a
 `./data` folder the user owns — no third-party account, no telemetry. Passkey (WebAuthn) login,
-installable as a home-screen app, optional Capacitor shells for standalone Android/iOS builds.
+installable as a home-screen app (PWA).
+This is a personal fork; the upstream Capacitor native shells (frontend/android, frontend/ios)
+have been removed, though the `@capacitor/*` deps and `lib/mobile.js` gating remain.
 License: AGPL-3.0-or-later.
 
 ## Project layout
 
 ```
 frontend/  React 19 + Vite app (src/views, src/components, src/store, src/lib). Builds to static files.
-           android/ + ios/ are the Capacitor shells for the standalone mobile app (docs/MOBILE.md).
 api/       backend — server.js (Node, no framework), deps: @simplewebauthn/server, web-push.
            coach/ is the optional AI coach; openapi.yaml documents every route.
 web/       multi-stage Dockerfile (builds frontend → nginx) + nginx.conf.template (serves app, proxies /api).
 mcp/       optional MCP server — read-only stdio bridge exposing a user's workouts/1RM/muscle
            balance to LLM clients (Claude Desktop, Cursor…). Not part of the Docker build; only
            runs when an LLM client spawns it.
-media/     exercise img/gif, gitignored, fetched at runtime by the `media` compose service.
-website/   static project site (plain HTML/CSS/JS), deployed separately.
-kubernetes/ example manifests (docs/SELF_HOSTING_KUBERNETES.md).
-docs/      guides indexed in docs/README.md (FAQ, SELF_HOSTING*, MOBILE, AI_COACH, DATA_IMPORTS, API);
+catalogue/ exercise dataset; catalogue/media/ holds the exercise animations (licensed separately,
+           see catalogue/media/NOTICE.md), copied into the web image at build time.
+docs/      guides indexed in docs/README.md (FAQ, SELF_HOSTING*, AI_COACH, DATA_IMPORTS, API);
            docs/dev/ holds feature design notes (SET_TYPES: drop sets/rest-pause, LIST_VIEW, COMBINE_ROUTINES).
 ```
 
 ## Commands
 
 ```bash
-# Local stack (api + web + media, prebuilt or built from source)
+# Local stack (api + web), built from source
 cp .env.example .env
 docker compose up -d --build
 
@@ -49,19 +49,16 @@ cd mcp && npm test
 
 # Production build
 cd frontend && npm run build
-cd frontend && npm run build:mobile   # + cap sync, points media at the CDN dataset
 ```
 
 There is no linter/formatter configured (no ESLint/Prettier config in the repo) and no
 TypeScript — match the existing style by hand.
 
-GitHub (`github.com/DuarteSantos8/openGym`) is the home of the project; `.github/workflows/mirror.yml`
-pushes `main` and `v*` tags to the GitLab mirror. Pull requests are gated by
-`.github/workflows/test.yml` on Node 22 — the same version as `web/Dockerfile` / `api/Dockerfile`
-(`node:22-alpine`): the frontend, api and MCP suites, the locale checks, and building and booting
-both api image targets. GitLab CI on the mirror (`.gitlab-ci.yml`) builds the release artifacts:
-the signed Android APK, the multi-arch images and the SBOMs. Never push or merge on GitLab
-directly; the mirror is fast-forward only.
+Upstream is `github.com/DuarteSantos8/openGym`; this repo is a personal fork
+(`michaelportale/openGym`). `.github/workflows/test.yml` describes the checks on Node 22 — the same
+version as `web/Dockerfile` / `api/Dockerfile` (`node:22-alpine`): the frontend, api and MCP suites,
+the locale checks, and building and booting both api image targets. Actions are disabled on the
+fork, so run the suites locally before merging.
 
 ## Architecture
 
@@ -82,16 +79,16 @@ directly; the mirror is fast-forward only.
   - `workout-model.js`, `supersetFlow.js` — in-session workout state machine, incl. supersets.
   - `exercises.js` / `exercises-data.js` — the exercise library (1,324 built-ins + user-defined).
   - `api.js` — the only place that talks to the backend (`fetch` wrapper, session cookie flows).
-  - CONTRIBUTING.md is explicit: **anything that decides what you lift next, or reads a logged
+  - Upstream's rule: **anything that decides what you lift next, or reads a logged
     session back, is a pure helper here with a unit test beside it** — not verifiable by
     clicking, and the progression engine has already had two bugs that only a test caught.
 - **`views/`** — one file per screen (Home, Workout, Plan, Library, Stats, History, Settings,
   Admin, Login, RoutineEdit), routed by `react-router-dom` from `App.jsx`.
 - **`components/`** — shared UI (charts, modals, timers); `instr/` holds per-language exercise
   instruction text; `locales/` is the i18n string catalogue (`lib/i18n.js` / `i18n-core.js`).
-- Mobile: `@capacitor/*` wraps the same web build into native shells under `frontend/android` and
-  `frontend/ios` (see `docs/MOBILE.md`); `mobile.js` in `lib/` gates native-only behavior (file
-  persistence, local notifications, wake lock) behind a `MOBILE` flag.
+- Mobile: the app is used as an installed PWA. The upstream Capacitor shells are removed from this
+  fork; `mobile.js` in `lib/` still gates native-only behavior (file persistence, local
+  notifications, wake lock) behind a `MOBILE` flag that is off in the web build.
 
 ### API (`api/server.js`)
 
@@ -127,16 +124,16 @@ notification code; it documents the exact env-var contract (`RP_ID`, `ORIGIN`, `
 
 ### Docker / deploy
 
-`docker-compose.yml` has three services: `media` (one-shot exercise-asset downloader, gitignored
-output), `api`, `web` (multi-stage build of `frontend/` served by nginx, which also proxies
-`/api` → `api` and serves the shared media volume — single origin, required for passkeys).
+`docker-compose.yml` has two services: `api` and `web` (multi-stage build of `frontend/` served by
+nginx, which also proxies `/api` → `api` and serves the exercise animations from
+`catalogue/media/`, baked into the image — single origin, required for passkeys).
 `web/nginx.conf.template` is rendered from env vars at container start (`NGINX_PORT`, `BACKEND`,
 `PORT`), so host/port remapping works against prebuilt images without a rebuild.
 
-## Guidelines from CONTRIBUTING.md worth knowing before changing code
+## Guidelines (from upstream) worth knowing before changing code
 
 - **Dependency-light is a hard constraint, not a preference.** Frontend: React + Router + Zustand
   and nothing else. `api/`: two dependencies total. New dependencies are a hard sell either side.
-- Don't commit `media/` or `data/` (gitignored).
+- Don't commit `data/`, `.env` or `coach-auth/` (gitignored).
 - Training-logic changes (progression, 1RM, session read-back) need a unit test in `src/lib`
   beside the code, not just manual clicking-through.
