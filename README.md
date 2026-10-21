@@ -10,8 +10,9 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-Then open http://localhost:8080. Settings such as the port, `RP_ID` and `ORIGIN` live in `.env`;
-see `.env.example` for the full list.
+Then open http://localhost:8080. By default the app only listens on localhost
+(`WEB_PORT=127.0.0.1:8080`); keep that unless you mean to expose it on your network. Settings
+such as the port, `RP_ID` and `ORIGIN` live in `.env`; see `.env.example` for the full list.
 
 Use `--build` so Compose builds the images from this repo instead of pulling the upstream ones.
 
