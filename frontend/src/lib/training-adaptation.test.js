@@ -241,3 +241,27 @@ it('uses the exact acceptance day for unknown timing even when startsOn names an
   expect(p.creditedKinds).toEqual([])
   expect(p.shortfalls).toContainEqual({code:'unknown-cycle',sessions:1})
 })
+
+it('reviews and accepts the real tomorrow pass created by refill without crediting the just-finished pass',async()=>{
+  const {effectiveRoutineIds}=await import('./history.js')
+  const s=fixture(),last=s.workouts.at(-1)
+  last.d=today;last.start=ts(today);last.end=ts(today)+1000
+  expect(refillAfter(s,last,today,ts(today)+2000)).toBe(true)
+  expect(s.queue.startsOn).toBe('2026-10-22')
+  const boundary={date:s.queue.startsOn,since:s.queue.since},workouts=structuredClone(s.workouts)
+  const availability={dates:['2026-10-22','2026-10-23','2026-10-24','2026-10-25','2026-10-26'],totalSessions:5,minutes:75,baselineIds:{push:'p',pull:'u',legs:'l'}}
+  const p=propose(s,{availability})
+  expect(p.error).toBeNull()
+  expect(p.creditedKinds).toEqual([])
+  expect(p.remainingSessions.map(r=>r.kind)).toEqual(['push','pull','legs','upper','lower'])
+  const accepted=applyAdaptation(s,p)
+  expect(accepted.error).toBeNull()
+  expect(accepted.state.queue).toMatchObject({startsOn:boundary.date,since:boundary.since,adaptation:{cycleBoundary:boundary}})
+  expect(accepted.state.workouts).toEqual(workouts)
+  expect(queueDone(accepted.state)).toEqual([])
+  expect(effectiveRoutineIds(accepted.state,today,today)).toEqual([])
+  expect(effectiveRoutineIds(accepted.state,'2026-10-22',today)).toEqual([accepted.state.queue.ids[0]])
+  expect(propose(accepted.state,{availability}).error).toBeNull()
+  expect(propose(s,{availability:{...availability,dates:[today,'2026-10-22']}}).error).toBe('availability')
+  expect(propose(s,{availability:{...availability,cycleStart:'2026-10-22'}}).error).toBe('cycle')
+})

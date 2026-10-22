@@ -87,7 +87,9 @@ export function proposeAdaptation({state:s,availability,coverage,policy={},today
   const cycleBoundary=availability.cycleStart != null
     ? {date:availability.cycleStart,since:null}
     : adaptationOf(s)?.cycleBoundary || (q ? {date:q.startsOn,since:Number.isFinite(q.since)?q.since:null} : {date:weekKey(today,weekStartOf(s)),since:null})
-  if (!dateOK(cycleBoundary.date) || cycleBoundary.date>today) return {...empty,error:'cycle'}
+  if (!dateOK(cycleBoundary.date) || (availability.cycleStart!=null && cycleBoundary.date>today)) return {...empty,error:'cycle'}
+  // An automatically refilled pass can start tomorrow; review it now without moving its start.
+  if (dates.some(date=>date<cycleBoundary.date || (q && date<q.startsOn))) return {...empty,error:'availability'}
   const pattern=total===5?['push','pull','legs','upper','lower']:['push','pull','legs','push','pull','legs']
   const credited=new Set(),seen=new Set()
   let unmatched=0,unknownCycle=0
