@@ -36,7 +36,7 @@ const convSet = (set, from, to) => {
   return out
 }
 const convTarget = (cfg, from, to) => {
-  if (!cfg || typeof cfg !== 'object') return cfg
+  if (!cfg || typeof cfg !== 'object' || cfg.loadConvention === 'machine-setting') return cfg
   const out = { ...cfg }
   if (out.weight != null) out.weight = convertWeight(out.weight, from, to)
   // A per-exercise increment is a load too — 2.5 kg is 5 lb, not 2.5 lb.
@@ -65,9 +65,10 @@ const convBarWeights = (bw, from, to) => {
   return out
 }
 const convEntry = (e, from, to) => {
-  if (!e || typeof e !== 'object') return e
+  if (!e || typeof e !== 'object' || e.equipmentSnapshot?.loadConvention === 'machine-setting') return e
   return {
     ...e,
+    ...(e.equipmentSnapshot ? { equipmentSnapshot: { ...e.equipmentSnapshot, unit: e.equipmentSnapshot.unit ? to : null } } : {}),
     ...(e.topW != null ? { topW: convertWeight(e.topW, from, to) } : {}),
     ...(e.target ? { target: convTarget(e.target, from, to) } : {}),
     // The plan the entry was built from (lib/session-start.js) carries the routine's weight too.

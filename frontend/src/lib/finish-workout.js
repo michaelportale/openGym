@@ -69,6 +69,8 @@ export function buildCompletedWorkout(active, { end = Date.now(), prs = [], snap
   const entries = (active?.entries || []).map(entry => {
     const completed = {
       id: entry.id,
+      ...(entry.trainingSnapshot ? { trainingSnapshot: structuredClone(entry.trainingSnapshot) } : {}),
+      ...(entry.equipmentSnapshot ? { equipmentSnapshot: structuredClone(entry.equipmentSnapshot) } : {}),
       // Only what was logged — the live-session bookkeeping on a row stays behind (finishedRow).
       sets: (entry.sets || []).map(finishedRow),
       topW: bestWeightForEntry(entry) || null,

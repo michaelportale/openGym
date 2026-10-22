@@ -34,6 +34,7 @@ import Icon from '../components/Icon.jsx'
 import { Button, Check, NumberField } from '../components/ui.jsx'
 import { defaultIncrement, weightIncrement, stepWeight } from '../lib/progression.js'
 import { progressionGuidance } from '../lib/progression-copy.js'
+import { trainingSnapshotFor } from '../lib/training-metadata.js'
 import { buildPlannedEntry, plannedConfigOf, builtOutOfProgression } from '../lib/session-start.js'
 import { routineChangesFromEntry, updateRoutineFromEntry } from '../lib/routines.js'
 import { sessionNoProg, setSessionNoProg, setEntryNoProg, joinSessionNoProg } from '../lib/session-noprog.js'
@@ -1396,7 +1397,7 @@ function ActiveWorkout() {
         // Freestyle stamps the meaning of a dumbbell weight and reads last time in it, the way
         // buildPlannedEntry does for a planned exercise (lib/dumbbells.js).
         const built = freestyle
-          ? { target: withMeaning(s, cfg, ex.id), plan: null, sets: applyIntensifierPlan(buildSets(historyAs(past, ex.id, dbLoadFor(s, full)), full, {
+          ? { ...trainingSnapshotFor(s, full), target: withMeaning(s, cfg, ex.id), plan: null, sets: applyIntensifierPlan(buildSets(historyAs(past, ex.id, dbLoadFor(s, full)), full, {
             step: modeOf(full) === 'reps' ? (ownedWeightsFor(s, full) || weightIncrement(full, s.unit)) : defaultIncrement(ex.id, s.unit), preferLast: true,
           }), full, dropGrid(s, full)) }
           : buildPlannedEntry(past, full, routine, { noProg })
@@ -1497,6 +1498,11 @@ function ActiveWorkout() {
         // happens to occupy the same index.
         if (!activeEntry || activeEntry.id !== entryId) return
         const full = { ...cfg, id: activeEntry.id }
+        const loggedIdentity = activeEntry.sets.some(row => row.done)
+        if (loggedIdentity) for (const key of ['stationId', 'loadConvention', 'dbLoad']) {
+          if (activeEntry.target?.[key] != null) full[key] = activeEntry.target[key]
+          else delete full[key]
+        }
         // The weight the sheet showed is today's. Left as it was, it is not an edit of the plan's:
         // stamped as the plan, a later edit of the reps would restart from today's load as though
         // it had been typed in (nextPrescription), so the plan keeps its own.
@@ -1517,6 +1523,7 @@ function ActiveWorkout() {
         const doneWork = activeEntry.sets.filter(x => x.done && !isWarmupRow(x))
         const freshWarm = fresh.filter(isWarmupRow)
         const freshWork = fresh.filter(x => !isWarmupRow(x))
+        if (!loggedIdentity) { activeEntry.trainingSnapshot = built.trainingSnapshot; activeEntry.equipmentSnapshot = built.equipmentSnapshot }
         activeEntry.target = built.target
         activeEntry.plan = built.plan
         activeEntry.planned = built.planned
@@ -1524,7 +1531,7 @@ function ActiveWorkout() {
         else delete activeEntry.carried
         activeEntry.sets = [...doneWarm, ...freshWarm.slice(doneWarm.length), ...doneWork, ...freshWork.slice(doneWork.length)]
       })
-    }, null, routine)
+    }, null, routine, null, null, null, entry.sets.some(row => row.done))
   }
 
   // Remove a whole exercise from the session. The confirmation always asks first; in a

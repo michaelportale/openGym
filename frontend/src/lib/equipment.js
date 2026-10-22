@@ -49,7 +49,7 @@ export function activeProfile(S) {
 export function exAvailable(S, ex) {
   const p = activeProfile(S)
   if (!p) return true
-  return eqAvailable(profileEquipment(p), ex)
+  return equipmentMatch(p, ex).available
 }
 
 // A profile saved before the bench and the bar were on the checklist (#464) never had the chance
@@ -75,4 +75,17 @@ export function eqAvailable(equipment, ex) {
 
 export function newProfile(name) {
   return { id: 'eq' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name, equipment: [], accV: ACC_V }
+}
+
+
+// A station list is an explicit inventory, including when empty. Legacy profiles retain
+// category availability, but do not establish that a particular machine exists.
+const STATION_EQUIPMENT = new Set(['leverage machine', 'sled machine', 'cable', 'smith machine', 'assisted'])
+export function equipmentMatch(profile, ex, excludedStationIds = []) {
+  if (!profile) return { available: true, status: 'unverified', stationIds: [] }
+  const stations = Array.isArray(profile.stations) ? profile.stations : null
+  const matches = (stations || []).filter(s => s && !excludedStationIds.includes(s.id) && s.exerciseIds?.includes(ex.id))
+  const machine = STATION_EQUIPMENT.has(ex.eq)
+  const available = machine && stations ? matches.length > 0 : eqAvailable(profileEquipment(profile), ex)
+  return { available, status: !available ? 'unavailable' : matches.length ? 'exact' : stations ? 'category' : 'legacy-unverified', stationIds: available ? matches.map(s => s.id) : [] }
 }

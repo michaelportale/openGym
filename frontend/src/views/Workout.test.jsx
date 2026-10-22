@@ -3443,3 +3443,24 @@ describe('the workout screen chrome (v1.3.11)', () => {
     expect(container.querySelector('.wthumb')).toBeNull()
   })
 })
+
+describe('equipment identity while editing a session exercise', () => {
+  const profile = { id: 'gym', stations: [{ id: 'a', label: 'Press A', exerciseIds: ['0576'], loadConvention: 'plate-per-side' }, { id: 'b', label: 'Press B', exerciseIds: ['0576'], loadConvention: 'machine-setting' }] }
+  const oldSnapshot = { stationId: 'a', label: 'Press A', loadConvention: 'plate-per-side', unit: 'kg', status: 'exact' }
+  it('updates an unlogged entry snapshot when its selected station changes', async () => {
+    const entry = exercise('0576', [false], { target: { sets: 1, reps: 8, weight: 20, prog: 'off', stationId: 'a' }, equipmentSnapshot: oldSnapshot, plan: { kind: 'first', policy: 'linear', why: ['Synthetic plan'] } })
+    await mount([entry], 0, { equipProfiles: [profile], activeEquipId: 'gym' })
+    await pressProgression()
+    await act(async () => mocks.exConfigSheet.mock.calls.at(-1)[2]({ ...entry.target, stationId: 'b', loadConvention: 'machine-setting' }))
+    expect(mocks.S.active.entries[0].equipmentSnapshot).toMatchObject({ stationId: 'b', loadConvention: 'machine-setting', unit: null })
+  })
+  it('keeps the identity of already logged sets while allowing rep edits', async () => {
+    const entry = exercise('0576', [true], { target: { sets: 1, reps: 8, weight: 20, prog: 'off', stationId: 'a', loadConvention: 'plate-per-side' }, equipmentSnapshot: oldSnapshot, plan: { kind: 'first', policy: 'linear', why: ['Synthetic plan'] } })
+    await mount([entry], 0, { equipProfiles: [profile], activeEquipId: 'gym' })
+    await pressProgression()
+    await act(async () => mocks.exConfigSheet.mock.calls.at(-1)[2]({ ...entry.target, reps: 10, stationId: 'b', loadConvention: 'machine-setting' }))
+    expect(mocks.S.active.entries[0].equipmentSnapshot).toEqual(oldSnapshot)
+    expect(mocks.S.active.entries[0].target.stationId).toBe('a')
+    expect(mocks.S.active.entries[0].target.reps).toBe(10)
+  })
+})

@@ -2,6 +2,7 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
 import { EXDB, EXIDX, BODYPARTS, isCardio, isBodyweightEq, allExercises, equipmentOf, byCategory, smOf, searchExercises, similarExercises, exOr, isAssisted, betterWeight, beatsWeight, isCustomEx } from './lib/exercises.js'
+import { trainingMetadataOf, trainingSnapshotFor, TRAINING_ROLES } from './lib/training-metadata.js'
 import { activeProfile, exAvailable, ALL_EQUIPMENT, newProfile, profileEquipment, ACC_V } from './lib/equipment.js'
 import { fmtDate, fmtDateRange, fmtNum, fmtPlate, exerciseNameText, fmtVol, fmtDur, durPart, todayISO, isoOf, uid, exCount, routineCount, setsWorkCount, DAYN, DAYS, weekOrder, weekStartOf, weekDayOffset, MONTHS_LONG, ACCENTS } from './lib/format.js'
 import { lastEntryFor, bestWeightFor, bestWeightForEntry, buildSets, effectiveRoutineIds, workoutDay, workoutVolume, setsDone, setsDoneActive, setUnitsTotal, lastBW, sessionSections, setLabel, defaultConfig, cleanupSg, modeOf, effortOf, EFFORT, capEffort, stepEffort, isBw, isPerSide, sideReps, workSetsDone, applyIntensifierPlan, MAX_PLANNED_WARMUPS, NOTE_MAX } from './lib/history.js'
@@ -1019,6 +1020,7 @@ function ExerciseDetail({ ex, close }) {
     {instrFor(ex).length > 0 &&<><h4 className="sec">{t('How to')}{getLang() !== 'en' && !instrTranslated(ex) && <span className="dim" style={{ textTransform: 'none', letterSpacing: 0 }}> · {t('instructions in English')}</span>}</h4><ol className="steps-list">{instrFor(ex).map((s, i) => <li key={i}>{s}</li>)}</ol></>}
     {/* The catalogue is community-edited (catalogue/README.md): a wrong muscle, a clumsy step or a
         missing translation is one tap from an issue that already names the exercise. */}
+    {!isCustomEx(ex) && !ex.missing && <TrainingMetadataEditor ex={ex} />}
     {!isCustomEx(ex) && !ex.missing && <a className="small dim exfix-link" target="_blank" rel="noopener"
       href={'https://github.com/DuarteSantos8/openGym/issues/new?template=exercise.yml&exercise=' + encodeURIComponent(ex.id + ', ' + ex.n)}>
       <Icon name="pencil" /> {t('Suggest a fix for this exercise')}</a>}
@@ -1114,12 +1116,29 @@ export const addToRoutineSheet = ex => ui().openSheet(close => <AddToRoutine ex=
 // (planning, logging, PRs, stats). A photo, GIF or video of your own, and a link to a video or
 // guide, are optional (components/CustomMediaField.jsx): the state keeps a small reference to the
 // file, never the file itself, and the link is cleaned on save and again whenever it is opened.
+const ROLE_NAMES = ['Horizontal press', 'Vertical press', 'Horizontal pull', 'Vertical pull', 'Squat', 'Hinge', 'Chest isolation', 'Shoulder isolation', 'Elbow flexion', 'Elbow extension', 'Knee flexion', 'Knee extension', 'Calf raise', 'Core']
+const roleOptions = () => [{ value: '', label: t('Unknown') }, ...TRAINING_ROLES.map((value, i) => ({ value, label: t(ROLE_NAMES[i]) }))]
+const LOAD_CONVENTIONS = { 'barbell-total': 'Barbell total', 'db-per-hand': 'Dumbbell per hand', 'db-total': 'Dumbbells total', 'plate-per-side': 'Plate-loaded per side', 'machine-setting': 'Machine setting', 'machine-total': 'Machine total' }
+const conventionOptions = () => [{ value: '', label: t('Unknown') }, ...Object.entries(LOAD_CONVENTIONS).map(([value, label]) => ({ value, label: t(label) }))]
+function TrainingMetadataEditor({ ex }) {
+  const st = useStore(s => s.S)
+  const value = trainingMetadataOf({ ...ex, ...(st.trainingMetadata?.[ex.id] ? { trainingMetadata: st.trainingMetadata[ex.id] } : {}) })
+  const change = patch => update(s => { s.trainingMetadata = s.trainingMetadata || {}; s.trainingMetadata[ex.id] = { role: value.role, primary: value.primary, secondary: value.secondary, ...patch, _ts: Date.now() } })
+  const toggle = (key, m) => change({ [key]: value[key].includes(m) ? value[key].filter(v => v !== m) : [...value[key], m] })
+  return <>
+    <SelectRow title={t('Movement role')} value={value.role || ''} options={roleOptions()} onChange={role => change({ role: role || null })} />
+    <MultiSelectRow title={t('Primary muscle groups')} values={value.primary} options={MUSCLES.map(m => ({ value: m, label: t(MUSCLE_NAME[m]) }))} onToggle={m => toggle('primary', m)} noneLabel={t('No explicit muscle group')} doneLabel={t('Done')} />
+    <MultiSelectRow title={t('Additional muscle groups')} values={value.secondary} options={MUSCLES.filter(m => !value.primary.includes(m)).map(m => ({ value: m, label: t(MUSCLE_NAME[m]) }))} onToggle={m => toggle('secondary', m)} noneLabel={t('No explicit muscle group')} doneLabel={t('Done')} />
+  </>
+}
+
 function CustomExForm({ existing, prefill, onDone, close }) {
   const nameRef = useRef(null)
   const onNameFocus = useSheetKeyboard(nameRef)
   const [n, setN] = useState(existing ? existing.n : (prefill || ''))
   const [bp, setBp] = useState(existing ? existing.bp : '')
   const [eq, setEq] = useState(existing ? (existing.eq || '') : '')
+  const [role, setRole] = useState(S().trainingMetadata?.[existing?.id]?.role || '')
   const storedEq = existing && typeof existing.eq === 'string' && existing.eq && !ALL_EQUIPMENT.includes(existing.eq) ? existing.eq : null
   const [desc, setDesc] = useState(existing ? (existing.desc || '') : '')
   const [media, setMedia] = useState(() => mediaOf(existing))
@@ -1190,10 +1209,11 @@ function CustomExForm({ existing, prefill, onDone, close }) {
     if (existing) update(s => { const c = (s.customEx || []).find(x => x.id === id); if (c) {
       c.n = name; c.bp = bp; c.desc = d; c.tg = tg; c.sm = sm; c.muscleGroups = groups; c.primaries = prim; c.secondaries = sm; c.eq = eq
       extra(c)
+      s.trainingMetadata = s.trainingMetadata || {}; s.trainingMetadata[id] = { role: role || null, primary: prim, secondary: sm, _ts: Date.now() }
     } })
     else {
       id = 'c' + uid()
-      update(s => { const c = { id, n: name, bp, desc: d, tg, sm, muscleGroups: groups, primaries: prim, secondaries: sm, eq, custom: true }; extra(c); (s.customEx = s.customEx || []).push(c) })
+      update(s => { const c = { id, n: name, bp, desc: d, tg, sm, muscleGroups: groups, primaries: prim, secondaries: sm, eq, custom: true }; extra(c); (s.customEx = s.customEx || []).push(c); s.trainingMetadata = s.trainingMetadata || {}; s.trainingMetadata[id] = { role: role || null, primary: prim, secondary: sm, _ts: Date.now() } })
     }
     // The file goes to the server now rather than after the state's own debounce: another device
     // that sees the reference first shows a tile until it arrives.
@@ -1215,6 +1235,7 @@ function CustomExForm({ existing, prefill, onDone, close }) {
           Hevy import). It stays a chip of its own, picked, so Save does not stop on "Pick equipment". */}
       {storedEq && <button key={storedEq} className={'chip' + (eq === storedEq ? ' on' : '')} onClick={() => setEq(storedEq)}>{t(storedEq)}</button>}
     </div>
+    <SelectRow title={t('Movement role')} value={role} options={roleOptions()} onChange={setRole} />
     {bp && <>
       {bp !== 'cardio' && <MultiSelectRow title={t('Primary muscle groups')} sheetTitle={t('Primary muscle groups')}
         values={primaries}
@@ -1273,7 +1294,7 @@ function usageMap(st) {
 }
 // The swap pickers' own scope (#473): exercises sharing the swapped exercise's target muscle.
 const SAME = '≈'
-function ExercisePicker({ onPick, title, close, like }) {
+function ExercisePicker({ onPick, title, close, like, allEquipment = false }) {
   const st = useStore(s => s.S)
   const usage = usageMap(st)
   const [q, setQ] = useState('')
@@ -1289,7 +1310,7 @@ function ExercisePicker({ onPick, title, close, like }) {
   })                                        // '' = all, '★' = chosen, '☆' = favourites, '≈' = same muscle, else a body part
   const [eq, setEq] = useState('')          // '' = any equipment
   const [cat, setCat] = useState('')        // '' = any type
-  const [showAll, setShowAll] = useState(false)
+  const [showAll, setShowAll] = useState(allEquipment)
   const [shown, setShown] = useState(50)
   const [byMuscle, setByMuscle] = useState(false)
   const searchRef = useRef(null)
@@ -1435,7 +1456,7 @@ export function swapActiveWorkoutExercise(index) {
     // A freestyle swap logs dumbbell weights the way the exercise means them now, and starts
     // from last time read in that meaning (lib/dumbbells.js), as a planned one does.
     const built = freestyle
-      ? { target: withMeaning(st, cfg, ex.id), plan: null, sets: applyIntensifierPlan(buildSets(historyAs(past, ex.id, dbLoadFor(st, full)), full, { step: (modeOf(full) === 'reps' && ownedWeightsFor(st, full)) || step, preferLast: true }), full, dropGrid(st, full)) }
+      ? { ...trainingSnapshotFor(st, full), target: withMeaning(st, cfg, ex.id), plan: null, sets: applyIntensifierPlan(buildSets(historyAs(past, ex.id, dbLoadFor(st, full)), full, { step: (modeOf(full) === 'reps' && ownedWeightsFor(st, full)) || step, preferLast: true }), full, dropGrid(st, full)) }
       : buildPlannedEntry(past, full, slotRoutine, { noProg: builtOutOfProgression(current, slotRoutine) })
     const replacement = {
       id: ex.id,
@@ -1491,18 +1512,27 @@ function EquipmentProfileSheet({ profile, close }) {
   const update = useStore(s => s.update)
   const nameRef = useRef(null)
   const [checked, setChecked] = useState(new Set(profile ? profileEquipment(profile) : []))
+  const [stations, setStations] = useState(() => profile?.stations ? structuredClone(profile.stations) : null)
+  const editStation = (id, patch) => setStations(rows => rows.map(row => row.id === id ? { ...row, ...patch } : row))
+  const addExercise = station => {
+    const picker = exercisePicker(ex => {
+      setStations(rows => rows.map(row => row.id === station.id ? { ...row, exerciseIds: [...new Set([...row.exerciseIds, ex.id])] } : row))
+      picker.close()
+    }, { title: t('Add supported exercise'), allEquipment: true })
+  }
   const toggle = k => setChecked(s => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n })
   const save = () => {
     const name = (nameRef.current.value || '').trim()
     if (!name) { return }
+    if (stations?.some(row => !row.label.trim())) { toast(t('Give it a name')); return }
     update(s => {
       s.equipProfiles = s.equipProfiles || []
       const equipment = [...checked]
       if (profile) {
         const p = s.equipProfiles.find(x => x.id === profile.id)
-        if (p) { p.name = name; p.equipment = equipment; p.accV = ACC_V }
+        if (p) { p.name = name; p.equipment = equipment; p.accV = ACC_V; if (stations) p.stations = stations }
       } else {
-        const p = newProfile(name); p.equipment = equipment
+        const p = newProfile(name); p.equipment = equipment; if (stations) p.stations = stations
         s.equipProfiles.push(p)
         if (!s.activeEquipId) s.activeEquipId = p.id
       }
@@ -1524,6 +1554,18 @@ function EquipmentProfileSheet({ profile, close }) {
     <div className="dim small" style={{ marginTop: 10 }}>
       {t('Body-weight exercises are always available, unless they need a pull-up bar or a bench.')}
     </div>
+    <h4 className="sec">{t('Equipment stations')}</h4>
+    <div className="small dim">{stations ? t('Only listed stations enable machine exercises. Free weights still use the checklist.') : t('Category availability is unverified. Add stations to confirm specific machines.')}</div>
+    {(stations || []).map(station => <div key={station.id} className="sect-b" style={{ marginTop: 12 }}>
+      <TextField aria-label={t('Station name')} placeholder={t('Station name')} maxLength={80} value={station.label} onChange={e => editStation(station.id, { label: e.target.value })} />
+      <TextField aria-label={t('Manufacturer')} placeholder={t('Manufacturer')} maxLength={80} value={station.manufacturer || ''} onChange={e => editStation(station.id, { manufacturer: e.target.value })} />
+      <TextField aria-label={t('Model')} placeholder={t('Model')} maxLength={80} value={station.model || ''} onChange={e => editStation(station.id, { model: e.target.value })} />
+      <SelectRow title={t('Load convention')} value={station.loadConvention || ''} options={conventionOptions()} onChange={loadConvention => editStation(station.id, { loadConvention: loadConvention || null })} />
+      <div className="chips">{station.exerciseIds.map(id => <button key={id} className="chip on" aria-label={t('Remove {0}', exerciseNameText(EXIDX[id] || { n: id }))} onClick={() => editStation(station.id, { exerciseIds: station.exerciseIds.filter(value => value !== id) })}>{exerciseNameFor(EXIDX[id] || { n: id })} ×</button>)}</div>
+      <Button variant="ghost" onClick={() => addExercise(station)}>{t('Add supported exercise')}</Button>
+      <Button variant="ghost" onClick={() => setStations(rows => rows.filter(row => row.id !== station.id))}>{t('Remove station')}</Button>
+    </div>)}
+    <Button variant="ghost" onClick={() => setStations(rows => [...(rows || []), { id: 'station' + uid(), label: '', exerciseIds: [], loadConvention: null }])}>{t('Add station')}</Button>
     <div style={{ height: 14 }} /><Button variant="primary" onClick={save}>{t('Save')}</Button>
   </>
 }
@@ -1643,7 +1685,7 @@ const intensifierToSave = x => (x.type === 'dropset'
     ? { ...x, totalReps: Math.max(1, Math.round(x.totalReps) || 0), restSec: Math.max(5, Number(x.restSec) || 0) }
     : x)
 
-function ExConfig({ ex, existing, onSave, onDelete, onReplace, close, routine, initial, saveLabel }) {
+function ExConfig({ ex, existing, onSave, onDelete, onReplace, close, routine, initial, saveLabel, lockEquipment = false }) {
   const st = useStore(s => s.S)
   const cardio = isCardio(ex.id)
   const speedUnit = speedUnitOf(st)
@@ -1719,7 +1761,7 @@ function ExConfig({ ex, existing, onSave, onDelete, onReplace, close, routine, i
     // What a dumbbell weight means in this slot (lib/dumbbells.js): written only when the slot
     // picked its own, so every other config stays the shape it was.
     const dbLoad = isBellEx(ex) && !bw ? dbLoadOf(c.dbLoad) : null
-    const withMeant = dbLoad ? { dbLoad } : {}
+    const withMeant = { ...(dbLoad ? { dbLoad } : {}), ...(c.stationId ? { stationId: c.stationId } : {}), ...(c.loadConvention ? { loadConvention: c.loadConvention } : {}) }
     // "Last set to failure": written only when on, so a plan that never asked keeps its shape.
     const withFailure = c.lastToFailure === true ? { lastToFailure: true } : {}
     if (cardio) onSave({ sets, min: Math.max(1, Math.round(c.min) || 20), speed: Math.max(0, c.speed || 8), ...withNote, ...withRest })
@@ -1988,9 +2030,14 @@ function ExConfig({ ex, existing, onSave, onDelete, onReplace, close, routine, i
           : t('Every set becomes rest-pause: {0} reps to start, then {1} more split into short bursts, {2}s rest before each, roughly halving each time.', c.reps || 0, c.intensifier.totalReps, c.intensifier.restSec)}
       </div>}
     </>}
+    {lockEquipment && <div className="small dim">{t('Equipment identity stays with logged sets. Swap exercise to use another station.')}</div>}
+    {!lockEquipment && mode !== 'cardio' && <>
+      <SelectRow title={t('Equipment station')} value={c.stationId || ''} options={[{ value: '', label: t('Unknown') }, ...(st.equipProfiles?.find(p => p.id === st.activeEquipId)?.stations || []).filter(row => row.exerciseIds.includes(ex.id)).map(row => ({ value: row.id, label: row.label }))]} onChange={stationId => setC(x => ({ ...x, stationId: stationId || undefined, loadConvention: st.equipProfiles?.find(p => p.id === st.activeEquipId)?.stations?.find(row => row.id === stationId)?.loadConvention || undefined }))} />
+      <SelectRow title={t('Load convention')} value={c.loadConvention || ''} options={conventionOptions()} onChange={loadConvention => setC(x => ({ ...x, loadConvention: loadConvention || undefined }))} />
+    </>}
     {/* What a dumbbell weight means, for this routine's slot (cfg.dbLoad). Picking what the
         exercise already means drops the key, so the slot follows the exercise's default again. */}
-    {isBellEx(ex) && !bw && mode !== 'cardio' && <>
+    {!lockEquipment && isBellEx(ex) && !bw && mode !== 'cardio' && <>
       <h4 className="sec">{t('Weight means')}</h4>
       <DbLoadPicker ex={ex} cfg={c} value={dbLoadFor(st, { ...c, id: ex.id })}
         onChange={v => setC(x => ({ ...x, dbLoad: v === dbLoadFor(st, ex.id) ? undefined : v }))} />
@@ -2019,7 +2066,7 @@ function ExConfig({ ex, existing, onSave, onDelete, onReplace, close, routine, i
     {onDelete && <><div style={{ height: 8 }} /><Button variant="danger" onClick={() => { close(); onDelete() }}>{t('Remove from routine')}</Button></>}
   </>
 }
-export const exConfigSheet = (ex, existing, onSave, onDelete, routine, initial, onReplace, saveLabel) => ui().openSheet(close => <ExConfig ex={ex} existing={existing} initial={initial} onSave={onSave} onDelete={onDelete} onReplace={onReplace} routine={routine} saveLabel={saveLabel} close={close} />)
+export const exConfigSheet = (ex, existing, onSave, onDelete, routine, initial, onReplace, saveLabel, lockEquipment = false) => ui().openSheet(close => <ExConfig ex={ex} existing={existing} initial={initial} onSave={onSave} onDelete={onDelete} onReplace={onReplace} routine={routine} saveLabel={saveLabel} lockEquipment={lockEquipment} close={close} />)
 
 /* ============================ glyph picker ============================ */
 // Grouped by what the glyph means for a training day, so picking one is a scan
