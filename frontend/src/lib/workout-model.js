@@ -215,6 +215,7 @@ const sideOf = value => {
   if (v.rir != null) out.rir = v.rir
   if (v.rpe != null) out.rpe = v.rpe
   if (v.weightOrigin === WEIGHT_ORIGIN_MANUAL) out.weightOrigin = WEIGHT_ORIGIN_MANUAL
+  if (v.loadNeedsReview === false) out.loadNeedsReview = false
   // A side can carry its own intensifier (issue #60): drop-sets and rest-pause bursts are logged
   // per limb, exactly like the main set, so the same {type, drops, clusters} shape rides on the
   // side. Reuses the row-level helpers below (addDrop/dropsOf/…), which read this very shape.
@@ -269,7 +270,16 @@ export function setSideField(row, side, field, value) {
   const cur = { ...sideOf(base.sides[side]) }
   if (value == null && (field === 'rir' || field === 'rpe')) delete cur[field]
   else cur[field] = value
-  return syncSideAggregate({ ...base, sides: { ...base.sides, [side]: cur } })
+  // A copied unknown load is confirmed per limb only by an explicit load edit.
+  // Keep the row pending until both sides are reviewed; cascaded values do not call this helper.
+  if (base.loadNeedsReview && field === 'w') cur.loadNeedsReview = false
+  const next = syncSideAggregate({ ...base, sides: { ...base.sides, [side]: cur } })
+  if (next.loadNeedsReview && ['L', 'R'].every(key => next.sides[key].loadNeedsReview === false)) {
+    delete next.loadNeedsReview
+    delete next.sides.L.loadNeedsReview
+    delete next.sides.R.loadNeedsReview
+  }
+  return next
 }
 
 // Flip one side's done tick, resyncing the row's own done (true only when both sides are).

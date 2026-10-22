@@ -143,3 +143,67 @@ it('preserves a saved routine copy’s manual-load requirement when its editor s
   act(() => [...host.querySelectorAll('button')].find(b => b.textContent.trim() === 'Save').click())
   expect(save).toHaveBeenCalledWith(expect.objectContaining({ weight: 0, loadNeedsReview: true }))
 })
+it.each([false, true])('renders each mixed-history occurrence’s own load convention (reverse=%s)', reverse => {
+  for (const legacy of [false, true]) {
+    const physical = { id: cfg.id, target: { ...cfg }, ...(legacy ? {} : { equipmentSnapshot: { loadConvention: 'machine-total', stationId: 'a', unit: 'kg', status: 'exact' } }), sets: [{ w: 80, r: 10, done: true }] }
+    const setting = { id: cfg.id, target: { ...cfg, loadConvention: 'machine-setting' }, equipmentSnapshot: { loadConvention: 'machine-setting', stationId: 'b', unit: null, status: 'exact' }, sets: [{ w: 7, r: 10, done: true }] }
+    act(() => useStore.getState().update(s => { s.workouts = [{ id: 'mixed', d: '2026-10-21', entries: reverse ? [setting, physical] : [physical, setting] }] }))
+    act(() => exerciseHistorySheet(cfg.id))
+    const host = renderTop(), labels = host.querySelector('.list .ss').textContent
+    expect.soft(labels).toBe((reverse ? ['7 Setting × 10', '80×10'] : ['80×10', '7 Setting × 10']).join('  ·  '))
+  }
+})
+it.each(['focus', 'list'])('confirms only explicitly edited copied loads per side, including reopening (%s)', async view => {
+  const s = structuredClone(useStore.getState().S)
+  s.active.entries = buildSessionEntries(s, { ex: [{ ...cfg, sets: 2, side: true, reps: 20, weight: 0, loadNeedsReview: true }] })
+  s.active.workoutView = view
+  useStore.setState({ S: s, user: null })
+  let host = render(<MemoryRouter><Workout /></MemoryRouter>)
+  const row = () => useStore.getState().S.active.entries[0].sets[0]
+  const sideButton = (side, action) => view === 'focus'
+    ? host.querySelector(`[data-focus-side="${side}"] [aria-label="${action === 'done' ? `Complete ${side === 'L' ? 'left' : 'right'} side` : action === 'load' ? 'Increase load' : 'Increase reps'}"]`)
+    : host.querySelectorAll('.setrow.side')[side === 'L' ? 0 : 1].querySelector(action === 'done' ? '[role="checkbox"]' : `.stp.${action === 'load' ? 'w' : 'r'} [aria-label="Increase"]`)
+  act(() => sideButton('L', 'done').click())
+  expect(row().sides.L.done).toBe(false)
+  act(() => sideButton('L', 'reps').click())
+  act(() => sideButton('L', 'done').click())
+  expect(row().sides.L.done).toBe(false)
+  act(() => sideButton('L', 'load').click())
+  act(() => sideButton('R', 'done').click())
+  expect(row().sides.R.done).toBe(false)
+  act(() => sideButton('L', 'done').click())
+  expect(row().sides.L.done).toBe(true)
+  expect(row().done).toBe(false)
+  const reopened = JSON.parse(JSON.stringify(useStore.getState().S))
+  act(() => roots.splice(0).forEach(root => root.unmount()))
+  document.body.innerHTML = ''
+  useStore.setState({ S: reopened, user: null })
+  host = render(<MemoryRouter><Workout /></MemoryRouter>)
+  expect(row().sides.L.done).toBe(true)
+  act(() => sideButton('R', 'done').click())
+  expect(row().sides.R.done).toBe(false)
+  const { buildCompletedWorkout } = await import('./lib/finish-workout.js')
+  const partial = buildCompletedWorkout(useStore.getState().S.active)
+  expect(partial.entries[0].sets[0].sides.L).not.toHaveProperty('loadNeedsReview')
+  act(() => sideButton('R', 'load').click())
+  act(() => sideButton('R', 'done').click())
+  expect(row().done).toBe(true)
+  expect(row().loadNeedsReview).toBeUndefined()
+  const next = useStore.getState().S.active.entries[0].sets[1]
+  expect(next.loadNeedsReview).toBe(true)
+  const nextComplete = view === 'focus' ? host.querySelector('[aria-label="Complete left side"]') : host.querySelector('[aria-label="Set 2 (Left) done"]')
+  act(() => nextComplete.click())
+  expect(useStore.getState().S.active.entries[0].sets[1].sides.L.done).toBe(false)
+})
+it.each(['focus', 'list'])('still logs ordinary legacy per-side zero loads without review (%s)', view => {
+  const s = structuredClone(useStore.getState().S)
+  s.active.entries = buildSessionEntries(s, { ex: [{ ...cfg, side: true, reps: 20, weight: 0 }] })
+  s.active.workoutView = view
+  useStore.setState({ S: s, user: null })
+  const host = render(<MemoryRouter><Workout /></MemoryRouter>)
+  for (const side of ['Left', 'Right']) {
+    const label = view === 'focus' ? `Complete ${side.toLowerCase()} side` : `Set 1 (${side}) done`
+    act(() => host.querySelector(`[aria-label="${label}"]`).click())
+  }
+  expect(useStore.getState().S.active.entries[0].sets[0]).toMatchObject({ done: true, w: 0 })
+})
