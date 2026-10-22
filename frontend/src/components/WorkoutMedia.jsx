@@ -21,6 +21,7 @@ import { useMediaPicker } from './CustomMediaField.jsx'
 import { CustomThumb, MediaView } from './CustomMedia.jsx'
 import { Button } from './ui.jsx'
 import Icon from './Icon.jsx'
+import { ModalToastStatus } from './Toast.jsx'
 
 const toast = m => useUI.getState().toast(m)
 
@@ -178,6 +179,7 @@ export function WorkoutMediaViewer({ w, index = 0, close }) {
         <Button variant="danger" size="sm" onClick={remove}>{t('Remove')}</Button>
       </div>
     </div>}
+    <ModalToastStatus />
     {list.length > 1 && !asking && <div className="mviewer-nav">
       <button type="button" className="iconbtn" aria-label={t('Previous')} onClick={() => go(-1)}><Icon name="chevronLeft" /></button>
       <button type="button" className="iconbtn" aria-label={t('Next')} onClick={() => go(1)}><Icon name="chevronRight" /></button>
