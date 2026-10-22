@@ -3,6 +3,7 @@ import { useUI } from '../store/useUI.js'
 import { keyboardOpen } from '../lib/viewport-guard.js'
 import { t } from '../lib/i18n.js'
 import Icon from './Icon.jsx'
+import { ModalToastStatus } from './Toast.jsx'
 
 // Putting the page back after a sheet closes takes up to three goes (see the un-pin below): now,
 // next frame, and once the keyboard's dismiss animation is over. Anything else that wants to
@@ -241,7 +242,7 @@ function Sheet({ sheet, active }) {
     return (
       <div {...layer}>
         <div className="mback" onClick={() => { if (!sheet.locked) close() }} />
-        <div className="center" ref={dialogRef} {...semantics}>{dismiss}{sheet.render(close)}</div>
+        <div className="center" ref={dialogRef} {...semantics}>{dismiss}{sheet.render(close)}{active && <ModalToastStatus />}</div>
       </div>
     )
   }
@@ -252,6 +253,7 @@ function Sheet({ sheet, active }) {
         onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}>
         {dismiss || <div className="grab" aria-hidden="true" />}
         {sheet.render(close)}
+        {active && <ModalToastStatus />}
       </div>
     </div>
   )

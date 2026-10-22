@@ -1,6 +1,13 @@
 import { useUI } from '../store/useUI.js'
 import Icon from './Icon.jsx'
 
+// Modal isolation hides the visual toast outside the dialog. Mirror only its message
+// inside the active dialog so validation feedback remains available to screen readers.
+export function ModalToastStatus() {
+  const msg = useUI(s => s.toastMsg)
+  return <div className="modal-status" role="status">{msg}</div>
+}
+
 // The one toast. Mostly text; with an action (the Undo after a set is removed) it carries a button
 // at its end, stays longer and holds still while a finger or the mouse rests on it.
 export default function Toast() {
