@@ -67,7 +67,7 @@ Warm-ups stay out of work totals. Physical units can be converted without doubli
 loads or adding bar mass. Machine settings and unknown load conventions retain their exact
 reported labels and stay out of load totals and strength estimates; incomplete totals are labeled
 **Partial load total**. Exercise targets and station identities remain unknown until verified.
-Historical imports never advance the current program queue.
+Historical imports never advance the current program queue. The [local acceptance record](dev/PERSONAL_STRENGTH_ACCEPTANCE.md) covers repeat-import and synthetic backup/restore verification; importing personal history remains a separate previewed operation.
 
 `## Planned targets — not completed work` can offer separately labeled baseline proposals with
 columns `Exercise / variant`, `Equipment / attachment`, `Load and units / convention`,
