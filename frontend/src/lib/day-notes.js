@@ -38,7 +38,7 @@ export function readDayNote(entry) {
 export const dayNoteOf = (S, iso) => readDayNote(isMap(S?.dayNotes) ? S.dayNotes[iso] : null)
 
 /** Whether `iso` is excused: it carries a note. The nudge and the reminder skip such a day. */
-export const excusedOn = (S, iso) => dayNoteOf(S, iso) != null
+export const excusedOn = (S, iso) => dayNoteOf(S, iso) != null || ['rest','trained-unlogged'].includes(S?.dayDispositions?.[iso]?.status)
 
 /** Whether `iso` can take a note at all: a real date, today or earlier. */
 export const canNoteDay = (iso, today = todayISO()) => ISO.test(String(iso || '')) && iso <= today

@@ -40,6 +40,7 @@ const logged = (S, iso) => S.workouts.some(w => w.d === iso);
 // never a missed day, never nudged or reminded about.
 const DAY_NOTE_TAGS = ['sick', 'travel', 'rest', 'injured'];
 export function excusedOn(S, iso) {
+  if (['rest','trained-unlogged'].includes(S?.dayDispositions?.[iso]?.status)) return true;
   const e = S?.dayNotes && typeof S.dayNotes === 'object' ? S.dayNotes[iso] : null;
   if (!e || typeof e !== 'object' || Array.isArray(e)) return false;
   return DAY_NOTE_TAGS.includes(e.tag) || (typeof e.text === 'string' && e.text.trim() !== '');

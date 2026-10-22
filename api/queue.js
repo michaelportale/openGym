@@ -104,7 +104,7 @@ export function effectiveRoutineId(S, iso) {
   // The planner's weekday pointers stay hidden on a live queue day even when it has no session for
   // it (every remaining one pinned to another day): those sessions have their days.
   const live = queueLiveOn(S, iso);
-  return [].concat(S.week?.[wd] || []).find(id => S.routines?.some(r => r?.id === id) && !(live && S.queue.ids.includes(id))) || null;
+  return [].concat(S.week?.[wd] || []).find(id => S.routines?.some(r => r?.id === id) && !adaptationCovers(S,id,iso) && !(live && S.queue.ids.includes(id))) || null;
 }
 
 // Is `iso` a day the queue speaks for, with sessions still to do? (`today === iso` here, so
@@ -112,4 +112,13 @@ export function effectiveRoutineId(S, iso) {
 export function queueLiveOn(S, iso) {
   const q = queueOf(S);
   return !!q && iso >= q.startsOn && q.ids.some(id => !queueDone(S, id, q.startsOn));
+}
+
+// Keep in sync with frontend/src/lib/queue.js: adaptationCovers.
+function adaptationCovers(S,id,iso) {
+  const a=S.queue?.adaptation;
+  return a?.policyVersion===1 && typeof a.token==='string' && typeof a.today==='string'
+    && Array.isArray(a.baseline) && Array.isArray(a.availability?.dates)
+    && iso>=a.today && a.availability.dates.some(date=>iso<=date)
+    && a.baseline.some(r=>r.id===id);
 }

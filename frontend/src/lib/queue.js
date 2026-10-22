@@ -201,3 +201,12 @@ export function weekTally(S, today) {
   const other = thisWeek.filter(w => !credited.has(w) || routineIdsOf(w).some(unqueued)).length
   return { done: queueDone(S).length + other, planned: q.ids.length + ownDays }
 }
+
+/** An accepted adaptation replaces only its baseline weekdays, through its last available date. */
+export function adaptationCovers(S,id,iso) {
+  const a=S.queue?.adaptation
+  return a?.policyVersion===1 && typeof a.token==='string' && typeof a.today==='string'
+    && Array.isArray(a.baseline) && Array.isArray(a.availability?.dates)
+    && iso>=a.today && a.availability.dates.some(date=>iso<=date)
+    && a.baseline.some(r=>r.id===id)
+}
