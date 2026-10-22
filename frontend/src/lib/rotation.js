@@ -44,7 +44,7 @@ const newPass = (ids, label, rotationId, startsOn, since) => ({ ids, since, star
 
 /** Workouts that could have credited `q`'s pass: dated on/after its startsOn, matching one of its ids. */
 const creditWindow = (s, q) => (s.workouts || [])
-  .filter(w => String(w.d || '') >= q.startsOn && routineIdsOf(w).some(id => q.ids.includes(id)))
+  .filter(w => w.historicalImport !== true && String(w.d || '') >= q.startsOn && routineIdsOf(w).some(id => q.ids.includes(id)))
 
 /**
  * `now`, or later still when a workout already in the credit window would otherwise re-credit

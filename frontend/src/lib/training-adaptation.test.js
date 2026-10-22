@@ -265,3 +265,14 @@ it('reviews and accepts the real tomorrow pass created by refill without crediti
   expect(propose(s,{availability:{...availability,dates:[today,'2026-10-22']}}).error).toBe('availability')
   expect(propose(s,{availability:{...availability,cycleStart:'2026-10-22'}}).error).toBe('cycle')
 })
+
+it('keeps imported history in coverage without awarding adaptation family or occurrence credit', () => {
+  const s=fixture()
+  s.workouts=s.workouts.map(w=>({...w,historicalImport:true}))
+  s.routines.push({id:'old-adaptation',name:'Old push',ex:[],adaptationPolicyVersion:1,adaptationKind:'push',adaptationSourceIds:['p']})
+  s.workouts.push({...s.workouts[0],id:'old-import',routineId:'old-adaptation'})
+  const p=propose(s)
+  expect(p.creditedKinds).toEqual([])
+  expect(p.remainingSessions.map(r=>r.kind)).toEqual(['push','pull'])
+  expect(coverageForState(s,today).rolling.byMuscle.chest.actual.directSets).toBe(2)
+})

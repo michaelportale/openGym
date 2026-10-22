@@ -203,7 +203,7 @@ export const hasCompletedWork = set => isSideSet(set)
 /** Actual completed load x reps; the scalar maximum weight is only a summary. */
 export function completedVolumeOf(set) {
   if (isSideSet(set)) return completedVolumeOf(set.sides.L) + completedVolumeOf(set.sides.R)
-  if (!set?.done) return 0
+  if (!set?.done || set.sourceLoad?.physical === false) return 0
   return (Number(set.w) || 0) * (Number(set.r) || 0) + extraVolumeOf(set)
 }
 

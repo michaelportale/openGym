@@ -32,6 +32,7 @@ const convSet = (set, from, to) => {
     L: convSet(set.sides.L, from, to), R: convSet(set.sides.R, from, to),
   } })
   if (out.w != null) out.w = convertWeight(out.w, from, to)
+  if (out.sourceLoad && out.loadUnit) out.loadUnit = to
   if (Array.isArray(out.drops)) out.drops = out.drops.map(d => ({ ...d, w: convertWeight(d.w, from, to) }))
   return out
 }
@@ -65,7 +66,8 @@ const convBarWeights = (bw, from, to) => {
   return out
 }
 const convEntry = (e, from, to) => {
-  if (!e || typeof e !== 'object' || e.equipmentSnapshot?.loadConvention === 'machine-setting') return e
+  if (!e || typeof e !== 'object' || e.equipmentSnapshot?.loadConvention === 'machine-setting'
+    || (e.sets?.some(s => s.sourceLoad) && !e.equipmentSnapshot?.unit)) return e
   return {
     ...e,
     ...(e.equipmentSnapshot ? { equipmentSnapshot: { ...e.equipmentSnapshot, unit: e.equipmentSnapshot.unit ? to : null } } : {}),

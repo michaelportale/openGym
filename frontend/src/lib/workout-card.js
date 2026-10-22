@@ -54,7 +54,7 @@ export function workoutCardModel(w, { unit, nameOf }) {
     stats: [
       ...(ms >= 60000 ? [{ label: t('Duration'), value: fmtDur(ms) }] : []),
       { label: t('Sets'), value: fmtNum(sets) },
-      { label: t('Volume'), value: fmtVol(w.vol ?? workoutVolume(w), unit) },
+      { label: t('Volume'), value: fmtVol(w.vol ?? workoutVolume(w), unit, w.volumePartial) },
     ],
     records: records.map(r => r.name),
     levels: MUSCLES.some(m => levels[m] > 0) ? levels : null,

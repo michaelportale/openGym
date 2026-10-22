@@ -147,6 +147,7 @@ export function bestSetOf(entry, formula = DEFAULT_FORMULA) {
       ? [s.sides.L, s.sides.R].filter(side => side?.done === true)
       : [s]
     sets.forEach(set => {
+      if (set.sourceLoad?.physical === false) return
       const est = estimate1RM(set.w, set.r, formula, set.rir ?? null)
       if (est !== null && (!best || est > best.est)) best = { est, w: Number(set.w), r: Math.round(Number(set.r)) }
     })

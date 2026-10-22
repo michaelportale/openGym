@@ -65,7 +65,7 @@ export const queueOf = S => {
 }
 
 // The DONE RULE for one workout and one session — `isDone` asks it across the log.
-const countsFor = (S, q, w, id) => routineIdsOf(w).includes(id)
+const countsFor = (S, q, w, id) => w.historicalImport !== true && routineIdsOf(w).includes(id)
   && ((w.start ?? 0) >= q.since
     || (q.strict !== true && String(w.d || '') >= q.startsOn && nameParts(w).includes(S.routines.find(r => r.id === id)?.name)))
 const isDone = (S, q, id) => S.workouts.some(w => countsFor(S, q, w, id))
