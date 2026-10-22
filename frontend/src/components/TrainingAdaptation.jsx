@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useStore } from '../store/useStore.js'
 import { acceptTrainingAdaptation, undoTrainingAdaptation } from '../store/training-adaptation.js'
 import { proposeAdaptation, setDisposition, dispositionOf, estimateSession, adaptationNeedsReview, coverageShortfalls, adaptationOf } from '../lib/training-adaptation.js'
-import { todayISO, isoOf, exerciseNameText } from '../lib/format.js'
+import { todayISO, isoOf, exerciseNameText, weekKey, weekStartOf } from '../lib/format.js'
 import { exOr } from '../lib/exercises.js'
 import { t } from '../lib/i18n.js'
 import { Button } from './ui.jsx'
@@ -11,6 +11,7 @@ const statusNames=()=>({unknown:t('Unknown'),rest:t('Rest'),missed:t('Missed'), 
 const errorText=error=>error==='stale'?t('Training changed. Preview again before accepting.')
   :error==='external'?t('Adopt this external queue in Plan before adjusting it.')
     :error==='conflict'?t('An available date already has unrelated training. Choose another date or edit that schedule first.')
+    :error==='cycle'?t('Choose a cycle start on or before today.')
     :error==='active'?t('Finish or discard the active workout before adjusting future sessions.')
     :error==='baseline'?t('Choose your original Push, Pull and Leg routines before previewing.')
       :t('Choose available dates and a valid time budget. Each accepted session needs working sets.')
@@ -18,12 +19,15 @@ export default function TrainingAdaptation({ S }) {
   const today=todayISO(), update=useStore(s=>s.update)
   const [open,setOpen]=useState(false),[day,setDay]=useState(today),[status,setStatus]=useState(dispositionOf(S,today))
   const [policy,setPolicy]=useState({restMultiSeconds:150,restSingleSeconds:90,warmupMinutes:0})
-  const [total,setTotal]=useState(5),[minutes,setMinutes]=useState(75),[dates,setDates]=useState([])
+  const accepted=adaptationOf(S)
+  const [creditMode,setCreditMode]=useState(accepted?.availability?.cycleStart?'selected':'current')
+  const [cycleStart,setCycleStart]=useState(accepted?.availability?.cycleStart || accepted?.cycleBoundary?.date || S.queue?.startsOn || weekKey(today,weekStartOf(S)))
+  const [total,setTotal]=useState([5,6].includes(accepted?.availability?.totalSessions)?accepted.availability.totalSessions:6),[minutes,setMinutes]=useState(75),[dates,setDates]=useState([])
   const [mapping,setMapping]=useState(adaptationOf(S)?.availability?.baselineIds || {push:'',pull:'',legs:''})
   const [proposal,setProposal]=useState(null),[error,setError]=useState(null),[undo,setUndo]=useState(null)
   const base=adaptationOf(S)?.baseline || S.routines.filter(r=>!r.adaptationSourceIds)
   const preview=()=>{
-    const p=proposeAdaptation({state:useStore.getState().S,availability:{dates,totalSessions:total,minutes,baselineIds:mapping},policy,today})
+    const p=proposeAdaptation({state:useStore.getState().S,availability:{dates,totalSessions:total,minutes,baselineIds:mapping,...(creditMode==='selected'?{cycleStart}:{})},policy,today})
     setError(p.error);setProposal(p.error?null:p)
   }
   const changeSet=(i,j,value)=>setProposal(p=>{
@@ -48,6 +52,9 @@ export default function TrainingAdaptation({ S }) {
         <label>{t('Total training sessions')}<br/><select className="input" aria-label={t('Total training sessions')} value={total} onChange={e=>{setTotal(Number(e.target.value));setProposal(null)}}><option value="5">5</option><option value="6">6</option></select></label>
         <label>{t('Minutes per session')}<br/><input className="input" type="number" min="1" max="180" aria-label={t('Minutes per session')} value={minutes} style={{width:80}} onChange={e=>{setMinutes(Number(e.target.value));setProposal(null)}} /></label>
       </div>
+      <label>{t('Cycle credit')} <select className="input" aria-label={t('Cycle credit')} value={creditMode} onChange={e=>{setCreditMode(e.target.value);setProposal(null)}}><option value="current">{t('Current accepted pass (fixed plan: calendar week)')}</option><option value="selected">{t('Review work from a selected start date')}</option></select></label>
+      {creditMode==='selected' && <label>{t('Cycle start')} <input className="input" type="date" max={today} aria-label={t('Cycle start')} value={cycleStart} onChange={e=>{setCycleStart(e.target.value);setProposal(null)}} /></label>}
+      <p className="muted small">{t('To include a completed PPL prefix from an earlier pass, explicitly choose its start date and review credited families below.')}</p>
       <details><summary>{t('Duration assumptions')}</summary><div style={{display:'flex',gap:12,flexWrap:'wrap'}}>{[['warmupMinutes',t('Additional warm-up minutes')],['restMultiSeconds',t('Multi-joint rest seconds')],['restSingleSeconds',t('Single-joint rest seconds')]].map(([key,label])=><label key={key}>{label}<br/><input className="input" type="number" min="0" style={{width:80}} aria-label={label} value={policy[key]} onChange={e=>{setPolicy({...policy,[key]:Number(e.target.value)});setProposal(null)}} /></label>)}</div></details>
       <p className="muted small">{t('Aim around 75 minutes, usually 60–90. Estimates include sets, rest, transitions and planned warm-ups. Add any extra warm-up time below.')}</p>
       <fieldset style={{border:'1px solid var(--line)',borderRadius:8,padding:8,display:'flex',gap:12,flexWrap:'wrap'}}><legend>{t('Available training dates')}</legend>
@@ -61,6 +68,8 @@ export default function TrainingAdaptation({ S }) {
     {proposal && <div aria-label={t('Proposed changes')} style={{marginTop:16}}>
       <p>{t('Only future sessions change. Completed work and the reusable program stay saved.')}</p>
       <p className="muted small">{t('Priorities use observed rolling seven-day gaps. Off-program work counts; unknown work is not zero. Future dates may move older work outside that window.')}</p>
+      <p>{t('Cycle starts {0}. Credited families: {1}',proposal.cycleBoundary.date,proposal.creditedKinds.join(', ') || t('None'))}</p>
+      {proposal.replacedPins.length>0 && <p>{t('Original dated sessions replaced: {0}',proposal.replacedPins.map(({date,id})=>`${date} · ${S.routines.find(r=>r.id===id)?.name || id}`).join(', '))}</p>}
       {proposal.remainingSessions.map((r,i)=><div key={r.date} style={{borderTop:'1px solid var(--line)',paddingTop:12,marginTop:12}}>
         <strong>{r.date} · {r.name}</strong>
         <p>{t('Estimated duration: {0} min',r.estimate.minutes)}</p>
@@ -68,7 +77,7 @@ export default function TrainingAdaptation({ S }) {
         {r.ex.map((e,j)=><label key={j} style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,marginBottom:8}}><span>{exerciseNameText(exOr(e.id))} · {proposal.baseline.find(b=>b.id===e.adaptationSourceId)?.ex.find(x=>x.id===e.id)?.sets ?? '?'} → {e.sets}</span><input className="input" type="number" min="0" max="50" style={{width:60}} aria-label={t('Working sets {0}.{1}',i+1,j+1)} value={e.sets} onChange={ev=>changeSet(i,j,ev.target.value)} /></label>)}
         {r.deferred.length>0 && <p>{t('Deferred exercises: {0}',r.deferred.map(e=>`${exerciseNameText(exOr(e.id))} (${e.sets ?? '?'})`).join(', '))}</p>}
       </div>)}
-      {proposal.shortfalls.length>0 && <div role="note"><strong>{t('Planning shortfalls')}</strong>{proposal.shortfalls.map((f,i)=><p className="small" key={i}>{f.code==='time'?t('Some prescribed work does not fit the time budget. It remains deferred; rest is not shortened.'):f.code==='availability'?t('{0} planned sessions have no available date.',f.sessions):f.code==='coverage-sets'?t('{0}: {1} estimated-set gaps remain against your aim.',f.muscle,f.sets):f.code==='coverage'?t('{0}: {1} observed direct-day gaps remain after these opportunities.',f.muscle,f.directDays):t('Some targets, roles or logged work are unknown. Review these separately; uncertainty counts may overlap.')}</p>)}</div>}
+      {proposal.shortfalls.length>0 && <div role="note"><strong>{t('Planning shortfalls')}</strong>{proposal.shortfalls.map((f,i)=><p className="small" key={i}>{f.code==='unmatched-program'?t('{0} logged sessions do not match an uncredited family in this cycle. Review the cycle start and mapping.',f.sessions):f.code==='unknown-cycle'?t('{0} logged sessions have uncertain cycle timing and are not credited.',f.sessions):f.code==='time'?t('Some prescribed work does not fit the time budget. It remains deferred; rest is not shortened.'):f.code==='availability'?t('{0} planned sessions have no available date.',f.sessions):f.code==='coverage-sets'?t('{0}: {1} estimated-set gaps remain against your aim.',f.muscle,f.sets):f.code==='coverage'?t('{0}: {1} observed direct-day gaps remain after these opportunities.',f.muscle,f.directDays):t('Some targets, roles or logged work are unknown. Review these separately; uncertainty counts may overlap.')}</p>)}</div>}
       <div style={{display:'flex',gap:8,marginTop:12}}><Button variant="primary" onClick={()=>{const result=acceptTrainingAdaptation(proposal);setError(result.error);if(!result.error){setUndo(result.undo);setProposal(null)}}}>{t('Accept adjustment')}</Button><Button onClick={()=>{setProposal(null);setError(null)}}>{t('Cancel')}</Button></div>
     </div>}
     {undo && <Button onClick={()=>{const result=undoTrainingAdaptation(undo);setError(result.error);if(!result.error)setUndo(null)}}>{t('Undo adjustment')}</Button>}

@@ -110,3 +110,21 @@ it('names proposed exercises from the real catalogue so the review is actionable
   act(()=>root.render(<Plan/>));prepare()
   expect(card().textContent.toLowerCase()).toContain('barbell incline bench press')
 })
+it.each([null,5,6])('defaults to six or preserves accepted total %s on reopen',total=>{
+  const s=state()
+  if(total)s.queue.adaptation={token:'accepted',policyVersion:1,baseline:s.routines,availability:{totalSessions:total},reviewedWork:'[]'}
+  useStore.setState({S:s});act(()=>root.render(<Plan/>));act(()=>button('Review availability').click())
+  expect(card().querySelector('[aria-label="Total training sessions"]').value).toBe(String(total || 6))
+})
+it('lets a user explicitly include a prior completed PPL prefix and reviews displaced pins',()=>{
+  const s=state(),start=new Date(todayISO()+'T12:00:00');start.setDate(start.getDate()-1);const prior=isoOf(start)
+  s.queue.since=Date.now();s.workouts=['p','u','l'].map((id,i)=>({id:'prior'+i,routineId:id,d:prior,start:start.getTime()+i,entries:[]}))
+  const future=new Date(todayISO()+'T12:00:00');future.setDate(future.getDate()+1);s.dayPlan[isoOf(future)]='l'
+  useStore.setState({S:s});act(()=>root.render(<Plan/>));prepare()
+  expect(card().querySelector('[aria-label="Cycle credit"]')).not.toBeNull()
+  input('Total training sessions','5');input('Cycle credit','selected');input('Cycle start',prior)
+  act(()=>button('Preview adjustment').click())
+  expect(card().textContent).toContain('Credited families: push, pull, legs')
+  expect(card().textContent).toContain('Upper')
+  expect(card().textContent).toContain('Original dated sessions replaced:')
+})
