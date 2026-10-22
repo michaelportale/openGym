@@ -1,4 +1,5 @@
-import { metricEntriesForExercise, metricRowsForEntry, bestWeightForEntry, completedRepsOf, modeOf, workoutAt } from './history.js'
+import { isSettingLoad } from './load-identity.js'
+import { metricEntriesForExercise, metricRowsForEntry, bestWeightForEntry, completedRepsOf, modeOf, workoutAt, entryVolumeIsPartial } from './history.js'
 import { completedVolumeOf } from './workout-model.js'
 import { bestSetOf } from './onerm.js'
 import { beatsWeight } from './exercises.js'
@@ -25,7 +26,7 @@ export const HISTORY_SESSIONS = 10
 // Volume of the exercise in one session: main set plus its drops/bursts, reps mode only —
 // there is no honest tonnage for a hold or a run.
 // A dumbbell entry logged per bell counts both bells (lib/dumbbells.js volumeFactor).
-const entryVolume = (rows, en) => rows.reduce((v, s) => v + completedVolumeOf(s), 0) * volumeFactor(en)
+const entryVolume = (rows, en) => rows.reduce((v, s) => v + completedVolumeOf(s, en), 0) * volumeFactor(en)
 
 export function exerciseHistory(S, exId, { limit = HISTORY_SESSIONS } = {}) {
   // Dumbbell weights are read in the exercise's current meaning (lib/dumbbells.js), so the curve,
@@ -41,9 +42,15 @@ export function exerciseHistory(S, exId, { limit = HISTORY_SESSIONS } = {}) {
     if (!entries.length) return
     const mode = entries.at(-1).mode
     const sameMode = entries.filter(item => item.mode === mode)
-    const rows = sameMode.flatMap(item => item.rows)
-    const en = { ...sameMode.at(-1).entry, sets: rows }
-    if (rows.length) logged.push({ w, en, mode, rows })
+    // Keep each setting visible, without giving its rows the last entry's mass convention.
+    const hasSetting = sameMode.some(item => isSettingLoad(item.entry))
+    const rows = sameMode.flatMap(item => item.rows.map(row => hasSetting ? { ...row,
+      // Even a legacy row must not inherit a later occurrence’s setting target.
+      loadConvention: item.entry.equipmentSnapshot?.loadConvention ?? item.entry.target?.loadConvention ?? 'legacy',
+    } : row))
+    const physical = sameMode.filter(item => !isSettingLoad(item.entry))
+    const en = { ...physical.at(-1)?.entry, id: exId, sets: physical.flatMap(item => item.rows) }
+    if (rows.length) logged.push({ w, en, mode, rows, items: sameMode, target: sameMode.at(-1).entry.target })
   })
   logged.sort((a, b) => workoutAt(a.w) - workoutAt(b.w))
 
@@ -62,7 +69,7 @@ export function exerciseHistory(S, exId, { limit = HISTORY_SESSIONS } = {}) {
 
   let best = 0, prId = null
   const sessions = [], points = [], e1rmPoints = []
-  logged.forEach(({ w, en, mode: m, rows }) => {
+  logged.forEach(({ w, en, mode: m, rows, items, target }) => {
     const same = m === mode
     const value = same ? valueOf({ en, rows }) : null
     const e1rm = m === 'reps' ? (bestSetOf(en)?.est ?? null) : null
@@ -73,8 +80,8 @@ export function exerciseHistory(S, exId, { limit = HISTORY_SESSIONS } = {}) {
     if (value != null && value > 0) points.push({ t, d: w.d, y: value, e1rm })
     if (e1rm != null) e1rmPoints.push({ t, d: w.d, y: e1rm })
     sessions.push({
-      id: w.id, d: w.d, t, mode: m, target: en.target || null, sets: rows, value, e1rm,
-      volume: m === 'reps' ? entryVolume(rows, en) : null,
+      id: w.id, d: w.d, t, mode: m, target: target || null, sets: rows, value, e1rm,
+      volume: m === 'reps' ? items.reduce((sum, item) => sum + entryVolume(item.rows, item.entry), 0) : null, volumePartial: m === 'reps' && items.some(item => entryVolumeIsPartial(item.entry)),
     })
   })
   // The "first reached" rule only holds for records above zero: a bodyweight session with

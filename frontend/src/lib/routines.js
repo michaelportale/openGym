@@ -138,6 +138,11 @@ export function replaceSlotExercise(slot, id, S, rid) {
   }
   const { id: _replaced, bodyweight: _flag, assisted: _assisted, side: _side, ...carried } = old
   const out = { id, ...carried }
+  if (old.stationId || old.loadConvention) {
+    delete out.stationId
+    delete out.loadConvention
+    out.weight = 0
+  }
   if (isCardio(id)) return out
   if (isBw(old) !== isBodyweightEq(id)) {
     out.weight = 0

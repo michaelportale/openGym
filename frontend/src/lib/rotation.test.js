@@ -405,3 +405,11 @@ describe('a complete managed pass left behind by a sync merge', () => {
     expect(refillIfComplete(S(), TODAY, NOW)).toBe(false)
   })
 })
+
+it('does not use historical imports as the closing workout or boundary when restoring a completed pass',()=>{
+  const current=w('a',TODAY,NOW-1000)
+  const s=S({rotation:{id:'rot',sequence:['a'],label:'R'},queue:pass(['a'],{rotationId:'rot'}),workouts:[current,{...w('a','2040-01-01',NOW+999999),historicalImport:true}]})
+  expect(refillIfComplete(s,TODAY,NOW)).toBe(true)
+  expect(s.queue.startsOn).toBe('2026-09-13')
+  expect(s.queue.since).toBe(NOW)
+})

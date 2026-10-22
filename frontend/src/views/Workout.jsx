@@ -1,3 +1,4 @@
+import { isSettingLoad, historyForLoad } from '../lib/load-identity.js'
 import { Fragment, useEffect, useId, useRef, useState } from 'react'
 import SwipeCards from '../components/SwipeCards.jsx'
 import SwipeRow from '../components/SwipeRow.jsx'
@@ -32,19 +33,21 @@ import { effortColor } from '../lib/effort.js'
 import Elapsed from '../components/Elapsed.jsx'
 import Icon from '../components/Icon.jsx'
 import { Button, Check, NumberField } from '../components/ui.jsx'
-import { defaultIncrement, weightIncrement, stepWeight } from '../lib/progression.js'
+import { applyPrescription, defaultIncrement, weightIncrement, stepWeight } from '../lib/progression.js'
 import { progressionGuidance } from '../lib/progression-copy.js'
+import { trainingSnapshotFor } from '../lib/training-metadata.js'
 import { buildPlannedEntry, plannedConfigOf, builtOutOfProgression } from '../lib/session-start.js'
 import { routineChangesFromEntry, updateRoutineFromEntry } from '../lib/routines.js'
 import { sessionNoProg, setSessionNoProg, setEntryNoProg, joinSessionNoProg } from '../lib/session-noprog.js'
 import { glyphOf } from '../lib/glyphs.js'
 import { markAllSetsDone, sessionHistory } from '../lib/backfill.js'
 import { bestSetFor } from '../lib/exercise-history.js'
-import { isWarmupRow, isFailureSet, toggleFailure, isDropSet, isRestPauseSet, dropsOf, clustersOf, addDrop, addCluster, removeDropAt, removeClusterAt, setDropAt, setClusterAt, nextDropWeight, nextBurstReps, isSideSet, makeSideSet, setSideField, toggleSide, addSideDrop, removeSideDropAt, setSideDropAt, addSideCluster, removeSideClusterAt, setSideClusterAt, WEIGHT_ORIGIN_MANUAL } from '../lib/workout-model.js'
+import { hasCompletedWork, isWarmupRow, isFailureSet, toggleFailure, isDropSet, isRestPauseSet, dropsOf, clustersOf, addDrop, addCluster, removeDropAt, removeClusterAt, setDropAt, setClusterAt, nextDropWeight, nextBurstReps, isSideSet, makeSideSet, setSideField, toggleSide, addSideDrop, removeSideDropAt, setSideDropAt, addSideCluster, removeSideClusterAt, setSideClusterAt, WEIGHT_ORIGIN_MANUAL } from '../lib/workout-model.js'
 import { canMoveActiveWorkoutUnit, moveActiveWorkoutUnit, canMoveActiveWorkoutEntry, moveActiveWorkoutEntry } from '../lib/active-workout-order.js'
 import { nextOpenSet, workoutKeyAction } from '../lib/workout-keys.js'
 import { MUSCLE_NAME } from '../lib/muscles.js'
 import FocusView from './FocusView.jsx'
+import StrengthFeedback from '../components/StrengthFeedback.jsx'
 import { withMeaning, historyAs, dbLoadFor, entryDbLoad, bellsIn, ownedWeightsFor, stepOwned } from '../lib/dumbbells.js'
 
 // How long after a key starts a hold the same key is not yet its "Done" (#133). A USB button
@@ -186,7 +189,7 @@ function ExerciseBlock({ entryIdx, compact, dense, editing, onToggle, onToggleSi
   const timed = mode === 'time'
   // The history the rows were built from: before the session's day when it is logged into the
   // past (sessionHistory), so "last time", the best set and the Best chip are not from later on.
-  const H = sessionHistory(S)
+  const H = historyForLoad(sessionHistory(S), { ...entry.target, id: entry.id })
   // The routine's own last session of this exercise (or any, for a routine that has none), the
   // same one the rows and the progression line were built from (#216).
   const last = lastEntryFor(H, entry.id, entry.rid)
@@ -250,7 +253,7 @@ function ExerciseBlock({ entryIdx, compact, dense, editing, onToggle, onToggleSi
   const refAction = refBest ? t('Show last time instead') : t('Show your best set instead')
   // The button's text is the reference, which says nothing about what a tap does; its name
   // carries both, the reference first as it reads on screen, then the switch.
-  const refLine = refText ? <button type="button" className="refline small dim"
+  const refLine = (mode !== 'reps' || !entry.equipmentSnapshot) && refText ? <button type="button" className="refline small dim"
     title={refAction} aria-label={`${refText}. ${refAction}`}
     onClick={() => update(s => { s.logRef = refBest ? 'last' : 'best' })}>
     {/* Each set on its own left-to-right island. In Arabic the first one followed the label's
@@ -274,7 +277,7 @@ function ExerciseBlock({ entryIdx, compact, dense, editing, onToggle, onToggleSi
   // The weight column says what a dumbbell weight means when the exercise has said (#474): one
   // bell or both together. A one-arm exercise holds one bell, so its plain heading is already true.
   const bells = !bw && bellsIn(cfg) === 2 ? meaning : 'as'
-  const loadCol = { f: 'w', step: loadStep, dec: true, hd: bw ? t('Added ({0})', S.unit)
+  const loadCol = { f: 'w', step: loadStep, dec: true, hd: isSettingLoad(entry) ? t('Setting') : bw ? t('Added ({0})', S.unit)
     : bells === 'each' ? t('Each ({0})', S.unit) : bells === 'total' ? t('Both ({0})', S.unit) : t('Weight ({0})', S.unit) }
   // The reps column is the total in every mode, unilateral included — the stepper walks in
   // twos there so the number you land on is one you can actually split evenly.
@@ -685,6 +688,7 @@ function ExerciseBlock({ entryIdx, compact, dense, editing, onToggle, onToggleSi
       <span><strong>{t(guidance.policyLabel)}</strong> · {t(...guidance.why)}</span>
     </button>}
     </>}
+    <StrengthFeedback entryIdx={entryIdx} onProgressionSettings={onProgressionSettings} />
     <div className="card" style={{ marginTop: 10, marginBottom: 0 }}>
       {/* the header carries the same eff3/timed sizing as the rows, or the labels drift off their
           columns; over L/R rows it also has to skip the side badge that sits in front of the weight cell */}
@@ -1139,8 +1143,12 @@ function ActiveWorkout() {
     // carries through without retyping every row while explicit manual exceptions stay put. A
     // warm-up edit stays on its own row, and the later rungs keep their ramp loads.
     if (field === 'w') {
+      delete e.sets[i].loadNeedsReview
       e.sets[i].weightOrigin = WEIGHT_ORIGIN_MANUAL
       e.sets = cascadeWeight(e.sets, i, v, undefined, e.target?.backoffStep)
+      if (!isWarmupRow(e.sets[i])) e.sets.slice(i + 1).forEach(row => {
+        if (!isWarmupRow(row) && row.w === v) delete row.loadNeedsReview
+      })
     }
   })
   const modeAt = idx => modeOf({ ...(A.entries[idx].target || {}), id: A.entries[idx].id })
@@ -1158,7 +1166,7 @@ function ActiveWorkout() {
     }
     else {
       // An extra set past a pyramid copies the last one's target, Max included.
-      const row = { w: l ? l.w : 0, r: l ? l.r : e.target.reps, done: false, ...(l && l.max ? { max: true } : {}) }
+      const row = { w: l ? l.w : 0, r: l ? l.r : e.target.reps, done: false, ...(l?.loadNeedsReview ? { loadNeedsReview: true } : {}), ...(l && l.max ? { max: true } : {}) }
       // A unilateral exercise keeps adding per-side rows (issue #60): seed each side from the
       // previous set's own side when it had one, else split the row's total evenly.
       e.sets.push(isPerSide({ ...(e.target || {}), id: e.id })
@@ -1294,7 +1302,7 @@ function ActiveWorkout() {
     onRemoveSetAt: i => removeSetAt(idx, i),
     onCopySetAt: i => copyActiveSet(idx, i),
     onStartTimed: (i, onFocusProgress) => startTimed(idx, i, onFocusProgress),
-    onProgressionSettings: editing ? null : () => openProgressionSettings(idx),
+    onProgressionSettings: editing ? null : proposal => openProgressionSettings(idx, proposal?.action ? proposal : null),
     onRest: editing ? null : () => openExerciseRest(idx),
     onNoProg: routineKeepsOut(A.entries[idx]) ? null : on => setNoProg(idx, on),
     routineUpdate: routineUpdateFor(idx),
@@ -1396,7 +1404,7 @@ function ActiveWorkout() {
         // Freestyle stamps the meaning of a dumbbell weight and reads last time in it, the way
         // buildPlannedEntry does for a planned exercise (lib/dumbbells.js).
         const built = freestyle
-          ? { target: withMeaning(s, cfg, ex.id), plan: null, sets: applyIntensifierPlan(buildSets(historyAs(past, ex.id, dbLoadFor(s, full)), full, {
+          ? { ...trainingSnapshotFor(s, full), target: withMeaning(s, cfg, ex.id), plan: null, sets: applyIntensifierPlan(buildSets(historyAs(past, ex.id, dbLoadFor(s, full)), full, {
             step: modeOf(full) === 'reps' ? (ownedWeightsFor(s, full) || weightIncrement(full, s.unit)) : defaultIncrement(ex.id, s.unit), preferLast: true,
           }), full, dropGrid(s, full)) }
           : buildPlannedEntry(past, full, routine, { noProg })
@@ -1469,7 +1477,7 @@ function ActiveWorkout() {
       }),
     })
   }
-  const openProgressionSettings = idx => {
+  const openProgressionSettings = (idx, proposal) => {
     const state = useStore.getState().S
     const entry = state.active?.entries?.[idx]
     if (!entry) return
@@ -1482,6 +1490,7 @@ function ActiveWorkout() {
     // The sheet opens at the plan's sets and reps rather than today's prescription (see
     // plannedConfigOf), so saving it unchanged rebuilds the rows the entry already has.
     const opened = plannedConfigOf(entry)
+    if (proposal) opened.weight = proposal.load
     exConfigSheet(exOr(entryId), opened, cfg => {
       // Store updates clone the state tree. If this exact object is no longer at the captured
       // index, the list changed while the sheet was open; an id check alone cannot distinguish
@@ -1497,10 +1506,17 @@ function ActiveWorkout() {
         // happens to occupy the same index.
         if (!activeEntry || activeEntry.id !== entryId) return
         const full = { ...cfg, id: activeEntry.id }
+        const loggedIdentity = activeEntry.sets.some(hasCompletedWork)
+        if (loggedIdentity) for (const key of ['stationId', 'loadConvention', 'dbLoad']) {
+          if (activeEntry.target?.[key] != null) full[key] = activeEntry.target[key]
+          else delete full[key]
+        }
         // The weight the sheet showed is today's. Left as it was, it is not an edit of the plan's:
         // stamped as the plan, a later edit of the reps would restart from today's load as though
         // it had been typed in (nextPrescription), so the plan keeps its own.
-        if ((cfg.weight || 0) === (opened.weight || 0) && activeEntry.planned?.weight != null) full.weight = activeEntry.planned.weight
+        if (!proposal && (cfg.weight || 0) === (opened.weight || 0) && activeEntry.planned?.weight != null) full.weight = activeEntry.planned.weight
+        // Changing reps or saving the same load cannot confirm an uncertain imported copy.
+        if (activeEntry.sets.some(row => row.loadNeedsReview) && (cfg.weight || 0) === (opened.weight || 0)) full.loadNeedsReview = true
         const activeRoutine = s.routines.find(r => r.id === activeEntry.rid)
         // A config without a set count keeps the rows the session already has.
         if (!(full.sets > 0)) full.sets = activeEntry.sets.filter(x => !isWarmupRow(x)).length || 1
@@ -1512,11 +1528,23 @@ function ActiveWorkout() {
         // Without a prescription only in a routine kept out of progression: an exercise kept out
         // by hand keeps its prescription, so its Undo leaves the numbers it should count at.
         const built = buildPlannedEntry(sessionHistory(s), full, activeRoutine, { noProg: builtOutOfProgression(activeEntry, activeRoutine) })
+        // Saving this advisory explicitly overrides this session once. The automatic rule is
+        // not run on the candidate again, and the routine's selected policy is unchanged.
+        if (proposal) {
+          const reps = Math.min(full.reps, Math.max(full.repsMin || 1, proposal.reps))
+          const manual = { policy: built.plan.policy, kind: 'hold', weight: full.weight, reps,
+            why: ['Editable suggestion from comparable history accepted for this session.'] }
+          const ramp = ownedWeightsFor(s, full) || weightIncrement(full, s.unit)
+          built.sets = applyPrescription(built.sets, manual, ramp, barFloor(s, full.id))
+          built.target = { ...built.target, weight: full.weight, reps }
+          built.plan = manual
+        }
         const fresh = built.sets
-        const doneWarm = activeEntry.sets.filter(x => x.done && isWarmupRow(x))
-        const doneWork = activeEntry.sets.filter(x => x.done && !isWarmupRow(x))
+        const doneWarm = activeEntry.sets.filter(x => hasCompletedWork(x) && isWarmupRow(x))
+        const doneWork = activeEntry.sets.filter(x => hasCompletedWork(x) && !isWarmupRow(x))
         const freshWarm = fresh.filter(isWarmupRow)
         const freshWork = fresh.filter(x => !isWarmupRow(x))
+        if (!loggedIdentity) { activeEntry.trainingSnapshot = built.trainingSnapshot; activeEntry.equipmentSnapshot = built.equipmentSnapshot }
         activeEntry.target = built.target
         activeEntry.plan = built.plan
         activeEntry.planned = built.planned
@@ -1524,7 +1552,7 @@ function ActiveWorkout() {
         else delete activeEntry.carried
         activeEntry.sets = [...doneWarm, ...freshWarm.slice(doneWarm.length), ...doneWork, ...freshWork.slice(doneWork.length)]
       })
-    }, null, routine)
+    }, null, routine, null, null, null, entry.sets.some(hasCompletedWork))
   }
 
   // Remove a whole exercise from the session. The confirmation always asks first; in a
@@ -1622,6 +1650,11 @@ function ActiveWorkout() {
   // (store/useUI.js). The tick's own beep would sound over the chime's first note and clip it,
   // and its short buzz would cut the pattern off: a new vibrate call replaces the running one.
   const toggle = (idx, i, side, { quiet = false, onFocusProgress } = {}) => {
+    const pending = useStore.getState().S.active?.entries[idx]?.sets[i]
+    if (pending?.loadNeedsReview && (!side || pending.sides?.[side]?.loadNeedsReview !== false)) {
+      useUI.getState().toast(t('Choose the load for this copied exercise before logging it.'))
+      return
+    }
     // Ticking a set ends the typing in that row: drop the keyboard before the rest timer, the
     // effort sheet or the next exercise moves in. WebKit keeps the input focused across the
     // button tap, and a focused input with its keyboard gone is what leaves the tab bar

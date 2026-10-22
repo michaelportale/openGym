@@ -27,6 +27,14 @@ export const MIN_RATED = 5
 export const rirOf = s =>
   !s ? null : s.rir != null ? s.rir : s.rpe != null ? 10 - s.rpe : isFailureSet(s) ? 0 : null
 
+// Progression requires a rating the lifter entered; a failure flag is not a logged RIR.
+export function loggedRirOf(set) {
+  const valid = (v, min, max) => typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max
+  if (valid(set?.rir, 0, 10)) return set.rir
+  if (valid(set?.rpe, 0, 10)) return 10 - set.rpe
+  return null
+}
+
 /** RIR → the scale being displayed. The reverse of rirOf, for one number. */
 export const toScale = (kind, rir) =>
   rir == null ? null : Math.round((kind === 'rpe' ? 10 - rir : rir) * 10) / 10

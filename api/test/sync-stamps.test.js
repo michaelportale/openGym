@@ -411,3 +411,54 @@ test('PUT /api/data: an older app\'s two changes of one setting in a row both la
   assert.ok(onDisk._unstamped?.ed?.restSec > 0);
   assert.equal(onDisk._prior?.restSec?.length, 2);   // 100, then 120
 });
+
+test('manual training metadata keeps per-exercise stamps across server writes', () => {
+  const cur = { _ts: 1, workouts: [], routines: [], trainingMetadata: { a: { role: 'hinge', primary: ['hamstring'], secondary: [], _ts: 900 } } };
+  const next = clone(cur);
+  next.trainingMetadata.b = { role: 'squat', primary: ['quadriceps'], secondary: [], _ts: 901 };
+  stampPut(cur, next, { overRead: true, stamped: false, now: 1000 });
+  assert.equal(next.edited?.trainingMetadata, undefined);
+  assert.equal(next.trainingMetadata.a._ts, 900);
+});
+
+test('PUT and GET /api/data preserve exact station inventory and immutable entry snapshots', async t => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gym-equipment-'));
+  fs.writeFileSync(path.join(dataDir, 'secret'), SECRET, { mode: 0o600 });
+  fs.writeFileSync(path.join(dataDir, 'db.json'), JSON.stringify({ users: [{ id: 'u1', name: 'One', created: new Date().toISOString() }], creds: [], subs: [], invites: [] }));
+  const child = spawn(process.execPath, ['server.js'], { cwd: API, stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, PORT: '0', DATA_DIR: dataDir, ORIGIN: 'http://localhost:8080', RP_ID: 'localhost' } });
+  let log = '';
+  child.stdout.on('data', d => log += d); child.stderr.on('data', d => log += d);
+  t.after(() => { child.kill('SIGKILL'); fs.rmSync(dataDir, { recursive: true, force: true }); });
+  const base = `http://127.0.0.1:${await boundPort(child, () => log)}`;
+  const headers = { Cookie: `gymsid=${mintSession('u1')}`, 'Content-Type': 'application/json' };
+  const entry = { id: 'synthetic', trainingSnapshot: { role: null, primary: [], secondary: [], status: 'unknown' }, equipmentSnapshot: { stationId: 'station1', label: 'Synthetic station', loadConvention: 'plate-per-side', unit: 'lb', status: 'exact' }, sets: [{ w: 45, r: 8, done: true }] };
+  const state = { _ts: 1, trainingMetadata: { synthetic: { role: 'horizontal-press', primary: ['chest'], secondary: [], _ts: 1 } },
+    equipProfiles: [{ id: 'gym', stations: [{ id: 'station1', label: 'Synthetic station', exerciseIds: ['synthetic'], loadConvention: 'plate-per-side' }] }],
+    routines: [{ id: 'push', ex: [{ id: 'synthetic', stationId: 'station1', loadConvention: 'plate-per-side' }] }], workouts: [{ id: 'w1', d: '2026-10-01', start: 1, end: 2, entries: [entry] }] };
+  const response = await fetch(`${base}/api/data`, { method: 'PUT', headers, body: JSON.stringify({ state, stamped: true }) });
+  assert.equal(response.status, 200);
+  const read = await (await fetch(`${base}/api/data`, { headers })).json();
+  assert.deepEqual(read.state.workouts[0].entries[0], entry);
+  assert.deepEqual(read.state.trainingMetadata, state.trainingMetadata);
+  assert.deepEqual(read.state.equipProfiles[0].stations, state.equipProfiles[0].stations);
+  assert.equal(read.state.routines[0].ex[0].stationId, 'station1');
+});
+
+test('coverage targets retain per-muscle stamps for older unstamped writers', () => {
+  const cur = { _ts: 1, workouts: [], routines: [], coverageTargets: { chest: { directDays: 2, sets: null, _ts: 900 } } };
+  const next = clone(cur);
+  next.coverageTargets.triceps = { directDays: 3, sets: 8, _ts: 901 };
+  stampPut(cur, next, { overRead: true, stamped: false, now: 1000 });
+  assert.equal(next.edited?.coverageTargets, undefined);
+  assert.equal(next.coverageTargets.chest._ts, 900);
+});
+
+test('explicit day dispositions are independently stamped for older writers', () => {
+  const cur=stored();cur.dayDispositions={'2026-10-20':{status:'rest',_ts:NOW-100}};
+  const next=clone(cur);next.dayDispositions['2026-10-21']={status:'trained-unlogged'};
+  stampPut(cur,next,{overRead:true,stamped:false,now:NOW});
+  assert.equal(next.edited.dayDispositions,undefined);
+  assert.equal(next.dayDispositions['2026-10-20']._ts,NOW-100);
+  assert.ok(next.dayDispositions['2026-10-21']._ts>=NOW);
+});

@@ -1,3 +1,4 @@
+import { uncertainImportedLoad } from './load-identity.js'
 import { uid } from './format.js'
 import { modeOf, defaultConfig, isPerSide, entryRoutineId, setsFromRows } from './history.js'
 import { isSideSet, isWarmupRow } from './workout-model.js'
@@ -119,11 +120,16 @@ function copiedEntry(entry, source) {
   // in a routine: a copied `planned` or `rid` would tell the next session it had been built from
   // another plan or another routine.
   for (const key of SESSION_ONLY) delete cfg[key]
+  // A copied observation keeps its explicit convention even if today's station was edited.
+  if (entry.equipmentSnapshot?.loadConvention) cfg.loadConvention = entry.equipmentSnapshot.loadConvention
+  // An exercise mapping does not establish a transferable load. The new unchecked rows need
+  // a fresh load choice; the original source evidence remains on the historical record.
+  if (uncertainImportedLoad(entry)) { cfg.weight = 0; cfg.loadNeedsReview = true }
   return cfg
 }
 
 // `rowReps` is one session's per-set aim under triple progression (progression.js), not a plan.
-const SESSION_ONLY = ['planned', 'plan', 'carried', 'rid', 'noProg', 'muscleSnapshot', 'rowReps']
+const SESSION_ONLY = ['planned', 'plan', 'carried', 'rid', 'noProg', 'muscleSnapshot', 'trainingSnapshot', 'equipmentSnapshot', 'rowReps']
 
 // `routines` are the ones the session was built from, when they still exist: the rule each copied
 // exercise is read under comes from there (see copiedEntry).

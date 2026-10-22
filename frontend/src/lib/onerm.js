@@ -1,3 +1,4 @@
+import { isSettingLoad } from './load-identity.js'
 import { isAssisted } from './exercises.js'
 import { isSideSet } from './workout-model.js'
 import { entriesForExercise, metricRowsForEntry, workoutAt } from './history.js'
@@ -137,6 +138,7 @@ export function estimate1RM(w, r, formula = DEFAULT_FORMULA, rir = null) {
 // `topW` is ignored on purpose: it records the working weight a user confirmed after the
 // exercise, with no rep count attached, so it cannot produce an estimate.
 export function bestSetOf(entry, formula = DEFAULT_FORMULA) {
+  if (isSettingLoad(entry)) return null
   // An assistance machine has no one-rep max to estimate: the load is the help you were given,
   // so Epley on it would rise as you got weaker and call that a record (issue #232). These
   // exercises stay out of the estimate, the curve and the strength list entirely.
@@ -147,6 +149,7 @@ export function bestSetOf(entry, formula = DEFAULT_FORMULA) {
       ? [s.sides.L, s.sides.R].filter(side => side?.done === true)
       : [s]
     sets.forEach(set => {
+      if (set.sourceLoad?.physical === false) return
       const est = estimate1RM(set.w, set.r, formula, set.rir ?? null)
       if (est !== null && (!best || est > best.est)) best = { est, w: Number(set.w), r: Math.round(Number(set.r)) }
     })

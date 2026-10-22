@@ -2,7 +2,7 @@
 // ideas'): something to paste into a chat, a coach's spreadsheet or a notes app. The sets are the
 // same labels the history shows, so a drop-set or a rest-pause set reads the same in both.
 // i18n-core rather than i18n, like history.js: nothing here needs the React half.
-import { setLabel, sessionSections, workoutVolume } from './history.js'
+import { setLabel, sessionSections, workoutVolume, workoutVolumeIsPartial } from './history.js'
 import { EXIDX } from './exercises.js'
 import { hasCompletedWork, isWarmupRow } from './workout-model.js'
 import { fmtDate, fmtNum, fmtVol, durPart, capWords } from './format.js'
@@ -17,7 +17,7 @@ import { t, exerciseNameClass } from './i18n-core.js'
 export function workoutText(w, { unit, nameOf, speedUnit }) {
   const facts = [
     ...durPart((w.end || 0) - (w.start || 0)),
-    fmtVol(w.vol ?? workoutVolume(w), unit),
+    fmtVol(w.vol ?? workoutVolume(w), unit, workoutVolumeIsPartial(w)),
     ...(w.bw ? [t('Body weight') + ' ' + fmtNum(w.bw) + ' ' + unit] : []),
   ]
   const blocks = [[[w.name, fmtDate(w.d, true, true)].filter(Boolean).join(' · '), facts.join(' · ')].join('\n')]
@@ -30,7 +30,7 @@ export function workoutText(w, { unit, nameOf, speedUnit }) {
     // Title case the way the screen shows it (exerciseNameClass): an English name gets it, a
     // translated one keeps its own casing, which German's capitalised nouns depend on.
     const name = nameOf(entry)
-    return [exerciseNameClass(EXIDX[entry.id]) ? capWords(name) : name, sets.map(s => setLabel(entry.id, s, entry.target, speedUnit)).join(', '), ...(entry.note ? [entry.note] : [])]
+    return [exerciseNameClass(EXIDX[entry.id]) ? capWords(name) : name, sets.map(s => setLabel(entry.id, s, { ...entry.target, equipmentSnapshot: entry.equipmentSnapshot }, speedUnit)).join(', '), ...(entry.note ? [entry.note] : [])]
   }
   // Grouped the way the detail sheet groups it (sessionSections): per routine first, so a
   // superset is only ever paired inside one routine's section, in the order the sheet lists them.

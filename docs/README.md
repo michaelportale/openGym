@@ -8,7 +8,7 @@ Pick the part that matches what you're doing. If you just have a question, try t
 | Guide | Read it when |
 |---|---|
 | [FAQ](FAQ.md) | You have a quick question: iPhone, cost, where your data goes, AI, the exercise media |
-| [Importing data](DATA_IMPORTS.md) | You're coming from FitNotes, Strong, Hevy or Apple Health, or sharing a plan with someone |
+| [Importing data](DATA_IMPORTS.md) | You're importing CSV, structured Markdown notes or Apple Health, or sharing a plan |
 | [AI coach](AI_COACH.md) | Your instance has the coach switched on and you want to know what it sees and can change |
 
 The [live demo](https://opengym.ch/demo/) is the real app with example data, nothing
@@ -40,6 +40,9 @@ Design notes for specific features, kept next to the code they describe:
 | [Set types](dev/SET_TYPES.md) | Drop sets and rest-pause: the set-row model and how totals are counted |
 | [Workout views](dev/LIST_VIEW.md) | The cards, list and compact layouts of the workout screen |
 | [Combine routines](dev/COMBINE_ROUTINES.md) | Spec for running more than one routine in a session |
+| [Personal strength policy](dev/PERSONAL_STRENGTH_POLICY.md) | Coverage accounting, effort suggestions, duration assumptions and evidence limits |
+| [Personal strength acceptance](dev/PERSONAL_STRENGTH_ACCEPTANCE.md) | Verified local behavior, release checks and the open installed-iPhone gate |
+| [Fitbod research](dev/FITBOD_RESEARCH.md) | Installed-artifact findings and unverified runtime behavior |
 
 ## Still stuck?
 

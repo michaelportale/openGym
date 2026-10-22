@@ -1,3 +1,4 @@
+import { isSettingLoad } from '../lib/load-identity.js'
 import { useState } from 'react'
 import { useStore } from '../store/useStore.js'
 import { exOr } from '../lib/exercises.js'
@@ -18,6 +19,7 @@ import { speedUnitOf, toSpeed, fromSpeed } from '../lib/speed.js'
 import { effortPickerSheet, exerciseDetailSheet, exerciseHistorySheet, exerciseNoteSheet, menuSheet, barWeightSheet } from '../sheets.jsx'
 import { baseWeightFor, inventoryFor, loadKindFor, rowLoad } from '../lib/plates.js'
 import { ownedWeightsFor, stepOwned } from '../lib/dumbbells.js'
+import StrengthFeedback from '../components/StrengthFeedback.jsx'
 import Icon from '../components/Icon.jsx'
 import { Button, Stepper } from '../components/ui.jsx'
 import './FocusView.css'
@@ -177,7 +179,7 @@ export default function FocusView({
           onClick={() => onToggleSide(setIdx, side,
             !sideSet.done && (set.sides.L.done || set.sides.R.done) ? onProgress : undefined)}><Icon name="check" /></button>
       </div>
-      <Stepper label={t('Load ({0})', S.unit)} ariaLabel="load" value={sideSet.w || 0} step={loadStep} onStep={stepLoad} disabled={readOnly || sideSet.done}
+      <Stepper label={isSettingLoad(entry) ? t('Setting') : t('Load ({0})', S.unit)} ariaLabel="load" value={sideSet.w || 0} step={loadStep} onStep={stepLoad} disabled={readOnly || sideSet.done}
         onChange={value => change('w', value)} />
       <Stepper label={t('Reps')} ariaLabel="reps" value={sideSet.r || 0} step={1} decimal={false} disabled={readOnly || sideSet.done}
         onChange={value => change('r', value)} />
@@ -276,14 +278,15 @@ export default function FocusView({
         {entry.target?.note && <div className="focus-note">{entry.target.note}</div>}
         {pinnedNote && <div className="focus-note pinned"><Icon name="flag" />{t('From {0}:', fmtDate(pinnedNote.d, true))} {pinnedNote.note}</div>}
         {entry.note && <div className="focus-note">{entry.note}</div>}
-        {last && <div className="focus-last">{t('Last time')} · {fmtDate(last.d)}</div>}
+        {last && (mode !== 'reps' || !entry.equipmentSnapshot) && <div className="focus-last">{t('Last time')} · {fmtDate(last.d)}</div>}
         {guidance && <button className="focus-guidance" onClick={onProgressionSettings}><Icon name="lightbulb" />{t(guidance.policyLabel)}</button>}
       </div>
-      <Prescription entry={entry} setIdx={setIdx} unit={S.unit} fallbackRest={S.restSec}>
+      <Prescription entry={entry} setIdx={setIdx} unit={isSettingLoad(entry) ? '' : S.unit} fallbackRest={S.restSec}>
         <PlanBadge entry={entry} mode={mode} />
         <PlateBadge S={S} entry={entry} set={set} />
         {entry.noProg === true && <span className="focus-badge warning"><Icon name="pause" />{t('Not counted for progression')}{onNoProg && <button type="button" className="focus-badge-action" onClick={() => onNoProg(false)}>{t('Undo')}</button>}</span>}
       </Prescription>
+      <StrengthFeedback entryIdx={entryIdx} onProgressionSettings={onProgressionSettings} />
       {locked && <p className="focus-lock-note" role="status">{t('Complete set {0} to edit this one.', firstOpenSet + 1)}</p>}
 
       <div data-testid="focus-set" className={(set.done ? 'complete ' : '') + (locked ? 'locked' : '')}>
@@ -299,7 +302,7 @@ export default function FocusView({
             {(inclineFits(ex) || entry.sets.some(hasIncline)) && <Stepper label={t('Incline (%)')} ariaLabel="incline" value={set.incline || 0} step={INCLINE_STEP} max={INCLINE_MAX} disabled={readOnly}
               onChange={value => onField(setIdx, 'incline', clampIncline(value))} />}
           </> : <>
-            <Stepper label={t('Load ({0})', S.unit)} ariaLabel="load" value={set.w || 0} step={loadStep} onStep={stepLoad} disabled={readOnly}
+            <Stepper label={isSettingLoad(entry) ? t('Setting') : t('Load ({0})', S.unit)} ariaLabel="load" value={set.w || 0} step={loadStep} onStep={stepLoad} disabled={readOnly}
               onChange={value => onField(setIdx, 'w', value)} />
           {mode === 'time' ? <div className="focus-timed">
             <strong>{t('{0}s hold', set.sec || entry.target?.sec || 45)}</strong>

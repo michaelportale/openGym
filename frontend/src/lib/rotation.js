@@ -44,7 +44,7 @@ const newPass = (ids, label, rotationId, startsOn, since) => ({ ids, since, star
 
 /** Workouts that could have credited `q`'s pass: dated on/after its startsOn, matching one of its ids. */
 const creditWindow = (s, q) => (s.workouts || [])
-  .filter(w => String(w.d || '') >= q.startsOn && routineIdsOf(w).some(id => q.ids.includes(id)))
+  .filter(w => w.historicalImport !== true && String(w.d || '') >= q.startsOn && routineIdsOf(w).some(id => q.ids.includes(id)))
 
 /**
  * `now`, or later still when a workout already in the credit window would otherwise re-credit
@@ -202,7 +202,7 @@ export function refillAfter(s, w, today = todayISO(), now = Date.now()) {
   if (!q?.rotationId || !s.rotation?.id || q.rotationId !== s.rotation.id) return false
   if (!queueView(s, today)?.complete) return false
   const seq = rotationIds(s)
-  if (!isCircular(q.ids, seq)) return false
+  if (!isCircular(q.ids, seq) && !q.adaptation?.baseline) return false
   const credited = routineIdsOf(w)
   const last = q.ids.filter(id => credited.includes(id)).at(-1) ?? null
   const bound = [w.d, lastCreditDay(s)].filter(Boolean).sort().at(-1)

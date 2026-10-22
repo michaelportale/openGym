@@ -65,7 +65,7 @@ export const queueOf = S => {
 }
 
 // The DONE RULE for one workout and one session — `isDone` asks it across the log.
-const countsFor = (S, q, w, id) => routineIdsOf(w).includes(id)
+const countsFor = (S, q, w, id) => w.historicalImport !== true && routineIdsOf(w).includes(id)
   && ((w.start ?? 0) >= q.since
     || (q.strict !== true && String(w.d || '') >= q.startsOn && nameParts(w).includes(S.routines.find(r => r.id === id)?.name)))
 const isDone = (S, q, id) => S.workouts.some(w => countsFor(S, q, w, id))
@@ -189,7 +189,11 @@ export function weekTally(S, today) {
   // `q.ids`, but a weekday pointer to it is still not a day you planned yourself.
   const unqueued = id => !(q && S.queue.ids.includes(id))
   const ownIds = ids => [].concat(ids || []).filter(id => S.routines.some(r => r.id === id) && unqueued(id))
-  const ownDays = Object.values(S.week || {}).filter(ids => ownIds(ids).length).length
+  const start = new Date(weekKey(today,ws)+'T12:00:00')
+  const ownDays = Array.from({length:7},(_,i)=>{
+    const date=new Date(start);date.setDate(start.getDate()+i)
+    return ownIds(S.week?.[date.getDay()]).some(id=>!adaptationCovers(S,id,isoOf(date)))
+  }).filter(Boolean).length
   if (!q) return { done: thisWeek.length, planned: ownDays }
   // The workout that earns each session its credit is the earliest one the DONE RULE accepts
   // (by date, not array position — a backfilled log is not always in order); every other
@@ -200,4 +204,13 @@ export function weekTally(S, today) {
   // decides what is PLANNED)
   const other = thisWeek.filter(w => !credited.has(w) || routineIdsOf(w).some(unqueued)).length
   return { done: queueDone(S).length + other, planned: q.ids.length + ownDays }
+}
+
+/** An accepted adaptation replaces only its baseline weekdays, through its last available date. */
+export function adaptationCovers(S,id,iso) {
+  const a=S.queue?.adaptation
+  return a?.policyVersion===1 && typeof a.token==='string' && typeof a.today==='string'
+    && Array.isArray(a.baseline) && Array.isArray(a.availability?.dates)
+    && iso>=a.today && a.availability.dates.some(date=>iso<=date)
+    && a.baseline.some(r=>r.id===id)
 }

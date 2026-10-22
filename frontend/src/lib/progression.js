@@ -1,3 +1,4 @@
+import { historyForLoad, equipmentSnapshotFor } from './load-identity.js'
 // Automatic progression (issue #17).
 //
 // Everything here is a pure function of the workout history. Nothing writes back into a
@@ -86,7 +87,7 @@ export { defaultIncrement }
 // Resolve the load step for reps-mode weight controls and progression. Timed exercises use
 // `inc` for seconds, so their optional weight column must not call this helper.
 export function weightIncrement(cfg, unit) {
-  return cfg && cfg.inc > 0 ? cfg.inc : defaultIncrement(cfg?.id, unit)
+  return cfg && Number.isFinite(cfg.inc) && cfg.inc > 0 ? cfg.inc : defaultIncrement(cfg?.id, unit)
 }
 export const DEFAULT_SEC_INCREMENT = 5
 // Where adding another set of push-ups stops being progress and starts being a way to spend
@@ -330,6 +331,7 @@ export function readSession(entry, fallback) {
  * plan it was built from (`planned`), so the caller can tell a borrowed or outdated baseline.
  */
 export function sessionsFor(S, exId, fallback, rid) {
+  S = historyForLoad(S, { ...fallback, id: exId })
   if (rid) {
     const own = sessionsIn(S, exId, fallback, rid)
     if (own.length) return own
@@ -445,10 +447,11 @@ export function stallCount(sessions, policy) {
 export function nextPrescription(S, cfg, routine) {
   const mode = modeOf(cfg)
   const policy = policyFor(cfg, routine, mode)
-  const unit = S.unit || 'kg'
+  const setting = equipmentSnapshotFor(S, cfg).loadConvention === 'machine-setting'
+  const unit = setting ? '' : S.unit || 'kg'
   const inc = mode === 'time'
     ? (cfg.inc > 0 ? cfg.inc : DEFAULT_SEC_INCREMENT)
-    : weightIncrement(cfg, unit)
+    : weightIncrement(cfg, S.unit)
   if (policy === 'off') return { policy, kind: 'off' }
   // An assistance machine progresses downwards: the stack carries part of your weight, so the
   // reward for a clean session is less help, and a stall means taking more (issue #232). Only
@@ -578,7 +581,7 @@ export function nextPrescription(S, cfg, routine) {
   // weight remains the hard upper bound for the selected candidate.
   const epleyDeload = () => {
     // Epley reads load as the work done; on an assistance machine it is the work taken away.
-    if (assisted) return null
+    if (assisted || setting) return null
     if (mode !== 'reps' || (policy !== 'linear' && policy !== 'double')) return null
     const previous = last.target || {}
     const target = {

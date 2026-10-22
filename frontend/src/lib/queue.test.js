@@ -335,3 +335,18 @@ describe('queueOf — the shared normalization', () => {
     expect(queueView(st, TODAY).items.map(i => i.id)).toEqual(['d1', 'd2'])
   })
 })
+it('week tally excludes baseline weekdays replaced by dated adaptation while retaining unrelated and historical prescriptions',()=>{
+  const S={routines:[{id:'p'},{id:'u'},{id:'l'},{id:'other'},...['a','b','c','d','e'].map(id=>({id}))],workouts:[],week:{1:'p',2:['u','other'],3:'l'},dayPlan:{},queue:{ids:['a','b','c','d','e'],since:1,startsOn:'2026-10-19',adaptation:{token:'a',policyVersion:1,today:'2026-10-19',baseline:[{id:'p'},{id:'u'},{id:'l'}],availability:{dates:['2026-10-19','2026-10-20','2026-10-21','2026-10-22','2026-10-23']}}}}
+  expect(weekTally(S,'2026-10-21')).toEqual({done:0,planned:6})
+  S.queue.adaptation.today='2026-10-21'
+  expect(weekTally(S,'2026-10-21').planned).toBe(7)
+})
+
+describe('imported historical context never advances the current program', () => {
+  it.each([undefined, SINCE + 1000])('excludes explicit historical imports even with routine/name/date matches and start %s', start => {
+    const s = S({ workouts: [w({ historicalImport:true, routineIds:['d1'], name:'US W1 D1', start })] })
+    expect(queueDone(s)).toEqual([])
+    expect(queueRemaining(s)).toEqual(['d1','d2','d3'])
+    expect(pinState(s,'d1')).toBe('open')
+  })
+})

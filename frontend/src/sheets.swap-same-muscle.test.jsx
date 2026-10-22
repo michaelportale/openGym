@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 // #473: a swap opens on what trains the same muscle. Mid-workout (Swap exercise) and in the
 // routine editor (Replace exercise) the picker starts on the exercises sharing the swapped one's
-// target muscle, same equipment first, and "All" is one tap back to the whole list.
+// target muscles, with role/familiarity ranking, and "All" returns to the whole list.
 import React, { act } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createRoot } from 'react-dom/client'
@@ -57,7 +57,7 @@ describe('sameMuscleFirst', () => {
 })
 
 describe('swap picker opens on the same muscle', () => {
-  it('mid-workout: Swap exercise starts on the target muscle, same equipment first, All goes back', () => {
+  it('mid-workout: Swap exercise starts on the target muscle, explained suggestions first, All goes back', () => {
     expect(CABLE_TRI).toBeTruthy()
     const S = structuredClone(DEF)
     S.active = {
@@ -75,11 +75,8 @@ describe('swap picker opens on the same muscle', () => {
 
     const listed = rows(host)
     expect(listed.length).toBeGreaterThan(1)
-    expect(listed.every(s => s.startsWith('Triceps'))).toBe(true)
-    // Cable first: once something else shows up, no cable exercise follows it.
-    const firstOther = listed.findIndex(s => !s.endsWith('cable'))
-    expect(listed[0].endsWith('cable')).toBe(true)
-    if (firstOther > 0) expect(listed.slice(firstOther).some(s => s.endsWith('cable'))).toBe(false)
+    expect(listed.some(s => s.startsWith('Triceps'))).toBe(true)
+    expect(host.textContent).toContain('Training metadata unverified')
     // The exercise being swapped away is not offered as its own replacement.
     expect([...host.querySelectorAll('.list .item .tt')].map(x => x.textContent)).not.toContain(CABLE_TRI.n)
 
@@ -88,7 +85,8 @@ describe('swap picker opens on the same muscle', () => {
     expect(rows(host).some(s => !s.startsWith('Triceps'))).toBe(true)
     // …and back again.
     act(() => sameChip(host).click())
-    expect(rows(host).every(s => s.startsWith('Triceps'))).toBe(true)
+    expect(rows(host).some(s => s.startsWith('Triceps'))).toBe(true)
+    expect(host.textContent).toContain('Training metadata unverified')
   })
 
   // The routine editor hands its slot's exercise in (views/RoutineEdit.replace.test.jsx).
@@ -97,7 +95,31 @@ describe('swap picker opens on the same muscle', () => {
     exercisePicker(pick, { title: 'Replace exercise', like: CABLE_TRI.id })
     const host = renderTop()
     expect(isOn(sameChip(host))).toBe(true)
-    expect(rows(host).every(s => s.startsWith('Triceps'))).toBe(true)
+    expect(rows(host).some(s => s.startsWith('Triceps'))).toBe(true)
+    expect(host.textContent).toContain('Training metadata unverified')
+  })
+
+  it('keeps occupied stations out of searched suggestions and restores them only in All', () => {
+    const S = structuredClone(DEF)
+    S.equipProfiles = [{ id: 'gym', name: 'Gym', accV: 1, equipment: [], stations: [{ id: 'occupied', label: 'Cable stack', exerciseIds: ['0241'] }] }]
+    S.activeEquipId = 'gym'
+    S.equipFilterOn = true
+    useStore.setState({ S, user: null })
+    exercisePicker(vi.fn(), { like: CABLE_TRI.id })
+    const host = renderTop()
+    const occupied = host.querySelector('input[aria-label="Occupied station: Cable stack"]')
+    expect(occupied).toBeTruthy()
+    act(() => occupied.click())
+    const search = host.querySelector('input.input')
+    act(() => {
+      Object.getOwnPropertyDescriptor(search.constructor.prototype, 'value').set.call(search, 'cable triceps pushdown')
+      search.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    const names = () => [...host.querySelectorAll('.list .item .tt')].map(el => el.textContent)
+    expect(isOn(sameChip(host))).toBe(true)
+    expect(names()).not.toContain('cable triceps pushdown (v-bar)')
+    act(() => chipByText(host, 'All').click())
+    expect(names()).toContain('cable triceps pushdown (v-bar)')
   })
 
   it('an add opens on the whole list, with no same-muscle chip', () => {

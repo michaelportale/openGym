@@ -250,3 +250,41 @@ test('queue: a strict pass (the app\'s "Start new pass") ignores a same-named wo
   const after = { ...strict, workouts: [early, { ...early, start: 2000 }] };
   assert.equal(effectiveRoutineId(after, '2026-09-07'), 'r2');
 });
+
+test('adapted occurrence dates replace baseline weekday work, preserving unrelated assignments outside the window',()=>{
+  const S={routines:[{id:'p',name:'Push'},{id:'future',name:'Upper'}],workouts:[],week:{3:'p',4:'p',5:'p'},dayPlan:{'2026-10-22':'future'},queue:{ids:['future'],since:1,startsOn:'2026-10-21',adaptation:{token:'test',today:'2026-10-21',policyVersion:1,baseline:[{id:'p'}],availability:{dates:['2026-10-22','2026-10-24']}}}};
+  assert.equal(effectiveRoutineId(S,'2026-10-21'),null);
+  assert.equal(effectiveRoutineId(S,'2026-10-22'),'future');
+  S.workouts.push({id:'done',routineId:'future',d:'2026-10-22',start:2});
+  assert.equal(effectiveRoutineId(S,'2026-10-23'),null);
+  assert.equal(effectiveRoutineId(S,'2026-10-28'),'p');
+});
+
+test('explicit rest and trained-unlogged days suppress reminder and nudge delivery',async()=>{
+  const {excusedOn}=await import('../nudge.js');
+  for(const status of ['rest','trained-unlogged']) assert.equal(excusedOn({dayDispositions:{'2026-10-21':{status,_ts:1}}},'2026-10-21'),true);
+  assert.equal(excusedOn({dayDispositions:{'2026-10-21':{status:'unknown',_ts:1}}},'2026-10-21'),false);
+});
+test('fixed-week acceptance removes reviewed baseline pins on unselected dates with frontend/API scheduling parity',async()=>{
+  const {proposeAdaptation,applyAdaptation,undoAdaptation}=await import('../../frontend/src/lib/training-adaptation.js');
+  const {effectiveRoutineIds}=await import('../../frontend/src/lib/history.js');
+  const S={routines:[{id:'p',name:'Push',ex:[{id:'0047',sets:3}]},{id:'u',name:'Pull',ex:[{id:'2330',sets:3}]},{id:'l',name:'Legs',ex:[{id:'0043',sets:3}]},{id:'other',name:'Other',ex:[]}],workouts:[],week:{3:'p',4:'u',5:'l'},dayPlan:{'2026-10-21':'other','2026-10-23':'l','2026-10-25':'l'}};
+  const p=proposeAdaptation({state:S,today:'2026-10-21',availability:{dates:['2026-10-22','2026-10-24'],totalSessions:5,baselineIds:{push:'p',pull:'u',legs:'l'}}});
+  assert.deepEqual(p.replacedPins,[{date:'2026-10-23',id:'l'}]);
+  const result=applyAdaptation(S,p),a=result.state;
+  assert.deepEqual(undoAdaptation(a,result.undo).state.dayPlan,S.dayPlan);
+  assert.equal(effectiveRoutineId(a,'2026-10-22'),a.queue.ids[0]);
+  assert.deepEqual(effectiveRoutineIds(a,'2026-10-22','2026-10-21'),[a.queue.ids[0]]);
+  a.workouts.push({id:'done',routineId:a.queue.ids[0],d:'2026-10-22',start:a.queue.since+1});
+  for(const date of ['2026-10-21','2026-10-23','2026-10-24','2026-10-25']) assert.equal(effectiveRoutineId(a,date),effectiveRoutineIds(a,date,date)[0] || null);
+  assert.equal(effectiveRoutineId(a,'2026-10-23'),null);
+  assert.equal(effectiveRoutineId(a,'2026-10-25'),'l');
+});
+
+test('historical imports cannot satisfy current queue through time or dated-name fallback', () => {
+  for (const start of [null, Date.parse('2026-09-09T12:00:00Z')]) {
+    const S={...base,queue:{ids:['r1','r2'],since:1,startsOn:'2026-09-07'},workouts:[{id:'import',historicalImport:true,d:'2026-09-09',routineId:'r1',name:'Push',start}]};
+    assert.equal(effectiveRoutineId(S,'2026-09-09'),'r1');
+    assert.equal(pinState(S,'r1'),'open');
+  }
+});

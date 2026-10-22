@@ -1,6 +1,6 @@
 // The persisted boundary for a finished session. Keep this pure so compatibility tests can
 // exercise the exact shape the UI writes without mounting React or mutating store state.
-import { bestWeightForEntry, cleanupSg } from './history.js'
+import { bestWeightForEntry, cleanupSg, workoutVolumeIsPartial } from './history.js'
 import { hasCompletedWork, isSideSet } from './workout-model.js'
 
 // planSec is live-session bookkeeping: a hold displaced before it finished puts its plan aside so
@@ -18,11 +18,11 @@ import { hasCompletedWork, isSideSet } from './workout-model.js'
 // it always was.
 function finishedRow(set) {
   if (!set) return set
-  const sideMarked = isSideSet(set) && (set.sides.L.weightOrigin != null || set.sides.R.weightOrigin != null)
-  if (set.planSec == null && set.weightOrigin == null && !sideMarked) return set
-  const { planSec, weightOrigin, ...rest } = set
+  const sideMarked = isSideSet(set) && ['L', 'R'].some(key => set.sides[key].weightOrigin != null || set.sides[key].loadNeedsReview != null)
+  if (set.planSec == null && set.weightOrigin == null && !set.loadNeedsReview && !sideMarked) return set
+  const { planSec, weightOrigin, loadNeedsReview, ...rest } = set
   if (sideMarked) {
-    const side = ({ weightOrigin: _, ...kept }) => kept
+    const side = ({ weightOrigin: _, loadNeedsReview: __, ...kept }) => kept
     rest.sides = { ...rest.sides, L: side(rest.sides.L), R: side(rest.sides.R) }
   }
   return planSec == null || rest.done ? rest : { ...rest, sec: planSec }
@@ -69,10 +69,12 @@ export function buildCompletedWorkout(active, { end = Date.now(), prs = [], snap
   const entries = (active?.entries || []).map(entry => {
     const completed = {
       id: entry.id,
+      ...(entry.trainingSnapshot ? { trainingSnapshot: structuredClone(entry.trainingSnapshot) } : {}),
+      ...(entry.equipmentSnapshot ? { equipmentSnapshot: structuredClone(entry.equipmentSnapshot) } : {}),
       // Only what was logged — the live-session bookkeeping on a row stays behind (finishedRow).
       sets: (entry.sets || []).map(finishedRow),
       topW: bestWeightForEntry(entry) || null,
-      target: entry.target || null,
+      target: entry.target?.loadNeedsReview ? Object.fromEntries(Object.entries(entry.target).filter(([key]) => key !== 'loadNeedsReview')) : entry.target || null,
       // Which routine this entry came from, and whether it counts for progression. Written
       // only when set/true, so a single-routine non-excluded session is byte-for-byte the
       // shape it always was. Without this the whitelist drops both at finish.
@@ -84,6 +86,10 @@ export function buildCompletedWorkout(active, { end = Date.now(), prs = [], snap
       // The superset the exercise was done in, so the history can show the pairing. Without it
       // the workout forgot at finish what it had been all session.
       ...(entry.sg ? { sg: entry.sg } : {}),
+    }
+    // Explicit concerns remain evidence for later suggestions, alongside the recorded effort.
+    for (const key of ['pain', 'techniqueProblem', 'safetyConcern', 'userOverride']) {
+      if (entry[key]) completed[key] = structuredClone(entry[key])
     }
     const snapshot = typeof snapshotFor === 'function' ? snapshotFor(entry) : null
     if (snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot) && Object.keys(snapshot).length) {
@@ -113,6 +119,7 @@ export function buildCompletedWorkout(active, { end = Date.now(), prs = [], snap
   const allNoProg = entries.length > 0 && entries.every(e => e.noProg === true)
 
   return {
+    ...(workoutVolumeIsPartial({ entries }) ? { volumePartial: true } : {}),
     id: active.id,
     d: active.d,
     start: active.start,
