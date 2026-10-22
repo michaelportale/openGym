@@ -1,6 +1,6 @@
 # Personal strength training — agreed design
 
-Status: product scope confirmed by the user on 2026-10-21. Implementation has not started.
+Status: implementation and local integrated verification completed on 2026-10-22; review and installed-iPhone acceptance remain open. See [acceptance evidence and release gates](../../dev/PERSONAL_STRENGTH_ACCEPTANCE.md).
 
 ## Outcome
 
@@ -38,9 +38,9 @@ React/Vite/Zustand frontend, pure domain helpers with Vitest, Node API storing p
 
 [Pelland et al.](https://pubmed.ncbi.nlm.nih.gov/41343037/) compared indirect-set accounting methods; fractional (0.5) accounting had strongest support among evaluated models. A proposed new coverage policy may use direct=1, relevant indirect=0.5, while clearly labeling the result an estimate. This is not a validated universal coefficient for every exercise or muscle, nor a formula for RIR-based stimulus.
 
-[ACSM 2026 position stand overview](https://acsm.org/science-spotlight-acsm-releases-new-position-stand-on-resistance-training/) and the cited research require focused review before choosing numeric volume, qualifying-exposure, progression, and adaptation rules. Twice-weekly coverage is the user's planning preference; no arbitrary exact exposure threshold has been approved.
+The focused evidence review and implemented accounting/progression/duration defaults are recorded in [policy v1](../../dev/PERSONAL_STRENGTH_POLICY.md). Twice-weekly coverage is the user's planning preference. The direct-work-day definition is transparent bookkeeping; no physiological meaningful-exposure threshold or deterministic adaptation formula is claimed.
 
-Fitbod investigation is explicitly requested and remains open. Official documentation supports equipment profiles and replacements; it does not establish its proprietary ranking algorithm or universal gym inventory. Its [App Store listing](https://apps.apple.com/us/app/fitbod-gym-fitness-planner/id1041517543?platform=mac) supports compatible Apple Silicon Macs. No local Fitbod artifact was found and no phone runtime connection exists. Once available, inspect gym lookup, equipment editing, set logging and substitutions using REA/UI evidence. Record observations, inferences and unknowns separately; do not promise recovery of server-side data.
+Fitbod investigation remains bounded by access. Installed Fitbod 8.37.0 (build 24107) was inspected statically with REA; the Mac UI reached the welcome screen only. Bundled resources establish equipment categories and precomputed replacement candidates, not exact gym inventory, live ranking or progression behavior. No proprietary datasets/media were copied, no server data was recovered, and no subscription/account mutation occurred. The user declined paid access. See [observations, inferences and unknowns](../../dev/FITBOD_RESEARCH.md); account-specific runtime flows remain unverified.
 
 ## Privacy and rollout
 

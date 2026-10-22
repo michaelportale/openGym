@@ -2,11 +2,15 @@
 
 Status: **open investigation**, checked 2026-10-21. This note separates public documentation from direct observation. Do not describe openGym as matching Fitbod behavior on the strength of the help pages alone.
 
-## Access check
+## Installed-artifact and access evidence
 
-- A bounded search for `*fitbod*.app` under `/Applications` and `/Users/michaelportale/Applications` returned no installation. No connected phone runtime or authenticated Fitbod Mac session was available. No app was launched, installed, or signed in; no subscription or workout history was changed.
-- The [Mac App Store listing](https://apps.apple.com/us/app/fitbod-gym-fitness-planner/id1041517543?platform=mac) identifies app `1041517543`, an iPhone-designed app compatible with macOS 15+ on Apple M1 or later. On this check the listing showed version `8.37.0`; that is a **store version, not an observed installed version**.
-- REA artifact ID, bundle version/build, account state, UI capture IDs, and flow-level observations: **none**. Do not imply REA or live UI inspection occurred.
+Checked 2026-10-21: `/Applications/Fitbod.app` is installed. REA identified bundle `com.fitbod`, version **8.37.0**, build **24107**, with an arm64 executable. Its SHA-256 is `12af668aaa0aafaa8b0054ee392977fa2823c2d601df808666e5552ef80e68ce`. The earlier no-installation finding is superseded. The Mac UI was observed only at the welcome screen; gym, account, logging and replacement flows were not exercised. No subscription, payment, account or saved workout was changed. The user declined paid access; this investigation does not require buying a subscription.
+
+Static inspection found bundled equipment, exercise/equipment relationships, available weights and ordered replacement lists. Equipment records include separate machine categories and broad leverage-machine categories, without dedicated physical station or manufacturer/model fields in the inspected schema. Location permission text and bundled UI copy describe suggesting likely gym equipment. That supports an inference about a designed preset flow, not a verified branch inventory or current runtime behavior.
+
+A bounded search found no `LA Fitness` text in bundled JSON, plist, strings or CSV resources. This does not exclude encoded, compiled or downloaded inventories. Ordered replacement lists establish packaged candidate data; their final UI ordering, identity namespace and personalization remain unverified. Bundled RIR and replacement labels do not establish progression algorithms.
+
+No proprietary datasets or media were copied into openGym. No server endpoints were queried, algorithms decompiled, account containers read, or server-side datasets recovered. Static resources may be stale seeds or fallbacks. The [App Store listing](https://apps.apple.com/us/app/fitbod-gym-fitness-planner/id1041517543?platform=mac) remains public product context, distinct from the installed artifact and observed welcome screen.
 
 ## Public-source observations and unknowns
 
@@ -21,6 +25,6 @@ Fitbod's [workout-generation guide](https://help.fitbod.me/hc/en-us/articles/360
 
 ## Required direct investigation when access exists
 
-With an accessible Mac installation and account session, record the exact bundle ID/version/build and evidence IDs, then use REA and UI tooling to inspect: (1) location search and a gym profile, (2) equipment selection and editing, (3) set logging with load convention and RIR, and (4) an exercise replacement and its persistence scope. Use the least invasive read-only path or disposable unsaved workout state; do not change subscriptions or saved history. Keep raw account captures outside Git and put only deidentified observations, inferences, and unresolved questions in this note. Recheck public documentation against that installed version because the UI may differ.
+If a permitted account session becomes accessible without paid access, record its version and direct evidence, then inspect: (1) location search and a gym profile, (2) equipment selection and editing, (3) set logging with load convention and RIR, and (4) an exercise replacement and its persistence scope. Use the least invasive read-only path or disposable unsaved workout state; do not change subscriptions or saved history. Keep raw account captures outside Git and put only deidentified observations, inferences, and unresolved questions in this note. Recheck public documentation against that installed version because the UI may differ.
 
 Independent data modeling and logging work may proceed with explicit openGym requirements. Do not assert Fitbod parity, proprietary recommendation behavior, or automatic inventory until the corresponding direct evidence exists.
