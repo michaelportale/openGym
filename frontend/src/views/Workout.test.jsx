@@ -3216,6 +3216,22 @@ describe('mark all sets done while logging a past workout', () => {
   }
   const labels = menu => menuItemsOf(menu).map(it => it.label)
 
+  it('keeps unknown loads pending and asks for review instead of announcing every exercise done', async () => {
+    const side = setSideField(makeSideSet({ w: 0, r: 16, loadNeedsReview: true }), 'L', 'w', 12)
+    await mount([
+      exercise('plain-bench', [false], { sets: [{ w: 0, r: 8, done: false, loadNeedsReview: true }] }),
+      exercise('plain-row', [false]),
+      exercise('plain-curl', [false], { target: { mode: 'reps', side: true, reps: 16 }, sets: [side] }),
+    ], 0, { active: { backfill: { durationMin: 60, replaceId: null }, routineIds: [] } })
+    const markAll = menuItemsOf(await openMenu()).find(it => it.label === 'Mark all sets done')
+    await act(async () => { markAll.onClick() })
+    expect(mocks.S.active.entries.map(e => e.sets[0].done)).toEqual([false, true, false])
+    expect(mocks.S.active.entries[2].sets[0].sides.L.done).toBe(true)
+    expect(mocks.S.active.entries[2].sets[0].sides.R.done).toBe(false)
+    expect(mocks.toast).toHaveBeenCalledWith('Choose the load for this copied exercise before logging it.')
+    expect(mocks.workoutCompleteSheet).not.toHaveBeenCalled()
+  })
+
   it('ticks every set, stamps the top weight and offers the finish', async () => {
     await mount([
       exercise('plain-bench', [false, true]),
