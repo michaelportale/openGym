@@ -87,6 +87,10 @@ export function buildCompletedWorkout(active, { end = Date.now(), prs = [], snap
       // the workout forgot at finish what it had been all session.
       ...(entry.sg ? { sg: entry.sg } : {}),
     }
+    // Explicit concerns remain evidence for later suggestions, alongside the recorded effort.
+    for (const key of ['pain', 'techniqueProblem', 'safetyConcern', 'userOverride']) {
+      if (entry[key]) completed[key] = structuredClone(entry[key])
+    }
     const snapshot = typeof snapshotFor === 'function' ? snapshotFor(entry) : null
     if (snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot) && Object.keys(snapshot).length) {
       completed.muscleSnapshot = { ...snapshot }

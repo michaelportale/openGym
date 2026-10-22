@@ -32,7 +32,7 @@ import { effortColor } from '../lib/effort.js'
 import Elapsed from '../components/Elapsed.jsx'
 import Icon from '../components/Icon.jsx'
 import { Button, Check, NumberField } from '../components/ui.jsx'
-import { defaultIncrement, weightIncrement, stepWeight } from '../lib/progression.js'
+import { applyPrescription, defaultIncrement, weightIncrement, stepWeight } from '../lib/progression.js'
 import { progressionGuidance } from '../lib/progression-copy.js'
 import { trainingSnapshotFor } from '../lib/training-metadata.js'
 import { buildPlannedEntry, plannedConfigOf, builtOutOfProgression } from '../lib/session-start.js'
@@ -46,6 +46,7 @@ import { canMoveActiveWorkoutUnit, moveActiveWorkoutUnit, canMoveActiveWorkoutEn
 import { nextOpenSet, workoutKeyAction } from '../lib/workout-keys.js'
 import { MUSCLE_NAME } from '../lib/muscles.js'
 import FocusView from './FocusView.jsx'
+import StrengthFeedback from '../components/StrengthFeedback.jsx'
 import { withMeaning, historyAs, dbLoadFor, entryDbLoad, bellsIn, ownedWeightsFor, stepOwned } from '../lib/dumbbells.js'
 
 // How long after a key starts a hold the same key is not yet its "Done" (#133). A USB button
@@ -251,7 +252,7 @@ function ExerciseBlock({ entryIdx, compact, dense, editing, onToggle, onToggleSi
   const refAction = refBest ? t('Show last time instead') : t('Show your best set instead')
   // The button's text is the reference, which says nothing about what a tap does; its name
   // carries both, the reference first as it reads on screen, then the switch.
-  const refLine = refText ? <button type="button" className="refline small dim"
+  const refLine = !entry.equipmentSnapshot && refText ? <button type="button" className="refline small dim"
     title={refAction} aria-label={`${refText}. ${refAction}`}
     onClick={() => update(s => { s.logRef = refBest ? 'last' : 'best' })}>
     {/* Each set on its own left-to-right island. In Arabic the first one followed the label's
@@ -686,6 +687,7 @@ function ExerciseBlock({ entryIdx, compact, dense, editing, onToggle, onToggleSi
       <span><strong>{t(guidance.policyLabel)}</strong> · {t(...guidance.why)}</span>
     </button>}
     </>}
+    <StrengthFeedback entryIdx={entryIdx} onProgressionSettings={onProgressionSettings} />
     <div className="card" style={{ marginTop: 10, marginBottom: 0 }}>
       {/* the header carries the same eff3/timed sizing as the rows, or the labels drift off their
           columns; over L/R rows it also has to skip the side badge that sits in front of the weight cell */}
@@ -1295,7 +1297,7 @@ function ActiveWorkout() {
     onRemoveSetAt: i => removeSetAt(idx, i),
     onCopySetAt: i => copyActiveSet(idx, i),
     onStartTimed: (i, onFocusProgress) => startTimed(idx, i, onFocusProgress),
-    onProgressionSettings: editing ? null : () => openProgressionSettings(idx),
+    onProgressionSettings: editing ? null : proposal => openProgressionSettings(idx, proposal?.action ? proposal : null),
     onRest: editing ? null : () => openExerciseRest(idx),
     onNoProg: routineKeepsOut(A.entries[idx]) ? null : on => setNoProg(idx, on),
     routineUpdate: routineUpdateFor(idx),
@@ -1470,7 +1472,7 @@ function ActiveWorkout() {
       }),
     })
   }
-  const openProgressionSettings = idx => {
+  const openProgressionSettings = (idx, proposal) => {
     const state = useStore.getState().S
     const entry = state.active?.entries?.[idx]
     if (!entry) return
@@ -1483,6 +1485,7 @@ function ActiveWorkout() {
     // The sheet opens at the plan's sets and reps rather than today's prescription (see
     // plannedConfigOf), so saving it unchanged rebuilds the rows the entry already has.
     const opened = plannedConfigOf(entry)
+    if (proposal) opened.weight = proposal.load
     exConfigSheet(exOr(entryId), opened, cfg => {
       // Store updates clone the state tree. If this exact object is no longer at the captured
       // index, the list changed while the sheet was open; an id check alone cannot distinguish
@@ -1506,7 +1509,7 @@ function ActiveWorkout() {
         // The weight the sheet showed is today's. Left as it was, it is not an edit of the plan's:
         // stamped as the plan, a later edit of the reps would restart from today's load as though
         // it had been typed in (nextPrescription), so the plan keeps its own.
-        if ((cfg.weight || 0) === (opened.weight || 0) && activeEntry.planned?.weight != null) full.weight = activeEntry.planned.weight
+        if (!proposal && (cfg.weight || 0) === (opened.weight || 0) && activeEntry.planned?.weight != null) full.weight = activeEntry.planned.weight
         const activeRoutine = s.routines.find(r => r.id === activeEntry.rid)
         // A config without a set count keeps the rows the session already has.
         if (!(full.sets > 0)) full.sets = activeEntry.sets.filter(x => !isWarmupRow(x)).length || 1
@@ -1518,6 +1521,16 @@ function ActiveWorkout() {
         // Without a prescription only in a routine kept out of progression: an exercise kept out
         // by hand keeps its prescription, so its Undo leaves the numbers it should count at.
         const built = buildPlannedEntry(sessionHistory(s), full, activeRoutine, { noProg: builtOutOfProgression(activeEntry, activeRoutine) })
+        // Saving this advisory explicitly overrides this session once. The automatic rule is
+        // not run on the candidate again, and the routine's selected policy is unchanged.
+        if (proposal) {
+          const reps = Math.min(full.reps, Math.max(full.repsMin || 1, proposal.reps))
+          const manual = { policy: built.plan.policy, kind: 'hold', weight: full.weight, reps,
+            why: ['Editable suggestion from comparable history accepted for this session.'] }
+          built.sets = applyPrescription(built.sets, manual)
+          built.target = { ...built.target, weight: full.weight, reps }
+          built.plan = manual
+        }
         const fresh = built.sets
         const doneWarm = activeEntry.sets.filter(x => hasCompletedWork(x) && isWarmupRow(x))
         const doneWork = activeEntry.sets.filter(x => hasCompletedWork(x) && !isWarmupRow(x))

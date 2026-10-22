@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  rirOf, toScale, displayScale, avgRir, effortSummary, hasEffort, effortWeeks,
+  loggedRirOf, rirOf, toScale, displayScale, avgRir, effortSummary, hasEffort, effortWeeks,
   effortHistogram, isHardSet, HARD_RIR, MIN_RATED,
   effortColor, EFFORT_BANDS, EFFORT_PRESETS
 } from './effort.js'
@@ -308,5 +308,17 @@ describe('estimated fallback resolver', () => {
     const hist = effortHistogram(st, 0, resolve)
     expect(hist[0].n).toBe(5)
     expect(hist.slice(1).every(b => b.n === 0)).toBe(true)
+  })
+})
+
+
+describe('loggedRirOf', () => {
+  it('preserves zero and logged RPE but never infers effort from failure', () => {
+    expect(loggedRirOf({ rir: 0 })).toBe(0)
+    expect(loggedRirOf({ rpe: 8 })).toBe(2)
+    expect(loggedRirOf({ failure: true })).toBeNull()
+    expect(loggedRirOf({ rir: null })).toBeNull()
+    expect(loggedRirOf({ rir: '' })).toBeNull()
+    expect(loggedRirOf({ rir: -1 })).toBeNull()
   })
 })

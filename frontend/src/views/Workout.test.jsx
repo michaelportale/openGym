@@ -3498,3 +3498,89 @@ describe('equipment identity after logging one side', () => {
     expect(!!isWarmupRow(kept)).toBe(warmup)
   })
 })
+
+describe('prominent final working-set effort and comparable prescription', () => {
+  const snap = { stationId: null, loadConvention: 'barbell-total', unit: 'kg', status: 'unknown' }
+  const target = { id: '0025', mode: 'reps', sets: 2, repsMin: 8, reps: 12, weight: 60, inc: 2.5, prog: 'double' }
+  const lift = () => exercise('0025', [false, false], { target, planned: { sets: 2, repsMin: 8, reps: 12 }, equipmentSnapshot: snap })
+  const prior = () => ({ id: 'prior', d: '2026-10-20', entries: [{ ...lift(), sets: [{ w: 60, r: 12, done: true }, { w: 60, r: 12, done: true, rir: 2 }] }] })
+
+  it.each(['cards', 'focus'])('offers optional final RIR in %s without rating earlier sets or auto-completing work', async view => {
+    const e = lift(); e.sets[0].rir = 3
+    await mount([e], 0, { active: { workoutView: view }, effort: 'none' })
+    await click(buttonNamed('Final working set RIR'))
+    const [scale, value, onPick] = mocks.effortPickerSheet.mock.calls.at(-1)
+    expect([scale, value]).toEqual(['rir', null])
+    await act(async () => { onPick(0) })
+    expect(mocks.S.active.entries[0].sets).toEqual([{ w: 60, r: 5, done: false, rir: 3 }, { w: 60, r: 5, done: false, rir: 0 }])
+    await rerender()
+    expect(buttonNamed('Final working set RIR').textContent).toContain('0')
+    await act(async () => { onPick(null) })
+    expect(mocks.S.active.entries[0].sets[1].rir).toBeUndefined()
+  })
+
+  it('targets the actual final working row, preserving earlier effort when another set is added', async () => {
+    const e = lift(); e.sets[1].rir = 1; e.sets.push({ w: 60, r: 10, done: false }, { phase: 'warmup', w: 20, r: 5, done: false })
+    await mount([e])
+    await click(buttonNamed('Final working set RIR'))
+    await act(async () => { mocks.effortPickerSheet.mock.calls.at(-1)[2](2) })
+    expect(mocks.S.active.entries[0].sets.map(s => s.rir)).toEqual([undefined, 1, 2, undefined])
+  })
+
+  it('keeps final limb ratings separate and does not infer the unrated limb', async () => {
+    const e = lift(); e.sets[1] = makeSideSet({ w: 20, r: 16 })
+    await mount([e])
+    await click(buttonNamed('Final working set RIR · L'))
+    await act(async () => { mocks.effortPickerSheet.mock.calls.at(-1)[2](0) })
+    const row = mocks.S.active.entries[0].sets[1]
+    expect(row.sides.L.rir).toBe(0)
+    expect(row.sides.R.rir).toBeUndefined()
+  })
+
+  it('clears a prior RPE rating when final RIR is cleared on one side', async () => {
+    const e = lift(); e.sets[1] = setSideField(makeSideSet({ w: 20, r: 16 }), 'L', 'rpe', 8)
+    await mount([e])
+    await click(buttonNamed('Final working set RIR · L'))
+    await act(async () => { mocks.effortPickerSheet.mock.calls.at(-1)[2](null) })
+    expect(mocks.S.active.entries[0].sets[1].sides.L.rpe).toBeUndefined()
+    expect(mocks.S.active.entries[0].sets[1].sides.L.rir).toBeUndefined()
+  })
+
+  it('shows only prior comparable performance beside an editable advisory while the selected policy stays explicit', async () => {
+    const wrongStation = prior(); wrongStation.id = 'wrong'; wrongStation.d = '2026-10-21'; wrongStation.entries[0].equipmentSnapshot = { ...snap, loadConvention: 'db-total' }; wrongStation.entries[0].sets[0].w = 999
+    await mount([lift()], 0, { workouts: [prior(), wrongStation] })
+    const feedback = container.querySelector('.strength-feedback')
+    expect(feedback.textContent).toContain('Comparable history')
+    expect(feedback.textContent).toContain('60')
+    expect(feedback.textContent).not.toContain('999')
+    expect(feedback.textContent).toContain('62.5')
+    expect(feedback.textContent).toContain('4.2%')
+    expect(feedback.textContent).toContain('Double progression')
+    await click(buttonNamed('Edit this session’s prescription'))
+    expect(mocks.exConfigSheet).toHaveBeenCalled()
+    expect(mocks.S.active.entries[0].target.weight).toBe(60)
+    expect(mocks.S.workouts[0]).toEqual(prior())
+  })
+
+  it('seeds the advisory editor and accepts a current-session load once while preserving logged sets and policy', async () => {
+    const e = lift(); e.sets[0] = { w: 60, r: 12, done: true, rir: 0 }
+    await mount([e], 0, { workouts: [prior()] })
+    await click(buttonNamed('Edit this session’s prescription'))
+    const [, opened, save] = mocks.exConfigSheet.mock.calls.at(-1)
+    expect(opened.weight).toBe(62.5)
+    expect(opened.prog).toBe('double')
+    await act(async () => { save(opened) })
+    expect(mocks.S.active.entries[0].sets).toEqual([
+      { w: 60, r: 12, done: true, rir: 0 }, { w: 62.5, r: 8, done: false },
+    ])
+    expect(mocks.S.active.entries[0].target.prog).toBe('double')
+    expect(mocks.S.active.entries[0].target.weight).toBe(62.5)
+    expect(mocks.S.workouts[0]).toEqual(prior())
+  })
+
+  it('says no comparable history rather than reusing an exercise-only load cache', async () => {
+    await mount([lift()], 0, { exWeights: { '0025': { w: 999 } } })
+    expect(container.querySelector('.strength-feedback').textContent).toContain('No comparable history')
+    expect(container.querySelector('.strength-feedback').textContent).not.toContain('999')
+  })
+})

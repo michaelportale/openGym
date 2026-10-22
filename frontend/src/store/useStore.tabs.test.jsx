@@ -235,3 +235,39 @@ describe('routines edited on two devices', () => {
     expect(A.getState().S.routines[0]._ts).toBeGreaterThan(0)
   })
 })
+
+describe('final-set effort survives offline reopen and cross-tab sync', () => {
+  it('keeps only the final rating across a reopen, failed upload, retry and a stale tab merge', async () => {
+    const srv = server({ ...clone(DEF), _ts: 100, workouts: [], _rev: 1 })
+    savedCopy(srv.doc, 1)
+    const stale = await openTab()
+    const A = await openTab()
+    A.getState().update(s => {
+      s.active = { id: 'effort-live', d: '2026-10-21', start: 1, name: 'Synthetic press', entries: [{ id: '0025', equipmentSnapshot: { stationId: null, loadConvention: 'barbell-total', unit: 'kg' }, target: { sets: 2, weight: 60 }, sets: [{ w: 60, r: 12, done: true }, { w: 60, r: 12, done: true, rir: 0 }] }] }
+    })
+    const reopened = await openTab()
+    expect(reopened.getState().S.active.entries[0].sets.map(s => s.rir)).toEqual([undefined, 0])
+    const { buildCompletedWorkout } = await import('../lib/finish-workout.js')
+    reopened.getState().update(s => {
+      s.workouts.push(buildCompletedWorkout(s.active, { end: 2 }))
+      s.active = null
+    })
+    h.api = async (path, opts) => {
+      if (opts?.method === 'PUT') throw new Error('offline')
+      return srv.handler(path, opts)
+    }
+    await reopened.getState().pushState()
+    expect(saved().workouts).toHaveLength(1)
+    expect(saved().workouts[0].entries[0].sets.map(s => s.rir)).toEqual([undefined, 0])
+    expect(localStorage.getItem('gym_dirty')).toBe('1')
+    h.api = srv.handler
+    await reopened.getState().pushState()
+    stale.getState().update(s => { s.restSec = 75 })
+    await stale.getState().pushState()
+    expect(srv.doc.workouts).toHaveLength(1)
+    expect(srv.doc.workouts[0].entries[0].sets.map(s => s.rir)).toEqual([undefined, 0])
+    expect(srv.doc.workouts[0].entries[0].equipmentSnapshot.loadConvention).toBe('barbell-total')
+    expect(srv.doc.active).toBeUndefined()
+    expect(srv.doc.restSec).toBe(75)
+  })
+})
