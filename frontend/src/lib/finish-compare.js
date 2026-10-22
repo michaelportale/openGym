@@ -1,3 +1,4 @@
+import { historyForLoad, isSettingLoad } from './load-identity.js'
 // The finish summary's "last time / next time" (#324): one line per lift, today against the
 // previous session of the same exercise, and what the next session will open at. "Next" has no
 // rule of its own: it is buildPlannedEntry, the same call Start makes, run on the state right
@@ -35,9 +36,10 @@ export function finishCompare(st, w) {
     const today = workSets(entry)
     if (!today.length) continue
     seen.add(entry.id)
+    const comparable = historyForLoad({ ...st, workouts }, { ...entry.target, id: entry.id, equipmentSnapshot: entry.equipmentSnapshot }).workouts
     let last = null
-    for (let i = workouts.length - 1; i >= 0 && !last; i--) {
-      const prev = (workouts[i].entries || []).find(e => e?.id === entry.id)
+    for (let i = comparable.length - 1; i >= 0 && !last; i--) {
+      const prev = (comparable[i].entries || []).find(e => e?.id === entry.id)
       const sets = prev ? workSets(prev) : []
       if (sets.length) last = sets
     }
@@ -53,11 +55,11 @@ export function finishCompare(st, w) {
           const kind = built.plan?.kind === 'deload' ? 'deload'
             : nw != null && nw > top(today) + 1e-9 ? 'up'
               : nw != null && nw < top(today) - 1e-9 ? 'down' : 'hold'
-          next = { w: nw ?? null, r: nr ?? null, sets: built.target?.sets ?? null, kind }
+          next = { ...(isSettingLoad(built) ? { setting: true } : {}), w: nw ?? null, r: nr ?? null, sets: built.target?.sets ?? null, kind }
         }
       } catch { /* a routine the builder cannot read keeps its row without a "next" */ }
     }
-    rows.push({ id: entry.id, today, last, trend: trendOf(today, last), next })
+    rows.push({ id: entry.id, today, last, trend: trendOf(today, last), next, ...(isSettingLoad(entry) ? { setting: true } : {}) })
   }
   return rows
 }

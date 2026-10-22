@@ -112,3 +112,15 @@ it.each([0, 1])('retains week start %i when switching the activity metric', week
   expect(dayLabels()).toEqual(labels)
   expect(host.textContent).toContain('More volume')
 })
+
+it.each([false,true])('qualifies a mixed day load subtotal regardless of partial-session order (%s)',partialFirst=>{
+  const at=new Date();at.setDate(at.getDate()-1)
+  const day=isoOf(at)
+  const complete={d:day,entries:[{sets:[{done:true,w:5,r:10}]}]}
+  const partial={d:day,volumePartial:true,entries:[{sets:[{done:true,w:22,r:5,sourceLoad:{physical:false}}]}]}
+  host=document.createElement('div');document.body.appendChild(host);root=createRoot(host)
+  act(()=>root.render(<Heatmap S={{unit:'kg',workouts:partialFirst?[partial,complete]:[complete,partial]}} />))
+  const cell=[...host.querySelectorAll('.hm-c[title]')].find(c=>c.title.startsWith(day))
+  expect(cell.title).toContain('50 kg · Partial load total')
+  expect(cell.title).toContain('2 workouts')
+})

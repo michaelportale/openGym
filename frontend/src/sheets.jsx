@@ -1,7 +1,9 @@
+import { isSettingLoad, equipmentSnapshotFor } from './lib/load-identity.js'
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
 import { EXDB, EXIDX, BODYPARTS, isCardio, isBodyweightEq, allExercises, equipmentOf, byCategory, smOf, searchExercises, similarExercises, exOr, isAssisted, betterWeight, beatsWeight, isCustomEx } from './lib/exercises.js'
+import { trainingMetadataOf, trainingSnapshotFor, TRAINING_ROLES } from './lib/training-metadata.js'
 import { activeProfile, exAvailable, ALL_EQUIPMENT, newProfile, profileEquipment, ACC_V } from './lib/equipment.js'
 import { fmtDate, fmtDateRange, fmtNum, fmtPlate, exerciseNameText, fmtVol, fmtDur, durPart, todayISO, isoOf, uid, exCount, routineCount, setsWorkCount, DAYN, DAYS, weekOrder, weekStartOf, weekDayOffset, MONTHS_LONG, ACCENTS } from './lib/format.js'
 import { lastEntryFor, bestWeightFor, bestWeightForEntry, buildSets, effectiveRoutineIds, workoutDay, workoutVolume, setsDone, setsDoneActive, setUnitsTotal, lastBW, sessionSections, setLabel, defaultConfig, cleanupSg, modeOf, effortOf, EFFORT, capEffort, stepEffort, isBw, isPerSide, sideReps, workSetsDone, applyIntensifierPlan, MAX_PLANNED_WARMUPS, NOTE_MAX } from './lib/history.js'
@@ -28,9 +30,10 @@ import { glyphOf, GLYPH_GROUPS, DEFAULT_GLYPH } from './lib/glyphs.js'
 import BodyMap from './components/BodyMap.jsx'
 import MuscleExplorer from './components/MuscleExplorer.jsx'
 import ExerciseViewToggle from './components/ExerciseViewToggle.jsx'
-import { sameMuscleFirst, swapMuscleOf } from './lib/similar-exercises.js'
+import { rankReplacements, swapMuscleOf } from './lib/similar-exercises.js'
 import { exerciseMuscleSnapshot, loadOfWorkouts, MUSCLES, MUSCLE_NAME, muscleWeightsOf, normalizeMuscleGroups, hasExplicitMuscleMetadata, inMuscleOrder } from './lib/muscles.js'
-import { parseImport, mergeImport } from './lib/import-csv.js'
+import { parseImport, mergeImport, matchExercise, priorCustom } from './lib/import-csv.js'
+import { parseFitnessNotes, prepareFitnessNotes, fitnessNotesPreview } from './lib/import-fitness-notes.js'
 import { importHevyData, HevyApiError, HEVY_DEV_SETTINGS, mergeHevyRoutines } from './lib/import-hevy.js'
 import { buildPlanBundle, parsePlan, mergePlan, printPlan, planPrintHTML } from './lib/plan-share.js'
 import { estimate1RM, best1RM, is1RMRecord, REP_CAP, formulaOf, FORMULA_NAMES } from './lib/onerm.js'
@@ -47,7 +50,7 @@ import { refillAfter } from './lib/rotation.js'
 import { isWarmupRow, hasCompletedWork } from './lib/workout-model.js'
 import { saveSessionAsRoutine } from './lib/session-routines.js'
 import { repeatSessionEntries } from './lib/session-repeat.js'
-import { swapActiveExercise } from './lib/active-exercise-swap.js'
+import { swapActiveExercise, previewRoutineSwap, applyRoutineSwap } from './lib/active-exercise-swap.js'
 import { useSheetKeyboard, useRevealActiveChip, tappable } from './lib/use-sheet-keyboard.js'
 import { useAutoMore } from './lib/use-auto-more.js'
 import { isFav, toggleFav, sortFavouritesFirst, sortYoursFirst } from './lib/favourites.js'
@@ -489,8 +492,81 @@ function ImportSummary({ parsed, close }) {
   </>
 }
 
+function FitnessNotesSummary({ parsed, close }) {
+  const st = useStore(s => s.S)
+  const [mappings, setMappings] = useState({})
+  const [proposalIds, setProposalIds] = useState([])
+  const preview = fitnessNotesPreview(st, parsed)
+  const availableProposals = parsed.proposedRoutines.filter(r => !st.routines.some(x => x.id === r.id))
+  const doImport = () => {
+    let result
+    update(s => { result = mergeImport(s, prepareFitnessNotes(parsed, s, { mappings, proposalIds })) })
+    close()
+    toast(tn('{0} workout imported', '{0} workouts imported', result.added))
+  }
+  return <>
+    <h3>{t('Import fitness notes')}</h3>
+    <p className="small dim">{t('Review actual sets, unknown values and exercise mappings before importing.')}</p>
+    <p className="small dim">{t('Machine settings and unknown load conventions stay out of load totals and strength estimates.')}</p>
+    <div className="small">{t('Workouts')}: {parsed.workouts.length} · {t('New')}: {preview.fresh}</div>
+    {preview.duplicates > 0 && <p className="small dim">{t('{0} duplicate sources will be skipped.', preview.duplicates)}</p>}
+    {preview.conflicts > 0 && <p role="alert">{t('{0} source conflicts; existing records will be kept.', preview.conflicts)}</p>}
+    {parsed.warnings.map((warning, i) => <p key={i} className="small dim" role="alert">{warning}</p>)}
+    {parsed.workouts.map(w => <details key={w.id} style={{ marginBottom: 12 }}>
+      <summary>{w.d} · {w.name} · {w.dataStatus || '?'}</summary>
+      {w.entries.map(e => <div key={e.id} className="small" style={{ margin: '8px 0' }}>
+        <b>{e.name}</b> · {e.equipmentSnapshot.label || '?'} · {e.equipmentSnapshot.sourceBasis || '?'}
+        <div>{e.sets.map((row, i) => <div key={i}>{row.phase === 'warmup' ? t('Warm-up') : t('Working sets')} · {setLabel(e.id, row)}</div>)}</div>
+        {e.note && <div>{e.note}</div>}
+      </div>)}
+      {w.note && <p className="small">{w.note}</p>}
+    </details>)}
+    <h4>{t('Review exercise mappings')}</h4>
+    {parsed.customEx.map(c => {
+      const own = priorCustom(st.customEx, c.id, c.n)
+      const candidate = matchExercise(c.sourceName)
+      const choices = [candidate && EXIDX[candidate], ...(st.customEx || []), ...parsed.customEx.filter(x => x.id !== c.id)].filter(Boolean).filter((x, i, list) => list.findIndex(y => y.id === x.id) === i)
+      return <label key={c.id} style={{ display: 'block', marginBottom: 12 }}>
+        <div className="small">{c.n}</div>
+        <select aria-label={t('Mapping for {0}', c.n)} value={mappings[c.id] || ''} onChange={ev => setMappings({ ...mappings, [c.id]: ev.target.value })}>
+          <option value="">{own ? own.n : t('Keep as a separate exercise')}</option>
+          {choices.map(ex => <option key={ex.id} value={ex.id}>{exerciseNameText(ex)}</option>)}
+        </select>
+      </label>
+    })}
+    {availableProposals.length > 0 && <>
+      <h4>{t('Baseline proposals (optional)')}</h4>
+      <p className="small dim">{t('Save selected proposals as routines; your active program stays unchanged.')}</p>
+      {availableProposals.map(r => <div key={r.id} style={{ marginBottom: 12 }}>
+        <label><input type="checkbox" checked={proposalIds.includes(r.id)} onChange={ev => setProposalIds(ev.target.checked ? [...proposalIds, r.id] : proposalIds.filter(id => id !== r.id))} /> {r.name}</label>
+        {r.ex.map((e, i) => <div key={i} className="small dim">{parsed.customEx.find(c => c.id === e.id)?.n} · {e.sets} × {e.repsMin ? `${e.repsMin}–` : ''}{e.reps} · {e.note}</div>)}
+      </div>)}
+    </>}
+    <Button variant="primary" onClick={doImport} disabled={!preview.fresh && !availableProposals.some(r => proposalIds.includes(r.id))}>{t('Import')}</Button>
+    <div style={{ height: 8 }} />
+    <Button variant="ghost" className="dim" onClick={close}>{t('Cancel')}</Button>
+  </>
+}
+
 /** Read a CSV/XML export, then show what it would do. */
 export function importFromApp(file, onDone) {
+  const files = file && typeof file.length === 'number' && !file.name ? Array.from(file) : [file]
+  if (files.some(f => /\.md$/i.test(f?.name))) {
+    if (!files.every(f => /\.md$/i.test(f?.name))) { toast(t('Choose Markdown notes separately from CSV or XML files.')); return }
+    Promise.all(files.map(f => new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve({ name: f.name, text: String(reader.result) })
+      reader.onerror = reject
+      reader.readAsText(f)
+    }))).then(notes => {
+      const parsed = parseFitnessNotes(notes)
+      ui().openSheet(close => <FitnessNotesSummary parsed={parsed} close={close} />)
+      onDone && onDone()
+    }).catch(() => toast(t('Could not read that file')))
+    return
+  }
+  if (files.length !== 1) { toast(t('Choose one CSV or XML file at a time.')); return }
+  file = files[0]
   const rd = new FileReader()
   rd.onload = () => {
     let parsed
@@ -1019,6 +1095,7 @@ function ExerciseDetail({ ex, close }) {
     {instrFor(ex).length > 0 &&<><h4 className="sec">{t('How to')}{getLang() !== 'en' && !instrTranslated(ex) && <span className="dim" style={{ textTransform: 'none', letterSpacing: 0 }}> · {t('instructions in English')}</span>}</h4><ol className="steps-list">{instrFor(ex).map((s, i) => <li key={i}>{s}</li>)}</ol></>}
     {/* The catalogue is community-edited (catalogue/README.md): a wrong muscle, a clumsy step or a
         missing translation is one tap from an issue that already names the exercise. */}
+    {!isCustomEx(ex) && !ex.missing && <TrainingMetadataEditor ex={ex} />}
     {!isCustomEx(ex) && !ex.missing && <a className="small dim exfix-link" target="_blank" rel="noopener"
       href={'https://github.com/DuarteSantos8/openGym/issues/new?template=exercise.yml&exercise=' + encodeURIComponent(ex.id + ', ' + ex.n)}>
       <Icon name="pencil" /> {t('Suggest a fix for this exercise')}</a>}
@@ -1045,7 +1122,7 @@ function ExerciseHistory({ exId }) {
     <div className="empty"><div className="ico"><Icon name="history" /></div>{t('No sessions logged yet')}</div>
   </>
   const tail = s => [
-    s.volume > 0 && t('Volume') + ' ' + fmtVol(s.volume, st.unit),
+    (s.volume > 0 || s.volumePartial) && t('Volume') + ' ' + fmtVol(s.volume, st.unit, s.volumePartial),
     s.e1rm != null && t('Est. 1RM') + ' ' + fmtNum(s.e1rm) + ' ' + st.unit,
   ].filter(Boolean).join(' · ')
   return <>
@@ -1114,12 +1191,29 @@ export const addToRoutineSheet = ex => ui().openSheet(close => <AddToRoutine ex=
 // (planning, logging, PRs, stats). A photo, GIF or video of your own, and a link to a video or
 // guide, are optional (components/CustomMediaField.jsx): the state keeps a small reference to the
 // file, never the file itself, and the link is cleaned on save and again whenever it is opened.
+const ROLE_NAMES = ['Horizontal press', 'Vertical press', 'Horizontal pull', 'Vertical pull', 'Squat', 'Hinge', 'Chest isolation', 'Shoulder isolation', 'Elbow flexion', 'Elbow extension', 'Knee flexion', 'Knee extension', 'Calf raise', 'Core']
+const roleOptions = () => [{ value: '', label: t('Unknown') }, ...TRAINING_ROLES.map((value, i) => ({ value, label: t(ROLE_NAMES[i]) }))]
+const LOAD_CONVENTIONS = { 'barbell-total': 'Barbell total', 'db-per-hand': 'Dumbbell per hand', 'db-total': 'Dumbbells total', 'plate-per-side': 'Plate-loaded per side', 'machine-setting': 'Machine setting', 'machine-total': 'Machine total' }
+const conventionOptions = () => [{ value: '', label: t('Unknown') }, ...Object.entries(LOAD_CONVENTIONS).map(([value, label]) => ({ value, label: t(label) }))]
+function TrainingMetadataEditor({ ex }) {
+  const st = useStore(s => s.S)
+  const value = trainingMetadataOf({ ...ex, ...(st.trainingMetadata?.[ex.id] ? { trainingMetadata: st.trainingMetadata[ex.id] } : {}) })
+  const change = patch => update(s => { s.trainingMetadata = s.trainingMetadata || {}; s.trainingMetadata[ex.id] = { role: value.role, primary: value.primary, secondary: value.secondary, ...patch, _ts: Date.now() } })
+  const toggle = (key, m) => change({ [key]: value[key].includes(m) ? value[key].filter(v => v !== m) : [...value[key], m] })
+  return <>
+    <SelectRow title={t('Movement role')} value={value.role || ''} options={roleOptions()} onChange={role => change({ role: role || null })} />
+    <MultiSelectRow title={t('Primary muscle groups')} values={value.primary} options={MUSCLES.map(m => ({ value: m, label: t(MUSCLE_NAME[m]) }))} onToggle={m => toggle('primary', m)} noneLabel={t('No explicit muscle group')} doneLabel={t('Done')} />
+    <MultiSelectRow title={t('Additional muscle groups')} values={value.secondary} options={MUSCLES.filter(m => !value.primary.includes(m)).map(m => ({ value: m, label: t(MUSCLE_NAME[m]) }))} onToggle={m => toggle('secondary', m)} noneLabel={t('No explicit muscle group')} doneLabel={t('Done')} />
+  </>
+}
+
 function CustomExForm({ existing, prefill, onDone, close }) {
   const nameRef = useRef(null)
   const onNameFocus = useSheetKeyboard(nameRef)
   const [n, setN] = useState(existing ? existing.n : (prefill || ''))
   const [bp, setBp] = useState(existing ? existing.bp : '')
   const [eq, setEq] = useState(existing ? (existing.eq || '') : '')
+  const [role, setRole] = useState(S().trainingMetadata?.[existing?.id]?.role || '')
   const storedEq = existing && typeof existing.eq === 'string' && existing.eq && !ALL_EQUIPMENT.includes(existing.eq) ? existing.eq : null
   const [desc, setDesc] = useState(existing ? (existing.desc || '') : '')
   const [media, setMedia] = useState(() => mediaOf(existing))
@@ -1190,10 +1284,11 @@ function CustomExForm({ existing, prefill, onDone, close }) {
     if (existing) update(s => { const c = (s.customEx || []).find(x => x.id === id); if (c) {
       c.n = name; c.bp = bp; c.desc = d; c.tg = tg; c.sm = sm; c.muscleGroups = groups; c.primaries = prim; c.secondaries = sm; c.eq = eq
       extra(c)
+      s.trainingMetadata = s.trainingMetadata || {}; s.trainingMetadata[id] = { role: role || null, primary: prim, secondary: sm, _ts: Date.now() }
     } })
     else {
       id = 'c' + uid()
-      update(s => { const c = { id, n: name, bp, desc: d, tg, sm, muscleGroups: groups, primaries: prim, secondaries: sm, eq, custom: true }; extra(c); (s.customEx = s.customEx || []).push(c) })
+      update(s => { const c = { id, n: name, bp, desc: d, tg, sm, muscleGroups: groups, primaries: prim, secondaries: sm, eq, custom: true }; extra(c); (s.customEx = s.customEx || []).push(c); s.trainingMetadata = s.trainingMetadata || {}; s.trainingMetadata[id] = { role: role || null, primary: prim, secondary: sm, _ts: Date.now() } })
     }
     // The file goes to the server now rather than after the state's own debounce: another device
     // that sees the reference first shows a tile until it arrives.
@@ -1215,6 +1310,7 @@ function CustomExForm({ existing, prefill, onDone, close }) {
           Hevy import). It stays a chip of its own, picked, so Save does not stop on "Pick equipment". */}
       {storedEq && <button key={storedEq} className={'chip' + (eq === storedEq ? ' on' : '')} onClick={() => setEq(storedEq)}>{t(storedEq)}</button>}
     </div>
+    <SelectRow title={t('Movement role')} value={role} options={roleOptions()} onChange={setRole} />
     {bp && <>
       {bp !== 'cardio' && <MultiSelectRow title={t('Primary muscle groups')} sheetTitle={t('Primary muscle groups')}
         values={primaries}
@@ -1273,23 +1369,19 @@ function usageMap(st) {
 }
 // The swap pickers' own scope (#473): exercises sharing the swapped exercise's target muscle.
 const SAME = '≈'
-function ExercisePicker({ onPick, title, close, like }) {
+function ExercisePicker({ onPick, title, close, like, allEquipment = false }) {
   const st = useStore(s => s.S)
   const usage = usageMap(st)
   const [q, setQ] = useState('')
-  // What a swap is away from: the picker opens on what trains the same muscle, if anything you
-  // can use does, and "All" is one tap back to everything.
-  const likeEx = like ? (EXIDX[like] || allExercises(st).find(e => e.id === like) || null) : null
-  // A muscle nothing else trains gets no chip at all rather than one that lists nothing.
-  const likeTg = swapMuscleOf(likeEx) && sameMuscleFirst(allExercises(st), likeEx).length ? swapMuscleOf(likeEx) : ''
-  const [bp, setBp] = useState(() => {
-    if (!likeTg) return ''
-    const prof = activeProfile(st)
-    return sameMuscleFirst(allExercises(st), likeEx).some(e => !prof || exAvailable(st, e)) ? SAME : ''
-  })                                        // '' = all, '★' = chosen, '☆' = favourites, '≈' = same muscle, else a body part
+  const likeEx = typeof like === 'object' ? like : like ? (EXIDX[like] || allExercises(st).find(e => e.id === like) || null) : null
+  const selectedProfile = st.equipProfiles?.find(p => p.id === st.activeEquipId)
+  const [excludedStationIds, setExcludedStationIds] = useState([])
+  const recommendations = rankReplacements({ exercise: likeEx, candidates: allExercises(st), profile: activeProfile(st) || (excludedStationIds.length ? selectedProfile : null), excludedStationIds, workouts: st.workouts, metadata: st.trainingMetadata })
+  const likeTg = recommendations.length ? swapMuscleOf(likeEx) : ''
+  const [bp, setBp] = useState(() => recommendations.length ? SAME : '')
   const [eq, setEq] = useState('')          // '' = any equipment
   const [cat, setCat] = useState('')        // '' = any type
-  const [showAll, setShowAll] = useState(false)
+  const [showAll, setShowAll] = useState(allEquipment)
   const [shown, setShown] = useState(50)
   const [byMuscle, setByMuscle] = useState(false)
   const searchRef = useRef(null)
@@ -1299,7 +1391,7 @@ function ExercisePicker({ onPick, title, close, like }) {
   const all = allExercises(st)
   const profile = activeProfile(st)
   const inScope = e => bp === '★' ? usage[e.id] : bp === '☆' ? isFav(st, e.id) : (!bp || e.bp === bp)
-  let inPart = searchExercises(bp === SAME ? sameMuscleFirst(all, likeEx) : all.filter(inScope), q)
+  let inPart = searchExercises(bp === SAME ? recommendations.map(r => r.exercise) : all.filter(inScope), q)
   if (bp === '★') inPart = [...inPart].sort((a, b) => (usage[b.id] - usage[a.id]) || exerciseNameFor(a).localeCompare(exerciseNameFor(b)))
   // The Library's Type row (issue #521), with its fallback: a type the search or muscle group
   // narrowed away is ignored for this view, not forgotten.
@@ -1309,12 +1401,12 @@ function ExercisePicker({ onPick, title, close, like }) {
   // Drop the equipment filter if the search narrowed it away, so you never hit a dead end.
   const eqOn = eqOpts.includes(eq) ? eq : ''
   // Favourites float to the top of whatever the filters left (issue #6), the rest keeps its order.
-  // On the same-muscle list the equipment order wins: what is on the same kit comes first,
-  // favourites leading within each half.
+  // Replacement suitability and completed-session familiarity take priority in the swap scope.
   // While searching, what you have logged or planned follows right after them.
   const narrowedList = eqOn ? eqFiltered.filter(e => e.eq === eqOn) : eqFiltered
   const ranked = q.trim() ? sortYoursFirst(narrowedList, st, usage) : sortFavouritesFirst(narrowedList, st)
-  const f = bp === SAME ? sameMuscleFirst(ranked, likeEx) : ranked
+  const f = bp === SAME ? narrowedList : ranked
+  const reasons = bp === SAME ? new Map(recommendations.map(r => [r.exercise.id, r.reasons])) : new Map()
   const chosenCount = Object.keys(usage).length
   const favCount = (st.favEx || []).length
   const special = bp === '★' || bp === '☆'
@@ -1327,11 +1419,14 @@ function ExercisePicker({ onPick, title, close, like }) {
   // results once you have scrolled to their end, so a search almost never ends on nothing.
   // Worked out a beat behind the typing (useDeferredValue): the list itself never waits for it.
   const qLate = useDeferredValue(q)
+  const similarCandidates = bp === SAME
+    ? recommendations.map(r => r.exercise).filter(e => (!catOn || e.cat === catOn) && (!eqOn || e.eq === eqOn))
+    : (profile && !showAll ? all.filter(e => exAvailable(st, e)) : all).filter(e => !bp || e.bp === bp)
   const similar = q.trim() && qLate === q && !special && f.length <= shown
-    ? similarExercises((profile && !showAll ? all.filter(e => exAvailable(st, e)) : all).filter(e => bp === SAME || !bp || e.bp === bp), q, f, f.length ? 12 : 30)
+    ? similarExercises(similarCandidates, q, f, f.length ? 12 : 30)
     : []
   const pickRow = e => <div key={e.id} className="item" {...tappable(() => onPick(e))}>
-        <Thumb ex={e} /><div className="grow"><div className={`tt ${exerciseNameClass(e)}`}>{isFav(st, e.id) && <Icon name="starFill" className="fav-star" />}{exerciseNameFor(e)}</div><div className="ss capitalize">{t(MUSCLE_NAME[e.tg] || e.tg || e.bp)} · {t(e.eq)}</div></div>
+        <Thumb ex={e} /><div className="grow"><div className={`tt ${exerciseNameClass(e)}`}>{isFav(st, e.id) && <Icon name="starFill" className="fav-star" />}{exerciseNameFor(e)}</div><div className="ss capitalize">{t(MUSCLE_NAME[e.tg] || e.tg || e.bp)} · {t(e.eq)}</div>{reasons.has(e.id) && <div className="small muted">{reasons.get(e.id).map(reason => t(reason)).join(' · ')}</div>}</div>
         {/* Accent tag = already in a routine/log ("Chosen"); the yellow star by the name = favourite. */}
         {usage[e.id] && <span className="tag acc"><Icon name="starFill" /></span>}
         {/* A "+" glyph reads as "add this now" — it used to just open the same detail sheet as
@@ -1367,12 +1462,20 @@ function ExercisePicker({ onPick, title, close, like }) {
         {showAll ? t('Filter by "{0}"', profile.name) : t('Show all equipment')}
       </button>
     </div>}
+    {likeEx && selectedProfile?.stations?.length > 0 && <details style={{ marginTop: 10 }}>
+      <summary className="small">{t('Temporarily exclude occupied stations')}</summary>
+      <div className="small muted">{t('Applies to these suggestions only. All keeps manual search available.')}</div>
+      {selectedProfile.stations.map(station => <label key={station.id} className="row" style={{ padding: '8px 0', gap: 8 }}>
+        <input type="checkbox" aria-label={t('Occupied station: {0}', station.label)} checked={excludedStationIds.includes(station.id)} onChange={() => setExcludedStationIds(ids => ids.includes(station.id) ? ids.filter(id => id !== station.id) : [...ids, station.id])} />
+        <span>{station.label}</span>
+      </label>)}
+    </details>}
     {/* Changing muscle group keeps the equipment filter: if it still has exercises under the new
         group the filter stays applied, and if not the eqOn fallback above drops it for this view
         without forgetting the choice (issue #71). The favourites/chosen chips still clear it —
         those are cross-body-part views where a stale equipment filter would be confusing. */}
     <div className="chips" ref={bpStrip} style={{ margin: eqOpts.length > 1 || catOpts.length > 1 ? '10px 0 6px' : '10px 0' }}>
-      {likeTg && <button className={'chip nocap' + (bp === SAME ? ' on' : '')} onClick={() => { setBp(SAME); setShown(50) }}><Icon name="figureStrength" style={{ fontSize: 12, display: 'inline-block', marginInlineEnd: 4, verticalAlign: '-1px' }} />{t('Same muscle: {0}', t(MUSCLE_NAME[likeTg] || likeTg))}</button>}
+      {(likeTg || recommendations.length > 0) && <button className={'chip nocap' + (bp === SAME ? ' on' : '')} onClick={() => { setBp(SAME); setShown(50) }}><Icon name="figureStrength" style={{ fontSize: 12, display: 'inline-block', marginInlineEnd: 4, verticalAlign: '-1px' }} />{likeTg ? t('Same muscle: {0}', t(MUSCLE_NAME[likeTg] || likeTg)) : t('Suggested replacements')}</button>}
       {favCount > 0 && <button className={'chip' + (bp === '☆' ? ' on' : '')} onClick={() => { setBp('☆'); setEq(''); setShown(50) }}><Icon name="starFill" className="fav-star" />{t('Favourites')} ({favCount})</button>}
       {chosenCount > 0 && <button className={'chip' + (bp === '★' ? ' on' : '')} onClick={() => { setBp('★'); setEq(''); setShown(50) }}><Icon name="starFill" style={{ fontSize: 12, display: 'inline-block', marginInlineEnd: 4, verticalAlign: '-1px' }} />{t('Chosen')} ({chosenCount})</button>}
       <button className={'chip nocap' + (!bp ? ' on' : '')} onClick={() => { setBp(''); setShown(50) }}>{t('All')}</button>
@@ -1401,8 +1504,7 @@ function ExercisePicker({ onPick, title, close, like }) {
   </>
 }
 // `title` names what the pick is for when it is not an add — the routine editor's Replace (#110).
-// `like` is the exercise a swap or a replace is away from: the picker then opens on the ones that
-// train the same muscle, same equipment first (#473).
+// `like` is an exercise id or snapshot: swaps open on explained, available alternatives.
 export const exercisePicker = (onPick, { title, like } = {}) => ui().openSheet(close => <ExercisePicker onPick={onPick} title={title} like={like} close={close} />)
 
 /** Start a safe swap for one exact active-workout occurrence. */
@@ -1413,7 +1515,7 @@ export function swapActiveWorkoutExercise(index) {
   // The "+" on a picker row commits with the default config, exactly as it does in the add
   // flows; tapping the row still opens the config sheet first.
   // Worded for the session, not the routine: a swap changes today's workout only.
-  const picker = exercisePicker((ex, quick) => quick ? swapTo(ex, defaultConfig(ex.id)) : exConfigSheet(ex, null, cfg => swapTo(ex, cfg), null, null, null, null, t('Use in this workout')), { title: t('Swap exercise'), like: active.entries[index].id })
+  const picker = exercisePicker((ex, quick) => quick ? swapTo(ex, defaultConfig(ex.id)) : exConfigSheet(ex, null, cfg => swapTo(ex, cfg), null, null, null, null, t('Use in this workout')), { title: t('Swap exercise'), like: { ...exOr(active.entries[index].id), ...(active.entries[index].trainingSnapshot ? { trainingSnapshot: active.entries[index].trainingSnapshot } : {}) } })
   function swapTo(ex, cfg) {
     // The picker is a chooser here, not a stack you keep adding from: one swap, then back to
     // the workout. (The add flow deliberately leaves it open.)
@@ -1435,7 +1537,7 @@ export function swapActiveWorkoutExercise(index) {
     // A freestyle swap logs dumbbell weights the way the exercise means them now, and starts
     // from last time read in that meaning (lib/dumbbells.js), as a planned one does.
     const built = freestyle
-      ? { target: withMeaning(st, cfg, ex.id), plan: null, sets: applyIntensifierPlan(buildSets(historyAs(past, ex.id, dbLoadFor(st, full)), full, { step: (modeOf(full) === 'reps' && ownedWeightsFor(st, full)) || step, preferLast: true }), full, dropGrid(st, full)) }
+      ? { ...trainingSnapshotFor(st, full), target: withMeaning(st, cfg, ex.id), plan: null, sets: applyIntensifierPlan(buildSets(historyAs(past, ex.id, dbLoadFor(st, full)), full, { step: (modeOf(full) === 'reps' && ownedWeightsFor(st, full)) || step, preferLast: true }), full, dropGrid(st, full)) }
       : buildPlannedEntry(past, full, slotRoutine, { noProg: builtOutOfProgression(current, slotRoutine) })
     const replacement = {
       id: ex.id,
@@ -1449,14 +1551,21 @@ export function swapActiveWorkoutExercise(index) {
       ...(current.noProg === true ? { noProg: true } : {}),
     }
 
+    const preview = previewRoutineSwap(st.active, st.routines, index, withMeaning(st, full))
     const apply = options => {
       // A timed callback closes over entry/set indexes. Invalidate it, and the current rest,
       // before the selected occurrence can be replaced or a new entry shifts those indexes.
       ui().stopWork()
       ui().stopRest()
       update(state => { swapActiveExercise(state.active, index, replacement, options) }, true)
+      if (preview) ui().openSheet(close => <>
+        <h3>{t('Used in this workout')}</h3>
+        <p className="muted small">{t('Your future plan is unchanged.')}</p>
+        <Button variant="primary" onClick={() => { close(); previewFutureSwap(preview) }}>{t('Update future plan…')}</Button>
+        <Button variant="ghost" onClick={close}>{t('Keep this workout only')}</Button>
+      </>)
     }
-    const logged = (current.sets || []).some(set => set.done === true)
+    const logged = (current.sets || []).some(hasCompletedWork)
     if (!logged) { apply(); return }
 
     if (current.sg) {
@@ -1485,24 +1594,58 @@ export function swapActiveWorkoutExercise(index) {
   }
 }
 
+function previewFutureSwap(preview) {
+  const st = S()
+  const name = cfg => exerciseNameFor(exOr(cfg.id))
+  const prescription = cfg => {
+    const snapshot = trainingSnapshotFor(st, cfg).equipmentSnapshot
+    const reps = modeOf(cfg) === 'time' ? `${cfg.sec || 0} ${t('sec')}` : cfg.repsMin ? `${cfg.repsMin}–${cfg.reps}` : cfg.reps || 0
+    const load = cfg.weight != null ? `${fmtNum(cfg.weight)}${snapshot.unit ? ` ${snapshot.unit}` : ''} · ${t(LOAD_CONVENTIONS[snapshot.loadConvention] || 'As entered')}` : ''
+    return [`${cfg.sets || 1} × ${reps}`, load, snapshot.label].filter(Boolean).join(' · ')
+  }
+  ui().openSheet(close => <>
+    <h3>{t('Update future plan?')}</h3>
+    <p>{preview.routineName}</p>
+    <p>{name(preview.before)} · {prescription(preview.before)}</p>
+    <p>→ {name(preview.after)} · {prescription(preview.after)}</p>
+    <p className="small muted">{t('Only this routine slot changes. Logged workouts stay unchanged.')}</p>
+    <Button variant="primary" onClick={() => {
+      close()
+      let applied = false
+      update(state => { applied = applyRoutineSwap(state.routines, preview) }, true)
+      if (!applied) toast(t('The routine changed. Reopen it to update this slot.'))
+    }}>{t('Update future plan')}</Button>
+    <Button variant="ghost" onClick={close}>{t('Cancel')}</Button>
+  </>)
+}
+
 /* ============================ equipment profiles ============================ */
 // Create or edit one profile ("Home", "Gym", ...): a name plus a checklist of what you have.
 function EquipmentProfileSheet({ profile, close }) {
   const update = useStore(s => s.update)
   const nameRef = useRef(null)
   const [checked, setChecked] = useState(new Set(profile ? profileEquipment(profile) : []))
+  const [stations, setStations] = useState(() => profile?.stations ? structuredClone(profile.stations) : null)
+  const editStation = (id, patch) => setStations(rows => rows.map(row => row.id === id ? { ...row, ...patch } : row))
+  const addExercise = station => {
+    const picker = exercisePicker(ex => {
+      setStations(rows => rows.map(row => row.id === station.id ? { ...row, exerciseIds: [...new Set([...row.exerciseIds, ex.id])] } : row))
+      picker.close()
+    }, { title: t('Add supported exercise'), allEquipment: true })
+  }
   const toggle = k => setChecked(s => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n })
   const save = () => {
     const name = (nameRef.current.value || '').trim()
     if (!name) { return }
+    if (stations?.some(row => !row.label.trim())) { toast(t('Give it a name')); return }
     update(s => {
       s.equipProfiles = s.equipProfiles || []
       const equipment = [...checked]
       if (profile) {
         const p = s.equipProfiles.find(x => x.id === profile.id)
-        if (p) { p.name = name; p.equipment = equipment; p.accV = ACC_V }
+        if (p) { p.name = name; p.equipment = equipment; p.accV = ACC_V; if (stations) p.stations = stations }
       } else {
-        const p = newProfile(name); p.equipment = equipment
+        const p = newProfile(name); p.equipment = equipment; if (stations) p.stations = stations
         s.equipProfiles.push(p)
         if (!s.activeEquipId) s.activeEquipId = p.id
       }
@@ -1524,6 +1667,18 @@ function EquipmentProfileSheet({ profile, close }) {
     <div className="dim small" style={{ marginTop: 10 }}>
       {t('Body-weight exercises are always available, unless they need a pull-up bar or a bench.')}
     </div>
+    <h4 className="sec">{t('Equipment stations')}</h4>
+    <div className="small dim">{stations ? t('Only listed stations enable machine exercises. Free weights still use the checklist.') : t('Category availability is unverified. Add stations to confirm specific machines.')}</div>
+    {(stations || []).map(station => <div key={station.id} className="sect-b" style={{ marginTop: 12 }}>
+      <TextField aria-label={t('Station name')} placeholder={t('Station name')} maxLength={80} value={station.label} onChange={e => editStation(station.id, { label: e.target.value })} />
+      <TextField aria-label={t('Manufacturer')} placeholder={t('Manufacturer')} maxLength={80} value={station.manufacturer || ''} onChange={e => editStation(station.id, { manufacturer: e.target.value })} />
+      <TextField aria-label={t('Model')} placeholder={t('Model')} maxLength={80} value={station.model || ''} onChange={e => editStation(station.id, { model: e.target.value })} />
+      <SelectRow title={t('Load convention')} value={station.loadConvention || ''} options={conventionOptions()} onChange={loadConvention => editStation(station.id, { loadConvention: loadConvention || null })} />
+      <div className="chips">{station.exerciseIds.map(id => <button key={id} className="chip on" aria-label={t('Remove {0}', exerciseNameText(EXIDX[id] || { n: id }))} onClick={() => editStation(station.id, { exerciseIds: station.exerciseIds.filter(value => value !== id) })}>{exerciseNameFor(EXIDX[id] || { n: id })} ×</button>)}</div>
+      <Button variant="ghost" onClick={() => addExercise(station)}>{t('Add supported exercise')}</Button>
+      <Button variant="ghost" onClick={() => setStations(rows => rows.filter(row => row.id !== station.id))}>{t('Remove station')}</Button>
+    </div>)}
+    <Button variant="ghost" onClick={() => setStations(rows => [...(rows || []), { id: 'station' + uid(), label: '', exerciseIds: [], loadConvention: null }])}>{t('Add station')}</Button>
     <div style={{ height: 14 }} /><Button variant="primary" onClick={save}>{t('Save')}</Button>
   </>
 }
@@ -1550,7 +1705,7 @@ const climbsRange = policy => policy === 'double' || policy === 'triple'
 // Triple progression's set ceiling while it is being edited: never below the starting sets.
 const setsMaxOf = c => Math.max(Math.max(1, Math.round(c.sets) || 1), Math.min(MAX_TRIPLE_SETS, Math.round(c.setsMax) || 0))
 
-function ProgressionFields({ ex, mode, c, setC, routine, unit, perSide, bw }) {
+function ProgressionFields({ ex, mode, c, setC, routine, unit, setting, perSide, bw }) {
   // Triple progression adds sets and then load. Bodyweight work with nothing added already climbs
   // reps and then sets on its own (the rep ceiling below), and has no load to finish the cycle
   // with, so it is not offered there.
@@ -1564,11 +1719,11 @@ function ProgressionFields({ ex, mode, c, setC, routine, unit, perSide, bw }) {
   const invalid = !progressionStepIsValid(inc, active, backoff)
   // "26 → 24 → 22 kg": what the sets will open at, from the weight and step typed above.
   const preview = backoff && c.weight > 0 && inc > 0
-    ? backoffWeights(c.weight, Math.max(1, Math.round(c.sets) || 1), inc).map(fmtNum).join(' → ') + ' ' + unit
+    ? backoffWeights(c.weight, Math.max(1, Math.round(c.sets) || 1), inc).map(fmtNum).join(' → ') + ' ' + (setting ? t('Setting') : unit)
     : ''
   const stride = mode === 'reps' && perSide ? 2 : 1
   const range = climbsRange(active) ? normalizeRepRange(c.reps, c.repsMin, stride) : null
-  const epleyEligible = mode === 'reps' && !isBw({ ...c, id: ex.id }) && (active === 'linear' || climbsRange(active))
+  const epleyEligible = !setting && mode === 'reps' && !isBw({ ...c, id: ex.id }) && (active === 'linear' || climbsRange(active))
   // What is typed is shown as typed, 0 for an emptied field included: shown as the default 90
   // instead, the field could not be emptied to type a new percentage.
   const deloadPercent = Math.round((c.deloadFactor != null && Number.isFinite(Number(c.deloadFactor)) ? Number(c.deloadFactor) : 0.9) * 100)
@@ -1596,7 +1751,7 @@ function ProgressionFields({ ex, mode, c, setC, routine, unit, perSide, bw }) {
     {/* Double progression on a weighted exercise fills this row with four steppers; `cfgrow-4`
         lets it wrap into two pairs on phones, where four abreast left the inputs a few px wide. */}
     {(active !== 'off' || backoff) && <div className={'row cfgrow' + ((active === 'double' && epleyEligible) || active === 'triple' ? ' cfgrow-4' : '')} style={{ marginBottom: 18 }}>
-      <Stepper label={mode === 'time' ? t('Step (seconds)') : t('Step ({0})', unit)} value={inc}
+      <Stepper label={mode === 'time' ? t('Step (seconds)') : t('Step ({0})', setting ? t('Setting') : unit)} value={inc}
         step={mode === 'time' ? 5 : 1.25} decimal={mode !== 'time'} invalid={invalid} className={invalid ? 'invalid' : ''}
         onChange={v => setC(x => ({ ...x, inc: v }))} />
       {climbsRange(active) && <>
@@ -1643,7 +1798,7 @@ const intensifierToSave = x => (x.type === 'dropset'
     ? { ...x, totalReps: Math.max(1, Math.round(x.totalReps) || 0), restSec: Math.max(5, Number(x.restSec) || 0) }
     : x)
 
-function ExConfig({ ex, existing, onSave, onDelete, onReplace, close, routine, initial, saveLabel }) {
+function ExConfig({ ex, existing, onSave, onDelete, onReplace, close, routine, initial, saveLabel, lockEquipment = false }) {
   const st = useStore(s => s.S)
   const cardio = isCardio(ex.id)
   const speedUnit = speedUnitOf(st)
@@ -1657,6 +1812,8 @@ function ExConfig({ ex, existing, onSave, onDelete, onReplace, close, routine, i
       ? { ...cfg, ...normalizeRepRange(cfg.reps, cfg.repsMin, isPerSide(cfg) ? 2 : 1) }
       : cfg
   })
+  const setting = equipmentSnapshotFor(st, { ...c, id: ex.id }).loadConvention === 'machine-setting'
+  const setDbMeaning = value => setC(x => ({ ...x, dbLoad: value === dbLoadFor(st, ex.id) ? undefined : value, loadConvention: undefined }))
   // Cardio keeps its own duration+speed form; the reps/time choice (issue #16) is offered for
   // everything else, which is where the gap was — planks, hangs, wall sits, loaded carries.
   const mode = cardio ? 'cardio' : modeOf({ ...c, id: ex.id })
@@ -1700,7 +1857,7 @@ function ExConfig({ ex, existing, onSave, onDelete, onReplace, close, routine, i
     // switching to Time too — a timed hold has no rep count to split — but "per side" does not
     // have to mean splitting: for a hold it means doing the whole thing once per side, so the
     // flag now survives the switch and buildWorkSets doubles the planned sets instead.
-    const flags = {}
+    const flags = existing?.loadNeedsReview && c.weight === existing.weight ? { loadNeedsReview: true } : {}
     if (bw !== isBodyweightEq(ex.id)) flags.bodyweight = bw
     // Free text, e.g. a pyramid's per-set loading ("bar only, +1 plate/side each set") — the
     // sets/reps/weight fields are one flat target and have no room for that on their own.
@@ -1719,7 +1876,7 @@ function ExConfig({ ex, existing, onSave, onDelete, onReplace, close, routine, i
     // What a dumbbell weight means in this slot (lib/dumbbells.js): written only when the slot
     // picked its own, so every other config stays the shape it was.
     const dbLoad = isBellEx(ex) && !bw ? dbLoadOf(c.dbLoad) : null
-    const withMeant = dbLoad ? { dbLoad } : {}
+    const withMeant = { ...(dbLoad ? { dbLoad } : {}), ...(c.stationId ? { stationId: c.stationId } : {}), ...(!isBellEx(ex) && c.loadConvention ? { loadConvention: c.loadConvention } : {}) }
     // "Last set to failure": written only when on, so a plan that never asked keeps its shape.
     const withFailure = c.lastToFailure === true ? { lastToFailure: true } : {}
     if (cardio) onSave({ sets, min: Math.max(1, Math.round(c.min) || 20), speed: Math.max(0, c.speed || 8), ...withNote, ...withRest })
@@ -1791,7 +1948,7 @@ function ExConfig({ ex, existing, onSave, onDelete, onReplace, close, routine, i
         <Stepper label={t('Seconds')} value={c.sec} step={5} decimal={false} onChange={v => setC(x => ({ ...x, sec: v }))} />
         {/* A bodyweight hold's load is the "Added" row below — showing both put two fields on
             one value. */}
-        {!bw && <Stepper label={t('Weight ({0})', st.unit)} value={c.weight} step={2.5} onChange={v => setC(x => ({ ...x, weight: v }))} />}
+        {!bw && <Stepper label={setting ? t('Setting') : t('Weight ({0})', st.unit)} value={c.weight} step={2.5} onChange={v => setC(x => ({ ...x, weight: v }))} />}
       </> : <>
         {/* Rest-pause always trains as exactly two rows — a warm-up at this rep count, then one
             rest-pause work set — so "Sets" has nothing left to mean and only invites a mismatch. */}
@@ -1800,7 +1957,7 @@ function ExConfig({ ex, existing, onSave, onDelete, onReplace, close, routine, i
         {!ranged && !pyramid && <Stepper label={t('Reps')} value={c.reps} step={perSide ? 2 : 1} decimal={false} onChange={v => setC(x => ({ ...x, reps: v }))} />}
         {/* On bodyweight work the weight stepper is the click #32 is about, so it is not here
             until there is a belt to describe — see the added-weight row below. */}
-        {!bw && !pyramid && <Stepper label={t('Weight ({0})', st.unit)} value={c.weight} step={2.5} onChange={v => setC(x => ({ ...x, weight: v }))} />}
+        {!bw && !pyramid && <Stepper label={setting ? t('Setting') : t('Weight ({0})', st.unit)} value={c.weight} step={2.5} onChange={v => setC(x => ({ ...x, weight: v }))} />}
       </>}
     </div>
     {/* Pyramid sets: a row per set, each with its own reps or Max, rest and weight. A set left
@@ -1826,7 +1983,7 @@ function ExConfig({ ex, existing, onSave, onDelete, onReplace, close, routine, i
         </div>
         {/* Bodyweight work has its one "Added" load below instead. */}
         {!bw && <div className="row cfgrow" style={{ marginBottom: 4 }}>
-          <Stepper label={t('Weight ({0})', st.unit)} value={(c.pyramidWeight || [])[i] || 0} step={2.5}
+          <Stepper label={setting ? t('Setting') : t('Weight ({0})', st.unit)} value={(c.pyramidWeight || [])[i] || 0} step={2.5}
             onChange={v => setC(x => {
               const weight = Array.from({ length: x.pyramid.length }, (_, j) => (x.pyramidWeight || [])[j] || 0)
               weight[i] = v
@@ -1988,12 +2145,19 @@ function ExConfig({ ex, existing, onSave, onDelete, onReplace, close, routine, i
           : t('Every set becomes rest-pause: {0} reps to start, then {1} more split into short bursts, {2}s rest before each, roughly halving each time.', c.reps || 0, c.intensifier.totalReps, c.intensifier.restSec)}
       </div>}
     </>}
+    {lockEquipment && <div className="small dim">{t('Equipment identity stays with logged sets. Swap exercise to use another station.')}</div>}
+    {!lockEquipment && mode !== 'cardio' && <>
+      <SelectRow title={t('Equipment station')} value={c.stationId || ''} options={[{ value: '', label: t('Unknown') }, ...(st.equipProfiles?.find(p => p.id === st.activeEquipId)?.stations || []).filter(row => row.exerciseIds.includes(ex.id)).map(row => ({ value: row.id, label: row.label }))]} onChange={stationId => setC(x => ({ ...x, stationId: stationId || undefined, loadConvention: st.equipProfiles?.find(p => p.id === st.activeEquipId)?.stations?.find(row => row.id === stationId)?.loadConvention || undefined }))} />
+      <SelectRow title={t('Load convention')} value={isBellEx(ex) ? dbLoadFor(st, { ...c, id: ex.id }) : c.loadConvention || ''} options={isBellEx(ex)
+        ? [{ value: 'as', label: t('As entered') }, { value: 'each', label: t('Dumbbell per hand') }, { value: 'total', label: t('Dumbbells total') }]
+        : conventionOptions()} onChange={isBellEx(ex) ? setDbMeaning : loadConvention => setC(x => ({ ...x, loadConvention: loadConvention || undefined }))} />
+    </>}
     {/* What a dumbbell weight means, for this routine's slot (cfg.dbLoad). Picking what the
         exercise already means drops the key, so the slot follows the exercise's default again. */}
-    {isBellEx(ex) && !bw && mode !== 'cardio' && <>
+    {!lockEquipment && isBellEx(ex) && !bw && mode !== 'cardio' && <>
       <h4 className="sec">{t('Weight means')}</h4>
       <DbLoadPicker ex={ex} cfg={c} value={dbLoadFor(st, { ...c, id: ex.id })}
-        onChange={v => setC(x => ({ ...x, dbLoad: v === dbLoadFor(st, ex.id) ? undefined : v }))} />
+        onChange={setDbMeaning} />
     </>}
     {/* How the weight is plate-loaded and what the bar weighs — per exercise, not per plan, so
         it sits apart from the config fields above and writes straight to S.barWeights/S.loadKind. */}
@@ -2003,7 +2167,7 @@ function ExConfig({ ex, existing, onSave, onDelete, onReplace, close, routine, i
     </>}
     {pyramid
       ? <div className="small dim" style={{ marginBottom: 18 }}>{t('Weight is up to you: pyramid sets are not progressed automatically.')}</div>
-      : <ProgressionFields ex={ex} mode={mode} c={c} setC={setC} routine={routine} unit={st.unit} perSide={perSide} bw={bw} />}
+      : <ProgressionFields ex={ex} mode={mode} c={c} setC={setC} routine={routine} unit={st.unit} setting={setting} perSide={perSide} bw={bw} />}
     <textarea className="input" rows={3} maxLength={500} style={{ marginBottom: 18 }}
       placeholder={t('Note (optional): loading cues, "bar only, then +1 plate/side each set", anything worth remembering')}
       value={c.note || ''} onChange={e => setC(x => ({ ...x, note: e.target.value }))} />
@@ -2019,7 +2183,7 @@ function ExConfig({ ex, existing, onSave, onDelete, onReplace, close, routine, i
     {onDelete && <><div style={{ height: 8 }} /><Button variant="danger" onClick={() => { close(); onDelete() }}>{t('Remove from routine')}</Button></>}
   </>
 }
-export const exConfigSheet = (ex, existing, onSave, onDelete, routine, initial, onReplace, saveLabel) => ui().openSheet(close => <ExConfig ex={ex} existing={existing} initial={initial} onSave={onSave} onDelete={onDelete} onReplace={onReplace} routine={routine} saveLabel={saveLabel} close={close} />)
+export const exConfigSheet = (ex, existing, onSave, onDelete, routine, initial, onReplace, saveLabel, lockEquipment = false) => ui().openSheet(close => <ExConfig ex={ex} existing={existing} initial={initial} onSave={onSave} onDelete={onDelete} onReplace={onReplace} routine={routine} saveLabel={saveLabel} lockEquipment={lockEquipment} close={close} />)
 
 /* ============================ glyph picker ============================ */
 // Grouped by what the glyph means for a training day, so picking one is a scan
@@ -2474,7 +2638,7 @@ function WorkoutDetail({ w, close }) {
     return <div key={i} className="row wd-ex" style={{ alignItems: 'flex-start' }} {...tappable(() => exerciseHistorySheet(e.id))}>
       {ex && <Thumb ex={ex} />}
       <div className="grow"><div className={`tt ${exerciseNameClass(ex)}`} style={{ fontWeight: 600 }}>{nameOf(e)} {w.prs && w.prs.includes(e.id) && <span className="pr"><Icon name="trophy" />PR</span>}</div>
-        <div className="ss">{e.sets.filter(hasCompletedWork).map(s => setLabel(e.id, s, e.target, speedUnitOf(st))).join('  ·  ') || t('no sets')}</div>
+        <div className="ss">{e.sets.filter(hasCompletedWork).map(s => setLabel(e.id, s, { ...e.target, equipmentSnapshot: e.equipmentSnapshot }, speedUnitOf(st))).join('  ·  ') || t('no sets')}</div>
         {e.note && <div className="small dim" style={{ marginTop: 3 }}>
           {e.notePin && <Icon name="pin" style={{ fontSize: 12, marginInlineEnd: 4, verticalAlign: '-1px', color: 'var(--yellow)' }} />}{e.note}
         </div>}</div>
@@ -2516,7 +2680,7 @@ function WorkoutDetail({ w, close }) {
   const grouped = groups.length > 1 || (groups[0] && groups[0].rid && (w.routineIds || []).length > 1)
   return <>
     <h3>{w.name}</h3>
-    <div className="muted small" style={{ marginBottom: 12 }}>{[fmtDate(w.d, true), ...durPart(w.end - w.start), fmtVol(w.vol, st.unit), ...(w.bw ? [fmtNum(w.bw) + ' ' + st.unit] : [])].join(' · ')}</div>
+    <div className="muted small" style={{ marginBottom: 12 }}>{[fmtDate(w.d, true), ...durPart(w.end - w.start), fmtVol(w.vol, st.unit, w.volumePartial), ...(w.bw ? [fmtNum(w.bw) + ' ' + st.unit] : [])].join(' · ')}</div>
     {grouped ? groups.map(g => {
       const r = g.rid ? st.routines.find(x => x.id === g.rid) : null
       const items = g.items.map(i => w.entries[i])
@@ -2688,7 +2852,7 @@ export const workoutDetailSheet = w => ui().openSheet(close => <WorkoutDetail w=
 /* ============================ calendar ============================ */
 function Calendar({ start, close }) {
   const st = useStore(s => s.S)
-  const [cur, setCur] = useState(() => { const d = start ? new Date(start) : new Date(); d.setDate(1); return d })
+  const [cur, setCur] = useState(() => { const d = start ? new Date(start + 'T12:00:00') : new Date(); d.setDate(1); return d })
   const y = cur.getFullYear(), mo = cur.getMonth()
   const byDay = {}
   st.workouts.forEach(w => {
@@ -2725,7 +2889,7 @@ function Calendar({ start, close }) {
       <h3 style={{ margin: 0 }}>{t(MONTHS_LONG[mo])} {y}</h3>
       <button className="iconbtn" onClick={() => setCur(new Date(y, mo + 1, 1))} aria-label={t('Next month')}><Icon name="chevronRight" /></button>
     </div>
-    <div className="small muted" style={{ textAlign: 'center' }}>{monthWs.length ? `${tn('{0} workout', '{0} workouts', monthWs.length)} · ${fmtDur(monthMs)} · ${fmtVol(monthVol, st.unit)}` : t('No workouts this month')}</div>
+    <div className="small muted" style={{ textAlign: 'center' }}>{monthWs.length ? `${tn('{0} workout', '{0} workouts', monthWs.length)} · ${fmtDur(monthMs)} · ${fmtVol(monthVol, st.unit, monthWs.some(w => w.volumePartial))}` : t('No workouts this month')}</div>
     <div className="cal-grid">{weekOrder(ws).map(d => <div key={d} className="cal-h">{t(DAYS[d])}</div>)}{cells}</div>
     <div className="cal-legend">
       <span><i style={{ background: 'var(--acc)' }} />{t('Trained')}</span>
@@ -2747,7 +2911,7 @@ export function WorkoutRow({ w, onClick }) {
   return <div className="item" {...tappable(onClick)}>
     <span className="lrow-i" style={{ width: 34, height: 34, borderRadius: 8, fontSize: 19 }}><Icon name={glyph} /></span>
     <div className="grow"><div className="tt">{w.name}</div>
-      <div className="ss">{[fmtDate(w.d, true), ...durPart(w.end - w.start), tn('{0} set', '{0} sets', setsDone(w)), fmtVol(w.vol, st.unit)].join(' · ')}</div></div>
+      <div className="ss">{[fmtDate(w.d, true), ...durPart(w.end - w.start), tn('{0} set', '{0} sets', setsDone(w)), fmtVol(w.vol, st.unit, w.volumePartial)].join(' · ')}</div></div>
     {mediaN > 0 && <span className="wrow-media" title={tn('{0} photo or video', '{0} photos or videos', mediaN)} aria-label={tn('{0} photo or video', '{0} photos or videos', mediaN)}><Icon name="image" />{mediaN}</span>}
     {w.prs && w.prs.length > 0 && <span className="pr"><Icon name="trophy" />{w.prs.length} PR</span>}
     <Icon name="chevronRight" className="chev" />
@@ -3280,9 +3444,9 @@ function LastAndNext({ st, w }) {
           {tr ? <span style={{ color: tr[1], display: 'inline-flex' }} aria-label={row.trend > 0 ? t('Up on last time') : row.trend < 0 ? t('Down on last time') : t('Same as last time')}><Icon name={tr[0]} /></span>
             : <span className="tag nocap">{t('First time')}</span>}
         </div>
-        <div className="small">{t('Today')}: {setsLine(row.today, st.unit)}</div>
-        {row.last && <div className="small dim">{t('Last time')}: {setsLine(row.last, st.unit)}</div>}
-        {row.next && <div className="small accent">{t('Next time')}: {row.next.w != null ? fmtNum(row.next.w) + ' ' + st.unit : ''}{row.next.w != null && row.next.r != null ? ' × ' : ''}{row.next.r != null ? row.next.r : ''} · {nextWord[row.next.kind]}</div>}
+        <div className="small">{t('Today')}: {setsLine(row.today, row.setting ? t('Setting') : st.unit)}</div>
+        {row.last && <div className="small dim">{t('Last time')}: {setsLine(row.last, row.setting ? t('Setting') : st.unit)}</div>}
+        {row.next && <div className="small accent">{t('Next time')}: {row.next.w != null ? fmtNum(row.next.w) + ' ' + (row.next.setting ? t('Setting') : st.unit) : ''}{row.next.w != null && row.next.r != null ? ' × ' : ''}{row.next.r != null ? row.next.r : ''} · {nextWord[row.next.kind]}</div>}
       </div>
     })}</div>
   </div>
@@ -3312,7 +3476,7 @@ function FinishSummary({ w, prs, e1prs = [], close }) {
     <h3 style={{ margin: '8px 0' }}>{t('Workout complete!')}</h3>
     <div className="tiles" style={{ textAlign: 'start' }}>
       <div className="tile"><div className="l">{t('Duration')}</div><div className="v" style={{ fontSize: '1.1rem' }}>{fmtDur(w.end - w.start)}</div></div>
-      <div className="tile"><div className="l">{t('Volume')}</div><div className="v" style={{ fontSize: '1.1rem' }}>{fmtVol(w.vol, st.unit)}</div></div>
+      <div className="tile"><div className="l">{t('Volume')}</div><div className="v" style={{ fontSize: '1.1rem' }}>{fmtVol(w.vol, st.unit, w.volumePartial)}</div></div>
       <div className="tile"><div className="l">{t('Sets')}</div><div className="v" style={{ fontSize: '1.1rem' }}>{setsWorkCount(setsDone(w), workSetsDone(w))}</div></div>
       <div className="tile"><div className="l">{t('PRs')}</div><div className="v" style={{ fontSize: 20 }}>{prs.length || '–'}</div></div>
     </div>
@@ -3373,6 +3537,7 @@ function doFinishWorkout() {
   // it outdoes loses its own. It used to report none at all while the editor's Save awarded them
   // (QA 1.3.9). The confirmed weights are left alone either way.
   if (!past) A.entries.forEach(e => {
+    if (isSettingLoad(e)) return
     const loads = e.sets.filter(s => s.done && !isWarmupRow(s)).map(s => s.w).filter(w => w > 0)
     const mx = loads.length ? loads.reduce((a, b) => betterWeight(e.id, a, b)) : 0
     // Held against history read the way this session logged a dumbbell weight (lib/dumbbells.js).

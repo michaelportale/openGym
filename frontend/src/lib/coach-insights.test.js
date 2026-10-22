@@ -95,3 +95,14 @@ describe('sessionInsights', () => {
   })
   it('returns null for nothing', () => { expect(sessionInsights(S(), null)).toBeNull() })
 })
+
+it('carries partial totals through aggregate and both sides of a session comparison',()=>{
+  const complete=w('complete','2040-02-01',[{id:chest,sets:[set(5,10)]}])
+  const partial=w('partial','2040-02-02',[{id:chest,sets:[set(5,10),set(5,null,{sourceLoad:{physical:true}})]}],{volumePartial:true})
+  const s={workouts:[complete,partial]}
+  expect(insightsFor(s)).toMatchObject({volume:100,volumePartial:true})
+  expect(insightsFor(s,{to:'2040-02-01'}).volumePartial).toBe(false)
+  expect(sessionInsights(s,partial)).toMatchObject({now:{volumePartial:true},then:{volumePartial:false}})
+  const next={...complete,id:'next',d:'2040-02-03'};s.workouts.push(next)
+  expect(sessionInsights(s,next)).toMatchObject({now:{volumePartial:false},then:{volumePartial:true}})
+})

@@ -8,7 +8,8 @@ import { isWarmupRow } from './workout-model.js'
 import { nextPrescription, applyPrescription, defaultIncrement, weightIncrement, plannedOf } from './progression.js'
 import { dropGrid } from './plates.js'
 import { backoffStepOf, applyBackoff } from './backoff.js'
-import { dbLoadFor, historyAs, ownedWeightsFor } from './dumbbells.js'
+import { dbLoadFor, historyAs, ownedWeightsFor, withMeaning } from './dumbbells.js'
+import { trainingSnapshotFor } from './training-metadata.js'
 
 /**
  * Where a planned session's reps come from (Settings → During a workout). 'plan', the default:
@@ -48,9 +49,7 @@ export function buildPlannedEntry(stored, cfg, routine, { noProg = false } = {})
   const built = applyPrescription(buildSets(st, cfg, { step: ramp, rid: routine?.id, useTarget: plan.kind === 'off', planReps }), plan, ramp, barFloor(st, cfg.id))
   const rows = backoffStep ? applyBackoff(built, backoffStep) : built
   const sets = applyIntensifierPlan(rows, cfg, dropGrid(st, cfg))
-  const target = { ...cfg }
-  // Stamped on the session, so the meaning it was logged with stays with it (dumbbells.js).
-  if (meaning !== 'as') target.dbLoad = meaning
+  const target = withMeaning(stored, cfg)
   if (plan.weight != null) target.weight = plan.weight
   if (plan.reps != null) target.reps = plan.reps
   if (plan.sec != null) target.sec = plan.sec
@@ -71,7 +70,7 @@ export function buildPlannedEntry(stored, cfg, routine, { noProg = false } = {})
     && rows.some(s => !isWarmupRow(s) && s.r !== cfg.reps)
   // `planned` is what the routine asked for, kept apart from the target the prescription moved,
   // so the next session can tell an edited plan from a progressed one (nextPrescription).
-  return { target, plan, sets, planned: plannedOf(cfg), ...(carried ? { carried: true } : {}) }
+  return { ...trainingSnapshotFor(stored, cfg), target, plan, sets, planned: plannedOf(cfg), ...(carried ? { carried: true } : {}) }
 }
 
 /**

@@ -1,3 +1,4 @@
+import { equipmentSnapshotFor } from './load-identity.js'
 // Converting a profile between kg and lb. Until now the unit switch only relabelled the numbers
 // (60 kg became "60 lb", issue #22); this walks every stored weight once. Rounded to what a gym
 // can load: lb to the nearest 0.5, kg to the nearest 0.25 — enough that a value converted there
@@ -32,11 +33,12 @@ const convSet = (set, from, to) => {
     L: convSet(set.sides.L, from, to), R: convSet(set.sides.R, from, to),
   } })
   if (out.w != null) out.w = convertWeight(out.w, from, to)
+  if (out.sourceLoad && out.loadUnit) out.loadUnit = to
   if (Array.isArray(out.drops)) out.drops = out.drops.map(d => ({ ...d, w: convertWeight(d.w, from, to) }))
   return out
 }
 const convTarget = (cfg, from, to) => {
-  if (!cfg || typeof cfg !== 'object') return cfg
+  if (!cfg || typeof cfg !== 'object' || cfg.loadConvention === 'machine-setting') return cfg
   const out = { ...cfg }
   if (out.weight != null) out.weight = convertWeight(out.weight, from, to)
   // A per-exercise increment is a load too — 2.5 kg is 5 lb, not 2.5 lb.
@@ -65,9 +67,11 @@ const convBarWeights = (bw, from, to) => {
   return out
 }
 const convEntry = (e, from, to) => {
-  if (!e || typeof e !== 'object') return e
+  if (!e || typeof e !== 'object' || e.equipmentSnapshot?.loadConvention === 'machine-setting'
+    || (e.sets?.some(s => s.sourceLoad) && !e.equipmentSnapshot?.unit)) return e
   return {
     ...e,
+    ...(e.equipmentSnapshot ? { equipmentSnapshot: { ...e.equipmentSnapshot, unit: e.equipmentSnapshot.unit ? to : null } } : {}),
     ...(e.topW != null ? { topW: convertWeight(e.topW, from, to) } : {}),
     ...(e.target ? { target: convTarget(e.target, from, to) } : {}),
     // The plan the entry was built from (lib/session-start.js) carries the routine's weight too.
@@ -103,7 +107,10 @@ export function convertStateUnit(S, to) {
   // switching back finds the old list as you left it. The dumbbell list (S.dumbbells) is kept per
   // unit the same way. The load kinds (S.loadKind) and what a dumbbell weight means (S.dbLoad)
   // hold no weight.
-  if (Array.isArray(S.routines)) out.routines = S.routines.map(r => ({ ...r, ex: (r.ex || []).map(cfg => convTarget(cfg, from, to)) }))
+  if (Array.isArray(S.routines)) out.routines = S.routines.map(r => ({ ...r, ex: (r.ex || []).map(cfg => (equipmentSnapshotFor(S, cfg).loadConvention === 'machine-setting' ? cfg : convTarget(cfg, from, to))) }))
+  if (Array.isArray(S.queue?.adaptation?.baseline)) out.queue = { ...S.queue, adaptation: { ...S.queue.adaptation,
+    baseline: S.queue.adaptation.baseline.map(r => ({ ...r, ex: (r.ex || []).map(cfg => (equipmentSnapshotFor(S, cfg).loadConvention === 'machine-setting' ? cfg : convTarget(cfg, from, to))) })),
+  } }
   if (Array.isArray(S.workouts)) out.workouts = S.workouts.map(convSession)
   if (S.active) out.active = convSession(S.active)
   return out

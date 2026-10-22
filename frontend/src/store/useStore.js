@@ -136,6 +136,7 @@ export const DEF = {
   // Equipment profiles (issue: filter Library/picker/routines by what you actually own —
   // e.g. "Home" vs "Gym" — building on the session-only equipment filter from issue #6).
   equipProfiles: [], activeEquipId: null, equipFilterOn: false,
+  trainingMetadata: {}, coverageTargets: {}, dayDispositions: {},
   // Standing per-exercise notes, keyed by exercise id: the gym-specific facts that are true
   // every time you do the movement ("seat 4, pin 7"). Distinct from a routine's `note`, which
   // belongs to one exercise in one plan, and from a session note, which belongs to one day.
@@ -1317,6 +1318,9 @@ export const useStore = create((set, get) => {
     async setCoachLocal(patch) {
       set({ coachLocal: coachDeviceSettings(await saveCoachDevice(patch)) })
     },
+
+    // Proposal acceptance/undo must validate against a tab's already-saved work before mutating.
+    updateCurrent(mut) { syncFromSaved(); get().update(mut) },
 
     // Mutate a draft of S via producer fn, then persist + schedule sync. Every routine the change
     // touched carries the time of it, for a conflict to keep the version edited last.

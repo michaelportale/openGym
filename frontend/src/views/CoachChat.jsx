@@ -477,7 +477,7 @@ function Insights({ S, window: win, compact }) {
     <div className="ins-tiles">
       <Tile v={ins.sessions} l={t('Sessions')} />
       <Tile v={ins.minutes != null ? ins.minutes : '–'} l={t('Min / session')} />
-      <Tile v={ins.volume ? kfmt(ins.volume) : '–'} l={t('Volume ({0})', S.unit)} />
+      <Tile v={ins.volume || ins.volumePartial ? kfmt(ins.volume) : '–'} l={t('Volume ({0})', S.unit) + (ins.volumePartial ? ' · ' + t('Partial load total') : '')} />
       <Tile v={ins.sets} l={t('Sets')} />
     </div>
 
@@ -528,12 +528,12 @@ function DebriefBody({ p, S }) {
       <div className="ins-tiles">
         <Tile v={live.now.sets} l={t('Sets')} />
         <Tile v={live.now.minutes != null ? live.now.minutes : '–'} l={t('Minutes')} />
-        <Tile v={live.now.volume ? kfmt(live.now.volume) : '–'} l={t('Volume ({0})', S.unit)} />
+        <Tile v={live.now.volume || live.now.volumePartial ? kfmt(live.now.volume) : '–'} l={t('Volume ({0})', S.unit) + (live.now.volumePartial ? ' · ' + t('Partial load total') : '')} />
         <Tile v={live.now.prs || '–'} l={t('PRs')} />
       </div>
-      {live.then && <div className="ins-cmp">
+      {live.then && ((!live.now.volumePartial && !live.then.volumePartial) || (live.now.minutes != null && live.then.minutes != null)) && <div className="ins-cmp">
         {t('vs. last {0} on {1}:', w.name || t('session'), fmtDate(live.prevDate))}{' '}
-        <Delta v={live.now.volume - live.then.volume} unit={S.unit} label={t('volume')} />
+        {!live.now.volumePartial && !live.then.volumePartial && <Delta v={live.now.volume - live.then.volume} unit={S.unit} label={t('volume')} />}
         {live.now.minutes != null && live.then.minutes != null && <Delta v={live.now.minutes - live.then.minutes} unit="min" label={t('time')} />}
       </div>}
       {!!live.lifts.length && <div className="ins-block">

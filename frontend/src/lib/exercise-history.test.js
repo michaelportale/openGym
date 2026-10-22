@@ -228,3 +228,15 @@ describe('bestSetFor', () => {
     expect(bestSetFor({}, 'bench')).toBeNull()
   })
 })
+
+it('qualifies only the affected exercise subtotal, including excluded machine rows and unknown reps',()=>{
+  const known={done:true,w:5,r:10,sourceLoad:{physical:true}}
+  const missing={done:true,w:5,r:null,sourceLoad:{physical:true}}
+  const excluded={done:true,w:22,r:5,sourceLoad:{physical:false}}
+  const w=session(0,[known,missing])
+  w.volumePartial=true
+  w.entries.push({id:'known',sets:[known,{...missing,phase:'warmup'}]},{id:'machine',sets:[excluded]})
+  expect(exerciseHistory({workouts:[w]},'bench').sessions[0]).toMatchObject({volume:50,volumePartial:true})
+  expect(exerciseHistory({workouts:[w]},'known').sessions[0]).toMatchObject({volume:50,volumePartial:false})
+  expect(exerciseHistory({workouts:[w]},'machine').sessions[0]).toMatchObject({volume:0,volumePartial:true})
+})

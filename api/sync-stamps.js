@@ -64,12 +64,12 @@ const capStamps = m => {
 const OWN_MERGE = new Set([
   '_ts', '_rev', '_wid', '_wids', '_unstamped', '_prior', 'active', 'unit', 'unitSet', 'resetAt', 'resetIds', 'deleted', 'edited', 'undone', 'routineOrder',
   'workouts', 'routines', 'customEx', 'equipProfiles', 'gymCards', 'bodyweight', 'measurements', 'favEx',
-  'exWeights', 'balanceOverrides', 'loadKind', 'plates', 'dbLoad', 'dumbbells', 'dayNotes',
+  'exWeights', 'balanceOverrides', 'loadKind', 'plates', 'dbLoad', 'dumbbells', 'dayNotes', 'trainingMetadata', 'coverageTargets', 'dayDispositions',
 ]);
 const PER_KEY = new Set(['week', 'dayPlan', 'exNotes', 'barWeights']);
 // The maps whose every entry carries its own edit time (sync-merge.js STAMPED_MAPS): merged per
 // key by the app, so never stamped here as a whole setting. dayNotes is a note per day off.
-export const STAMPED_MAPS = ['balanceOverrides', 'loadKind', 'plates', 'dbLoad', 'dumbbells', 'dayNotes'];
+export const STAMPED_MAPS = ['balanceOverrides', 'loadKind', 'plates', 'dbLoad', 'dumbbells', 'dayNotes', 'trainingMetadata', 'coverageTargets', 'dayDispositions'];
 const ENTRY_META = new Set(['id', '_ts', '_f', '_u']);
 const ENTRY_LISTS = ['routines', 'customEx', 'equipProfiles', 'gymCards', 'workouts'];
 
@@ -506,6 +506,12 @@ export function stampPut(cur, next, { overRead = false, stamped = false, now = D
       if (rec) next._unstamped = rec;
     }
     if (before != null && content(next) !== before) report.changed = true;
+  }
+  // This new per-day ledger may also be written by an unstamped API planner.
+  if (!stamped && isMap(next.dayDispositions)) {
+    for (const [day, entry] of Object.entries(next.dayDispositions)) {
+      if (isMap(entry) && !sameEntry(cur?.dayDispositions?.[day], entry)) entry._ts = t;
+    }
   }
   keepHeld(next, t);
   if (cur && !reset) notePrior(cur, next);

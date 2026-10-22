@@ -64,7 +64,7 @@ export const fmtPlate = n => (Math.round(n * 100) / 100).toLocaleString(dateLoca
 // Volume stays in the profile's unit throughout: the old shorthand turned anything over
 // 10 000 into "t", which is wrong for a pound profile and made one list mix "18.8t" with
 // "7'535 kg" — two numbers you can't compare at a glance.
-export const fmtVol = (v, unit) => fmtNum(v) + ' ' + unit
+export const fmtVol = (v, unit, partial = false) => fmtNum(v) + ' ' + unit + (partial ? ' · ' + t('Partial load total') : '')
 // Plural forms come from the pack via tn(): three forms in Russian, two in English.
 export const exCount = n => tn('{0} exercise', '{0} exercises', n)
 export const routineCount = n => tn('{0} routine', '{0} routines', n)

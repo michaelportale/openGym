@@ -7,6 +7,7 @@
 // cardio, warm-up count, the superset groups renumbered, session-only fields gone). The rows are
 // built the way a freestyle exercise added mid-workout builds them (Workout.jsx), with history
 // narrowed to this one entry of this one workout, so "last time" is that day.
+import { trainingSnapshotFor } from './training-metadata.js'
 import { EXIDX } from './exercises.js'
 import { routineFromSession } from './session-routines.js'
 import { buildSets, applyIntensifierPlan, modeOf, setsFromRows } from './history.js'
@@ -43,7 +44,7 @@ export function repeatSessionEntries(st, w, { exists = id => !!EXIDX[id] } = {})
     const only = { ...st, workouts: [{ ...w, entries: [source] }] }
     const sets = applyIntensifierPlan(buildSets(only, cfg, { step, preferLast: true }), cfg, dropGrid(st, cfg))
       .map(row => ({ ...row, done: false }))
-    entries.push({ id: cfg.id, ...(sg ? { sg } : {}), target: { ...cfg }, plan: null, sets })
+    entries.push({ ...trainingSnapshotFor(st, cfg), id: cfg.id, ...(sg ? { sg } : {}), target: { ...cfg }, plan: null, sets })
   })
   return { entries: regroup(entries), skipped }
 }

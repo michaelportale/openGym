@@ -7,7 +7,7 @@ import { api, beacon } from '../lib/api.js'
 import { nextPrescription } from '../lib/progression.js'
 import { buildCombinedEntries } from '../lib/session-merge.js'
 import { buildCompletedWorkout } from '../lib/finish-workout.js'
-import { isWarmupRow } from '../lib/workout-model.js'
+import { isWarmupRow, makeSideSet, setSideField, toggleSide, hasCompletedWork } from '../lib/workout-model.js'
 import { finishWorkout, finishWorkoutSheet } from '../sheets.jsx'
 
 // A menu's actions in order, whether it came as one list or in groups (menuSheet `sections`).
@@ -3441,5 +3441,188 @@ describe('the workout screen chrome (v1.3.11)', () => {
     await unmount()
     await mount([exercise('plain-bench', [false])], 0, { gifSize: 'mini', active: { workoutView: 'compact' } })
     expect(container.querySelector('.wthumb')).toBeNull()
+  })
+})
+
+describe('equipment identity while editing a session exercise', () => {
+  const profile = { id: 'gym', stations: [{ id: 'a', label: 'Press A', exerciseIds: ['0576'], loadConvention: 'plate-per-side' }, { id: 'b', label: 'Press B', exerciseIds: ['0576'], loadConvention: 'machine-setting' }] }
+  const oldSnapshot = { stationId: 'a', label: 'Press A', loadConvention: 'plate-per-side', unit: 'kg', status: 'exact' }
+  it('updates an unlogged entry snapshot when its selected station changes', async () => {
+    const entry = exercise('0576', [false], { target: { sets: 1, reps: 8, weight: 20, prog: 'off', stationId: 'a' }, equipmentSnapshot: oldSnapshot, plan: { kind: 'first', policy: 'linear', why: ['Synthetic plan'] } })
+    await mount([entry], 0, { equipProfiles: [profile], activeEquipId: 'gym' })
+    await pressProgression()
+    await act(async () => mocks.exConfigSheet.mock.calls.at(-1)[2]({ ...entry.target, stationId: 'b', loadConvention: 'machine-setting' }))
+    expect(mocks.S.active.entries[0].equipmentSnapshot).toMatchObject({ stationId: 'b', loadConvention: 'machine-setting', unit: null })
+  })
+  it('keeps the identity of already logged sets while allowing rep edits', async () => {
+    const entry = exercise('0576', [true], { target: { sets: 1, reps: 8, weight: 20, prog: 'off', stationId: 'a', loadConvention: 'plate-per-side' }, equipmentSnapshot: oldSnapshot, plan: { kind: 'first', policy: 'linear', why: ['Synthetic plan'] } })
+    await mount([entry], 0, { equipProfiles: [profile], activeEquipId: 'gym' })
+    await pressProgression()
+    await act(async () => mocks.exConfigSheet.mock.calls.at(-1)[2]({ ...entry.target, reps: 10, stationId: 'b', loadConvention: 'machine-setting' }))
+    expect(mocks.S.active.entries[0].equipmentSnapshot).toEqual(oldSnapshot)
+    expect(mocks.S.active.entries[0].target.stationId).toBe('a')
+    expect(mocks.S.active.entries[0].target.reps).toBe(10)
+  })
+})
+
+
+describe('equipment identity after logging one side', () => {
+  const equipmentSnapshot = { stationId: 'a', label: 'Press A', loadConvention: 'plate-per-side', unit: 'kg', status: 'exact' }
+  const trainingSnapshot = { role: 'horizontal-press', primary: ['chest'], secondary: [], status: 'manual' }
+  const partialEntry = warmup => {
+    let row = makeSideSet({ w: 20, r: 16, ...(warmup ? { warmup: true } : {}) })
+    row = setSideField(setSideField(setSideField(row, 'L', 'w', 23), 'L', 'r', 7), 'L', 'rir', 1)
+    row = toggleSide(row, 'L')
+    return exercise('0576', [], { target: { sets: 1, reps: 16, weight: 20, prog: 'off', side: true, stationId: 'a', loadConvention: 'plate-per-side', ...(warmup ? { warmupSets: 1 } : {}) }, sets: [row], equipmentSnapshot, trainingSnapshot, plan: { kind: 'first', policy: 'linear', why: ['Synthetic plan'] } })
+  }
+  it('locks the editor after either side completes', async () => {
+    const entry = partialEntry(false)
+    expect(entry.sets[0].done).toBe(false)
+    expect(hasCompletedWork(entry.sets[0])).toBe(true)
+    await mount([entry])
+    await pressProgression()
+    expect(mocks.exConfigSheet.mock.calls.at(-1)[8]).toBe(true)
+  })
+  it.each([false, true])('keeps completed limb work and snapshots through a rep edit (warmup=%s)', async warmup => {
+    const entry = partialEntry(warmup)
+    await mount([entry])
+    await pressProgression()
+    await act(async () => mocks.exConfigSheet.mock.calls.at(-1)[2]({ ...entry.target, reps: 20, stationId: 'b', loadConvention: 'machine-setting' }))
+    const saved = mocks.S.active.entries[0]
+    expect(saved.target).toMatchObject({ reps: 20, stationId: 'a', loadConvention: 'plate-per-side' })
+    expect(saved.equipmentSnapshot).toEqual(equipmentSnapshot)
+    expect(saved.trainingSnapshot).toEqual(trainingSnapshot)
+    const kept = saved.sets.find(hasCompletedWork)
+    expect(kept?.sides.L).toEqual({ w: 23, r: 7, rir: 1, done: true })
+    expect(kept?.sides.R).toEqual({ w: 20, r: 8, done: false })
+    expect(!!isWarmupRow(kept)).toBe(warmup)
+  })
+})
+
+describe('prominent final working-set effort and comparable prescription', () => {
+  const snap = { stationId: null, loadConvention: 'barbell-total', unit: 'kg', status: 'unknown' }
+  const target = { id: '0025', mode: 'reps', sets: 2, repsMin: 8, reps: 12, weight: 60, inc: 2.5, prog: 'double' }
+  const lift = () => exercise('0025', [false, false], { target, planned: { sets: 2, repsMin: 8, reps: 12 }, equipmentSnapshot: snap })
+  const prior = () => ({ id: 'prior', d: '2026-10-20', entries: [{ ...lift(), sets: [{ w: 60, r: 12, done: true }, { w: 60, r: 12, done: true, rir: 2 }] }] })
+
+  it.each(['cards', 'focus'])('offers optional final RIR in %s without rating earlier sets or auto-completing work', async view => {
+    const e = lift(); e.sets[0].rir = 3
+    await mount([e], 0, { active: { workoutView: view }, effort: 'none' })
+    await click(buttonNamed('Final working set RIR'))
+    const [scale, value, onPick] = mocks.effortPickerSheet.mock.calls.at(-1)
+    expect([scale, value]).toEqual(['rir', null])
+    await act(async () => { onPick(0) })
+    expect(mocks.S.active.entries[0].sets).toEqual([{ w: 60, r: 5, done: false, rir: 3 }, { w: 60, r: 5, done: false, rir: 0 }])
+    await rerender()
+    expect(buttonNamed('Final working set RIR').textContent).toContain('0')
+    await act(async () => { onPick(null) })
+    expect(mocks.S.active.entries[0].sets[1].rir).toBeUndefined()
+  })
+
+  it('targets the actual final working row, preserving earlier effort when another set is added', async () => {
+    const e = lift(); e.sets[1].rir = 1; e.sets.push({ w: 60, r: 10, done: false }, { phase: 'warmup', w: 20, r: 5, done: false })
+    await mount([e])
+    await click(buttonNamed('Final working set RIR'))
+    await act(async () => { mocks.effortPickerSheet.mock.calls.at(-1)[2](2) })
+    expect(mocks.S.active.entries[0].sets.map(s => s.rir)).toEqual([undefined, 1, 2, undefined])
+  })
+
+  it('keeps final limb ratings separate and does not infer the unrated limb', async () => {
+    const e = lift(); e.sets[1] = makeSideSet({ w: 20, r: 16 })
+    await mount([e])
+    await click(buttonNamed('Final working set RIR · L'))
+    await act(async () => { mocks.effortPickerSheet.mock.calls.at(-1)[2](0) })
+    const row = mocks.S.active.entries[0].sets[1]
+    expect(row.sides.L.rir).toBe(0)
+    expect(row.sides.R.rir).toBeUndefined()
+  })
+
+  it('clears a prior RPE rating when final RIR is cleared on one side', async () => {
+    const e = lift(); e.sets[1] = setSideField(makeSideSet({ w: 20, r: 16 }), 'L', 'rpe', 8)
+    await mount([e])
+    await click(buttonNamed('Final working set RIR · L'))
+    await act(async () => { mocks.effortPickerSheet.mock.calls.at(-1)[2](null) })
+    expect(mocks.S.active.entries[0].sets[1].sides.L.rpe).toBeUndefined()
+    expect(mocks.S.active.entries[0].sets[1].sides.L.rir).toBeUndefined()
+  })
+
+  it('shows only prior comparable performance beside an editable advisory while the selected policy stays explicit', async () => {
+    const wrongStation = prior(); wrongStation.id = 'wrong'; wrongStation.d = '2026-10-21'; wrongStation.entries[0].equipmentSnapshot = { ...snap, loadConvention: 'db-total' }; wrongStation.entries[0].sets[0].w = 999
+    await mount([lift()], 0, { workouts: [prior(), wrongStation] })
+    const feedback = container.querySelector('.strength-feedback')
+    expect(feedback.textContent).toContain('Comparable history')
+    expect(feedback.textContent).toContain('60')
+    expect(feedback.textContent).not.toContain('999')
+    expect(feedback.textContent).toContain('62.5')
+    expect(feedback.textContent).toContain('4.2%')
+    expect(feedback.textContent).toContain('Double progression')
+    await click(buttonNamed('Edit this session’s prescription'))
+    expect(mocks.exConfigSheet).toHaveBeenCalled()
+    expect(mocks.S.active.entries[0].target.weight).toBe(60)
+    expect(mocks.S.workouts[0]).toEqual(prior())
+  })
+
+  it('seeds the advisory editor and accepts a current-session load once while preserving logged sets and policy', async () => {
+    const e = lift(); e.sets[0] = { w: 60, r: 12, done: true, rir: 0 }
+    await mount([e], 0, { workouts: [prior()] })
+    await click(buttonNamed('Edit this session’s prescription'))
+    const [, opened, save] = mocks.exConfigSheet.mock.calls.at(-1)
+    expect(opened.weight).toBe(62.5)
+    expect(opened.prog).toBe('double')
+    await act(async () => { save(opened) })
+    expect(mocks.S.active.entries[0].sets).toEqual([
+      { w: 60, r: 12, done: true, rir: 0 }, { w: 62.5, r: 8, done: false },
+    ])
+    expect(mocks.S.active.entries[0].target.prog).toBe('double')
+    expect(mocks.S.active.entries[0].target.weight).toBe(62.5)
+    expect(mocks.S.workouts[0]).toEqual(prior())
+  })
+
+  it('says no comparable history rather than reusing an exercise-only load cache', async () => {
+    await mount([lift()], 0, { exWeights: { '0025': { w: 999 } } })
+    expect(container.querySelector('.strength-feedback').textContent).toContain('No comparable history')
+    expect(container.querySelector('.strength-feedback').textContent).not.toContain('999')
+  })
+})
+
+// Advisory acceptance must use the same physically loadable warm-up ramp as session creation.
+describe('advisory editor warm-up loading rules', () => {
+  it.each([
+    { name: 'bar floor and fractional increment', id: '0025', load: 31.25, inc: 1.25, next: 32.5, warm: 20, convention: 'barbell-total', state: { barWeights: { '0025': 20 } } },
+    { name: 'owned per-hand dumbbells', id: '0289', load: 14, inc: 1, next: 18, warm: 6, convention: 'db-per-hand', state: { dumbbells: { kg: { weights: [6, 10, 14, 18] } } }, dbLoad: 'each' },
+  ])('preserves $name when saving the current-session advisory', async fixture => {
+    const target = { id: fixture.id, mode: 'reps', sets: 2, repsMin: 8, reps: 12, weight: fixture.load, inc: fixture.inc, warmupSets: 1, prog: 'double', ...(fixture.dbLoad ? { dbLoad: fixture.dbLoad } : {}) }
+    const equipmentSnapshot = { stationId: null, loadConvention: fixture.convention, unit: 'kg', status: 'unknown' }
+    const entry = { id: fixture.id, target, planned: { sets: 2, repsMin: 8, reps: 12 }, equipmentSnapshot,
+      sets: [{ w: fixture.warm, r: 8, phase: 'warmup', done: false }, { w: fixture.load, r: 12, done: false }, { w: fixture.load, r: 12, done: false }] }
+    const history = [{ id: 'prior', d: '2026-10-20', entries: [{ ...entry, sets: [{ w: fixture.load, r: 12, done: true }, { w: fixture.load, r: 12, done: true, rir: 2 }] }] }]
+    await mount([entry], 0, { ...fixture.state, workouts: history })
+    await click(buttonNamed('Edit this session’s prescription'))
+    const [, opened, save] = mocks.exConfigSheet.mock.calls.at(-1)
+    expect(opened.weight).toBe(fixture.next)
+    await act(async () => { save(opened) })
+    const saved = mocks.S.active.entries[0]
+    expect(saved.sets.filter(isWarmupRow).map(s => s.w)).toEqual([fixture.warm])
+    expect(saved.sets.filter(s => !isWarmupRow(s)).map(s => [s.w, s.r])).toEqual([[fixture.next, 8], [fixture.next, 8]])
+    expect(mocks.S.workouts).toEqual(history)
+  })
+})
+
+describe('non-strength history reference with equipment snapshots', () => {
+  it.each([
+    ['cards', 'time'], ['list', 'time'], ['cards', 'cardio'], ['list', 'cardio'],
+  ])('retains the reference control for %s %s entries', async (view, mode) => {
+    const id = mode === 'time' ? '0025' : '2138'
+    const target = { mode, sets: 1, ...(mode === 'time' ? { sec: 30 } : { min: 20, speed: 8 }) }
+    const row = mode === 'time' ? { sec: 30, w: 0 } : { min: 20, speed: 8 }
+    const entry = { id, target, equipmentSnapshot: { stationId: null, loadConvention: null, unit: 'kg', status: 'unknown' }, sets: [{ ...row, done: false }] }
+    await mount([entry], 0, { active: { workoutView: view }, workouts: [{ id: 'prior', d: '2026-10-20', entries: [{ ...entry, sets: [{ ...row, done: true }] }] }] })
+    const reference = container.querySelector('.refline')
+    expect(reference).toBeTruthy()
+    expect(reference.textContent).toContain('Last time')
+    expect(reference.textContent).toContain(mode === 'time' ? '0:30' : '20 min')
+    await click(reference)
+    expect(mocks.S.logRef).toBe('best')
+    expect(container.querySelector('.strength-feedback')).toBeNull()
   })
 })

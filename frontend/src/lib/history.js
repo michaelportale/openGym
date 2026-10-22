@@ -1,3 +1,4 @@
+import { historyForLoad, isSettingLoad } from './load-identity.js'
 // Pure helpers over the state object S (ported 1:1 from the vanilla app).
 import { syncSupersetMeta } from './superset-meta.js'
 import { todayISO, isoOf, weekKey, weekStartOf, fmtNum } from './format.js'
@@ -22,7 +23,7 @@ const workRowsForMode = (entry = {}, mode = 'reps') => {
 // for the hook — and it re-exports this very `t` from core, so nothing changes here except what
 // gets dragged along behind it.
 import { t } from './i18n-core.js'
-import { queueNext, pinState, queueLiveOn } from './queue.js'
+import { queueNext, pinState, queueLiveOn, adaptationCovers } from './queue.js'
 import { isPyramid, pyramidLabel, pyramidTargetAt, pyramidWeightAt, PYRAMID_MAX } from './pyramid.js'
 
 // When a workout happened, as epoch ms: its own recorded start, else noon on its calendar day.
@@ -139,6 +140,7 @@ const effortTail = s => {
 // `speedUnit` is the profile's (lib/speed.js speedUnitOf); without one a cardio set reads km/h.
 const EXPLICIT_MODES = new Set(['reps', 'time', 'cardio'])
 export function setLabel(id, s, cfg, speedUnit) {
+  if (s.sourceLoad) return `${s.w == null ? '?' : fmtNum(s.w)} ${(s.sourceLoad.basis || '?').replace(/\b(?:kg|lbs?)\b/gi, s.loadUnit || '?')} × ${s.r == null ? '?' : fmtNum(s.r)}`
   // The id is the caller's when the config does not carry one: a freestyle target is built
   // without it, and modeOf would then fall back to 'reps' and print a run as "0×0".
   const c = cfg ? { ...cfg, id: cfg.id ?? id } : { id }
@@ -162,7 +164,8 @@ export function setLabel(id, s, cfg, speedUnit) {
   // of added weight, since the number is no longer the whole load on its own. As entered, and a
   // one-arm exercise (one bell, so both meanings are the same number), read as they always did.
   const meaning = !bw && bellsIn(c) === 2 ? dbLoadOf(c.dbLoad) : null
-  const load = (w, reps) => (bw ? (w > 0 ? `+${fmtNum(w)} × ` : '') + reps
+  const setting = s.loadConvention != null ? s.loadConvention === 'machine-setting' : isSettingLoad(c)
+  const load = (w, reps) => (setting ? `${fmtNum(w || 0)} ${t('Setting')} × ${reps}` : bw ? (w > 0 ? `+${fmtNum(w)} × ` : '') + reps
     : meaning === 'each' ? `${t('{0} each', fmtNum(w || 0))} × ${reps}`
       : meaning === 'total' ? `${t('{0} total', fmtNum(w || 0))} × ${reps}`
         : `${fmtNum(w || 0)}×${reps}`)
@@ -429,6 +432,7 @@ export const exNoteFor = (S, exId) => ((S?.exNotes || {})[exId] || '').trim() ||
 // built by buildSets(), which copies each completed set by position; only the target shape and
 // number of rows need to be seeded here so the config sheet and the rows agree.
 export function freestyleConfig(S, cfg) {
+  S = historyForLoad(S, cfg)
   const last = lastEntryFor(S, cfg.id)
   if (!last) return { ...cfg }
   // What a dumbbell weight meant last time is that session's stamp, not a choice to copy: a
@@ -484,7 +488,8 @@ export function effectiveRoutineIds(S, iso, today = todayISO()) {
   const q = pin === 'open' ? ov : queueNext(S, iso, today)
   // The planner's weekday pointers stay hidden on the queue's day even when it has no session for
   // it (every remaining one pinned to another day): those sessions have their days.
-  const own = q || queueLiveOn(S, iso, today) ? weekday.filter(id => !S.queue.ids.includes(id)) : weekday
+  const live = q || queueLiveOn(S, iso, today)
+  const own = weekday.filter(id => !adaptationCovers(S,id,iso) && !(live && S.queue.ids.includes(id)))
   return q ? [q, ...own] : own
 }
 export function effectiveRoutines(S, iso) {
@@ -529,14 +534,16 @@ export function nextTrainingDay(S, iso) {
  * insertWarmupRow for why this module cannot read it itself).
  */
 export function buildSets(S, cfg, options = {}) {
+  S = historyForLoad(S, cfg)
   const rows = buildWorkSets(S, cfg, options)
+  const review = rows => cfg.loadNeedsReview ? rows.map(row => ({ ...row, loadNeedsReview: true })) : rows
   const warm = Math.max(0, Math.min(MAX_PLANNED_WARMUPS, Math.round(cfg.warmupSets) || 0))
-  if (!warm) return rows
+  if (!warm) return review(rows)
   const mode = modeOf(cfg)
   let out = rows
   const floor = barFloor(S, cfg.id)
   for (let i = 0; i < warm; i++) out = insertWarmupRow(out, mode, cfg, options.step, floor)
-  return out
+  return review(out)
 }
 
 /** Beyond this a "warm-up" is its own workout; the config stepper stops here too. */
@@ -728,6 +735,11 @@ function shapeRows(sets, cfg, grid) {
   }
   return [warmup, work]
 }
+// Explicit settings and imported uncertainty qualify a subtotal; legacy loads keep their meaning.
+export const entryVolumeIsPartial = entry => (entry?.sets || []).some(s => hasCompletedWork(s) && !isWarmupRow(s)
+  && (isSettingLoad(entry) || (s.sourceLoad && (s.sourceLoad.physical === false || s.w == null || s.r == null))))
+export const workoutVolumeIsPartial = w => w?.volumePartial === true || (w?.entries || []).some(entryVolumeIsPartial)
+
 export function workoutVolume(w) {
   let v = 0
   // Count each completed limb at its own load, including drops. A rest-pause side's r already
@@ -745,7 +757,7 @@ export function workoutVolume(w) {
   ;(Array.isArray(w?.entries) ? w.entries : []).forEach(e => {
     const f = volumeFactor(e)
     ;(Array.isArray(e?.sets) ? e.sets : []).forEach(s => {
-      if (!isWarmupRow(s)) v += completedVolumeOf(s) * f
+      if (!isWarmupRow(s)) v += completedVolumeOf(s, e) * f
     })
   })
   return v
@@ -1096,9 +1108,9 @@ export function setSpanAt(rows, i) {
 // What a copied set leaves behind (v1.3.11, swipe right or "Copy this set"): the tick and when it
 // happened, a hold's set-aside plan, the manual-weight marker (the copy follows a weight change
 // above it like any inherited row) and the drop/burst sub-rows, which belong to the set that was
-// actually done. Weight, reps, time, speed, effort, the warm-up phase, a pyramid's Max and the
+// actually done. Weight, reps, time, speed, the warm-up phase, a pyramid's Max and the
 // side layout all come along.
-const NOT_COPIED = ['done', 'at', 'planSec', 'weightOrigin', 'type', 'drops', 'clusters']
+const NOT_COPIED = ['done', 'at', 'planSec', 'weightOrigin', 'type', 'drops', 'clusters', 'rir', 'rpe']
 const bare = src => {
   const out = { ...src }
   for (const k of NOT_COPIED) delete out[k]
@@ -1204,6 +1216,7 @@ export function completedRepsOf(set = {}) {
 /** Best load from completed work rows, with a guarded reps-only legacy topW fallback. */
 
 export function bestWeightForEntry(entry = {}) {
+  if (isSettingLoad(entry)) return 0
   const target = entry.target || entry
   const workRows = Array.isArray(entry.sets)
     ? entry.sets.filter(s => phaseForSet(s) === 'work')
@@ -1224,6 +1237,7 @@ export function bestWeightForEntry(entry = {}) {
       ? [set.sides.L, set.sides.R].filter(side => side?.done === true)
       : [set]
     completedSets.forEach(completedSet => {
+      if (completedSet?.sourceLoad?.physical === false) return
       const weight = Number(completedSet?.w)
       if (!Number.isFinite(weight)) return
       // A 0 on an assistance machine is a row with no load entered, not a set done with no help
@@ -1246,7 +1260,7 @@ export function bestWeightForEntry(entry = {}) {
   const topWeight = Number(entry.topW)
   // topW predates phase-tagged warm-ups. It remains a fallback for legacy all-work records,
   // but cannot override resolved work rows once any warm-up marker exists.
-  if (parentMode === 'reps' && !hasNonRepsWorkRow && !hasWarmupRow && Number.isFinite(topWeight)
+  if (!workRows.some(s => s.sourceLoad?.physical === false) && parentMode === 'reps' && !hasNonRepsWorkRow && !hasWarmupRow && Number.isFinite(topWeight)
     && (best <= 0 || (assisted ? topWeight > 0 && topWeight < best : topWeight > best))) best = topWeight
   return best
 }

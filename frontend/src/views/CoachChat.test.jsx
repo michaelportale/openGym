@@ -238,3 +238,22 @@ describe('the Coach chat', () => {
     expect(byText(/^Compare$/)).toBeTruthy()
   })
 })
+
+const partialVolumeState = (partialNow=true) => {
+  const s=state()
+  const workout=(id,d,partial)=>({id,d,name:'Synthetic session',start:Date.parse(d+'T12:00:00'),end:Date.parse(d+'T12:10:00'),volumePartial:partial,entries:[{id:'0047',sets:[{done:true,w:5,r:10},...(partial?[{done:true,w:5,r:null,sourceLoad:{physical:true}}]:[])]}]})
+  s.workouts=[workout('previous','2040-02-01',!partialNow),workout('current','2040-02-02',partialNow)]
+  return s
+}
+it('labels partial aggregate load totals in the real Coach review card',async()=>{
+  await mount({id:'partial-review',kind:'review',summary:'Synthetic review',window:{from:'2040-02-01',to:'2040-02-02'},changes:[]},null,{S:partialVolumeState()})
+  expect(container.querySelector('.ins-tiles').textContent).toContain('Partial load total')
+})
+it.each([false,true])('omits ordinary volume change when either compared subtotal is partial (%s)',partialNow=>{
+  return mount({id:'partial-debrief',kind:'debrief',workout:{id:'current',name:'Synthetic session',d:'2040-02-02'},summary:'Synthetic debrief'},null,{S:partialVolumeState(partialNow)}).then(()=>{
+    if(partialNow)expect(container.querySelector('.ins-tiles').textContent).toContain('Partial load total')
+    const comparison=container.querySelector('.ins-cmp')
+    expect(comparison?.textContent||'').not.toMatch(/kg volume/)
+    expect(comparison.textContent).toContain('min time')
+  })
+})

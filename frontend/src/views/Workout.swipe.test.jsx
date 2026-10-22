@@ -160,7 +160,7 @@ describe('copying a set', () => {
   it('puts an unticked copy right below, flashes it and says so', () => {
     setActive([entry('1001', [row(80, true, { rir: 2 }), row(80)])])
     expect(copyActiveSet(0, 0)).toBe(true)
-    expect(sets()).toEqual([row(80, true, { rir: 2 }), row(80, false, { rir: 2 }), row(80)])
+    expect(sets()).toEqual([row(80, true, { rir: 2 }), row(80, false), row(80)])
     expect(useUI.getState().setFlash).toMatchObject({ idx: 0, i: 1 })
     expect(toast()).toBe('Copied. One more like that one.')
     expect(useUI.getState().toastAction).toBeNull()

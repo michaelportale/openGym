@@ -86,3 +86,28 @@ describe('profiles saved before the bench and the bar existed (#464)', () => {
     expect(newProfile('Home').accV).toBe(ACC_V)
   })
 })
+
+
+describe('exact station inventory', () => {
+  const press = { id: '0576', n: 'lever chest press', eq: 'leverage machine' }
+  const curl = { id: '0599', n: 'lever seated leg curl', eq: 'leverage machine' }
+  const profile = { id: 'gym', equipment: ['leverage machine', 'barbell', 'bench'], accV: ACC_V,
+    stations: [{ id: 'chest', label: 'Chest press', exerciseIds: ['0576'] }] }
+  it('a chest press station does not enable a leg curl', async () => {
+    const { equipmentMatch } = await import('./equipment.js')
+    expect(equipmentMatch(profile, press)).toEqual({ available: true, status: 'exact', stationIds: ['chest'] })
+    expect(equipmentMatch(profile, curl)).toEqual({ available: false, status: 'unavailable', stationIds: [] })
+    expect(exAvailable({ equipFilterOn: true, activeEquipId: 'gym', equipProfiles: [profile] }, curl)).toBe(false)
+    expect(equipmentMatch(profile, press, ['chest']).available).toBe(false)
+  })
+  it('keeps free weights and accessories gated independently', async () => {
+    const { equipmentMatch } = await import('./equipment.js')
+    expect(equipmentMatch(profile, { id: '0289', n: 'dumbbell bench press', eq: 'dumbbell' }).available).toBe(false)
+    expect(equipmentMatch(profile, { n: 'barbell bench press', eq: 'barbell' }).available).toBe(true)
+    expect(equipmentMatch({ ...profile, equipment: ['dumbbell'] }, { n: 'dumbbell bench press', eq: 'dumbbell' }).available).toBe(false)
+  })
+  it('labels broad legacy category availability as unverified', async () => {
+    const { equipmentMatch } = await import('./equipment.js')
+    expect(equipmentMatch({ equipment: ['leverage machine'] }, curl)).toEqual({ available: true, status: 'legacy-unverified', stationIds: [] })
+  })
+})
