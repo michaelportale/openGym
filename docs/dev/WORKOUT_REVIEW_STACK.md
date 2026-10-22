@@ -2,6 +2,8 @@
 
 The user authorized publication for review on 2026-10-22, after the local acceptance checkpoint. No merge or deployment has occurred.
 
+The subsequent authorized review-and-merge pass is recorded in [PR merge review](PR_MERGE_REVIEW.md), including newly found defects, their fixes, and final verification. Its review fixes are appended to the final PR so the original stack remains intact. The device rollout limitation below remains separate from source integration.
+
 ## Review order
 
 Review and integrate the whole chain in this order. Each PR targets its predecessor so its diff contains only its own changes. After a predecessor lands, retarget the next PR to main and recheck the diff. Preserve the underlying commits when integrating the stack, or restack deliberately if using squash; do not let an automatic base change duplicate earlier changes.
