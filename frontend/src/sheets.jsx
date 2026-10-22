@@ -29,7 +29,7 @@ import { glyphOf, GLYPH_GROUPS, DEFAULT_GLYPH } from './lib/glyphs.js'
 import BodyMap from './components/BodyMap.jsx'
 import MuscleExplorer from './components/MuscleExplorer.jsx'
 import ExerciseViewToggle from './components/ExerciseViewToggle.jsx'
-import { sameMuscleFirst, swapMuscleOf } from './lib/similar-exercises.js'
+import { rankReplacements, swapMuscleOf } from './lib/similar-exercises.js'
 import { exerciseMuscleSnapshot, loadOfWorkouts, MUSCLES, MUSCLE_NAME, muscleWeightsOf, normalizeMuscleGroups, hasExplicitMuscleMetadata, inMuscleOrder } from './lib/muscles.js'
 import { parseImport, mergeImport } from './lib/import-csv.js'
 import { importHevyData, HevyApiError, HEVY_DEV_SETTINGS, mergeHevyRoutines } from './lib/import-hevy.js'
@@ -48,7 +48,7 @@ import { refillAfter } from './lib/rotation.js'
 import { isWarmupRow, hasCompletedWork } from './lib/workout-model.js'
 import { saveSessionAsRoutine } from './lib/session-routines.js'
 import { repeatSessionEntries } from './lib/session-repeat.js'
-import { swapActiveExercise } from './lib/active-exercise-swap.js'
+import { swapActiveExercise, previewRoutineSwap, applyRoutineSwap } from './lib/active-exercise-swap.js'
 import { useSheetKeyboard, useRevealActiveChip, tappable } from './lib/use-sheet-keyboard.js'
 import { useAutoMore } from './lib/use-auto-more.js'
 import { isFav, toggleFav, sortFavouritesFirst, sortYoursFirst } from './lib/favourites.js'
@@ -1298,16 +1298,12 @@ function ExercisePicker({ onPick, title, close, like, allEquipment = false }) {
   const st = useStore(s => s.S)
   const usage = usageMap(st)
   const [q, setQ] = useState('')
-  // What a swap is away from: the picker opens on what trains the same muscle, if anything you
-  // can use does, and "All" is one tap back to everything.
-  const likeEx = like ? (EXIDX[like] || allExercises(st).find(e => e.id === like) || null) : null
-  // A muscle nothing else trains gets no chip at all rather than one that lists nothing.
-  const likeTg = swapMuscleOf(likeEx) && sameMuscleFirst(allExercises(st), likeEx).length ? swapMuscleOf(likeEx) : ''
-  const [bp, setBp] = useState(() => {
-    if (!likeTg) return ''
-    const prof = activeProfile(st)
-    return sameMuscleFirst(allExercises(st), likeEx).some(e => !prof || exAvailable(st, e)) ? SAME : ''
-  })                                        // '' = all, '★' = chosen, '☆' = favourites, '≈' = same muscle, else a body part
+  const likeEx = typeof like === 'object' ? like : like ? (EXIDX[like] || allExercises(st).find(e => e.id === like) || null) : null
+  const selectedProfile = st.equipProfiles?.find(p => p.id === st.activeEquipId)
+  const [excludedStationIds, setExcludedStationIds] = useState([])
+  const recommendations = rankReplacements({ exercise: likeEx, candidates: allExercises(st), profile: activeProfile(st) || (excludedStationIds.length ? selectedProfile : null), excludedStationIds, workouts: st.workouts, metadata: st.trainingMetadata })
+  const likeTg = recommendations.length ? swapMuscleOf(likeEx) : ''
+  const [bp, setBp] = useState(() => recommendations.length ? SAME : '')
   const [eq, setEq] = useState('')          // '' = any equipment
   const [cat, setCat] = useState('')        // '' = any type
   const [showAll, setShowAll] = useState(allEquipment)
@@ -1320,7 +1316,7 @@ function ExercisePicker({ onPick, title, close, like, allEquipment = false }) {
   const all = allExercises(st)
   const profile = activeProfile(st)
   const inScope = e => bp === '★' ? usage[e.id] : bp === '☆' ? isFav(st, e.id) : (!bp || e.bp === bp)
-  let inPart = searchExercises(bp === SAME ? sameMuscleFirst(all, likeEx) : all.filter(inScope), q)
+  let inPart = searchExercises(bp === SAME ? recommendations.map(r => r.exercise) : all.filter(inScope), q)
   if (bp === '★') inPart = [...inPart].sort((a, b) => (usage[b.id] - usage[a.id]) || exerciseNameFor(a).localeCompare(exerciseNameFor(b)))
   // The Library's Type row (issue #521), with its fallback: a type the search or muscle group
   // narrowed away is ignored for this view, not forgotten.
@@ -1330,12 +1326,12 @@ function ExercisePicker({ onPick, title, close, like, allEquipment = false }) {
   // Drop the equipment filter if the search narrowed it away, so you never hit a dead end.
   const eqOn = eqOpts.includes(eq) ? eq : ''
   // Favourites float to the top of whatever the filters left (issue #6), the rest keeps its order.
-  // On the same-muscle list the equipment order wins: what is on the same kit comes first,
-  // favourites leading within each half.
+  // Replacement suitability and completed-session familiarity take priority in the swap scope.
   // While searching, what you have logged or planned follows right after them.
   const narrowedList = eqOn ? eqFiltered.filter(e => e.eq === eqOn) : eqFiltered
   const ranked = q.trim() ? sortYoursFirst(narrowedList, st, usage) : sortFavouritesFirst(narrowedList, st)
-  const f = bp === SAME ? sameMuscleFirst(ranked, likeEx) : ranked
+  const f = bp === SAME ? narrowedList : ranked
+  const reasons = bp === SAME ? new Map(recommendations.map(r => [r.exercise.id, r.reasons])) : new Map()
   const chosenCount = Object.keys(usage).length
   const favCount = (st.favEx || []).length
   const special = bp === '★' || bp === '☆'
@@ -1352,7 +1348,7 @@ function ExercisePicker({ onPick, title, close, like, allEquipment = false }) {
     ? similarExercises((profile && !showAll ? all.filter(e => exAvailable(st, e)) : all).filter(e => bp === SAME || !bp || e.bp === bp), q, f, f.length ? 12 : 30)
     : []
   const pickRow = e => <div key={e.id} className="item" {...tappable(() => onPick(e))}>
-        <Thumb ex={e} /><div className="grow"><div className={`tt ${exerciseNameClass(e)}`}>{isFav(st, e.id) && <Icon name="starFill" className="fav-star" />}{exerciseNameFor(e)}</div><div className="ss capitalize">{t(MUSCLE_NAME[e.tg] || e.tg || e.bp)} · {t(e.eq)}</div></div>
+        <Thumb ex={e} /><div className="grow"><div className={`tt ${exerciseNameClass(e)}`}>{isFav(st, e.id) && <Icon name="starFill" className="fav-star" />}{exerciseNameFor(e)}</div><div className="ss capitalize">{t(MUSCLE_NAME[e.tg] || e.tg || e.bp)} · {t(e.eq)}</div>{reasons.has(e.id) && <div className="small muted">{reasons.get(e.id).map(reason => t(reason)).join(' · ')}</div>}</div>
         {/* Accent tag = already in a routine/log ("Chosen"); the yellow star by the name = favourite. */}
         {usage[e.id] && <span className="tag acc"><Icon name="starFill" /></span>}
         {/* A "+" glyph reads as "add this now" — it used to just open the same detail sheet as
@@ -1388,12 +1384,20 @@ function ExercisePicker({ onPick, title, close, like, allEquipment = false }) {
         {showAll ? t('Filter by "{0}"', profile.name) : t('Show all equipment')}
       </button>
     </div>}
+    {likeEx && selectedProfile?.stations?.length > 0 && <details style={{ marginTop: 10 }}>
+      <summary className="small">{t('Temporarily exclude occupied stations')}</summary>
+      <div className="small muted">{t('Applies to these suggestions only. All keeps manual search available.')}</div>
+      {selectedProfile.stations.map(station => <label key={station.id} className="row" style={{ padding: '8px 0', gap: 8 }}>
+        <input type="checkbox" aria-label={t('Occupied station: {0}', station.label)} checked={excludedStationIds.includes(station.id)} onChange={() => setExcludedStationIds(ids => ids.includes(station.id) ? ids.filter(id => id !== station.id) : [...ids, station.id])} />
+        <span>{station.label}</span>
+      </label>)}
+    </details>}
     {/* Changing muscle group keeps the equipment filter: if it still has exercises under the new
         group the filter stays applied, and if not the eqOn fallback above drops it for this view
         without forgetting the choice (issue #71). The favourites/chosen chips still clear it —
         those are cross-body-part views where a stale equipment filter would be confusing. */}
     <div className="chips" ref={bpStrip} style={{ margin: eqOpts.length > 1 || catOpts.length > 1 ? '10px 0 6px' : '10px 0' }}>
-      {likeTg && <button className={'chip nocap' + (bp === SAME ? ' on' : '')} onClick={() => { setBp(SAME); setShown(50) }}><Icon name="figureStrength" style={{ fontSize: 12, display: 'inline-block', marginInlineEnd: 4, verticalAlign: '-1px' }} />{t('Same muscle: {0}', t(MUSCLE_NAME[likeTg] || likeTg))}</button>}
+      {(likeTg || recommendations.length > 0) && <button className={'chip nocap' + (bp === SAME ? ' on' : '')} onClick={() => { setBp(SAME); setShown(50) }}><Icon name="figureStrength" style={{ fontSize: 12, display: 'inline-block', marginInlineEnd: 4, verticalAlign: '-1px' }} />{likeTg ? t('Same muscle: {0}', t(MUSCLE_NAME[likeTg] || likeTg)) : t('Suggested replacements')}</button>}
       {favCount > 0 && <button className={'chip' + (bp === '☆' ? ' on' : '')} onClick={() => { setBp('☆'); setEq(''); setShown(50) }}><Icon name="starFill" className="fav-star" />{t('Favourites')} ({favCount})</button>}
       {chosenCount > 0 && <button className={'chip' + (bp === '★' ? ' on' : '')} onClick={() => { setBp('★'); setEq(''); setShown(50) }}><Icon name="starFill" style={{ fontSize: 12, display: 'inline-block', marginInlineEnd: 4, verticalAlign: '-1px' }} />{t('Chosen')} ({chosenCount})</button>}
       <button className={'chip nocap' + (!bp ? ' on' : '')} onClick={() => { setBp(''); setShown(50) }}>{t('All')}</button>
@@ -1422,8 +1426,7 @@ function ExercisePicker({ onPick, title, close, like, allEquipment = false }) {
   </>
 }
 // `title` names what the pick is for when it is not an add — the routine editor's Replace (#110).
-// `like` is the exercise a swap or a replace is away from: the picker then opens on the ones that
-// train the same muscle, same equipment first (#473).
+// `like` is an exercise id or snapshot: swaps open on explained, available alternatives.
 export const exercisePicker = (onPick, { title, like } = {}) => ui().openSheet(close => <ExercisePicker onPick={onPick} title={title} like={like} close={close} />)
 
 /** Start a safe swap for one exact active-workout occurrence. */
@@ -1434,7 +1437,7 @@ export function swapActiveWorkoutExercise(index) {
   // The "+" on a picker row commits with the default config, exactly as it does in the add
   // flows; tapping the row still opens the config sheet first.
   // Worded for the session, not the routine: a swap changes today's workout only.
-  const picker = exercisePicker((ex, quick) => quick ? swapTo(ex, defaultConfig(ex.id)) : exConfigSheet(ex, null, cfg => swapTo(ex, cfg), null, null, null, null, t('Use in this workout')), { title: t('Swap exercise'), like: active.entries[index].id })
+  const picker = exercisePicker((ex, quick) => quick ? swapTo(ex, defaultConfig(ex.id)) : exConfigSheet(ex, null, cfg => swapTo(ex, cfg), null, null, null, null, t('Use in this workout')), { title: t('Swap exercise'), like: { ...exOr(active.entries[index].id), ...(active.entries[index].trainingSnapshot ? { trainingSnapshot: active.entries[index].trainingSnapshot } : {}) } })
   function swapTo(ex, cfg) {
     // The picker is a chooser here, not a stack you keep adding from: one swap, then back to
     // the workout. (The add flow deliberately leaves it open.)
@@ -1470,14 +1473,21 @@ export function swapActiveWorkoutExercise(index) {
       ...(current.noProg === true ? { noProg: true } : {}),
     }
 
+    const preview = previewRoutineSwap(st.active, st.routines, index, withMeaning(st, full))
     const apply = options => {
       // A timed callback closes over entry/set indexes. Invalidate it, and the current rest,
       // before the selected occurrence can be replaced or a new entry shifts those indexes.
       ui().stopWork()
       ui().stopRest()
       update(state => { swapActiveExercise(state.active, index, replacement, options) }, true)
+      if (preview) ui().openSheet(close => <>
+        <h3>{t('Used in this workout')}</h3>
+        <p className="muted small">{t('Your future plan is unchanged.')}</p>
+        <Button variant="primary" onClick={() => { close(); previewFutureSwap(preview) }}>{t('Update future plan…')}</Button>
+        <Button variant="ghost" onClick={close}>{t('Keep this workout only')}</Button>
+      </>)
     }
-    const logged = (current.sets || []).some(set => set.done === true)
+    const logged = (current.sets || []).some(hasCompletedWork)
     if (!logged) { apply(); return }
 
     if (current.sg) {
@@ -1504,6 +1514,31 @@ export function swapActiveWorkoutExercise(index) {
       onConfirm: () => apply({ loggedConfirmed: true })
     })
   }
+}
+
+function previewFutureSwap(preview) {
+  const st = S()
+  const name = cfg => exerciseNameFor(exOr(cfg.id))
+  const prescription = cfg => {
+    const snapshot = trainingSnapshotFor(st, cfg).equipmentSnapshot
+    const reps = modeOf(cfg) === 'time' ? `${cfg.sec || 0} ${t('sec')}` : cfg.repsMin ? `${cfg.repsMin}–${cfg.reps}` : cfg.reps || 0
+    const load = cfg.weight != null ? `${fmtNum(cfg.weight)}${snapshot.unit ? ` ${snapshot.unit}` : ''} · ${t(LOAD_CONVENTIONS[snapshot.loadConvention] || 'As entered')}` : ''
+    return [`${cfg.sets || 1} × ${reps}`, load, snapshot.label].filter(Boolean).join(' · ')
+  }
+  ui().openSheet(close => <>
+    <h3>{t('Update future plan?')}</h3>
+    <p>{preview.routineName}</p>
+    <p>{name(preview.before)} · {prescription(preview.before)}</p>
+    <p>→ {name(preview.after)} · {prescription(preview.after)}</p>
+    <p className="small muted">{t('Only this routine slot changes. Logged workouts stay unchanged.')}</p>
+    <Button variant="primary" onClick={() => {
+      close()
+      let applied = false
+      update(state => { applied = applyRoutineSwap(state.routines, preview) }, true)
+      if (!applied) toast(t('The routine changed. Reopen it to update this slot.'))
+    }}>{t('Update future plan')}</Button>
+    <Button variant="ghost" onClick={close}>{t('Cancel')}</Button>
+  </>)
 }
 
 /* ============================ equipment profiles ============================ */
