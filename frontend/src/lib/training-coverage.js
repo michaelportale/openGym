@@ -2,7 +2,7 @@ import { EXIDX } from './exercises.js'
 import { trainingMetadataOf, TRAINING_ROLES } from './training-metadata.js'
 import { hasCompletedWork, isSideSet, isWarmupRow } from './workout-model.js'
 import { isoOf } from './format.js'
-import { effectiveRoutineIds } from './history.js'
+import { effectiveRoutineIds, setSpanAt } from './history.js'
 import { queueOf, adaptationCovers } from './queue.js'
 
 const dateOK = d => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d) && isoOf(new Date(d + 'T12:00:00')) === d
@@ -33,10 +33,21 @@ export function trainingCoverage({ workouts = [], plannedSessions = [], metadata
         let count = 0
         if (kind === 'planned' && typeof entry.sets === 'number' && Number.isInteger(entry.sets) && entry.sets >= 0) count = entry.sets
         else if (Array.isArray(entry.sets)) {
-          for (const row of entry.sets) {
-            if (row.phase != null && !['work', 'warmup', 'warm-up', 'warm_up'].includes(String(row.phase).trim().toLowerCase())) { unknowns[kind].phaseRows++; continue }
-            if (isWarmupRow(row)) continue
+          for (let i = 0; i < entry.sets.length;) {
+            const row = entry.sets[i], [, span] = setSpanAt(entry.sets, i)
+            const rows = entry.sets.slice(i, i + span)
+            i += span
+            const unknownPhase = rows.filter(r => r.phase != null && !['work', 'warmup', 'warm-up', 'warm_up'].includes(String(r.phase).trim().toLowerCase()))
+            unknowns[kind].phaseRows += unknownPhase.length
+            if (unknownPhase.length || rows.some(isWarmupRow)) continue
             if (kind === 'planned') { count++; continue }
+            // Timed L/R rows represent one prescribed set, just like a reps side-pair.
+            if (row.side === 'L' || row.side === 'R') {
+              if (span === 2 && rows.every(r => r.done === true)) count++
+              else if (rows.some(r => r.done === true)) unknowns[kind].partialRows++
+              else if (rows.some(r => r.done == null)) unknowns[kind].completionRows++
+              continue
+            }
             if (isSideSet(row) && !(row.sides.L.done === true && row.sides.R.done === true)) {
               if (hasCompletedWork(row)) unknowns[kind].partialRows++
               else if (row.sides.L.done == null || row.sides.R.done == null) unknowns[kind].completionRows++

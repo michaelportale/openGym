@@ -25,13 +25,15 @@ function choose() {
   act(() => picker.render(picker.close).props.onPick(EXIDX['0289']))
   const config = top()
   act(() => config.render(config.close).props.onSave({ mode: 'reps', sets: 2, reps: 10, weight: 22, dbLoad: 'each' }))
+  const review = top()
+  act(() => review.render(() => useUI.getState().closeSheet(review.id)).props.onConfirm())
 }
 beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true
   useUI.setState({ sheets: [], toastMsg: '' })
   const S = structuredClone(DEF)
   S.routines = [{ id: 'push', name: 'Push', ex: [{ id: '0251', mode: 'reps', sets: 3, reps: 8, weight: 50 }] }]
-  S.active = { id: 'session', d: '2026-10-21', cur: 0, entries: [{ id: '0251', rid: 'push', target: { mode: 'reps', sets: 3, reps: 8, weight: 50 }, equipmentSnapshot: { stationId: 'busy' }, sets: [{ w: 50, r: 8, done: false }] }] }
+  S.active = { id: 'session', d: '2026-10-21', cur: 0, entries: [{ id: '0251', rid: 'push', routineSourceId: '0251', target: { mode: 'reps', sets: 3, reps: 8, weight: 50 }, equipmentSnapshot: { stationId: 'busy' }, sets: [{ w: 50, r: 8, done: false }] }] }
   S.equipProfiles = [{ id: 'gym', name: 'Gym', equipment: ['dumbbell', 'bench'], accV: 1, stations: [{ id: 'busy', label: 'Occupied station', exerciseIds: ['0251', '0576'] }, { id: 'free', label: 'Available station', exerciseIds: ['0577'] }] }]
   S.customEx = [{ id: 'cFree', n: 'Available press', bp: 'chest', tg: 'pectorals', eq: 'leverage machine', custom: true }]
   S.trainingMetadata = { cFree: { role: 'horizontal-press', primary: ['chest'], secondary: [] } }
@@ -61,7 +63,7 @@ it('explains recommendations and temporarily excludes an occupied station while 
     search.dispatchEvent(new Event('input', { bubbles: true }))
   })
   expect(rows(host).some(row => row.textContent.includes(EXIDX['0576'].n))).toBe(false)
-  expect([...host.querySelectorAll('.chips .chip.on')].some(chip => chip.textContent.includes('Same muscle:'))).toBe(true)
+  expect([...host.querySelectorAll('.chips .chip.on')].some(chip => chip.textContent.includes('Suggested replacements'))).toBe(true)
   act(() => button(host, 'All').click())
   expect(rows(host).some(row => row.textContent.includes(EXIDX['0576'].n))).toBe(true)
 })
@@ -85,6 +87,7 @@ it('defaults to this workout, separately previews the future plan and accepts on
   expect(useStore.getState().S.routines[0].ex[0].id).toBe('0251')
   act(() => button(preview, 'Update future plan').click())
   expect(useStore.getState().S.routines[0].ex[0]).toMatchObject({ id: '0289', reps: 10, sets: 2, dbLoad: 'each' })
+  expect(useStore.getState().S.active.entries[0].routineSourceId).toBe('0289')
 })
 it('cancelling the future preview retains the session swap without changing the routine or history', () => {
   swapActiveWorkoutExercise(0)

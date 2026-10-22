@@ -6,7 +6,13 @@ import { useStore } from './store/useStore.js'
 import { startMediaSync } from './lib/media-sync.js'
 import { startNativeKeyboard } from './lib/native-keyboard.js'
 import './index.css'
+// Scoped workout refinements follow the shared control foundation.
+import './views/FocusView.css'
+import './components/StrengthFeedback.css'
+import './views/WorkoutLedger.css'
+import './components/RestTimer.css'
 import './components/Modals.css'
+import './components/WorkoutReplacementSheet.css'
 
 // App.jsx restores per-route scroll itself; the browser's own attempt races it.
 if ('scrollRestoration' in history) history.scrollRestoration = 'manual'

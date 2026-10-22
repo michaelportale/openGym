@@ -36,6 +36,8 @@ function submitSwap(index, exercise, config) {
   const configSheet = useUI.getState().sheets.at(-1)
   const configView = configSheet.render(configSheet.close)
   act(() => configView.props.onSave(config))
+  const review = useUI.getState().sheets.at(-1)
+  if (review.render(() => useUI.getState().closeSheet(review.id)).props.replacement) act(() => review.render(() => useUI.getState().closeSheet(review.id)).props.onConfirm())
 }
 
 beforeEach(() => {

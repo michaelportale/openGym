@@ -259,6 +259,17 @@ describe('Plan — the loop', () => {
 })
 
 describe('Plan — someone else’s queue, and a broken one', () => {
+  it('lets a locally accepted fixed-week adjustment return to the saved weekdays', () => {
+    mount({ queue: live({ adaptation: { token: 'adapt-local', policyVersion: 1, baseline: routines } }) })
+    expect(selectedMode()).toBe('Rotation')
+    expect(host.textContent).not.toContain('Externally managed')
+    pickMode('Fixed Week')
+    act(() => confirmSheet.mock.calls.at(-1)[0].onConfirm())
+    expect(mocks.S.queue).toBeNull()
+    expect(mocks.S.week).toEqual({ 1: ['c'] })
+    expect(mocks.S.rotation).toBeNull()
+  })
+
   it('an externally written pass is locked: no mode control, no edits, adoption behind a confirm', () => {
     mount({ queue: live(), scheduleMode: 'rotation' })   // no rotationId, no rotation
     expect(modeButtons()).toEqual([])
