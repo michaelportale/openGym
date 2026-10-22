@@ -34,6 +34,19 @@ describe('Calendar canonical workout days', () => {
     useStore.setState({ S: original })
   })
 
+  it('opens the selected calendar month for an ISO day in a western timezone', () => {
+    const priorTZ = process.env.TZ
+    process.env.TZ = 'America/New_York'
+    try {
+      calendarSheet('2026-09-01')
+      const host = renderTop()
+      expect(host.querySelector('h3').textContent).toBe('September 2026')
+    } finally {
+      if (priorTZ === undefined) delete process.env.TZ
+      else process.env.TZ = priorTZ
+    }
+  })
+
   it('keeps multiple legacy sessions on the heatmap fallback day clickable in Calendar', () => {
     const day = todayISO()
     const start = new Date(day + 'T09:00:00').getTime()
