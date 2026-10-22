@@ -51,7 +51,7 @@ describe('the docked rest bar', () => {
     expect(bar.querySelector('button.tclock .t').textContent).toBe('1:30')
     expect(bar.querySelector('.tclock .lbl').textContent).toBe('Rest')
     expect([...bar.querySelectorAll('.acts > button')].map(b => b.getAttribute('aria-label') || (b.querySelector('.on') || b).textContent.trim()))
-      .toEqual(['15s', '15s', 'Pause', 'Skip'])
+      .toEqual(['Decrease 15s', 'Increase 15s', 'Pause', 'Skip'])
     expect(bar.querySelector('.tclock').getAttribute('aria-label')).toBe('1:30. Change the time left')
   })
 
@@ -182,5 +182,22 @@ describe('the docked rest bar', () => {
     act(() => useUI.getState().pauseRest())
     act(() => applyRestLeft(60))
     expect(useUI.getState().timer).toMatchObject({ left: 60, paused: true })
+  })
+})
+
+
+describe('final effort during the next exercise rest', () => {
+  it('keeps optional effort tied to the completed final working set without blocking the timer', () => {
+    const entry = { id: '0025', target: { mode: 'reps' }, sets: [{ w: 60, r: 8, done: true }, { w: 60, r: 8, done: true }] }
+    useStore.setState({ S: { ...useStore.getState().S, active: { id: 'dock-session', cur: 1, entries: [entry, { id: '0289', sets: [] }] } } })
+    act(() => useUI.getState().startRest(90, 0, { forSet: 1 }))
+    mount()
+    expect(host.querySelector('.rest-effort').textContent).toContain('Final working set RIR')
+    act(() => host.querySelector('.rest-effort button').click())
+    expect(useUI.getState().sheets).toHaveLength(1)
+    expect(useUI.getState().timer.forIdx).toBe(0)
+    expect(useUI.getState().timer.forSet).toBe(1)
+    act(() => useStore.getState().update(s => { s.active.entries[0].sets[1].done = false }))
+    expect(host.querySelector('.rest-effort')).toBeNull()
   })
 })

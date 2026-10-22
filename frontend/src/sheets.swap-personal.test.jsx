@@ -25,6 +25,8 @@ function choose() {
   act(() => picker.render(picker.close).props.onPick(EXIDX['0289']))
   const config = top()
   act(() => config.render(config.close).props.onSave({ mode: 'reps', sets: 2, reps: 10, weight: 22, dbLoad: 'each' }))
+  const review = top()
+  act(() => review.render(() => useUI.getState().closeSheet(review.id)).props.onConfirm())
 }
 beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true
@@ -61,7 +63,7 @@ it('explains recommendations and temporarily excludes an occupied station while 
     search.dispatchEvent(new Event('input', { bubbles: true }))
   })
   expect(rows(host).some(row => row.textContent.includes(EXIDX['0576'].n))).toBe(false)
-  expect([...host.querySelectorAll('.chips .chip.on')].some(chip => chip.textContent.includes('Same muscle:'))).toBe(true)
+  expect([...host.querySelectorAll('.chips .chip.on')].some(chip => chip.textContent.includes('Suggested replacements'))).toBe(true)
   act(() => button(host, 'All').click())
   expect(rows(host).some(row => row.textContent.includes(EXIDX['0576'].n))).toBe(true)
 })
