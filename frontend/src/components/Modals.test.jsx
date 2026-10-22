@@ -1,6 +1,7 @@
 import React, { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { parseHTML } from 'linkedom'
+import { Window } from 'happy-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import Modals, { afterScrollRestore, scrollRestorePending } from './Modals.jsx'
 
@@ -47,9 +48,10 @@ function sheet(id, { locked = false, render = () => React.createElement('div') }
   return { id, locked, kind: 'sheet', render }
 }
 
-function installDom() {
+function installDom(focus = false) {
   const parsed = parseHTML('<!doctype html><html><body><div id="root"></div></body></html>')
-  dom = parsed.window
+  dom = focus ? new Window({ url: 'https://opengym.test/#/workout' }) : parsed.window
+  if (focus) dom.document.body.innerHTML = '<div id="root"></div>'
   dom.scrollTo = vi.fn()
   globalThis.window = dom
   globalThis.document = dom.document
@@ -515,5 +517,246 @@ describe('the restore window under StrictMode', () => {
     vi.advanceTimersByTime(400)
     expect(onClose).toHaveBeenCalledTimes(1)
     vi.useRealTimers()
+  })
+})
+
+
+// Use a DOM with native focus behavior for these keyboard contracts; linkedom intentionally
+// supplies only the structural DOM needed by the scrolling/history regressions above.
+describe('modal focus and screen-reader boundaries', () => {
+  beforeEach(async () => {
+    await act(async () => { root.unmount() })
+    installDom(true)
+    await act(async () => { root.render(React.createElement(Modals)) })
+  })
+
+  function trigger() {
+    const button = document.createElement('button')
+    button.textContent = 'Replace exercise'
+    container.prepend(button)
+    button.focus()
+    return button
+  }
+  const dialogSheet = (id, title = 'Replace exercise', options = {}) => sheet(id, {
+    ...options,
+    render: () => <><h3>{title}</h3><button>First</button><button disabled>Unavailable</button>
+      <button hidden>Hidden</button><button tabIndex={-1}>Outside tab order</button><button>Last</button></>,
+  })
+  const keys = async (key, shiftKey = false) => {
+    const event = new dom.KeyboardEvent('keydown', { key, shiftKey, bubbles: true, cancelable: true })
+    await act(async () => { document.activeElement.dispatchEvent(event) })
+    return event
+  }
+
+  it('names and focuses the dialog without opening an input keyboard, then returns to its opener', async () => {
+    const opener = trigger()
+    await setSheets([dialogSheet('replace')])
+    const dialog = container.querySelector('[role="dialog"]')
+    expect(dialog?.getAttribute('aria-modal')).toBe('true')
+    expect(document.getElementById(dialog.getAttribute('aria-labelledby')).textContent).toBe('Replace exercise')
+    expect(document.activeElement).toBe(dialog)
+    await setSheets([])
+    expect(document.activeElement).toBe(opener)
+  })
+
+  it.each(['sheet', 'center'])('offers an explicit Close button in an unlocked %s', async kind => {
+    const opener = trigger()
+    await setSheets([{ ...dialogSheet('close', 'Finish workout'), kind }])
+    const close = container.querySelector('[role="dialog"] .modal-close')
+    expect(close?.getAttribute('aria-label')).toBe('Close')
+    expect(close.textContent).toContain('Close')
+    await act(async () => { close.click() })
+    expect(mocks.state.sheets).toEqual([])
+    expect(document.activeElement).toBe(opener)
+  })
+
+  it('closes only the top sheet by touch and returns to the nested opener', async () => {
+    trigger()
+    const parent = dialogSheet('parent', 'Workout options')
+    await setSheets([parent])
+    const first = container.querySelector('[role="dialog"]')
+    const opener = [...first.querySelectorAll('button')].find(button => button.textContent === 'First')
+    opener.focus()
+    await setSheets([parent, dialogSheet('effort', 'Final working set RIR')])
+    const dialogs = container.querySelectorAll('[role="dialog"]')
+    await act(async () => { dialogs[1].querySelector('.modal-close').click() })
+    expect(mocks.state.sheets.map(s => s.id)).toEqual(['parent'])
+    expect(document.activeElement).toBe(opener)
+    expect(new Set([...container.querySelectorAll('[id]')].map(node => node.id)).size)
+      .toBe(container.querySelectorAll('[id]').length)
+  })
+
+  it('keeps locked confirmations locked and does not duplicate viewer controls', async () => {
+    trigger()
+    await setSheets([dialogSheet('locked', 'Workout saved', { locked: true })])
+    expect(container.querySelector('.modal-close')).toBeNull()
+    await setSheets([{ ...sheet('viewer', { render: () => <div role="dialog" tabIndex={-1}><button>Viewer close</button></div> }), kind: 'viewer' }])
+    expect(container.querySelector('.modal-close')).toBeNull()
+    expect(container.querySelectorAll('button')).toHaveLength(2) // original trigger plus viewer control
+  })
+
+  it('contains forward/backward keyboard traversal and ignores non-tabbable controls', async () => {
+    trigger()
+    await setSheets([dialogSheet('replace')])
+    const dialog = container.querySelector('[role="dialog"]')
+    const first = dialog.querySelector('.modal-close')
+    const last = [...dialog.querySelectorAll('button')].find(b => b.textContent === 'Last')
+    expect((await keys('Tab', true)).defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(last)
+    expect((await keys('Tab')).defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(first)
+    expect((await keys('Tab', true)).defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(last)
+  })
+
+  it('wraps through a native summary when replacement search has no results and stations are collapsed', async () => {
+    trigger()
+    await setSheets([sheet('replacements', { render: () => <>
+      <h3>Swap exercise</h3><input aria-label="Search exercises" />
+      <button>Suggested replacements</button><button>All</button>
+      <details><summary>Occupied stations</summary><label><input type="checkbox" />Cable station</label></details>
+      <p>No replacements in this view.</p>
+    </> })])
+    const dialog = container.querySelector('[role="dialog"]')
+    const close = dialog.querySelector('.modal-close'), summary = dialog.querySelector('summary')
+    close.focus()
+    expect((await keys('Tab', true)).defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(summary)
+    expect((await keys('Tab')).defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(close)
+    // Opening the disclosure makes the station checkbox the true end of the keyboard order.
+    dialog.querySelector('details').open = true
+    await keys('Tab', true)
+    expect(document.activeElement).toBe(dialog.querySelector('input[type="checkbox"]'))
+    await keys('Tab')
+    expect(document.activeElement).toBe(close)
+  })
+
+  it('excludes nested disclosure controls hidden by a closed ancestor', async () => {
+    trigger()
+    await setSheets([sheet('nested-details', { render: () => <><h3>Station filters</h3>
+      <details><summary>Occupied stations</summary><details open><summary>Nested station group</summary>
+        <button>Hidden station</button></details></details>
+    </> })])
+    const dialog = container.querySelector('[role="dialog"]')
+    dialog.querySelector('.modal-close').focus()
+    await keys('Tab', true)
+    expect(document.activeElement).toBe(dialog.querySelector('summary'))
+  })
+
+  it('excludes an explicitly untabbable summary and controls hidden by rendering styles', async () => {
+    trigger()
+    await setSheets([sheet('hidden-controls', { render: () => <><h3>Filters</h3><input aria-label="Search" />
+      <details><summary tabIndex={-1}>Not in tab order</summary><button>Hidden station</button></details>
+      <div style={{ display: 'none' }}><button>Not rendered</button></div>
+      <div style={{ contentVisibility: 'hidden' }}><button>Skipped content</button></div>
+    </> })])
+    const dialog = container.querySelector('[role="dialog"]')
+    dialog.querySelector('.modal-close').focus()
+    await keys('Tab', true)
+    expect(document.activeElement).toBe(dialog.querySelector('input'))
+  })
+
+  it('makes the workout, rest and sync background inert and restores prior attributes', async () => {
+    const opener = trigger()
+    const timer = document.createElement('section')
+    timer.id = 'timer'; timer.setAttribute('aria-hidden', 'false')
+    container.appendChild(timer)
+    await setSheets([dialogSheet('replace')])
+    expect(opener.hasAttribute('inert')).toBe(true)
+    expect(timer.getAttribute('aria-hidden')).toBe('true')
+    const sync = document.createElement('section')
+    sync.id = 'sync'; container.appendChild(sync)
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(sync.hasAttribute('inert')).toBe(true)
+    await setSheets([])
+    expect(opener.hasAttribute('inert')).toBe(false)
+    expect(timer.getAttribute('aria-hidden')).toBe('false')
+    expect(sync.hasAttribute('inert')).toBe(false)
+    expect(sync.hasAttribute('aria-hidden')).toBe(false)
+  })
+
+  it('keeps lower sheets inactive and returns through the correct nested opener', async () => {
+    const opener = trigger()
+    const firstSheet = dialogSheet('first', 'Workout options')
+    await setSheets([firstSheet])
+    const lower = container.querySelector('[role="dialog"]')
+    const innerOpener = lower.querySelector('button')
+    innerOpener.focus()
+    await setSheets([firstSheet, dialogSheet('second', 'Final set effort')])
+    expect(lower.closest('[inert]')).not.toBeNull()
+    expect(lower.getAttribute('aria-modal')).toBeNull()
+    await keys('Escape')
+    expect(document.activeElement).toBe(innerOpener)
+    expect(lower.closest('[inert]')).toBeNull()
+    await keys('Escape')
+    expect(document.activeElement).toBe(opener)
+  })
+
+  it('returns to the original page trigger when the whole modal stack closes at once', async () => {
+    const opener = trigger()
+    const first = dialogSheet('first')
+    await setSheets([first])
+    container.querySelector('[role="dialog"] button').focus()
+    await setSheets([first, dialogSheet('second')])
+    await setSheets([])
+    expect(document.activeElement).toBe(opener)
+  })
+
+  it('honors explicit input autofocus and still restores its original trigger', async () => {
+    const opener = trigger()
+    await setSheets([sheet('rename', { render: () => <><h3>Rename workout</h3><input autoFocus /></> })])
+    expect(document.activeElement).toBe(container.querySelector('input'))
+    await setSheets([])
+    expect(document.activeElement).toBe(opener)
+  })
+
+  it('contains a centered confirmation and preserves existing background isolation', async () => {
+    const opener = trigger()
+    const privateNode = document.createElement('section')
+    privateNode.setAttribute('inert', ''); privateNode.setAttribute('aria-hidden', 'true')
+    container.appendChild(privateNode)
+    await setSheets([{ ...dialogSheet('finish', 'Finish workout'), kind: 'center' }])
+    const dialog = container.querySelector('.center[role="dialog"]')
+    expect(document.activeElement).toBe(dialog)
+    await keys('Escape')
+    expect(document.activeElement).toBe(opener)
+    expect(privateNode.hasAttribute('inert')).toBe(true)
+    expect(privateNode.getAttribute('aria-hidden')).toBe('true')
+  })
+
+  it('returns to the original trigger after replacing a sheet with Finish summary', async () => {
+    const opener = trigger()
+    await setSheets([dialogSheet('review', 'Finish workout')])
+    container.querySelector('[role="dialog"] button').focus()
+    await setSheets([dialogSheet('summary', 'Workout saved', { locked: true })])
+    await keys('Escape')
+    expect(mocks.state.sheets.map(s => s.id)).toEqual(['summary'])
+    await setSheets([])
+    expect(document.activeElement).toBe(opener)
+  })
+
+  it('keeps an empty dialog reachable and redirects escaped focus back inside', async () => {
+    const opener = trigger()
+    await setSheets([sheet('empty', { locked: true, render: () => <h3>Loading replacements</h3> })])
+    const dialog = container.querySelector('[role="dialog"]')
+    expect((await keys('Tab')).defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(dialog)
+    opener.focus()
+    expect(document.activeElement).toBe(dialog)
+  })
+
+  it('dismisses a reduced-motion drag immediately without an animated settlement', async () => {
+    dom.matchMedia = () => ({ matches: true })
+    await setSheets([dialogSheet('drag')])
+    const el = container.querySelector('.sheet')
+    await act(async () => {
+      mouse(el, 'mousedown', 10)
+      mouse(el, 'mousemove', 150)
+      mouse(el, 'mouseup', 150)
+    })
+    expect(mocks.state.sheets).toHaveLength(0)
+    expect(el.style.transition).toBe('none')
+    expect(el.style.transform).not.toBe('translateY(110%)')
   })
 })
