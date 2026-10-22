@@ -82,13 +82,14 @@ export function coverageForState(S, today) {
   const window = { startDate: isoOf(first), endDate: today }
   const policy = { targets: S.coverageTargets || {} }
   const plannedSessions = []
+  const plannedEntries = id => (S.routines.find(r => r.id === id)?.ex || []).map(cfg => ({ ...S.customEx?.find(ex => ex.id === cfg.id), ...cfg }))
   // Fixed-day prescriptions are dated. Floating cycle sessions stay undated in cycle context.
   const q = queueOf(S)
   const fixed = { ...S, week: S.week || {}, dayPlan: S.dayPlan || {}, workouts: S.workouts || [], queue: null }
   for (let date = new Date(first); isoOf(date) <= today; date.setDate(date.getDate() + 1)) {
     const d = isoOf(date)
     for (const id of unique(effectiveRoutineIds(fixed, d, today)).filter(id => !q?.ids.includes(id) || S.dayPlan?.[d] === id)) {
-      plannedSessions.push({ id: `${d}:${id}`, date: d, entries: S.routines.find(r => r.id === id)?.ex || [] })
+      plannedSessions.push({ id: `${d}:${id}`, date: d, entries: plannedEntries(id) })
     }
   }
   const args = { metadata: S.trainingMetadata || {}, policy }
@@ -108,7 +109,7 @@ export function coverageForState(S, today) {
       return false
     })
     cycle = trainingCoverage({ ...args, window: { startDate, endDate: today < startDate ? startDate : today }, workouts: cycleWorkouts,
-      plannedSessions: q.ids.map(id => ({ id, entries: S.routines.find(r => r.id === id)?.ex || [] })) })
+      plannedSessions: q.ids.map(id => ({ id, entries: plannedEntries(id) })) })
     // A cycle has no fixed duration; weekly aims only produce gaps in the rolling view.
     for (const pair of Object.values(cycle.byMuscle)) for (const value of Object.values(pair)) value.gap = { directDays: null, sets: null }
     cycle.unknowns.actual.acceptanceSessions = ambiguous.size
