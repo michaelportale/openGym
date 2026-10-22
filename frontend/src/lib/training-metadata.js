@@ -5,6 +5,9 @@ import { dbLoadFor, isBellEx } from './dumbbells.js'
 // Deliberately curated starting family; unfamiliar catalogue entries keep an unknown role.
 export const TRAINING_ROLES = ['horizontal-press', 'vertical-press', 'horizontal-pull', 'vertical-pull', 'squat', 'hinge', 'chest-isolation', 'shoulder-isolation', 'elbow-flexion', 'elbow-extension', 'knee-flexion', 'knee-extension', 'calf-raise', 'core']
 const curated = {
+  // Basic dumbbell and pec-deck flies: chest isolation, not press equivalents.
+  '0308': ['chest-isolation', ['chest'], []],
+  '1030': ['chest-isolation', ['chest'], []],
   '0047': ['horizontal-press', ['chest'], ['deltoids', 'triceps']],
   '0426': ['vertical-press', ['deltoids'], ['triceps']],
   '0241': ['elbow-extension', ['triceps'], []],

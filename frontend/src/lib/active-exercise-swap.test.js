@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import * as swaps from './active-exercise-swap.js'
 import { swapActiveExercise } from './active-exercise-swap.js'
 
 const entry = (id, { sg, done = false, target, sets } = {}) => ({
@@ -85,4 +86,45 @@ describe('safe active exercise swap', () => {
     expect(active.entries.at(-1)).toBe(unrelated)
     expect(active.cur).toBe(cursor)
   })
+})
+
+it('requires confirmation for a completed limb and preserves its original station and results', () => {
+  const logged = entry('bench', { sets: [{ done: false, sides: { L: { w: 23, r: 7, rir: 1, done: true }, R: { w: 23, r: 7, done: false } } }] })
+  logged.equipmentSnapshot = { stationId: 'old', loadConvention: 'machine-setting', unit: null }
+  logged.trainingSnapshot = { role: 'horizontal-press', primary: ['chest'], secondary: [], status: 'manual' }
+  const active = { entries: [logged], cur: 0 }
+  const before = structuredClone(active)
+  expect(swapActiveExercise(active, 0, replacement())).toEqual({ needsConfirmation: true, grouped: false, index: 0 })
+  expect(active).toEqual(before)
+  expect(swapActiveExercise(active, 0, { ...replacement(), equipmentSnapshot: { stationId: 'new' } }, { loggedConfirmed: true })).toEqual({ inserted: true, index: 1 })
+  expect(active.entries[0]).toEqual(before.entries[0])
+  expect(active.entries[1].equipmentSnapshot.stationId).toBe('new')
+})
+
+const futurePreview = (active, routines, cfg) => {
+  expect(swaps.previewRoutineSwap).toBeTypeOf('function')
+  return swaps.previewRoutineSwap(active, routines, 0, cfg)
+}
+it('previews only the source routine and changes no plan until explicitly accepted', () => {
+  const active = { entries: [{ ...entry('bench'), rid: 'push' }] }
+  const routines = [{ id: 'other', name: 'Other', ex: [{ id: 'bench', reps: 5 }] }, { id: 'push', name: 'Push', ex: [{ id: 'bench', reps: 8, sg: 'pair' }] }]
+  const before = structuredClone(routines)
+  const preview = futurePreview(active, routines, { id: 'incline', reps: 10 })
+  expect(routines).toEqual(before)
+  expect(preview).toMatchObject({ routineId: 'push', routineName: 'Push', index: 0, before: { id: 'bench', reps: 8, sg: 'pair' }, after: { id: 'incline', reps: 10, sg: 'pair' } })
+  expect(swaps.applyRoutineSwap(routines, preview)).toBe(true)
+  expect(routines[0]).toEqual(before[0])
+  expect(routines[1].ex).toEqual([{ id: 'incline', reps: 10, sg: 'pair' }])
+  expect(active.entries[0].id).toBe('bench')
+})
+it('does not guess ambiguous, missing or changed future-plan slots', () => {
+  const active = { entries: [{ ...entry('bench'), rid: 'push' }] }
+  const routines = [{ id: 'push', ex: [{ id: 'bench', reps: 8 }] }]
+  const preview = futurePreview(active, routines, { id: 'incline', reps: 10 })
+  routines[0].ex[0].reps = 12
+  expect(swaps.applyRoutineSwap(routines, preview)).toBe(false)
+  expect(routines[0].ex[0].reps).toBe(12)
+  routines[0].ex.push({ id: 'bench' })
+  expect(futurePreview(active, routines, { id: 'incline' })).toBeNull()
+  expect(futurePreview({ entries: [entry('bench')] }, routines, { id: 'incline' })).toBeNull()
 })

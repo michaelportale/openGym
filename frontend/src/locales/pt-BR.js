@@ -1438,6 +1438,23 @@ export const PT_BR_OVERRIDES = {
   "Category availability is unverified. Add stations to confirm specific machines.": "A disponibilidade por categoria não está verificada. Adicione estações para confirmar máquinas específicas.",
   "Only listed stations enable machine exercises. Free weights still use the checklist.": "Só as estações listadas permitem exercícios de máquina. Os pesos livres continuam usando a lista.",
   "Equipment identity stays with logged sets. Swap exercise to use another station.": "O equipamento permanece associado às séries registradas. Troque o exercício para usar outra estação.",
+  "Same role and primary target": "Mesma função e alvo principal",
+  "Related role and primary target": "Função relacionada e mesmo alvo principal",
+  "Same muscle, different role": "Mesmo músculo, função diferente",
+  "Training metadata unverified": "Metadados de treino não verificados",
+  "Used in completed workouts": "Usado em treinos concluídos",
+  "Temporarily exclude occupied stations": "Excluir temporariamente estações ocupadas",
+  "Applies to these suggestions only. All keeps manual search available.": "Aplica-se apenas a estas sugestões. Todos mantém a busca manual disponível.",
+  "Occupied station: {0}": "Estação ocupada: {0}",
+  "Suggested replacements": "Substituições sugeridas",
+  "Used in this workout": "Usado neste treino",
+  "Your future plan is unchanged.": "Seu plano futuro não mudou.",
+  "Update future plan…": "Atualizar o plano futuro…",
+  "Keep this workout only": "Apenas este treino",
+  "Update future plan?": "Atualizar o plano futuro?",
+  "Only this routine slot changes. Logged workouts stay unchanged.": "Só muda esta posição da rotina. Os treinos registrados não mudam.",
+  "Update future plan": "Atualizar o plano futuro",
+  "The routine changed. Reopen it to update this slot.": "A rotina mudou. Abra novamente para atualizar esta posição.",
 }
 
 export default { ...pt, ...PT_BR_OVERRIDES }
