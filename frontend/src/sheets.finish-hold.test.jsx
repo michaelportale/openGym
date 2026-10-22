@@ -129,3 +129,19 @@ describe('the Finish sheet', () => {
     expect(host.textContent).toContain('You haven’t checked off any sets.')
   })
 })
+
+describe('optional final effort at the real finish boundary', () => {
+  it.each([null, 0, 2])('finishes once with final RIR %s, retaining the actual load without a second advance on retry', rir => {
+    install([{ w: 60, r: 12, done: true }, { w: 60, r: 12, done: true, ...(rir == null ? {} : { rir }) }])
+    const id = S().active.entries[0].id
+    act(() => finishWorkout())
+    act(() => finishWorkout())
+    expect(S().workouts).toHaveLength(1)
+    expect(S().workouts[0].entries[0].sets.map(s => s.rir)).toEqual([undefined, rir == null ? undefined : rir])
+    expect(S().workouts[0].entries[0].sets.map(s => s.w)).toEqual([60, 60])
+    expect(S().exWeights[id].w).toBe(60)
+    const saved = JSON.parse(localStorage.getItem('gym_state_v1'))
+    expect(saved.workouts).toHaveLength(1)
+    expect(saved.active).toBeNull()
+  })
+})

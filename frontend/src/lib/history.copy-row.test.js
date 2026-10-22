@@ -4,11 +4,12 @@ import { makeSideSet, setSideField, toggleSide, isSideSet } from './workout-mode
 
 // Swipe on sets (v1.3.11): swipe right copies a set, swipe left removes one with an Undo.
 describe('copyRowAt', () => {
-  it('puts an unticked copy of a work set right below it, keeping weight, reps and effort', () => {
+  it('puts an unticked copy of a work set right below it, keeping weight and reps but leaving the new effort unknown', () => {
     const rows = [{ w: 60, r: 8, done: true, rir: 2, at: 123, weightOrigin: 'manual' }, { w: 60, r: 8, done: false }]
     const out = copyRowAt(rows, 0)
     expect(out).toHaveLength(3)
-    expect(out[1]).toEqual({ w: 60, r: 8, rir: 2, done: false })
+    expect(out[1]).toEqual({ w: 60, r: 8, done: false })
+    expect(out[0].rir).toBe(2)
     expect(out[0]).toBe(rows[0])
     expect(rows).toHaveLength(2)   // input untouched
   })
@@ -36,6 +37,8 @@ describe('copyRowAt', () => {
     let row = makeSideSet({ w: 16, r: 20 })
     row = setSideField(row, 'L', 'r', 11)
     row = setSideField(row, 'R', 'w', 18)
+    row = setSideField(row, 'L', 'rir', 0)
+    row = setSideField(row, 'R', 'rpe', 8)
     row = toggleSide(row, 'L')
     row = { ...row, sides: { ...row.sides, L: { ...row.sides.L, type: 'dropset', drops: [{ w: 10, r: 6 }] } } }
     const out = copyRowAt([row], 0)

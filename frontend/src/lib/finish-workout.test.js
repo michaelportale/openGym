@@ -330,3 +330,18 @@ describe('sessionEnd: a workout finished long after its last set', () => {
     expect(sessionEnd(active, T0 + FORGOTTEN_GAP_MS + 1)).toBe(T0)
   })
 })
+
+describe('final effort preservation', () => {
+  it('retains final RIR zero and documented concerns without filling earlier missing ratings', () => {
+    const active = { id: 'a', d: '2026-10-21', start: 1, entries: [{ id: '0025', techniqueProblem: 'Keep the same load while reviewing technique', sets: [{ w: 60, r: 8, done: true }, { w: 60, r: 8, done: true, rir: 0 }] }] }
+    const completed = buildCompletedWorkout(active, { end: 2 })
+    expect(completed.entries[0].techniqueProblem).toBe('Keep the same load while reviewing technique')
+    expect(completed.entries[0].sets.map(s => s.rir)).toEqual([undefined, 0])
+  })
+  it('finishes completed work with no rating and never applies a load advance', () => {
+    const active = { id: 'a', d: '2026-10-21', start: 1, entries: [{ id: '0025', target: { sets: 2, weight: 60 }, sets: [{ w: 60, r: 8, done: true }, { w: 60, r: 8, done: true }] }] }
+    const completed = buildCompletedWorkout(active, { end: 2 })
+    expect(completed.entries[0].sets).toEqual([{ w: 60, r: 8, done: true }, { w: 60, r: 8, done: true }])
+    expect(completed.entries[0].target.weight).toBe(60)
+  })
+})
