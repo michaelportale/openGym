@@ -41,18 +41,20 @@ export function swapActiveExercise(active, index, replacement, {
     // A swap does not change which routine the slot belongs to — carry its `rid` the same
     // way `sg` is carried, so a combined session's WorkoutDetail groups stay contiguous.
     ...(current.rid ? { rid: current.rid } : {}),
+    ...(current.routineSourceId ? { routineSourceId: current.routineSourceId } : {}),
     ...(keepGroup ? { sg: current.sg } : {})
   })
   active.cur = insertAt
   return { inserted: true, index: insertAt }
 }
 
-/** A unique source slot is required: session additions/reorders cannot prove duplicate ancestry. */
+/** Follow the original planned exercise through swaps; additions and old drafts lack that proof. */
 export function previewRoutineSwap(active, routines, index, config) {
   const current = active?.entries?.[index]
+  if (!current?.routineSourceId) return null
   const rid = current?.rid || active?.routineId
   const routine = rid && routines.find(r => r.id === rid)
-  const matches = routine?.ex.map((cfg, i) => cfg.id === current?.id ? i : -1).filter(i => i >= 0) || []
+  const matches = routine?.ex.map((cfg, i) => cfg.id === current.routineSourceId ? i : -1).filter(i => i >= 0) || []
   if (matches.length !== 1) return null
   const slot = matches[0]
   const before = structuredClone(routine.ex[slot])
@@ -61,9 +63,14 @@ export function previewRoutineSwap(active, routines, index, config) {
 }
 
 /** Apply only the exact preview the user saw; stale or already accepted previews do nothing. */
-export function applyRoutineSwap(routines, preview) {
+export function applyRoutineSwap(routines, preview, active) {
   const routine = routines.find(r => r.id === preview?.routineId)
   if (!routine || JSON.stringify(routine.ex[preview.index]) !== JSON.stringify(preview.before)) return false
   routine.ex[preview.index] = structuredClone(preview.after)
+  for (const entry of active?.entries || []) {
+    if ((entry.rid || active.routineId) === routine.id && entry.routineSourceId === preview.before.id) {
+      entry.routineSourceId = preview.after.id
+    }
+  }
   return true
 }

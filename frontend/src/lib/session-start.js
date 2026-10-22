@@ -120,6 +120,7 @@ export function buildSessionEntries(st, r) {
   const noProg = r?.excludeFromProgression === true
   return (r ? r.ex : []).map(cfg => {
     const built = buildPlannedEntry(st, cfg, r, { noProg })
-    return { id: cfg.id, sg: cfg.sg, ...built, ...(noProg ? { noProg: true } : {}) }
+    // Active-only ancestry: an added or swapped exercise id cannot identify its plan slot.
+    return { id: cfg.id, routineSourceId: cfg.id, sg: cfg.sg, ...built, ...(noProg ? { noProg: true } : {}) }
   })
 }

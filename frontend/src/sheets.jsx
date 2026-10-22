@@ -1646,7 +1646,7 @@ function previewFutureSwap(preview) {
     <Button variant="primary" onClick={() => {
       close()
       let applied = false
-      update(state => { applied = applyRoutineSwap(state.routines, preview) }, true)
+      update(state => { applied = applyRoutineSwap(state.routines, preview, state.active) }, true)
       if (!applied) toast(t('The routine changed. Reopen it to update this slot.'))
     }}>{t('Update future plan')}</Button>
     <Button variant="ghost" onClick={close}>{t('Cancel')}</Button>

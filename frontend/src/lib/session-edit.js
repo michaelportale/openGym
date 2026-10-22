@@ -197,10 +197,12 @@ function draftRecord(active, current, key) {
     const merged = { ...clone(logged[i]), ...entry }
     delete merged.plan
     delete merged.carried
+    delete merged.routineSourceId
     for (const k of ['note', 'notePin', 'noProg', 'muscleSnapshot', 'rid', 'planned']) if (!(k in entry)) delete merged[k]
     return merged
   })
   const record = { ...current, ...updated, id: key, d: current.d, start: current.start, end: current.end }
+  if (!('volumePartial' in updated)) delete record.volumePartial
   if (!('excludeFromProgression' in updated)) delete record.excludeFromProgression
   const base = active.editBase
   for (const k of SESSION_FIELDS) {
