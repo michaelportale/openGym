@@ -1,6 +1,8 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { useUI } from '../store/useUI.js'
 import { keyboardOpen } from '../lib/viewport-guard.js'
+import { t } from '../lib/i18n.js'
+import Icon from './Icon.jsx'
 
 // Putting the page back after a sheet closes takes up to three goes (see the un-pin below): now,
 // next frame, and once the keyboard's dismiss animation is over. Anything else that wants to
@@ -44,10 +46,110 @@ const drainScrollRestore = close => {
   }
 }
 
+// Keep the existing sheet/scroll machinery, but give every surface the same modal boundary.
+// The root is inside the React app, so inert only its siblings along the path to <body>, never
+// an ancestor containing the dialog. Newly mounted sync/rest controls need the same boundary.
+const FOCUSABLE = 'button, a[href], input, select, textarea, summary, [tabindex], [contenteditable="true"], video[controls], audio[controls]'
+const firstSummary = details => [...details.children].find(child => child.tagName === 'SUMMARY')
+const focusableIn = el => [...el.querySelectorAll(FOCUSABLE)].filter(node => {
+  const nativeSummary = node.tagName === 'SUMMARY' && node.parentElement?.tagName === 'DETAILS'
+    && firstSummary(node.parentElement) === node && !node.hasAttribute('tabindex')
+  if ((!nativeSummary && node.tabIndex < 0) || node.matches(':disabled') || node.closest('[hidden], [inert], [aria-hidden="true"]')) return false
+  if (node.checkVisibility && !node.checkVisibility({ visibilityProperty: true })) return false
+  for (let parent = node; parent && parent !== el; parent = parent.parentElement) {
+    const style = window.getComputedStyle?.(parent)
+    if (style?.display === 'none' || style?.visibility === 'hidden' || style?.visibility === 'collapse' || style?.contentVisibility === 'hidden') return false
+    // Closed details can retain computed styles and cached rectangles for their hidden inputs.
+    // Only the first summary (and controls inside it) participates in keyboard navigation.
+    if (parent !== node && parent.tagName === 'DETAILS' && !parent.open && !firstSummary(parent)?.contains(node)) return false
+  }
+  return true
+})
+function useModalFocus(sheets, rootRef) {
+  const openers = useRef(new Map())
+  const fallback = useRef(null)
+  const topId = sheets.at(-1)?.id
+  // Capture before child autofocus runs during the commit, without overriding that autofocus.
+  const entering = useRef({ id: null, element: null })
+  if (entering.current.id !== topId) entering.current = { id: topId, element: document.activeElement }
+  useLayoutEffect(() => {
+    const modal = rootRef.current
+    const dialog = modal?.lastElementChild?.querySelector('[role="dialog"]')
+    if (!dialog || !topId) return
+    const before = entering.current.element
+    if (!openers.current.has(topId)) openers.current.set(topId,
+      before?.isConnected && before !== document.body && !dialog.contains(before) ? before : fallback.current)
+    const opener = openers.current.get(topId)
+    const focusDialog = () => dialog.focus({ preventScroll: true })
+    // Explicit caller autofocus (e.g. rename) is honored. Ordinary opening focuses the dialog,
+    // not its first text field, so merely reviewing a sheet does not summon the keyboard.
+    if (!dialog.contains(document.activeElement)) focusDialog()
+
+    const hidden = new Map()
+    const isolate = () => {
+      for (let branch = modal; branch?.parentElement; branch = branch.parentElement) {
+        for (const sibling of branch.parentElement.children) {
+          if (sibling === branch || hidden.has(sibling)) continue
+          hidden.set(sibling, { inert: sibling.hasAttribute('inert'), aria: sibling.getAttribute('aria-hidden') })
+          sibling.setAttribute('inert', '')
+          sibling.setAttribute('aria-hidden', 'true')
+        }
+        if (branch.parentElement === document.body) break
+      }
+    }
+    isolate()
+    const observer = typeof window.MutationObserver === 'function' ? new window.MutationObserver(isolate) : null
+    observer?.observe(document.body, { childList: true, subtree: true })
+    const onFocus = e => { if (!dialog.contains(e.target)) focusDialog() }
+    const onTab = e => {
+      if (e.key !== 'Tab' || e.defaultPrevented) return
+      const items = focusableIn(dialog), first = items[0], last = items.at(-1)
+      const at = document.activeElement
+      if (!items.length) { e.preventDefault(); focusDialog() }
+      else if (e.shiftKey && (at === first || at === dialog || !dialog.contains(at))) { e.preventDefault(); last.focus() }
+      else if (!e.shiftKey && (at === last || !dialog.contains(at))) { e.preventDefault(); first.focus() }
+    }
+    document.addEventListener('focusin', onFocus)
+    window.addEventListener('keydown', onTab)
+    return () => {
+      observer?.disconnect()
+      document.removeEventListener('focusin', onFocus)
+      window.removeEventListener('keydown', onTab)
+      for (const [node, prior] of hidden) {
+        if (!prior.inert) node.removeAttribute('inert')
+        if (prior.aria == null) node.removeAttribute('aria-hidden')
+        else node.setAttribute('aria-hidden', prior.aria)
+      }
+      const next = useUI.getState().sheets
+      if (!next.some(sheet => sheet.id === topId)) {
+        const nextDialog = rootRef.current?.lastElementChild?.querySelector('[role="dialog"]')
+        // closeAll can remove the nested opener too. Walk back to a connected ancestor opener;
+        // replacing a sheet inherits that same target rather than a now-detached confirm button.
+        const target = [opener, ...[...openers.current.values()].reverse(), fallback.current]
+          .find(node => node?.isConnected && (nextDialog?.contains(node) || !modal.contains(node))) || opener
+        fallback.current = target
+        for (const id of openers.current.keys()) if (!next.some(sheet => sheet.id === id)) openers.current.delete(id)
+        // Never focus a detached trigger or focus the page through a still-open modal.
+        if (target?.isConnected && (!next.length || nextDialog?.contains(target))) target.focus({ preventScroll: true })
+      }
+    }
+  }, [topId])
+}
+
 // One bottom sheet (or centered dialog) with swipe-to-dismiss.
-function Sheet({ sheet }) {
+function Sheet({ sheet, active }) {
   const { closeSheet } = useUI()
   const ref = useRef(null)
+  const dialogRef = useRef(null)
+  useLayoutEffect(() => {
+    const el = dialogRef.current
+    const heading = el?.querySelector('h1, h2, h3, [role="heading"]')
+    if (!heading) return
+    if (!heading.id) heading.id = `sheet-title-${sheet.id}`
+    el.setAttribute('aria-labelledby', heading.id)
+  }, [sheet.id])
+  const semantics = { role: 'dialog', 'aria-modal': active ? true : undefined, 'aria-label': t('Details'), tabIndex: -1 }
+  const layer = { inert: active ? undefined : true, 'aria-hidden': active ? undefined : true }
   // startY null = no gesture. axis stays null until the finger has travelled far enough to
   // tell a vertical pull from a sideways scroll; 'x' hands the gesture to whatever scrolls
   // horizontally under it (chip strips, heatmap) and the sheet stays put.
@@ -97,10 +199,14 @@ function Sheet({ sheet }) {
   const onTouchEnd = () => {
     const el = ref.current, d = drag.current
     if (d.startY === null) return
-    el.style.transition = 'transform .2s'
+    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    el.style.transition = still ? 'none' : 'transform .2s'
     // a long pull, or a short but fast flick, dismisses
     const flick = d.delta > 30 && d.vy > 0.6
-    if ((d.delta > 90 || flick) && !sheet.locked) { el.style.transform = 'translateY(110%)'; setTimeout(() => closeSheet(sheet.id), 180) }
+    if ((d.delta > 90 || flick) && !sheet.locked) {
+      if (still) closeSheet(sheet.id)
+      else { el.style.transform = 'translateY(110%)'; setTimeout(() => closeSheet(sheet.id), 180) }
+    }
     else el.style.transform = ''
     drag.current = idle()
   }
@@ -119,27 +225,32 @@ function Sheet({ sheet }) {
       el.removeEventListener('touchmove', onTouchMove)
       window.removeEventListener('mouseup', onMouseUp)
     }
-  }, [])
+  }, [sheet.id, sheet.locked])
 
   const close = () => closeSheet(sheet.id)
+  const dismiss = !sheet.locked && <div className="modal-dismiss" data-nodrag>
+    <button type="button" className="btn ghost modal-close" aria-label={t('Close')} onClick={close}>
+      <Icon name="xmark" />{t('Close')}
+    </button>
+  </div>
   // Full screen, on black: a photo or video opened from a workout (WorkoutMedia.jsx). No
   // backdrop to tap, no drag to dismiss — the viewer has its own close button, and back closes
   // it like any sheet.
-  if (sheet.kind === 'viewer') return <div>{sheet.render(close)}</div>
+  if (sheet.kind === 'viewer') return <div {...layer}>{sheet.render(close)}</div>
   if (sheet.kind === 'center') {
     return (
-      <div>
+      <div {...layer}>
         <div className="mback" onClick={() => { if (!sheet.locked) close() }} />
-        <div className="center">{sheet.render(close)}</div>
+        <div className="center" ref={dialogRef} {...semantics}>{dismiss}{sheet.render(close)}</div>
       </div>
     )
   }
   return (
-    <div>
+    <div {...layer}>
       <div className="mback" onClick={() => { if (!sheet.locked) close() }} />
-      <div className="sheet" ref={ref} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}
+      <div className="sheet" ref={el => { ref.current = el; dialogRef.current = el }} {...semantics} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}
         onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}>
-        <div className="grab" />
+        {dismiss || <div className="grab" aria-hidden="true" />}
         {sheet.render(close)}
       </div>
     </div>
@@ -153,6 +264,8 @@ export default function Modals() {
   const suppressPop = useRef(false)
   const pushedEntries = useRef(0)
   const sheetEntries = useRef([])
+  const modalRef = useRef(null)
+  useModalFocus(sheets, modalRef)
 
   // Every opened sheet gets a history entry so Android back dismisses it instead of
   // leaving the page (issue #63). Keep the pushed-entry count and each active sheet's
@@ -270,8 +383,8 @@ export default function Modals() {
 
   if (!sheets.length) return null
   return (
-    <div id="modal-root" className="open">
-      {sheets.map(s => <Sheet key={s.id} sheet={s} />)}
+    <div id="modal-root" className="open" ref={modalRef}>
+      {sheets.map((s, i) => <Sheet key={s.id} sheet={s} active={i === sheets.length - 1} />)}
     </div>
   )
 }
