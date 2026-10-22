@@ -6,7 +6,7 @@
 // window it names, which is why an old proposal in the thread still draws its chart months
 // later, against the data as it was then.
 import { EXIDX } from './exercises.js'
-import { workoutVolume, workoutAt } from './history.js'
+import { workoutVolume, workoutVolumeIsPartial, workoutAt } from './history.js'
 import { isWarmupRow } from './workout-model.js'
 import { bestSetOf } from './onerm.js'
 
@@ -72,7 +72,7 @@ export function insightsFor(S, win = {}, { topN = 3 } = {}) {
     })
 
   return {
-    from, to, sessions: ws.length, minutes: median(minutes), volume: Math.round(volume), sets: setsTotal,
+    from, to, sessions: ws.length, minutes: median(minutes), volume: Math.round(volume), volumePartial: ws.some(workoutVolumeIsPartial), sets: setsTotal,
     bodyParts, bodyweight, strength
   }
 }
@@ -88,7 +88,7 @@ export function sessionInsights(S, workout) {
   const before = (idx >= 0 ? all.slice(0, idx) : all).filter(w => w.name && w.name === workout.name)
   const prev = before[before.length - 1] || null
   const stat = w => ({
-    volume: Math.round(Number.isFinite(w.vol) ? w.vol : workoutVolume(w)),
+    volume: Math.round(Number.isFinite(w.vol) ? w.vol : workoutVolume(w)), volumePartial: workoutVolumeIsPartial(w),
     sets: (w.entries || []).reduce((n, en) => n + (en.sets || []).filter(s => s.done && !isWarmupRow(s)).length, 0),
     minutes: w.end && w.start ? Math.round((w.end - w.start) / 60000) : null,
     prs: (w.prs || []).length

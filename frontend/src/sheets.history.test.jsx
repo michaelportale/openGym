@@ -89,3 +89,10 @@ describe('exercise history sheet', () => {
     expect(top.querySelectorAll('.list .item')).toHaveLength(1)
   })
 })
+
+it.each([null,10])('qualifies the exercise subtotal when source reps are unknown or settings excluded (%s)',reps=>{
+  const row={done:true,w:5,r:reps,sourceLoad:{physical:reps==null}}
+  useStore.setState(s=>({S:{...s.S,workouts:[session(0,[{done:true,w:5,r:10},row])]}}))
+  exerciseHistorySheet(EX)
+  expect(renderTop().querySelector('.list .item').textContent).toContain('Partial load total')
+})

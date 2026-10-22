@@ -177,3 +177,19 @@ it('labels an incomplete physical load total in text export while retaining all 
   expect(w.volumePartial).toBe(true)
   expect(workoutText(w,{unit:'kg',nameOf:e=>e.name})).toContain('Partial load total')
 })
+
+// A malformed plan must never become an executable routine with an unbounded row count.
+it.each([
+  '9'.repeat(400)+' × 5', '3 × '+'9'.repeat(400),
+  '9007199254740992 × 5', '11 × 5', '3 × 1001', '3 × 8–1001',
+])('rejects unsupported baseline counts before constructing a routine: %s', prescription=>{
+  const text=fitnessNote().replace('4 × 5–7',prescription)
+  const p=parseFitnessNotes([{name:'synthetic-plan.md',text}])
+  expect(p.proposedRoutines).toEqual([])
+  expect(p.warnings.some(w=>/prescription|baseline/i.test(w))).toBe(true)
+})
+it.each([['3 × 8–12',3,8,12],['10 × 1–1000',10,1,1000]])('retains supported bounded baseline prescription %s',(prescription,sets,repsMin,reps)=>{
+  const p=parseFitnessNotes([{name:'synthetic-plan.md',text:fitnessNote().replace('4 × 5–7',prescription)}])
+  expect(p.proposedRoutines[0].ex[0]).toMatchObject({sets,repsMin,reps})
+  expect(p.warnings).toEqual([])
+})

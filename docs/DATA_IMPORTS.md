@@ -72,7 +72,8 @@ Historical imports never advance the current program queue.
 `## Planned targets — not completed work` can offer separately labeled baseline proposals with
 columns `Exercise / variant`, `Equipment / attachment`, `Load and units / convention`,
 `Planned sets and reps`, `Rationale / prior source`. Only explicit prescriptions such as
-`3 × 8–12` are supported. These are unchecked by default; selecting them saves independent
+`3 × 8–12` are supported, bounded to 1–10 sets and 1–1000 reps (finite safe integers,
+with an ordered range). Unsupported prescriptions warn and are skipped. These are unchecked by default; selecting them saves independent
 routines without activating a program. Next-exposure prose and summaries never become results.
 
 ## Hevy, directly
