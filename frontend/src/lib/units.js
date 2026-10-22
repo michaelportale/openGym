@@ -105,6 +105,9 @@ export function convertStateUnit(S, to) {
   // unit the same way. The load kinds (S.loadKind) and what a dumbbell weight means (S.dbLoad)
   // hold no weight.
   if (Array.isArray(S.routines)) out.routines = S.routines.map(r => ({ ...r, ex: (r.ex || []).map(cfg => convTarget(cfg, from, to)) }))
+  if (Array.isArray(S.queue?.adaptation?.baseline)) out.queue = { ...S.queue, adaptation: { ...S.queue.adaptation,
+    baseline: S.queue.adaptation.baseline.map(r => ({ ...r, ex: (r.ex || []).map(cfg => convTarget(cfg, from, to)) })),
+  } }
   if (Array.isArray(S.workouts)) out.workouts = S.workouts.map(convSession)
   if (S.active) out.active = convSession(S.active)
   return out

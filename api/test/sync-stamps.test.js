@@ -453,3 +453,12 @@ test('coverage targets retain per-muscle stamps for older unstamped writers', ()
   assert.equal(next.edited?.coverageTargets, undefined);
   assert.equal(next.coverageTargets.chest._ts, 900);
 });
+
+test('explicit day dispositions are independently stamped for older writers', () => {
+  const cur=stored();cur.dayDispositions={'2026-10-20':{status:'rest',_ts:NOW-100}};
+  const next=clone(cur);next.dayDispositions['2026-10-21']={status:'trained-unlogged'};
+  stampPut(cur,next,{overRead:true,stamped:false,now:NOW});
+  assert.equal(next.edited.dayDispositions,undefined);
+  assert.equal(next.dayDispositions['2026-10-20']._ts,NOW-100);
+  assert.ok(next.dayDispositions['2026-10-21']._ts>=NOW);
+});

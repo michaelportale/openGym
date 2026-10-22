@@ -134,3 +134,8 @@ describe('the workout-day reminder on a noted day (mobile)', () => {
     expect(buildReminderNotifications(noted, now)[0].schedule.at.getDate()).toBe(10)
   })
 })
+
+it('explicit rest and trained-unlogged days suppress reminders without treating unknown as missed evidence',()=>{
+  for (const status of ['rest','trained-unlogged']) expect(excusedOn({dayDispositions:{'2026-10-21':{status,_ts:1}}},'2026-10-21')).toBe(true)
+  expect(excusedOn({dayDispositions:{'2026-10-21':{status:'unknown',_ts:1}}},'2026-10-21')).toBe(false)
+})

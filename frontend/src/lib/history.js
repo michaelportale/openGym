@@ -22,7 +22,7 @@ const workRowsForMode = (entry = {}, mode = 'reps') => {
 // for the hook — and it re-exports this very `t` from core, so nothing changes here except what
 // gets dragged along behind it.
 import { t } from './i18n-core.js'
-import { queueNext, pinState, queueLiveOn } from './queue.js'
+import { queueNext, pinState, queueLiveOn, adaptationCovers } from './queue.js'
 import { isPyramid, pyramidLabel, pyramidTargetAt, pyramidWeightAt, PYRAMID_MAX } from './pyramid.js'
 
 // When a workout happened, as epoch ms: its own recorded start, else noon on its calendar day.
@@ -484,7 +484,8 @@ export function effectiveRoutineIds(S, iso, today = todayISO()) {
   const q = pin === 'open' ? ov : queueNext(S, iso, today)
   // The planner's weekday pointers stay hidden on the queue's day even when it has no session for
   // it (every remaining one pinned to another day): those sessions have their days.
-  const own = q || queueLiveOn(S, iso, today) ? weekday.filter(id => !S.queue.ids.includes(id)) : weekday
+  const live = q || queueLiveOn(S, iso, today)
+  const own = weekday.filter(id => !adaptationCovers(S,id,iso) && !(live && S.queue.ids.includes(id)))
   return q ? [q, ...own] : own
 }
 export function effectiveRoutines(S, iso) {

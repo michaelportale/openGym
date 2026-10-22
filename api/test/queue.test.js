@@ -250,3 +250,18 @@ test('queue: a strict pass (the app\'s "Start new pass") ignores a same-named wo
   const after = { ...strict, workouts: [early, { ...early, start: 2000 }] };
   assert.equal(effectiveRoutineId(after, '2026-09-07'), 'r2');
 });
+
+test('adapted occurrence dates replace baseline weekday work, preserving unrelated assignments outside the window',()=>{
+  const S={routines:[{id:'p',name:'Push'},{id:'future',name:'Upper'}],workouts:[],week:{3:'p',4:'p',5:'p'},dayPlan:{'2026-10-22':'future'},queue:{ids:['future'],since:1,startsOn:'2026-10-21',adaptation:{token:'test',today:'2026-10-21',policyVersion:1,baseline:[{id:'p'}],availability:{dates:['2026-10-22','2026-10-24']}}}};
+  assert.equal(effectiveRoutineId(S,'2026-10-21'),null);
+  assert.equal(effectiveRoutineId(S,'2026-10-22'),'future');
+  S.workouts.push({id:'done',routineId:'future',d:'2026-10-22',start:2});
+  assert.equal(effectiveRoutineId(S,'2026-10-23'),null);
+  assert.equal(effectiveRoutineId(S,'2026-10-28'),'p');
+});
+
+test('explicit rest and trained-unlogged days suppress reminder and nudge delivery',async()=>{
+  const {excusedOn}=await import('../nudge.js');
+  for(const status of ['rest','trained-unlogged']) assert.equal(excusedOn({dayDispositions:{'2026-10-21':{status,_ts:1}}},'2026-10-21'),true);
+  assert.equal(excusedOn({dayDispositions:{'2026-10-21':{status:'unknown',_ts:1}}},'2026-10-21'),false);
+});
