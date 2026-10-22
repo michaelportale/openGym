@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import * as swaps from './active-exercise-swap.js'
 import { swapActiveExercise } from './active-exercise-swap.js'
+import { buildCombinedEntries } from './session-merge.js'
 
 const entry = (id, { sg, done = false, target, sets } = {}) => ({
   id,
@@ -106,7 +107,7 @@ const futurePreview = (active, routines, cfg) => {
   return swaps.previewRoutineSwap(active, routines, 0, cfg)
 }
 it('previews only the source routine and changes no plan until explicitly accepted', () => {
-  const active = { entries: [{ ...entry('bench'), rid: 'push' }] }
+  const active = { entries: [{ ...entry('bench'), rid: 'push', routineSourceId: 'bench' }] }
   const routines = [{ id: 'other', name: 'Other', ex: [{ id: 'bench', reps: 5 }] }, { id: 'push', name: 'Push', ex: [{ id: 'bench', reps: 8, sg: 'pair' }] }]
   const before = structuredClone(routines)
   const preview = futurePreview(active, routines, { id: 'incline', reps: 10 })
@@ -118,7 +119,7 @@ it('previews only the source routine and changes no plan until explicitly accept
   expect(active.entries[0].id).toBe('bench')
 })
 it('does not guess ambiguous, missing or changed future-plan slots', () => {
-  const active = { entries: [{ ...entry('bench'), rid: 'push' }] }
+  const active = { entries: [{ ...entry('bench'), rid: 'push', routineSourceId: 'bench' }] }
   const routines = [{ id: 'push', ex: [{ id: 'bench', reps: 8 }] }]
   const preview = futurePreview(active, routines, { id: 'incline', reps: 10 })
   routines[0].ex[0].reps = 12
@@ -127,4 +128,48 @@ it('does not guess ambiguous, missing or changed future-plan slots', () => {
   routines[0].ex.push({ id: 'bench' })
   expect(futurePreview(active, routines, { id: 'incline' })).toBeNull()
   expect(futurePreview({ entries: [entry('bench')] }, routines, { id: 'incline' })).toBeNull()
+})
+
+const plannedSession = () => {
+  const routines = [{ id: 'push', name: 'Push', ex: ['0047', '0289'].map(id => ({ id, sets: 1, reps: 8, weight: 20, prog: 'off' })) }]
+  const state = { routines, workouts: [], exWeights: {}, unit: 'kg' }
+  return { routines, active: { routineId: 'push', ...buildCombinedEntries(state, ['push']) } }
+}
+it('keeps a second session-only swap tied to its original routine slot', () => {
+  const { routines, active } = plannedSession()
+  swapActiveExercise(active, 0, entry('0289'))
+  const preview = swaps.previewRoutineSwap(active, routines, 0, { id: '0308', sets: 1, reps: 10 })
+  expect(preview).toMatchObject({ index: 0, before: { id: '0047' } })
+  swaps.applyRoutineSwap(routines, preview, active)
+  expect(routines[0].ex.map(cfg => cfg.id)).toEqual(['0308', '0289'])
+})
+it('does not infer a routine source for a session addition with an existing exercise id', () => {
+  const { routines, active } = plannedSession()
+  active.entries.push({ ...entry('0047'), rid: 'push' })
+  expect(swaps.previewRoutineSwap(active, routines, 2, { id: '0308' })).toBeNull()
+})
+it('retains the source slot on a replacement inserted after completed work', () => {
+  const { routines, active } = plannedSession()
+  active.entries[0].sets[0].done = true
+  const original = structuredClone(active.entries[0])
+  swapActiveExercise(active, 0, entry('0289'), { loggedConfirmed: true })
+  expect(active.entries[0]).toEqual(original)
+  expect(swaps.previewRoutineSwap(active, routines, 1, { id: '0308' }))
+    .toMatchObject({ index: 0, before: { id: '0047' } })
+})
+it('follows an accepted future-plan replacement when that original slot is swapped again', () => {
+  const { routines, active } = plannedSession()
+  const preview = swaps.previewRoutineSwap(active, routines, 0, { id: '0308', sets: 1, reps: 10 })
+  swapActiveExercise(active, 0, entry('0308'))
+  expect(swaps.applyRoutineSwap(routines, preview, active)).toBe(true)
+  const next = swaps.previewRoutineSwap(active, routines, 0, { id: '0251' })
+  expect(next).toMatchObject({ index: 0, before: { id: '0308' } })
+  expect(swaps.applyRoutineSwap(routines, next, active)).toBe(true)
+  expect(routines[0].ex.map(cfg => cfg.id)).toEqual(['0251', '0289'])
+})
+it('keeps source-slot ancestry out of completed history', async () => {
+  const { buildCompletedWorkout } = await import('./finish-workout.js')
+  const { active } = plannedSession()
+  active.entries[0].sets[0].done = true
+  expect(buildCompletedWorkout(active).entries[0]).not.toHaveProperty('routineSourceId')
 })

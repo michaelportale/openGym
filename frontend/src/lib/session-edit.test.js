@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { editCompletedSession, saveWorkoutEdit, editLeftEmpty, deleteEditedWorkout, editChangesNothing } from './session-edit.js'
 import { mergeStates } from './sync-merge.js'
-import { entryExcluded, lastEntryFor } from './history.js'
+import { entryExcluded, lastEntryFor, workoutVolumeIsPartial } from './history.js'
 
 const entry = (w, id = '0025') => ({ id, sets: [{ w, r: 5, done: true }], target: { mode: 'reps' } })
 const fixture = () => ({
@@ -12,6 +12,19 @@ const fixture = () => ({
 })
 
 describe('saved workout editing', () => {
+  it('clears the partial-volume label after missing imported reps are supplied', () => {
+    const state = fixture()
+    const workout = state.workouts[0]
+    workout.volumePartial = true
+    workout.entries[0].sets = [{ w: 20, r: null, done: true, sourceLoad: { physical: true, value: 20, unit: 'kg', basis: 'kg total' } }]
+    editCompletedSession(state, 'workout')
+    state.active.entries[0].sets[0].r = 10
+    const saved = saveWorkoutEdit(state)
+    expect(saved.vol).toBe(200)
+    expect(saved).not.toHaveProperty('volumePartial')
+    expect(workoutVolumeIsPartial(saved)).toBe(false)
+  })
+
   it('keeps history unchanged until Save, survives reload and preserves its identity, clock and templates', () => {
     const state = fixture(), history = structuredClone(state.workouts), routines = structuredClone(state.routines)
     editCompletedSession(state, 'workout')
@@ -31,11 +44,12 @@ describe('saved workout editing', () => {
     const state = fixture()
     editCompletedSession(state, 'workout')
     state.active.entries[0].sets.push({ w: 42.5, r: 4, done: true })
-    state.active.entries.push({ ...entry(25, 'added'), rid: 'routine', plan: { kind: 'up' } })
+    state.active.entries.push({ ...entry(25, 'added'), rid: 'routine', routineSourceId: 'added', plan: { kind: 'up' } })
     const saved = saveWorkoutEdit(state)
     expect(saved.entries[0].sets).toHaveLength(2)
     expect(saved.entries[1]).toMatchObject({ id: 'added', rid: 'routine' })
     expect(saved.entries[1]).not.toHaveProperty('plan')
+    expect(saved.entries[1]).not.toHaveProperty('routineSourceId')
   })
 
   it('rebuilds best weights and PR flags after lowering record work', () => {
