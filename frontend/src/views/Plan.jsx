@@ -26,7 +26,7 @@ import { deriveSessionName } from '../lib/session-merge.js'
 import { markUndone, undoMarks } from '../lib/sync-merge.js'
 import {
   scheduleModeOf, queueRecovery, rotationIds, saveRotation, startNewPass, startPass, stopPass,
-  chooseRotation, chooseFixedWeek,
+  chooseRotation, chooseFixedWeek, isExternalQueue,
 } from '../lib/rotation.js'
 
 // Plan has two views (v1.3.11): Schedule (how you train, and when) and Routines (what you
@@ -193,10 +193,8 @@ function Schedule({ S, update, nav, mode }) {
   // A loop the app makes has no name of its own: Home shows it as 'Rotation' in the language on
   // screen. Stored as text, it stayed in the language it was made in (QA 2026-10-06).
   const seqLabel = liveQ?.label || S.rotation?.label || ''
-  // Ownership, not presence: a planner's queue has no rotationId, or one that does not match the
-  // saved rotation here — that's what makes it someone else's to write, not this app's.
-  const managed = !!liveQ && !!S.rotation && liveQ.rotationId === S.rotation.id
-  const external = !!liveQ && !managed
+  // Accepted one-off adjustments are local too; only a planner's queue stays locked.
+  const external = isExternalQueue(S)
   const recovery = queueRecovery(S)
   const qv = liveQ ? queueView(S, todayISO()) : null
 

@@ -23,6 +23,7 @@
 
 import { isoOf, todayISO, uid } from './format.js'
 import { queueOf, queueView } from './queue.js'
+import { adaptationOf } from './training-adaptation.js'
 
 const routineIdsOf = w => (Array.isArray(w?.routineIds) ? w.routineIds : (w?.routineId ? [w.routineId] : []))
 const dayAfter = iso => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + 1); return isoOf(d) }
@@ -32,6 +33,12 @@ export const scheduleModeOf = S => (queueOf(S) || S?.scheduleMode === 'rotation'
 
 /** A queue payload arrived but is unusable (malformed, duplicate-only, all-deleted): Week + a fix-up in Plan. */
 export const queueRecovery = S => S?.queue != null && !queueOf(S)
+
+/** A locally accepted one-off adjustment can be stopped without adopting it as a repeating loop. */
+export const isExternalQueue = S => {
+  const q = queueOf(S)
+  return !!q && !(q.rotationId && q.rotationId === S.rotation?.id) && !(!q.rotationId && adaptationOf(S))
+}
 
 /** The saved sequence's routines that still exist, first occurrence of each — the ids a new pass gets. */
 export const rotationIds = S => {
@@ -135,14 +142,12 @@ export function chooseRotation(s, today = todayISO(), now = Date.now()) {
 }
 
 /**
- * "How you train: Fixed week". Stops this app's own pass and keeps the saved sequence for a
- * later start; the weekday plan was never touched. A planner's queue (no matching rotationId)
- * is never this app's to drop, so only the mode flag moves for it.
+ * "How you train: Fixed week". Stops this app's own pass or accepted one-off adjustment and
+ * keeps the saved sequence for a later start; the weekday plan was never touched. A planner's
+ * queue is never this app's to drop, so only the mode flag moves for it.
  */
 export function chooseFixedWeek(s, today = todayISO()) {
-  const q = queueOf(s)
-  const external = !!q && (!s.rotation || q.rotationId !== s.rotation.id)
-  if (!external) stopPass(s, today)
+  if (!isExternalQueue(s)) stopPass(s, today)
   s.scheduleMode = 'week'
 }
 
