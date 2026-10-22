@@ -58,9 +58,11 @@ export function parseFitnessNotes(files) {
         if (heading.startsWith('Planned')) {
           const [name, setup, basis, prescription, evidence] = row
           const match = prescription.match(/^(\d+)\s*[×x]\s*(\d+)(?:\s*[–-]\s*(\d+))?$/)
-          if (!match || +match[1] < 1 || +match[2] < 1 || (match[3] && +match[3] < +match[2])) { warn('Baseline proposal needs explicit sets × reps; free-text targets remain proposals only.'); continue }
+          const [sets, lower, upper] = match ? [Number(match[1]), Number(match[2]), Number(match[3] || match[2])] : []
+          // Import support follows the 10-set pyramid/triple caps and CSV's 1000-rep ceiling.
+          if (!match || ![sets, lower, upper].every(Number.isSafeInteger) || sets < 1 || sets > 10 || lower < 1 || upper < lower || upper > 1000) { warn('Baseline prescription needs 1–10 sets × 1–1000 reps, with an ordered rep range.'); continue }
           const id = identity(name, setup, basis.replace(/^\d+(?:\.\d+)?\s*/, ''))
-          plan.push({ id, sets: +match[1], reps: +(match[3] || match[2]), ...(match[3] ? { repsMin: +match[2] } : {}), note: [basis, evidence].filter(Boolean).join(' · '), trainingSnapshot: unknownTraining() })
+          plan.push({ id, sets, reps: upper, ...(match[3] ? { repsMin: lower } : {}), note: [basis, evidence].filter(Boolean).join(' · '), trainingSnapshot: unknownTraining() })
           continue
         }
         if (meta.status !== 'complete') continue

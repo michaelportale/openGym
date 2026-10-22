@@ -730,6 +730,11 @@ function shapeRows(sets, cfg, grid) {
   }
   return [warmup, work]
 }
+// Only imported uncertainty qualifies a subtotal; legacy rows retain their existing meaning.
+export const entryVolumeIsPartial = entry => (entry?.sets || []).some(s => s.sourceLoad && hasCompletedWork(s) && !isWarmupRow(s)
+  && (s.sourceLoad.physical === false || s.w == null || s.r == null))
+export const workoutVolumeIsPartial = w => w?.volumePartial === true || (w?.entries || []).some(entryVolumeIsPartial)
+
 export function workoutVolume(w) {
   let v = 0
   // Count each completed limb at its own load, including drops. A rest-pause side's r already

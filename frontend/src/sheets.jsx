@@ -1121,7 +1121,7 @@ function ExerciseHistory({ exId }) {
     <div className="empty"><div className="ico"><Icon name="history" /></div>{t('No sessions logged yet')}</div>
   </>
   const tail = s => [
-    s.volume > 0 && t('Volume') + ' ' + fmtVol(s.volume, st.unit),
+    (s.volume > 0 || s.volumePartial) && t('Volume') + ' ' + fmtVol(s.volume, st.unit, s.volumePartial),
     s.e1rm != null && t('Est. 1RM') + ' ' + fmtNum(s.e1rm) + ' ' + st.unit,
   ].filter(Boolean).join(' · ')
   return <>
