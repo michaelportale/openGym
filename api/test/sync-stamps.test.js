@@ -444,3 +444,12 @@ test('PUT and GET /api/data preserve exact station inventory and immutable entry
   assert.deepEqual(read.state.equipProfiles[0].stations, state.equipProfiles[0].stations);
   assert.equal(read.state.routines[0].ex[0].stationId, 'station1');
 });
+
+test('coverage targets retain per-muscle stamps for older unstamped writers', () => {
+  const cur = { _ts: 1, workouts: [], routines: [], coverageTargets: { chest: { directDays: 2, sets: null, _ts: 900 } } };
+  const next = clone(cur);
+  next.coverageTargets.triceps = { directDays: 3, sets: 8, _ts: 901 };
+  stampPut(cur, next, { overRead: true, stamped: false, now: 1000 });
+  assert.equal(next.edited?.coverageTargets, undefined);
+  assert.equal(next.coverageTargets.chest._ts, 900);
+});
