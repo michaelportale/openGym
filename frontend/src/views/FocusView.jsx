@@ -19,10 +19,9 @@ import { speedUnitOf, toSpeed, fromSpeed } from '../lib/speed.js'
 import { effortPickerSheet, exerciseDetailSheet, exerciseHistorySheet, exerciseNoteSheet, menuSheet, barWeightSheet } from '../sheets.jsx'
 import { baseWeightFor, inventoryFor, loadKindFor, rowLoad } from '../lib/plates.js'
 import { ownedWeightsFor, stepOwned } from '../lib/dumbbells.js'
-import StrengthFeedback from '../components/StrengthFeedback.jsx'
+import StrengthFeedback, { EquipmentIdentity } from '../components/StrengthFeedback.jsx'
 import Icon from '../components/Icon.jsx'
 import { Button, Stepper } from '../components/ui.jsx'
-import './FocusView.css'
 
 const firstIncomplete = entry => {
   const index = entry.sets.findIndex(set => !set.done)
@@ -66,7 +65,7 @@ const addBurstTo = (row, restSec) => {
   return { ...addCluster(row, { r: reps, restSec }), r: (row.r || 0) + reps }
 }
 
-function Prescription({ entry, setIdx, unit, fallbackRest, children }) {
+function Prescription({ entry, unit, fallbackRest, children }) {
   const target = entry.target || {}
   const reps = target.repsMin > 0 ? `${target.repsMin}–${target.reps}` : target.reps > 0 ? String(target.reps) : ''
   const load = target.weight > 0
@@ -75,11 +74,10 @@ function Prescription({ entry, setIdx, unit, fallbackRest, children }) {
   const rpe = target.rpeMin > 0
     ? `RPE ${fmtNum(target.rpeMin)}${target.rpeMax > target.rpeMin ? `–${fmtNum(target.rpeMax)}` : ''}`
     : ''
-  const rest = target.restSec > 0 ? `Rest ${target.restSec}s` : fallbackRest > 0 ? `Rest ${fallbackRest}s` : ''
-  const badges = [reps && `${reps} Reps`, load, rpe, rest, target.tempo].filter(Boolean)
+  const rest = target.restSec > 0 ? `${t('Rest')} ${target.restSec}s` : fallbackRest > 0 ? `${t('Rest')} ${fallbackRest}s` : ''
+  const badges = [reps && `${reps} ${t('Reps')}`, load, rpe, rest, target.tempo].filter(Boolean)
 
   return <div className="focus-prescription">
-    <span className="focus-badge focus-progress">{setIdx + 1}/{entry.sets.length}</span>
     {badges.map(label => <span className="focus-badge" key={label}>{label}</span>)}
     {children}
   </div>
@@ -263,33 +261,44 @@ export default function FocusView({
       <header className="focus-card-header">
         <h2>{exerciseNameFor(ex)}</h2>
         <button className="iconbtn" aria-label={t('Details')} onClick={() => exerciseDetailSheet(ex)}><Icon name="info" /></button>
-        {isWarmupRow(set) && <span className="focus-warmup" aria-label={t('Warm-up')}>🔥</span>}
+        {isWarmupRow(set) && <span className="focus-warmup" aria-label={t('Warm-up')}><Icon name="flame" /></span>}
         {isFailureSet(set) && <span className="focus-failure" role="img" aria-label={t('Taken to failure')}>{t('F')}</span>}
         <button className="iconbtn" aria-label={t('More')} onClick={openExerciseMenu}><Icon name="more" /></button>
       </header>
 
       <div className="focus-context">
-        <div className="focus-tags">
+        <EquipmentIdentity entry={entry} />
+        {(mode === 'cardio' || isSideSet(set)) && <div className="focus-tags">
           {mode === 'cardio' && <span className="tag acc">{t('Cardio')}</span>}
           {isSideSet(set) && <span className="tag acc">{t('Per side')}</span>}
-          {(ex.tg || ex.bp) && <span className="tag">{t(ex.tg || ex.bp)}</span>}
-          {ex.eq && <span className="tag">{t(ex.eq)}</span>}
-        </div>
+        </div>}
         {entry.target?.note && <div className="focus-note">{entry.target.note}</div>}
         {pinnedNote && <div className="focus-note pinned"><Icon name="flag" />{t('From {0}:', fmtDate(pinnedNote.d, true))} {pinnedNote.note}</div>}
         {entry.note && <div className="focus-note">{entry.note}</div>}
         {last && (mode !== 'reps' || !entry.equipmentSnapshot) && <div className="focus-last">{t('Last time')} · {fmtDate(last.d)}</div>}
-        {guidance && <button className="focus-guidance" onClick={onProgressionSettings}><Icon name="lightbulb" />{t(guidance.policyLabel)}</button>}
       </div>
-      <Prescription entry={entry} setIdx={setIdx} unit={isSettingLoad(entry) ? '' : S.unit} fallbackRest={S.restSec}>
+      <Prescription entry={entry} unit={isSettingLoad(entry) ? '' : S.unit} fallbackRest={S.restSec}>
         <PlanBadge entry={entry} mode={mode} />
         <PlateBadge S={S} entry={entry} set={set} />
         {entry.noProg === true && <span className="focus-badge warning"><Icon name="pause" />{t('Not counted for progression')}{onNoProg && <button type="button" className="focus-badge-action" onClick={() => onNoProg(false)}>{t('Undo')}</button>}</span>}
       </Prescription>
-      <StrengthFeedback entryIdx={entryIdx} onProgressionSettings={onProgressionSettings} />
+      <StrengthFeedback entryIdx={entryIdx} onProgressionSettings={onProgressionSettings} section="context" />
+      <div className="focus-set-navigation">
+        <span className="focus-progress">{t('Set {0}', `${setIdx + 1}/${entry.sets.length}`)}</span>
+        <nav className="focus-pager" aria-label={t('Sets')}>
+          <button aria-label={t('Previous set')} disabled={setIdx === 0} onClick={() => selectSet(setIdx - 1)}><Icon name="chevronLeft" /></button>
+          <div className="focus-dots">
+            {entry.sets.map((row, index) => <button key={index} aria-label={t('Set {0}', index + 1)}
+              aria-current={index === setIdx ? 'step' : undefined}
+              className={(index === setIdx ? 'active ' : '') + (row.done ? 'done' : '')}
+              onClick={() => selectSet(index)}><span>{index + 1}</span>{row.done && <Icon name="check" />}</button>)}
+          </div>
+          <button aria-label={t('Next set')} disabled={setIdx === entry.sets.length - 1} onClick={() => selectSet(setIdx + 1)}><Icon name="chevronRight" /></button>
+        </nav>
+      </div>
       {locked && <p className="focus-lock-note" role="status">{t('Complete set {0} to edit this one.', firstOpenSet + 1)}</p>}
 
-      <div data-testid="focus-set" className={(set.done ? 'complete ' : '') + (locked ? 'locked' : '')}>
+      <div data-testid="focus-set" className={'focus-set ' + (set.done ? 'complete ' : '') + (locked ? 'locked' : '')}>
         {isSideSet(set) ? <div className="focus-sides">{sideFields('L')}{sideFields('R')}</div> : <>
           {mode === 'cardio' ? <>
             <Stepper label={t('Duration (min)')} ariaLabel="duration" value={set.min || 0} step={1} decimal={false} disabled={readOnly}
@@ -333,23 +342,18 @@ export default function FocusView({
           style={effortTint ? { color: effortTint, borderColor: effortTint, background: `color-mix(in srgb, ${effortTint} 20%, var(--surface-2))` } : undefined}
           aria-label={t(EFFORT[effort].hd)} disabled={readOnly} onClick={openEffort}>{effortValue == null ? t(EFFORT[effort].hd) : fmtNum(effortValue)}</button>}
       </div>
-      <Button variant="primary" icon="check" aria-label={t('Complete set')} onClick={complete}>{set.done ? t('Completed') : t('Complete')}</Button>
+      <Button variant="primary" className="focus-complete" icon="check" aria-label={t('Complete set')} onClick={complete}>{set.done ? t('Completed') : t('Complete')}</Button>
       <div className="focus-secondary">
         <button className="focus-skip" aria-label={t('Skip set')} disabled={setIdx >= entry.sets.length - 1} onClick={() => selectSet(setIdx + 1)}>
           <Icon name="play" />{t('Skip')}
         </button>
         <button className="iconbtn" aria-label={t('Set menu')} onClick={openSetMenu}><Icon name="more" /></button>
       </div>
-    </div>
-
-    <footer className="focus-pager">
-      <button aria-label={t('Previous set')} disabled={setIdx === 0} onClick={() => selectSet(setIdx - 1)}><Icon name="chevronLeft" /></button>
-      <div className="focus-dots">
-        {entry.sets.map((row, index) => <button key={index} aria-label={t('Set {0}', index + 1)}
-          className={(index === setIdx ? 'active ' : '') + (row.done ? 'done' : '')}
-          onClick={() => selectSet(index)} />)}
+      <StrengthFeedback entryIdx={entryIdx} section="effort" />
+      <div className="focus-exercise-actions">
+        {guidance && <button className="focus-guidance" onClick={onProgressionSettings}><Icon name="lightbulb" />{t(guidance.policyLabel)}</button>}
+        <Button variant="ghost" icon="shuffle" aria-label={t('Swap exercise')} disabled={busy} onClick={onSwap}>{t('Swap exercise')}</Button>
       </div>
-      <button aria-label={t('Next set')} disabled={setIdx === entry.sets.length - 1} onClick={() => selectSet(setIdx + 1)}><Icon name="chevronRight" /></button>
-    </footer>
+    </div>
   </div>
 }

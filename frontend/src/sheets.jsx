@@ -30,6 +30,7 @@ import { glyphOf, GLYPH_GROUPS, DEFAULT_GLYPH } from './lib/glyphs.js'
 import BodyMap from './components/BodyMap.jsx'
 import MuscleExplorer from './components/MuscleExplorer.jsx'
 import ExerciseViewToggle from './components/ExerciseViewToggle.jsx'
+import WorkoutReplacementSheet, { ReplacementLoadReview, replacementNeedsLoadReview } from './components/WorkoutReplacementSheet.jsx'
 import { rankReplacements, swapMuscleOf } from './lib/similar-exercises.js'
 import { exerciseMuscleSnapshot, loadOfWorkouts, MUSCLES, MUSCLE_NAME, muscleWeightsOf, normalizeMuscleGroups, hasExplicitMuscleMetadata, inMuscleOrder } from './lib/muscles.js'
 import { parseImport, mergeImport, matchExercise, priorCustom } from './lib/import-csv.js'
@@ -131,13 +132,14 @@ export function askAddDeviceData(extras) {
 // A title is shown as written: most are sentences ("Convert to lb?", "Set 2"), which a default
 // title-casing turned into "Convert To Lb?". An exercise name passes exerciseNameClass as
 // titleClass, which title-cases the lower-case packs and leaves a cased one alone.
-function MenuSheet({ title, titleClass = '', subtitle, items, sections, close }) {
+function MenuSheet({ title, titleClass = '', subtitle, items, sections, close, className, summary }) {
   const groups = (sections || [{ items }])
     .map(g => ({ title: g.title, items: (g.items || []).filter(Boolean) }))
     .filter(g => g.items.length)
-  return <>
+  return <div className={className}>
     {title && <h3 className={titleClass || undefined} style={{ marginBottom: subtitle ? 2 : 10 }}>{title}</h3>}
     {subtitle && <div className="muted small" style={{ marginBottom: 10 }}>{subtitle}</div>}
+    {summary}
     {groups.map((g, gi) => <div key={gi} className={'menu-group' + (sections ? ' grouped' : '')}>
       {g.title && <div className="menu-sec">{g.title}</div>}
       <div className="list menu-list">
@@ -152,7 +154,7 @@ function MenuSheet({ title, titleClass = '', subtitle, items, sections, close })
         </div>)}
       </div>
     </div>)}
-  </>
+  </div>
 }
 export function menuSheet(opts) {
   ui().openSheet(close => <MenuSheet {...opts} close={close} />)
@@ -1512,18 +1514,22 @@ export function swapActiveWorkoutExercise(index) {
   const active = S().active
   if (!active?.entries?.[index]) return
 
-  // The "+" on a picker row commits with the default config, exactly as it does in the add
-  // flows; tapping the row still opens the config sheet first.
-  // Worded for the session, not the routine: a swap changes today's workout only.
-  const picker = exercisePicker((ex, quick) => quick ? swapTo(ex, defaultConfig(ex.id)) : exConfigSheet(ex, null, cfg => swapTo(ex, cfg), null, null, null, null, t('Use in this workout')), { title: t('Swap exercise'), like: { ...exOr(active.entries[index].id), ...(active.entries[index].trainingSnapshot ? { trainingSnapshot: active.entries[index].trainingSnapshot } : {}) } })
-  function swapTo(ex, cfg) {
+  let applied = false
+  const sourceFingerprint = JSON.stringify(active.entries[index])
+  const stillCurrent = () => S().active?.id === active.id && JSON.stringify(S().active.entries[index]) === sourceFingerprint
+  const configure = (ex, initial, explicitSettings = false) => exConfigSheet(ex, null, cfg => swapTo(ex, cfg, explicitSettings), null, null, initial, null, t('Use in this workout'))
+  const picker = ui().openSheet(() => <WorkoutReplacementSheet
+    title={t('Swap exercise')} entry={active.entries[index]} loadLabels={LOAD_CONVENTIONS}
+    like={{ ...exOr(active.entries[index].id), ...(active.entries[index].trainingSnapshot ? { trainingSnapshot: active.entries[index].trainingSnapshot } : {}) }}
+    onPick={(ex, quick, initial) => quick ? swapTo(ex, initial || defaultConfig(ex.id)) : configure(ex, initial)} />)
+  function swapTo(ex, cfg, explicitSettings = false) {
     // The picker is a chooser here, not a stack you keep adding from: one swap, then back to
     // the workout. (The add flow deliberately leaves it open.)
     picker.close()
     const full = { ...cfg, id: ex.id }
     const st = S()
     const current = st.active?.entries?.[index]
-    if (!current) return
+    if (!current || !stillCurrent()) { toast(t('Workout changed. Reopen the replacement sheet.')); return }
     // A swap is an in-place substitution — routine identity is unchanged, so the replacement
     // keeps the slot's own `rid` and reads its prescription from that routine (not a
     // session-wide one). A slot with no `rid` is freestyle.
@@ -1536,9 +1542,23 @@ export function swapActiveWorkoutExercise(index) {
     const past = sessionHistory(st)
     // A freestyle swap logs dumbbell weights the way the exercise means them now, and starts
     // from last time read in that meaning (lib/dumbbells.js), as a planned one does.
-    const built = freestyle
+    let built = freestyle
       ? { ...trainingSnapshotFor(st, full), target: withMeaning(st, cfg, ex.id), plan: null, sets: applyIntensifierPlan(buildSets(historyAs(past, ex.id, dbLoadFor(st, full)), full, { step: (modeOf(full) === 'reps' && ownedWeightsFor(st, full)) || step, preferLast: true }), full, dropGrid(st, full)) }
       : buildPlannedEntry(past, full, slotRoutine, { noProg: builtOutOfProgression(current, slotRoutine) })
+    if (explicitSettings) {
+      // The first review may seed from history. Once the person edits those starting sets,
+      // history/progression must not overwrite them again (including an explicitly entered 0).
+      // This read-only view lets the canonical builder retain warm-ups, per-side rows, back-off
+      // and intensifier rules without inventing another construction path or changing history.
+      const policy = built.plan?.policy
+      built = buildPlannedEntry({ ...past, workouts: [], exWeights: {} }, full, slotRoutine, { noProg: true })
+      if (freestyle) { built.plan = null; delete built.planned }
+      else if (policy !== 'off') built.plan = {
+        policy, kind: 'hold', weight: built.target.weight,
+        ...(modeOf(full) === 'time' ? { sec: built.target.sec } : { reps: built.target.reps }),
+        why: ['Targets stay where you set them.'],
+      }
+    }
     const replacement = {
       id: ex.id,
       ...built,
@@ -1551,46 +1571,60 @@ export function swapActiveWorkoutExercise(index) {
       ...(current.noProg === true ? { noProg: true } : {}),
     }
 
-    const preview = previewRoutineSwap(st.active, st.routines, index, withMeaning(st, full))
-    const apply = options => {
-      // A timed callback closes over entry/set indexes. Invalidate it, and the current rest,
-      // before the selected occurrence can be replaced or a new entry shifts those indexes.
-      ui().stopWork()
-      ui().stopRest()
-      update(state => { swapActiveExercise(state.active, index, replacement, options) }, true)
-      if (preview) ui().openSheet(close => <>
-        <h3>{t('Used in this workout')}</h3>
-        <p className="muted small">{t('Your future plan is unchanged.')}</p>
-        <Button variant="primary" onClick={() => { close(); previewFutureSwap(preview) }}>{t('Update future plan…')}</Button>
-        <Button variant="ghost" onClick={close}>{t('Keep this workout only')}</Button>
-      </>)
-    }
-    const logged = (current.sets || []).some(hasCompletedWork)
-    if (!logged) { apply(); return }
+    // Review the builder's actual rows, not cfg.weight: comparable history/progression can
+    // legitimately seed another value. An explicit edit uses the same builder with that seed off.
+    if (replacementNeedsLoadReview(current, replacement)) {
+      ui().openSheet(close => <ReplacementLoadReview current={current} replacement={replacement}
+        exercise={ex} loadLabels={LOAD_CONVENTIONS}
+        onConfirm={() => { close(); proceed() }}
+        onEdit={() => { close(); configure(ex, cfg, true) }} />)
+    } else proceed()
+    function proceed() {
+      if (!stillCurrent()) { toast(t('Workout changed. Reopen the replacement sheet.')); return }
+      const preview = previewRoutineSwap(st.active, st.routines, index, withMeaning(st, full))
+      const apply = options => {
+        if (applied) return
+        if (!stillCurrent()) { toast(t('Workout changed. Reopen the replacement sheet.')); return }
+        applied = true
+        // A timed callback closes over entry/set indexes. Invalidate it, and the current rest,
+        // before the selected occurrence can be replaced or a new entry shifts those indexes.
+        ui().stopWork()
+        ui().stopRest()
+        update(state => { swapActiveExercise(state.active, index, replacement, options) }, true)
+        if (preview) ui().openSheet(close => <div className="workout-replacements replacement-review">
+          <h3>{t('Used in this workout')}</h3>
+          <p className="replacement-intro">{t('Your future plan is unchanged.')}</p>
+          <Button className="replacement-primary" onClick={close}>{t('Keep this workout only')}</Button>
+          <Button variant="ghost" onClick={() => { close(); previewFutureSwap(preview) }}>{t('Update future plan…')}</Button>
+        </div>)
+      }
+      const logged = (current.sets || []).some(hasCompletedWork)
+      if (!logged) { apply(); return }
 
-    if (current.sg) {
-      ui().openSheet(close => <>
-        <h3>{t('Swap exercise?')}</h3>
-        <div className="muted small" style={{ marginBottom: 12 }}>
-          {t('Logged sets stay with the original exercise. Choose where the replacement belongs.')}
-        </div>
-        <Button variant="primary" onClick={() => { close(); apply({ loggedConfirmed: true, groupDisposition: 'keep' }) }}>
-          {t('Keep replacement in this group')}
-        </Button>
-        <div style={{ height: 8 }} />
-        <Button variant="ghost" onClick={() => { close(); apply({ loggedConfirmed: true, groupDisposition: 'detach' }) }}>
-          {t('Insert after this group')}
-        </Button>
-      </>)
-      return
-    }
+      if (current.sg) {
+        ui().openSheet(close => <>
+          <h3>{t('Swap exercise?')}</h3>
+          <div className="muted small" style={{ marginBottom: 12 }}>
+            {t('Logged sets stay with the original exercise. Choose where the replacement belongs.')}
+          </div>
+          <Button variant="primary" onClick={() => { close(); apply({ loggedConfirmed: true, groupDisposition: 'keep' }) }}>
+            {t('Keep replacement in this group')}
+          </Button>
+          <div style={{ height: 8 }} />
+          <Button variant="ghost" onClick={() => { close(); apply({ loggedConfirmed: true, groupDisposition: 'detach' }) }}>
+            {t('Insert after this group')}
+          </Button>
+        </>)
+        return
+      }
 
-    confirmSheet({
-      title: t('Swap exercise?'),
-      message: t('Logged sets stay with the original exercise. The replacement will be inserted afterward.'),
-      confirmText: t('Continue'),
-      onConfirm: () => apply({ loggedConfirmed: true })
-    })
+      confirmSheet({
+        title: t('Swap exercise?'),
+        message: t('Logged sets stay with the original exercise. The replacement will be inserted afterward.'),
+        confirmText: t('Continue'),
+        onConfirm: () => apply({ loggedConfirmed: true })
+      })
+    }
   }
 }
 
@@ -3339,7 +3373,7 @@ export const supersetSheet = (meta, onSave) => ui().openSheet(close => <Superset
 
 // Shown when the last exercise's last set is checked — finish, or keep going.
 function WorkoutComplete({ close }) {
-  return <div style={{ textAlign: 'center', padding: '8px 0' }}>
+  return <div className="workout-finish-summary" style={{ textAlign: 'center', padding: '8px 0' }}>
     <div style={{ fontSize: 44, display: 'flex', justifyContent: 'center', color: 'var(--acc)' }}><Icon name="checkCircle" /></div>
     <h3 style={{ margin: '8px 0' }}>{t("That's the whole workout!")}</h3>
     <div className="muted small" style={{ marginBottom: 16 }}>{t('All exercises done. Nice work! Finish up, or add another one if you’ve got more in you.')}</div>
@@ -3471,8 +3505,8 @@ function CardioDone({ st, w }) {
 
 function FinishSummary({ w, prs, e1prs = [], close }) {
   const st = useStore(s => s.S)
-  return <div style={{ textAlign: 'center', padding: '8px 0' }}>
-    <div style={{ fontSize: 44, display: 'flex', justifyContent: 'center', color: 'var(--acc)' }}><Icon name="trophy" /></div>
+  return <div className="workout-finish-summary" style={{ textAlign: 'center', padding: '8px 0' }}>
+    <div className="finish-check"><Icon name="check" /></div>
     <h3 style={{ margin: '8px 0' }}>{t('Workout complete!')}</h3>
     <div className="tiles" style={{ textAlign: 'start' }}>
       <div className="tile"><div className="l">{t('Duration')}</div><div className="v" style={{ fontSize: '1.1rem' }}>{fmtDur(w.end - w.start)}</div></div>
@@ -3516,6 +3550,8 @@ export function finishWorkoutSheet({ onDiscard } = {}) {
   const done = setsDoneActive(A)
   const total = setUnitsTotal(A.entries)
   menuSheet({
+    className: 'workout-finish-review',
+    summary: <div className="finish-ledger"><span>{A.name}</span><strong>{t('{0} sets', done + '/' + total)}</strong></div>,
     title: !done ? t('Nothing logged yet') : done < total ? t('Finish early?') : t('Finish workout?'),
     subtitle: !done ? t('You haven’t checked off any sets. Finish the workout anyway?')
       : done < total ? tn('{0} set still unchecked. Finish the workout now?', '{0} sets still unchecked. Finish the workout now?', total - done) : null,

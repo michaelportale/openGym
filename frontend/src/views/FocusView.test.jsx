@@ -184,3 +184,34 @@ it('labels native setting controls and prescription without profile mass units',
   expect(container.textContent).not.toContain('Load (kg)')
   expect(container.querySelector('.focus-prescription').textContent).not.toContain('kg')
 })
+
+describe('Focus equipment identity', () => {
+  it('shows the saved station and load basis even when the current profile differs', () => {
+    mount({
+      id: SQUAT,
+      target: { sets: 2, reps: 8, weight: 60, loadConvention: 'machine-total' },
+      equipmentSnapshot: { stationId: 'rack-a', label: 'Rack A · safety pins', loadConvention: 'barbell-total', unit: 'lb', status: 'exact' },
+      sets: [{ w: 60, r: 8, done: true }, { w: 60, r: 8, done: false }],
+    }, { equipProfiles: [{ id: 'gym', stations: [{ id: 'rack-a', label: 'Renamed station', loadConvention: 'machine-setting' }] }] })
+    const identity = container.querySelector('.equipment-identity')
+    expect(identity.textContent).toContain('Rack A · safety pins')
+    expect(identity.textContent).toContain('Barbell total')
+    expect(identity.textContent).not.toContain('Renamed station')
+    expect(identity.textContent).not.toContain('Machine total')
+    expect(container.querySelector('.focus-dots [aria-current="step"]').textContent).toBe('2')
+  })
+
+  it('keeps unknown load meaning explicit without turning it into a mass convention', () => {
+    mount({
+      id: SQUAT,
+      target: { sets: 1, reps: 8, weight: 60, loadConvention: 'barbell-total' },
+      equipmentSnapshot: { stationId: null, loadConvention: null, unit: 'lb', status: 'unknown' },
+      sets: [{ w: 60, r: 8, done: false }],
+    })
+    const identity = container.querySelector('.equipment-identity')
+    expect([...identity.querySelectorAll('dd')].map(node => node.textContent)).toEqual(['Unknown', 'Unknown'])
+    expect(container.querySelector('.strength-feedback-context').textContent).toContain('No comparable history')
+    expect(container.querySelector('.strength-feedback-context [aria-label="Final working set RIR"]')).toBeNull()
+    expect(container.querySelector('.strength-feedback-effort [aria-label="Final working set RIR"]')).toBeTruthy()
+  })
+})

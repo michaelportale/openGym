@@ -1,62 +1,91 @@
-.focus-view{display:grid;gap:12px}
-.focus-superset-inline{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:12px;padding-bottom:12px;border-bottom:var(--hair) solid var(--sep);color:var(--acc);font-size:13px}
-.focus-superset-inline strong{font-weight:600}
+/* The set ledger stays in the app's existing theme; only the current set uses the account accent. */
+.focus-view{display:grid;gap:12px;min-width:0}
+.focus-card{container-type:inline-size;min-width:0;padding:16px;border-radius:12px;background:var(--surface)}
+.focus-card-header{display:flex;align-items:flex-start;gap:4px}
+.focus-card-header h2{flex:1;min-width:0;padding-block:8px;font-size:1.5rem;font-weight:600;line-height:1.2;letter-spacing:-.02em;text-transform:capitalize;overflow-wrap:anywhere;text-wrap:balance}
+.focus-card-header .iconbtn{flex:none;min-width:44px;min-height:44px}
+.focus-warmup{display:flex;align-items:center;min-height:44px;color:var(--label-2)}
+.focus-failure{display:inline-flex;align-items:center;justify-content:center;min-width:24px;min-height:44px;color:var(--purple);font-size:.875rem;font-weight:600}
+.focus-context{display:grid;gap:8px;margin-top:8px}
+.focus-tags{display:flex;flex-wrap:wrap;gap:8px}
+.focus-note,.focus-last,.focus-guidance{font-size:.875rem;line-height:1.4;color:var(--label-2)}
+.focus-note{overflow-wrap:anywhere}
+.focus-note.pinned{display:flex;gap:8px;align-items:flex-start;color:var(--label)}
+.focus-note .icn{flex:none;margin-top:2px}
+.focus-guidance{display:flex;align-items:center;gap:8px;min-height:44px;text-align:start;font-weight:500}
+.focus-guidance .icn{font-size:1rem;flex:none}
+.focus-prescription{display:flex;align-items:center;gap:4px 12px;flex-wrap:wrap;margin:12px 0 8px}
+.focus-badge{display:inline-flex;align-items:center;gap:4px;max-width:100%;min-height:24px;color:var(--label-2);font-size:.875rem;line-height:1.4;font-variant-numeric:tabular-nums;white-space:normal}
+.focus-badge .icn{font-size:1rem;flex:none}
+.focus-badge.plan{color:var(--label)}
+.focus-badge.warning,.focus-badge .short{color:var(--orange)}
+.focus-badge-action{min-height:44px;min-width:44px;color:inherit;font-size:.875rem;text-decoration:underline;text-underline-offset:3px}
+.focus-set-navigation{display:grid;gap:4px;padding-top:12px;margin-top:12px;border-top:var(--hair) solid var(--sep)}
+.focus-progress{color:var(--label);font-size:.875rem;font-weight:500;font-variant-numeric:tabular-nums}
+.focus-pager{display:grid;grid-template-columns:44px minmax(0,1fr) 44px;align-items:center;gap:4px}
+.focus-pager>button{display:grid;place-items:center;width:44px;height:44px;border-radius:8px;color:var(--label-2)}
+.focus-pager>button:disabled{opacity:.4}
+.focus-dots{display:flex;align-items:center;gap:4px;min-width:0;overflow-x:auto;scrollbar-width:thin}
+.focus-dots button{display:flex;align-items:center;justify-content:center;gap:3px;flex:1 0 44px;min-width:44px;min-height:44px;border-radius:8px;color:var(--label-2);font-size:.875rem;font-variant-numeric:tabular-nums}
+.focus-dots button.active{background:var(--surface-2);box-shadow:inset 0 -2px var(--acc);color:var(--label);font-weight:600}
+.focus-dots button.done{color:var(--label)}
+.focus-dots button .icn{font-size:.75rem}
+.focus-set{display:grid;gap:12px;padding-top:12px}
+.focus-set>.stp-w,.focus-side>.stp-w{margin:0}
+.focus-set .stp-l{text-align:start;color:var(--label-2);font-size:.875rem;line-height:1.4}
+.focus-set .stp{border-radius:8px;background:var(--bg)}
+.focus-set .stp button{width:48px;min-width:48px;height:56px;align-self:stretch}
+.focus-set .stp .num{height:auto;min-height:3.5rem;font-size:2.25rem;font-weight:500;line-height:1.2;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.focus-set .stp .num:focus-visible{outline-offset:-3px}
+.focus-set.complete .stp .num:disabled,.focus-set.locked .stp .num:disabled{color:var(--label-2)!important;-webkit-text-fill-color:var(--label-2)!important;opacity:1}
+.focus-set.complete .stp button:disabled,.focus-set.locked .stp button:disabled{opacity:.4}
+.focus-lock-note{margin:8px 0 0;color:var(--label-2);font-size:.875rem;line-height:1.4}
+.focus-effort{width:100%;min-height:48px;margin:0;font-size:1rem}
+.focus-card>.btn.primary.focus-complete{margin-top:16px;min-height:56px;border-radius:8px;background:var(--label);color:var(--bg);font-size:1rem;font-weight:600;transition:opacity 120ms var(--ease)}
+.focus-complete:active{opacity:.85}
+.focus-secondary{display:grid;grid-template-columns:minmax(0,1fr) 44px;gap:8px;margin-top:8px}
+.focus-secondary>.iconbtn{width:44px;min-height:44px;border-radius:8px;color:var(--label-2)}
+.focus-skip{display:flex;align-items:center;justify-content:center;gap:8px;min-height:44px;border-radius:8px;color:var(--label-2);font-size:.875rem}
+.focus-exercise-actions{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0 12px;padding-top:8px;border-top:var(--hair) solid var(--sep)}
+.focus-exercise-actions>.btn{width:auto;min-height:44px;padding-inline:0;font-size:.875rem;color:var(--label)}
+.focus-sides{display:grid;gap:16px;min-width:0}
+.focus-side{display:grid;gap:12px;min-width:0}
+.focus-side+.focus-side{padding-top:12px;border-top:var(--hair) solid var(--sep)}
+.focus-side-header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.focus-side-header>strong{font-size:1rem;font-weight:500}
+.focus-side-check{display:grid;place-items:center;min-width:48px;min-height:48px;border:1px solid var(--sep);border-radius:8px;color:var(--label-2)}
+.focus-side-check.done{background:var(--label);color:var(--bg)}
+.focus-timed{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding-block:8px}
+.focus-timed strong{font-size:1.5rem;font-weight:500;font-variant-numeric:tabular-nums}
+.focus-timed .btn{width:auto;min-width:120px;min-height:48px}
+.focus-extras:empty{display:none}
+.focus-extras{display:grid;gap:12px;min-width:0}
+.focus-extra{display:grid;gap:8px;min-width:0;padding-block:12px;border-top:var(--hair) solid var(--sep)}
+.focus-extra>span:first-child{color:var(--label-2);font-size:.875rem}
+.focus-extra .stp .num{font-size:1.75rem}
+.focus-superset-inline{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;padding-bottom:12px;border-bottom:var(--hair) solid var(--sep);color:var(--label);font-size:.875rem;line-height:1.4}
+.focus-superset-inline strong{font-weight:500}
 .focus-superset-inline span{color:var(--label-2)}
-.focus-superset-inline .icn{font-size:14px}
-.focus-superset-inline .btn{min-height:32px;padding-inline:8px;color:var(--acc)}
-.focus-superset-nav{display:flex;margin-left:auto}
+.focus-superset-inline .icn{font-size:1rem}
+.focus-superset-inline .btn{min-height:44px;padding-inline:8px;color:var(--label)}
+.focus-superset-nav{display:flex;margin-inline-start:auto}
 .focus-superset-nav button{display:grid;place-items:center;width:44px;height:44px;color:var(--label-2)}
-.focus-superset-nav button:disabled{opacity:.3}
-.focus-card{padding:16px;border-radius:var(--r-lg);background:var(--surface);box-shadow:inset 0 0 0 1.5px var(--acc-line)}
-.focus-card-header{display:flex;align-items:center;gap:6px;padding-bottom:12px;border-bottom:var(--hair) solid var(--sep)}
-.focus-card-header h2{flex:1;font-size:20px;line-height:1.2;text-transform:capitalize}
-.focus-warmup{font-size:16px}
-/* The set on screen is taken to failure: the same purple "F" the set rows wear. */
-.focus-failure{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 4px;border-radius:10px;background:var(--purple);color:#fff;font-size:12px;font-weight:700}
-.focus-context{display:grid;gap:5px;margin-top:10px}
-.focus-tags{display:flex;flex-wrap:wrap;gap:5px}
-.focus-note,.focus-last,.focus-guidance{color:var(--label-2);font-size:12px;line-height:1.35}
-.focus-note{padding-left:8px;border-left:var(--hair) solid var(--sep)}
-.focus-note.pinned{color:var(--yellow);display:flex;gap:5px;align-items:flex-start}
-.focus-note .icn{margin-top:1px;flex:none}
-.focus-guidance{display:flex;align-items:center;gap:5px;width:max-content;text-align:left;color:var(--acc);font-weight:600}
-.focus-guidance .icn{font-size:13px}
-.focus-prescription{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:14px 0}
-.focus-badge{display:inline-flex;align-items:center;gap:5px;max-width:100%;min-height:30px;padding:6px 11px;border-radius:99px;background:var(--surface-2);color:var(--label);font-size:14px;font-weight:500;line-height:1.2;white-space:nowrap}
-.focus-badge .icn{font-size:13px;flex:none}
-.focus-progress{padding-inline:12px;background:var(--acc);color:var(--on-acc);font-weight:600}
-.focus-badge.plan{background:var(--acc-soft);color:var(--acc);white-space:normal}
-.focus-badge.warning{background:color-mix(in srgb,var(--orange) 14%,transparent);color:var(--orange);white-space:normal}
-.focus-badge .short{color:var(--orange)}
-.focus-badge-action{margin-inline-start:2px;color:inherit;font-size:13px;font-weight:700;text-decoration:underline;text-underline-offset:2px}
-.focus-set>.stp-w,.focus-side>.stp-w{margin-top:12px}
-.focus-set.complete .stp .num:disabled,.focus-set.locked .stp .num:disabled,.focus-set.complete .focus-timed strong,.focus-set.locked .focus-timed strong{color:color-mix(in srgb,var(--label) 48%,var(--surface))!important;-webkit-text-fill-color:color-mix(in srgb,var(--label) 48%,var(--surface))!important;opacity:1}
-.focus-lock-note{margin:-4px 2px 2px;color:var(--label-2);font-size:12px;line-height:1.35}
-.focus-effort{width:100%;margin-top:16px}
-.focus-card>.btn.primary{margin-top:18px;min-height:48px}
-.focus-secondary{display:grid;grid-template-columns:1fr 44px;gap:8px;margin-top:8px}
-.focus-secondary>.iconbtn{width:44px;height:44px;border:1px solid var(--sep);border-radius:8px}
-.focus-skip{display:flex;align-items:center;justify-content:center;gap:6px;min-height:44px;border:1px solid var(--sep);border-radius:8px;color:var(--label)}
-.focus-pager{display:grid;grid-template-columns:44px 1fr 44px;align-items:center;gap:8px}
-.focus-pager>button{display:grid;place-items:center;width:44px;height:44px;border:1px solid var(--sep);border-radius:50%;color:var(--label)}
-.focus-pager>button:disabled{opacity:.3}
-.focus-dots{display:flex;align-items:center;justify-content:center;gap:4px}
-.focus-dots button{position:relative;width:44px;height:44px}
-.focus-dots button::after{content:'';position:absolute;left:50%;top:50%;width:6px;height:6px;border-radius:50%;background:var(--label-3);transform:translate(-50%,-50%)}
-.focus-dots button.active::after{width:9px;height:9px;background:var(--acc)}
-.focus-dots button.done::after{box-shadow:0 0 0 2px var(--acc-line)}
-.focus-sides{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.focus-side{min-width:0;padding:10px;border-radius:var(--r);background:var(--surface-2)}
-.focus-side-header{display:flex;align-items:center;justify-content:space-between}
-.focus-side-check{display:grid;place-items:center;width:44px;height:44px;border-radius:50%;color:var(--label-3)}
-.focus-side-check.done{background:var(--acc);color:var(--on-acc)}
-.focus-timed{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;padding:12px;border-radius:var(--r);background:var(--surface-2)}
-.focus-timed .btn{width:auto;min-width:120px}
-.focus-extras{display:grid;gap:8px;margin-top:12px}
-.focus-extra{display:grid;grid-template-columns:minmax(56px,auto) 1fr 1fr;align-items:end;gap:8px;padding:8px;border-radius:var(--r-sm);background:var(--surface-2)}
-.focus-extra .stp-l{font-size:11px}
-@media (max-width:400px){
-  .focus-sides{grid-template-columns:1fr}
-  .focus-extra{grid-template-columns:1fr 1fr}
-  .focus-extra>span:first-child{grid-column:1/-1}
+.focus-superset-nav button:disabled{opacity:.4}
+@media (max-width:360px){
+  .focus-card{padding:12px}
+  .focus-card-header h2{font-size:1.375rem}
+  .focus-set .stp .num{font-size:2rem}
+}
+@media (prefers-reduced-motion:reduce){
+  .focus-complete{transition:none!important;transform:none!important}
+}
+
+/* Keep long loads legible when narrow viewports or enlarged text leave too little
+   space between the adjustment controls. The number gets its own full-width row. */
+@container (max-width: 16rem){
+  .focus-set .stp{display:grid;grid-template-columns:1fr 1fr}
+  .focus-set .stp .val{grid-column:1 / -1;grid-row:1;min-width:0}
+  .focus-set .stp button{grid-row:2;width:100%;height:48px}
+  .focus-set .stp button:first-child{grid-column:1}
+  .focus-set .stp button:last-child{grid-column:2}
 }

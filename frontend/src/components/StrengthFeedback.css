@@ -1,0 +1,23 @@
+.equipment-identity{display:grid;gap:4px;margin:0;font-size:.875rem;line-height:1.4;color:var(--label)}
+.equipment-identity>div{display:flex;flex-wrap:wrap;gap:0 8px;min-width:0}
+.equipment-identity dt{color:var(--label-2)}
+.equipment-identity dt::after{content:':' }
+.equipment-identity dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.equipment-identity dd>span{color:var(--label-2)}
+.strength-feedback{display:grid;gap:12px;margin-block:12px;font-size:.875rem;line-height:1.45}
+.strength-feedback:empty{display:none}
+.strength-comparison{color:var(--label-2);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.strength-load-review{margin:0;color:var(--orange)}
+.strength-prescription{border-top:var(--hair) solid var(--sep)}
+.strength-prescription>summary{min-height:44px;cursor:pointer;color:var(--label);padding-block:10px}
+.strength-prescription>summary>span{color:var(--label-2);margin-inline-start:8px}
+.strength-prescription-body{display:grid;gap:8px;padding-block:0 12px;color:var(--label-2)}
+.strength-prescription-body strong{color:var(--label);font-weight:500}
+.strength-prescription-body .btn{min-height:44px;white-space:normal}
+.strength-effort{display:grid;gap:8px}
+.strength-effort-controls{display:grid;gap:8px}
+.strength-effort-controls .btn.strength-effort-button{display:flex;min-height:48px;padding:12px;border:1px solid var(--sep);border-radius:8px;color:var(--label);font-size:.875rem;text-align:start;white-space:normal}
+.strength-effort-button>span{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-width:0}
+.strength-effort-button>span>span{min-width:0}
+.strength-effort-button>span>strong{flex:none;font-weight:500;font-variant-numeric:tabular-nums}
+.strength-effort p{margin:0;color:var(--label-2);font-size:.875rem}

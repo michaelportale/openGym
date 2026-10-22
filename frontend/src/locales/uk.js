@@ -2426,4 +2426,9 @@ export default {
   "Machine settings and unknown load conventions stay out of load totals and strength estimates.": "Machine settings and unknown load conventions stay out of load totals and strength estimates.",
   "Setting": "Setting",
   "Choose the load for this copied exercise before logging it.": "Choose the load for this copied exercise before logging it.",
+  "Review starting load": "Review starting load",
+  "Review the station and load meaning before using these starting sets.": "Review the station and load meaning before using these starting sets.",
+  "Edit settings": "Edit settings",
+  "No replacements in this view. Try All or change the search.": "No replacements in this view. Try All or change the search.",
+  "Workout changed. Reopen the replacement sheet.": "Workout changed. Reopen the replacement sheet.",
 }

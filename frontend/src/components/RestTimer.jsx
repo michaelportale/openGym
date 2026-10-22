@@ -5,6 +5,12 @@ import { REST_MAX } from '../lib/duration.js'
 import { durationSheet } from './DurationWheel.jsx'
 import { Button } from './ui.jsx'
 import Icon from './Icon.jsx'
+import { useStore } from '../store/useStore.js'
+import { exOr } from '../lib/exercises.js'
+import { exerciseNameFor } from '../lib/i18n.js'
+import { isWarmupRow } from '../lib/workout-model.js'
+import StrengthFeedback from './StrengthFeedback.jsx'
+import { modeOf } from '../lib/history.js'
 
 const clock = sec => Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0')
 
@@ -80,6 +86,8 @@ export default function RestTimer() {
   const work = useUI(s => s.work)
   const { addRest, stopRest, pauseRest, resumeRest, finishWorkEarly, stopWork } = useUI()
   const on = work || timer
+  const active = useStore(s => s.S.active)
+  const dockRef = useRef(null)
   const actsRef = useRef(null)
   const skipFits = useSkipFits(actsRef, [!!timer && !work, t('Skip'), t('Dismiss')])
   // The page keeps room at its bottom for the bar (index.css body.resting), so the last set and
@@ -88,11 +96,20 @@ export default function RestTimer() {
     document.body.classList.toggle('resting', !!on)
     return () => document.body.classList.remove('resting')
   }, [!!on])
+  useLayoutEffect(() => {
+    const el = dockRef.current
+    if (!el) return
+    const measure = () => document.documentElement.style.setProperty('--rest-dock-height', `${el.getBoundingClientRect().height}px`)
+    measure()
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null
+    observer?.observe(el)
+    return () => { observer?.disconnect(); document.documentElement.style.removeProperty('--rest-dock-height') }
+  }, [!!on])
   if (!on) return null
   const pct = Math.max(0, Math.min(100, (on.left / on.total) * 100))
 
   if (work) return (
-    <div id="timer" className="working">
+    <div id="timer" ref={dockRef} className="working">
       <div className="bar" aria-hidden="true"><i style={{ width: pct + '%' }} /></div>
       <div className="tclock">
         <span className="t">{work.left <= 0 && work.overtime ? '+' + clock(-work.left) : clock(work.left)}</span>
@@ -112,17 +129,28 @@ export default function RestTimer() {
   // its two faces (data-alt, a hidden line in index.css): the row never reflows when the rest
   // turns Ready, so a thumb on +15 never lands on −15.
   const label = timer.kind === 'switch' ? t('Switch sides') : timer.paused ? t('Paused') : t('Rest')
+  const entry = active?.entries?.[timer.forIdx]
+  const finalIdx = entry?.sets.findLastIndex(s => !isWarmupRow(s))
+  const finalRest = entry && modeOf({ ...entry.target, id: entry.id }) === 'reps'
+    && entry.sets[finalIdx]?.done && timer.forSet === finalIdx
   return (
-    <div id="timer" className={'rest' + (timer.paused ? ' paused' : '') + (timer.kind === 'switch' ? ' switch' : '') + (timer.ready ? ' ready' : '')}>
+    <div id="timer" ref={dockRef} className={'rest' + (timer.paused ? ' paused' : '') + (timer.kind === 'switch' ? ' switch' : '') + (timer.ready ? ' ready' : '')}>
       <div className="bar" aria-hidden="true"><i style={{ width: pct + '%' }} /></div>
+      {finalRest && <div className="rest-effort">
+        <span>{exerciseNameFor(exOr(entry.id))}</span>
+        <Button size="sm" variant="ghost" onClick={() => useUI.getState().openSheet(() => <>
+          <h3>{t('Final working set RIR')}</h3>
+          <StrengthFeedback entryIdx={timer.forIdx} section="effort" />
+        </>)}>{t('Final working set RIR')}</Button>
+      </div>}
       <button type="button" className="tclock" onClick={adjustRestSheet}
         aria-label={(timer.ready ? t('Ready') : clock(timer.left)) + '. ' + t('Change the time left')}>
         <span className="t" role={timer.ready ? 'status' : undefined} data-alt={timer.ready ? '0:00' : t('Ready')}>{timer.ready ? t('Ready') : clock(timer.left)}</span>
         <span className="lbl">{label}<Icon name="chevronDown" /></span>
       </button>
       <div className="acts" ref={actsRef}>
-        <Button size="sm" className="adj" icon="minus" onClick={() => addRest(-15)}>15s</Button>
-        <Button size="sm" className="adj" icon="plus" disabled={!timer.ready && timer.left >= REST_MAX} onClick={() => addRest(15)}>15s</Button>
+        <Button size="sm" className="adj" icon="minus" aria-label={t('Decrease') + ' 15s'} onClick={() => addRest(-15)}>15s</Button>
+        <Button size="sm" className="adj" icon="plus" aria-label={t('Increase') + ' 15s'} disabled={!timer.ready && timer.left >= REST_MAX} onClick={() => addRest(15)}>15s</Button>
         {timer.ready
           ? <Button size="sm" className="pause-slot" icon="pause" disabled tabIndex={-1} aria-hidden="true" />
           : <Button size="sm" className="pause" icon={timer.paused ? 'play' : 'pause'}
