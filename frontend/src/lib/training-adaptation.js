@@ -19,7 +19,8 @@ export const adaptationOf = s => {
 const baselineOf = s => {
   const adaptation=adaptationOf(s)
   if (adaptation) return clone(adaptation.baseline)
-  const ids = s.rotation?.sequence || queueOf(s)?.ids || [...new Set(Object.values(s.week || {}).flat().filter(Boolean))]
+  const q = queueOf(s)
+  const ids = q ? s.rotation?.sequence || q.ids : [...new Set(Object.values(s.week || {}).flat().filter(Boolean))]
   return ids.map(id=>s.routines.find(r=>r.id===id)).filter(Boolean).map(clone)
 }
 const relevantWork = (s,today) => (s.workouts || []).filter(w => {

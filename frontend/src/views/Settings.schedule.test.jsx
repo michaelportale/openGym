@@ -99,6 +99,17 @@ describe('Settings — How you train (Plan & schedule)', () => {
     expect(host.textContent).toContain('Externally managed')
   })
 
+  it('lets a locally accepted adjustment return to Fixed Week without changing the saved routines', () => {
+    mount({ queue: { ids: ['a', 'b'], since: 1, startsOn: todayISO(), adaptation: { token: 'adapt-local', policyVersion: 1, baseline: routines } } })
+    expect(selected()).toBe('Rotation')
+    expect(host.textContent).not.toContain('Externally managed')
+    pick('Fixed Week')
+    act(() => confirmSheet.mock.calls.at(-1)[0].onConfirm())
+    expect(mocks.S.queue).toBeNull()
+    expect(mocks.S.rotation).toBeNull()
+    expect(mocks.S.routines).toEqual(routines)
+  })
+
   it('Fixed Week asks first, then drops the pass, sweeps its future pins, and keeps the sequence', () => {
     mount({
       queue: { ids: ['a', 'b'], since: Date.now(), startsOn: todayISO(), label: 'Rotation', rotationId: 'r1' },
