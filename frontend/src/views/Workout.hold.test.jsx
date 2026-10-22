@@ -8,7 +8,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import Workout from './Workout.jsx'
 import { DEF, useStore } from '../store/useStore.js'
-import { useUI } from '../store/useUI.js'
+import { useUI, restoreWork, WORK_KEY } from '../store/useUI.js'
 import { beep, chime, vibrate, alertBuzz } from '../lib/sound.js'
 
 vi.mock('../lib/sound.js', () => ({ beep: vi.fn(), chime: vi.fn(), vibrate: vi.fn(), alertBuzz: vi.fn(), unlock: vi.fn() }))
@@ -21,11 +21,12 @@ const plank = () => ({ id: '1001', target: { mode: 'time', sets: 2, sec: 10 }, s
 let root
 let container
 
-function renderWorkout(entries) {
+function renderWorkout(entries, beforeRender) {
   const S = clone(DEF)
   S.sound = true
   S.active = { id: 'hold-test', d: '2026-09-23', start: Date.now(), routineId: null, name: 'Hold', bw: null, cur: 0, entries }
   useStore.setState({ S, user: null })
+  beforeRender?.()
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -60,6 +61,37 @@ afterEach(() => {
 })
 
 describe('the end of a hold', () => {
+  it('keeps the planned target and elapsed time when a restored pending hold finishes after the screen rebinds', () => {
+    const entry = plank()
+    entry.sets[0].loadNeedsReview = true
+    renderWorkout([entry], () => {
+      localStorage.setItem(WORK_KEY, JSON.stringify({ endsAt: Date.now() + 8_000, total: 10, label: 'Hold', overtime: false, owner: { idx: 0, i: 0, id: entry.id } }))
+      expect(restoreWork()).toBe(true)
+    })
+    act(() => vi.advanceTimersByTime(3_000))
+    act(() => useUI.getState().finishWorkEarly())
+    expect(useStore.getState().S.active.entries[0].sets[0]).toMatchObject({ sec: 5, planSec: 10, w: 0, done: false, loadNeedsReview: true })
+    expect(useUI.getState().work).toBeNull()
+    expect(useUI.getState().timer).toBeNull()
+    expect(useUI.getState().toastMsg).toBe('Choose the load for this copied exercise before logging it.')
+    act(() => useStore.getState().update(s => { delete s.active.entries[0].sets[0].loadNeedsReview }, false))
+    startHold()
+    expect(useUI.getState().work.total).toBe(10)
+  })
+
+  it('asks for the copied load before starting a hold and leaves an existing rest running', () => {
+    const entry = plank()
+    entry.sets[0].loadNeedsReview = true
+    renderWorkout([entry])
+    act(() => useUI.getState().startRest(90))
+    const rest = useUI.getState().timer
+    act(() => container.querySelector('button[aria-label="Start set"]').click())
+    expect(useUI.getState().work).toBeNull()
+    expect(useUI.getState().timer).toBe(rest)
+    expect(useUI.getState().toastMsg).toBe('Choose the load for this copied exercise before logging it.')
+    expect(useStore.getState().S.active.entries[0].sets[0]).toMatchObject({ sec: 10, w: 0, done: false, loadNeedsReview: true })
+  })
+
   it('ran out on its own: the chime and its buzz pattern, and no tick beep or short buzz after them', () => {
     renderWorkout([plank()])
     startHold()
