@@ -41,7 +41,7 @@ import { sessionNoProg, setSessionNoProg, setEntryNoProg, joinSessionNoProg } fr
 import { glyphOf } from '../lib/glyphs.js'
 import { markAllSetsDone, sessionHistory } from '../lib/backfill.js'
 import { bestSetFor } from '../lib/exercise-history.js'
-import { isWarmupRow, isFailureSet, toggleFailure, isDropSet, isRestPauseSet, dropsOf, clustersOf, addDrop, addCluster, removeDropAt, removeClusterAt, setDropAt, setClusterAt, nextDropWeight, nextBurstReps, isSideSet, makeSideSet, setSideField, toggleSide, addSideDrop, removeSideDropAt, setSideDropAt, addSideCluster, removeSideClusterAt, setSideClusterAt, WEIGHT_ORIGIN_MANUAL } from '../lib/workout-model.js'
+import { hasCompletedWork, isWarmupRow, isFailureSet, toggleFailure, isDropSet, isRestPauseSet, dropsOf, clustersOf, addDrop, addCluster, removeDropAt, removeClusterAt, setDropAt, setClusterAt, nextDropWeight, nextBurstReps, isSideSet, makeSideSet, setSideField, toggleSide, addSideDrop, removeSideDropAt, setSideDropAt, addSideCluster, removeSideClusterAt, setSideClusterAt, WEIGHT_ORIGIN_MANUAL } from '../lib/workout-model.js'
 import { canMoveActiveWorkoutUnit, moveActiveWorkoutUnit, canMoveActiveWorkoutEntry, moveActiveWorkoutEntry } from '../lib/active-workout-order.js'
 import { nextOpenSet, workoutKeyAction } from '../lib/workout-keys.js'
 import { MUSCLE_NAME } from '../lib/muscles.js'
@@ -1498,7 +1498,7 @@ function ActiveWorkout() {
         // happens to occupy the same index.
         if (!activeEntry || activeEntry.id !== entryId) return
         const full = { ...cfg, id: activeEntry.id }
-        const loggedIdentity = activeEntry.sets.some(row => row.done)
+        const loggedIdentity = activeEntry.sets.some(hasCompletedWork)
         if (loggedIdentity) for (const key of ['stationId', 'loadConvention', 'dbLoad']) {
           if (activeEntry.target?.[key] != null) full[key] = activeEntry.target[key]
           else delete full[key]
@@ -1519,8 +1519,8 @@ function ActiveWorkout() {
         // by hand keeps its prescription, so its Undo leaves the numbers it should count at.
         const built = buildPlannedEntry(sessionHistory(s), full, activeRoutine, { noProg: builtOutOfProgression(activeEntry, activeRoutine) })
         const fresh = built.sets
-        const doneWarm = activeEntry.sets.filter(x => x.done && isWarmupRow(x))
-        const doneWork = activeEntry.sets.filter(x => x.done && !isWarmupRow(x))
+        const doneWarm = activeEntry.sets.filter(x => hasCompletedWork(x) && isWarmupRow(x))
+        const doneWork = activeEntry.sets.filter(x => hasCompletedWork(x) && !isWarmupRow(x))
         const freshWarm = fresh.filter(isWarmupRow)
         const freshWork = fresh.filter(x => !isWarmupRow(x))
         if (!loggedIdentity) { activeEntry.trainingSnapshot = built.trainingSnapshot; activeEntry.equipmentSnapshot = built.equipmentSnapshot }
@@ -1531,7 +1531,7 @@ function ActiveWorkout() {
         else delete activeEntry.carried
         activeEntry.sets = [...doneWarm, ...freshWarm.slice(doneWarm.length), ...doneWork, ...freshWork.slice(doneWork.length)]
       })
-    }, null, routine, null, null, null, entry.sets.some(row => row.done))
+    }, null, routine, null, null, null, entry.sets.some(hasCompletedWork))
   }
 
   // Remove a whole exercise from the session. The confirmation always asks first; in a

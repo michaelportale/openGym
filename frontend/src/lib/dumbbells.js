@@ -78,7 +78,10 @@ export const bellsIn = cfg => (isOneArm(cfg) ? 1 : 2)
  */
 export function withMeaning(S, cfg, id = cfg?.id) {
   const m = dbLoadFor(S, { ...(cfg || {}), id })
-  return m === 'as' ? { ...cfg } : { ...cfg, dbLoad: m }
+  const target = { ...cfg }
+  // dbLoad is authoritative; a stale separate convention must not contradict the target.
+  if (isBellEx(id)) delete target.loadConvention
+  return m === 'as' ? target : { ...target, dbLoad: m }
 }
 
 /** The meaning a logged entry was saved with: its target's stamp, 'as' when it has none. */

@@ -1,13 +1,14 @@
 // @vitest-environment happy-dom
 import React, { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { afterEach, beforeEach, it, expect } from 'vitest'
+import { afterEach, beforeEach, describe, it, expect } from 'vitest'
 import { useStore, DEF } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
 import { EXIDX } from './lib/exercises.js'
 import { bindUI } from './components/ui.jsx'
 import { equipmentProfileSheet, exConfigSheet, customExSheet, exerciseDetailSheet } from './sheets.jsx'
 import { buildSessionEntries } from './lib/session-start.js'
+import { entryDbLoad, volumeFactor, historyAs } from './lib/dumbbells.js'
 bindUI(useUI)
 const roots = []
 function renderTop() {
@@ -74,4 +75,50 @@ it('keeps station selection fixed after work is logged', () => {
   const host = renderTop()
   expect(host.textContent).not.toContain('Equipment station')
   expect(host.textContent).toContain('Equipment identity stays with logged sets. Swap exercise to use another station.')
+})
+
+
+describe('one authoritative dumbbell meaning', () => {
+  const seed = () => {
+    useStore.setState(s => ({ S: { ...s.S, dbLoad: { '0289': { mode: 'total', _ts: 1 } } } }))
+    let cfg
+    exConfigSheet(EXIDX['0289'], { sets: 1, reps: 8, weight: 20, prog: 'off' }, c => { cfg = c })
+    return { host: renderTop(), cfg: () => cfg }
+  }
+  const build = cfg => buildSessionEntries(useStore.getState().S, { id: 'push', ex: [{ id: '0289', ...cfg }] })[0]
+  it('Load convention per hand changes the actual dumbbell meaning from total', () => {
+    const editor = seed()
+    pick(editor.host, 'Load convention', 'Dumbbell per hand')
+    click(editor.host, 'Save')
+    expect(editor.cfg()).not.toHaveProperty('loadConvention')
+    const entry = build(editor.cfg())
+    expect(entry.equipmentSnapshot.loadConvention).toBe('db-per-hand')
+    expect(entryDbLoad(entry)).toBe('each')
+    expect(volumeFactor(entry)).toBe(2)
+    expect(historyAs({ workouts: [{ entries: [{ ...entry, sets: [{ w: 20, r: 8, done: true }] }] }] }, '0289', 'total').workouts[0].entries[0].sets[0].w).toBe(40)
+  })
+  it('Weight means updates a previous Load convention selection before building', () => {
+    const editor = seed()
+    pick(editor.host, 'Load convention', 'Dumbbell per hand')
+    click(editor.host, 'Both')
+    click(editor.host, 'Save')
+    expect(editor.cfg()).not.toHaveProperty('loadConvention')
+    const entry = build(editor.cfg())
+    expect(entry.equipmentSnapshot.loadConvention).toBe('db-total')
+    expect(entryDbLoad(entry)).toBe('total')
+    expect(volumeFactor(entry)).toBe(1)
+    expect(historyAs({ workouts: [{ entries: [{ ...entry, sets: [{ w: 20, r: 8, done: true }] }] }] }, '0289', 'each').workouts[0].entries[0].sets[0].w).toBe(10)
+  })
+  it('returning to as entered clears an explicit convention without reinterpreting numbers', () => {
+    const editor = seed()
+    pick(editor.host, 'Load convention', 'Dumbbell per hand')
+    click(editor.host, 'As entered')
+    click(editor.host, 'Save')
+    expect(editor.cfg()).not.toHaveProperty('loadConvention')
+    const entry = build(editor.cfg())
+    expect(entry.equipmentSnapshot.loadConvention).toBe(null)
+    expect(entryDbLoad(entry)).toBe('as')
+    expect(volumeFactor(entry)).toBe(1)
+    expect(historyAs({ workouts: [{ entries: [{ ...entry, sets: [{ w: 20, r: 8, done: true }] }] }] }, '0289', 'each').workouts[0].entries[0].sets[0].w).toBe(20)
+  })
 })
