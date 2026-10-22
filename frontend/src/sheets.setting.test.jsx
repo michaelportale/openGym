@@ -184,7 +184,7 @@ it.each(['focus', 'list'])('confirms only explicitly edited copied loads per sid
   expect(row().sides.R.done).toBe(false)
   const { buildCompletedWorkout } = await import('./lib/finish-workout.js')
   const partial = buildCompletedWorkout(useStore.getState().S.active)
-  expect(partial.entries[0].sets[0].sides.L).not.toHaveProperty('loadNeedsReview')
+  expect(partial.entries[0].sets[0].sides.L.loadNeedsReview).toBe(false)
   act(() => sideButton('R', 'load').click())
   act(() => sideButton('R', 'done').click())
   expect(row().done).toBe(true)
@@ -206,4 +206,69 @@ it.each(['focus', 'list'])('still logs ordinary legacy per-side zero loads witho
     act(() => host.querySelector(`[aria-label="${label}"]`).click())
   }
   expect(useStore.getState().S.active.entries[0].sets[0]).toMatchObject({ done: true, w: 0 })
+})
+
+it.each([
+  ['unilateral reps', { side: true, reps: 20 }],
+  ['timed', { mode: 'time', sec: 30 }],
+  ['unilateral timed', { mode: 'time', sec: 30, side: true }],
+])('keeps added %s sets unlogged until their copied load is reviewed', (_, target) => {
+  const s = structuredClone(useStore.getState().S)
+  s.active.entries = buildSessionEntries(s, { ex: [{ ...cfg, ...target, weight: 0, loadNeedsReview: true }] })
+  s.active.workoutView = 'list'
+  useStore.setState({ S: s, user: null })
+  const host = render(<MemoryRouter><Workout /></MemoryRouter>)
+  const initialCount = useStore.getState().S.active.entries[0].sets.length
+  act(() => [...host.querySelectorAll('button')].find(b => b.textContent.trim() === 'Add set').click())
+  const added = () => useStore.getState().S.active.entries[0].sets.slice(initialCount)
+  expect(added().length).toBe(target.mode === 'time' && target.side ? 2 : 1)
+  // Exercise the real completion buttons, not just the copied marker.
+  for (const button of [...host.querySelectorAll('[role="checkbox"]')].slice(target.side ? 2 : 1)) act(() => button.click())
+  expect(added().every(row => row.done === false && row.loadNeedsReview === true)).toBe(true)
+  if (target.mode !== 'time') {
+    expect(added()[0].sides.L.done).toBe(false)
+    expect(added()[0].sides.R.done).toBe(false)
+  }
+  expect(JSON.stringify(added())).not.toContain('rir')
+})
+
+it.each(['focus', 'list'])('keeps unreviewed load blocked after partial finish and reopening the saved editor (%s)', async view => {
+  const { editCompletedSession } = await import('./lib/session-edit.js')
+  const s = structuredClone(useStore.getState().S)
+  s.active.entries = buildSessionEntries(s, { ex: [{ ...cfg, side: true, reps: 20, weight: 0, loadNeedsReview: true }] })
+  s.active.workoutView = view
+  useStore.setState({ S: s, user: null })
+  let host = render(<MemoryRouter><Workout /></MemoryRouter>)
+  const sideButton = (side, action) => view === 'focus'
+    ? host.querySelector(`[data-focus-side="${side}"] [aria-label="${action === 'done' ? `Complete ${side === 'L' ? 'left' : 'right'} side` : 'Increase load'}"]`)
+    : host.querySelectorAll('.setrow.side')[side === 'L' ? 0 : 1].querySelector(action === 'done' ? '[role="checkbox"]' : '.stp.w [aria-label="Increase"]')
+  act(() => sideButton('L', 'load').click())
+  act(() => sideButton('L', 'done').click())
+  act(() => finishWorkout())
+  const confirmation = renderTop()
+  act(() => [...confirmation.querySelectorAll('button')].find(b => b.textContent.trim() === 'Finish workout').click())
+  const saved = JSON.parse(JSON.stringify(useStore.getState().S))
+  expect(saved.active).toBeNull()
+  expect(saved.workouts).toHaveLength(1)
+  act(() => roots.splice(0).forEach(root => root.unmount()))
+  document.body.innerHTML = ''
+  useUI.setState({ sheets: [] })
+  editCompletedSession(saved, saved.workouts[0].id)
+  saved.active.workoutView = view
+  useStore.setState({ S: saved, user: null })
+  host = render(<MemoryRouter><Workout /></MemoryRouter>)
+  const row = () => useStore.getState().S.active.entries[0].sets[0]
+  act(() => sideButton('R', 'done').click())
+  expect(row().sides.R.done).toBe(false)
+  expect(row().sides.L.done).toBe(true)
+  // A reviewed side remains editable without asking for its known load again.
+  act(() => sideButton('L', 'done').click())
+  expect(row().sides.L.done).toBe(false)
+  act(() => sideButton('L', 'done').click())
+  expect(row().sides.L.done).toBe(true)
+  act(() => sideButton('R', 'load').click())
+  act(() => sideButton('R', 'done').click())
+  expect(row().done).toBe(true)
+  expect(row().loadNeedsReview).toBeUndefined()
+  expect(saved.workouts).toHaveLength(1)
 })

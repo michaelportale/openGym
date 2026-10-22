@@ -147,7 +147,9 @@ const ownerDone = wk => !wk?.owner ? null : (elapsed, { abandoned = false } = {}
   useStore.getState().update(s => {
     const st = s.active.entries[idx].sets[i]
     st.sec = elapsed
-    if (abandoned) { if (st.planSec == null) st.planSec = wk.total; return }
+    // A restored timer records held time, but cannot confirm an unknown copied load. Keep its
+    // target aside like an interrupted hold so reviewing the load does not shorten the next try.
+    if (abandoned || st.loadNeedsReview) { if (st.planSec == null) st.planSec = wk.total; return }
     delete st.planSec
     if (st.sides) return   // a per-side row is ticked side by side, on the workout screen
     st.done = true

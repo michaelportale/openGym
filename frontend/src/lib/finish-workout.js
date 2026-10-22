@@ -14,15 +14,20 @@ import { hasCompletedWork, isSideSet } from './workout-model.js'
 // saved workout, the server copy and every backup as a field nothing reads — on the row and on
 // each side of a per-side row, where the side keeps its own.
 //
-// Rows that carry neither are passed through by reference, so an ordinary session is the shape
-// it always was.
+// Unreviewed copied loads are different: unfinished rows can be reopened in the history editor.
+// Keep their pending review and any already-confirmed limb so reopening cannot invent a zero
+// load or ask for a known load again. Fully completed rows no longer need these guards.
+// Rows that carry no bookkeeping are passed through by reference.
 function finishedRow(set) {
   if (!set) return set
   const sideMarked = isSideSet(set) && ['L', 'R'].some(key => set.sides[key].weightOrigin != null || set.sides[key].loadNeedsReview != null)
   if (set.planSec == null && set.weightOrigin == null && !set.loadNeedsReview && !sideMarked) return set
   const { planSec, weightOrigin, loadNeedsReview, ...rest } = set
+  const pendingReview = loadNeedsReview && !set.done
+  if (pendingReview) rest.loadNeedsReview = true
   if (sideMarked) {
-    const side = ({ weightOrigin: _, loadNeedsReview: __, ...kept }) => kept
+    const side = ({ weightOrigin: _, loadNeedsReview: reviewed, ...kept }) =>
+      pendingReview && reviewed === false ? { ...kept, loadNeedsReview: false } : kept
     rest.sides = { ...rest.sides, L: side(rest.sides.L), R: side(rest.sides.R) }
   }
   return planSec == null || rest.done ? rest : { ...rest, sec: planSec }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { workoutVolume, insertWarmupRow, buildSets, applyIntensifierPlan } from './history.js'
+import { workoutVolume, insertWarmupRow, buildSets, applyIntensifierPlan, makeWarmupAt, makeWorkAt } from './history.js'
 import { applyPrescription } from './progression.js'
-import { isSideSet } from './workout-model.js'
+import { isSideSet, makeSideSet, setSideField } from './workout-model.js'
 
 // The config sheet tells users warm-ups are "left out of volume, records and progression",
 // and history.js repeats that as an invariant in a comment. Volume was the one place it
@@ -156,5 +156,59 @@ describe('a unilateral rest-pause warm-up is per side', () => {
     // the work set stays per side with its bursts on each limb
     expect(isSideSet(out[1])).toBe(true)
     expect(out[1].type).toBe('restpause')
+  })
+})
+
+describe('warm-up changes do not confirm a copied unknown load', () => {
+  it('keeps pending review through work → warm-up → work without copying effort', () => {
+    const source = [{ w: 0, r: 8, done: false, loadNeedsReview: true, rir: 2 }]
+    const warm = makeWarmupAt(source, 0)
+    const work = makeWorkAt(JSON.parse(JSON.stringify(warm)), 0)
+    expect(work[0]).toMatchObject({ w: 0, r: 8, done: false, loadNeedsReview: true })
+    expect(work[0].rir).toBeUndefined()
+    expect(work[0].rpe).toBeUndefined()
+    expect(source[0]).toEqual({ w: 0, r: 8, done: false, loadNeedsReview: true, rir: 2 })
+  })
+
+  it.each(['reps', 'time'])('keeps a new %s warm-up pending when its work load needs review', mode => {
+    const source = [{ w: 0, r: 8, sec: 30, done: false, loadNeedsReview: true, rir: 1 }]
+    const warm = insertWarmupRow(source, mode, { reps: 8, sec: 30 })
+    const work = makeWorkAt(warm, 0)
+    expect(work[0]).toMatchObject({ w: 0, done: false, loadNeedsReview: true })
+    expect(work[0].rir).toBeUndefined()
+    expect(work[0].rpe).toBeUndefined()
+    expect(warm[1]).toBe(source[0])
+  })
+
+  it('does not give a new per-side warm-up the source side’s load confirmation', () => {
+    const pending = makeSideSet({ w: 0, r: 16, loadNeedsReview: true })
+    const source = setSideField(setSideField(pending, 'L', 'w', 20), 'L', 'rir', 2)
+    const warm = insertWarmupRow([source], 'reps', { reps: 16, side: true })[0]
+    expect(warm.loadNeedsReview).toBe(true)
+    for (const side of ['L', 'R']) {
+      expect(warm.sides[side].loadNeedsReview).not.toBe(false)
+      expect(warm.sides[side].rir).toBeUndefined()
+    }
+    const reviewedLeft = setSideField(warm, 'L', 'w', 10)
+    expect(reviewedLeft.loadNeedsReview).toBe(true)
+    expect(reviewedLeft.sides.L.loadNeedsReview).toBe(false)
+    expect(reviewedLeft.sides.R.loadNeedsReview).not.toBe(false)
+    expect(setSideField(reviewedLeft, 'R', 'w', 10).loadNeedsReview).toBeUndefined()
+    expect(source.sides.L.loadNeedsReview).toBe(false)
+  })
+
+  it('keeps pending review when extending a warm-up block with no work rows', () => {
+    const rows = [{ w: 0, r: 8, phase: 'warmup', warmup: true, loadNeedsReview: true }]
+    const next = insertWarmupRow(rows, 'reps', { reps: 8 })
+    expect(makeWorkAt(next, 1)[1].loadNeedsReview).toBe(true)
+  })
+
+  it.each([0, 40])('keeps a confirmed %s load usable after warm-up edits', w => {
+    const source = [{ w, r: 8, done: true, at: 123 }]
+    expect(makeWorkAt(makeWarmupAt(source, 0), 0)[0]).toEqual(source[0])
+    // The copied target can still carry the old hint after the actual row was reviewed.
+    const warm = insertWarmupRow(source, 'reps', { reps: 8, loadNeedsReview: true })[0]
+    expect(warm.loadNeedsReview).toBeUndefined()
+    expect(warm.done).toBe(false)
   })
 })

@@ -1050,6 +1050,9 @@ export function insertWarmupRow(rows, mode, target, step = 2.5, floor = 0) {
         r: work ? work.r : (prev ? prev.r : target.reps),
         done: false, phase: 'warmup', warmup: true,
       }
+  // A ramp derived from an unreviewed copy is still unreviewed. Adding a warm-up (or
+  // later counting it as work) is not confirmation of the unknown load it inherited.
+  if (mode !== 'cardio' && (work?.loadNeedsReview || prev?.loadNeedsReview)) warm.loadNeedsReview = true
   // A unilateral exercise warms up per side too (issue #60): the warm-up row splits into L/R
   // like the work sets it ramps toward, each side logged and ticked on its own with its own
   // reps and effort. The reps `r` above is the combined total (the work set's, or the plan's
@@ -1076,6 +1079,7 @@ export function makeWarmupAt(rows, i) {
   const src = rows[i]
   if (!canBeWarmup(src)) return rows
   const warm = { w: src.w || 0, r: src.r, done: !!src.done, phase: 'warmup', warmup: true }
+  if (src.loadNeedsReview) warm.loadNeedsReview = true
   if (src.at != null) warm.at = src.at
   return placeRow(rows, i, warm)
 }
