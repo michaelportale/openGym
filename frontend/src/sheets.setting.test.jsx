@@ -65,6 +65,7 @@ it.each(['planned add', 'freestyle add', 'planned swap', 'freestyle swap'])('iso
   } else act(() => swapActiveWorkoutExercise(0))
   const picker = top(); act(() => picker.render(picker.close).props.onPick(EXIDX[cfg.id]))
   const config = top(); act(() => config.render(config.close).props.onSave({ ...cfg, prog: 'double', repsMin: 8 }))
+  if (route.endsWith('swap')) { const review = top(); if (review.render(() => useUI.getState().closeSheet(review.id)).props.replacement) act(() => review.render(() => useUI.getState().closeSheet(review.id)).props.onConfirm()) }
   const entry = useStore.getState().S.active.entries.at(-1)
   expect(entry.equipmentSnapshot).toMatchObject({ stationId: 'b', loadConvention: 'machine-setting', unit: null })
   expect(entry.sets[0].w).toBe(7)

@@ -713,6 +713,31 @@ function applyEdits(out, n, o) {
   return bumps
 }
 
+// An adjustment's queue and generated dates are one accepted plan. If two offline devices
+// accept different plans, the losing queue's untouched generated pins must not become extra
+// ordinary sessions. A later manual pin edit is independent work and keeps its usual stamp.
+function reconcileAdaptationPins(out, sources) {
+  const kept = out.queue?.adaptation
+  if (!(Number(out.edited?.queue) > 0)) return 0
+  let latest = 0
+  for (const source of sources) {
+    const lost = source.queue?.adaptation
+    const acceptedAt = Number(lost?._ts) || Number(source.edited?.queue) || 0
+    if (lost?.policyVersion !== 1 || typeof lost.token !== 'string' || lost.token === kept?.token || !acceptedAt) continue
+    for (const date of list(lost.availability?.dates)) {
+      const id = source.dayPlan?.[date], key = `dayPlan.${date}`
+      if (typeof id !== 'string' || !id.startsWith(`${lost.token}-`) || !list(source.queue.ids).includes(id)
+        || list(out.queue?.ids).includes(id) || out.dayPlan?.[date] !== id || Number(out.edited?.[key]) !== acceptedAt) continue
+      delete out.dayPlan[date]
+      const at = Math.max(Number(out.edited?.queue) || 0, acceptedAt) + 1
+      out.edited[key] = at
+      if (out.undone) delete out.undone[key]
+      latest = Math.max(latest, at)
+    }
+  }
+  return latest
+}
+
 // `prefer` names the side whose settings, plan and per-exercise config win regardless of `_ts`:
 // on sign-in the server's profile is the truth and the device only contributes the entries it
 // logged while signed out. Without it the newer copy decides, as for a conflict between devices.
@@ -868,7 +893,7 @@ export function mergeStates(a0, b0, { prefer } = {}) {
     if (Object.keys(undone).length) out.undone = undone; else delete out.undone
   }
   if (deleted) out.deleted = deleted; else delete out.deleted
-  out._ts = Math.max(a._ts || 0, b._ts || 0)
+  out._ts = Math.max(a._ts || 0, b._ts || 0, !prefer ? reconcileAdaptationPins(out, [n, o]) : 0)
   if (resetAt) out.resetAt = resetAt
   if (resetIds) out.resetIds = resetIds
   else delete out.resetIds
@@ -1022,6 +1047,9 @@ export function highestStamp(S) {
 export function stampChange(prev, next, wall = Date.now()) {
   const now = Math.max(Number(wall) || 0, highestStamp(prev) + 1)
   if (!next || typeof next !== 'object') return now
+  // Keep the generated pins' acceptance stamp when a later label/unit edit restamps the queue.
+  const adaptation = next.queue?.adaptation
+  if (adaptation?.policyVersion === 1 && typeof adaptation.token === 'string' && adaptation.token !== prev?.queue?.adaptation?.token) adaptation._ts = now
   const before = new Map(list(prev?.workouts).filter(w => w && w.id != null).map(w => [w.id, w]))
   for (const w of list(next.workouts)) {
     if (!w || typeof w !== 'object' || w.id == null || w._ts == null) continue

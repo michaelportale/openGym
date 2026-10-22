@@ -68,25 +68,19 @@ describe('swap picker opens on the same muscle', () => {
     swapActiveWorkoutExercise(0)
     const host = renderTop()
 
-    const chip = sameChip(host)
-    expect(chip.textContent).toContain('Triceps')
+    const chip = chipByText(host, 'Suggested replacements')
     expect(isOn(chip)).toBe(true)
     expect(isOn(chipByText(host, 'All'))).toBe(false)
-
-    const listed = rows(host)
-    expect(listed.length).toBeGreaterThan(1)
-    expect(listed.some(s => s.startsWith('Triceps'))).toBe(true)
+    const names = () => [...host.querySelectorAll('.replacement-name')].map(row => row.textContent)
+    expect(names().length).toBeGreaterThan(1)
+    const suggested = names()
+    expect(names()).not.toContain(CABLE_TRI.n)
     expect(host.textContent).toContain('Training metadata unverified')
-    // The exercise being swapped away is not offered as its own replacement.
-    expect([...host.querySelectorAll('.list .item .tt')].map(x => x.textContent)).not.toContain(CABLE_TRI.n)
-
     act(() => chipByText(host, 'All').click())
     expect(isOn(chipByText(host, 'All'))).toBe(true)
-    expect(rows(host).some(s => !s.startsWith('Triceps'))).toBe(true)
-    // …and back again.
-    act(() => sameChip(host).click())
-    expect(rows(host).some(s => s.startsWith('Triceps'))).toBe(true)
-    expect(host.textContent).toContain('Training metadata unverified')
+    expect(names()).not.toEqual(suggested)
+    act(() => chipByText(host, 'Suggested replacements').click())
+    expect(names()).toEqual(suggested)
   })
 
   // The routine editor hands its slot's exercise in (views/RoutineEdit.replace.test.jsx).

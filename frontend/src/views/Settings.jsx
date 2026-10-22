@@ -14,7 +14,7 @@ import { effortOf } from '../lib/history.js'
 import { figureOf } from '../lib/exercises.js'
 import { unlock, chime, playOnSilentSupported, vibrateSupported, appleTouchDevice } from '../lib/sound.js'
 import { REST_SOUND_IDS, restSoundOf } from '../lib/rest-sounds.js'
-import { scheduleModeOf, chooseFixedWeek, chooseRotation } from '../lib/rotation.js'
+import { scheduleModeOf, chooseFixedWeek, chooseRotation, isExternalQueue } from '../lib/rotation.js'
 import { queueOf } from '../lib/queue.js'
 import { api, webauthnOK, passkeyRegister, passkeyError, IS_ANDROID } from '../lib/api.js'
 import { pushSupported, enablePush, disablePush, sendTestPush, syncPushSubscription } from '../lib/push.js'
@@ -102,10 +102,9 @@ export default function Settings({ page = null, find = null, via = null }) {
   const body = useRef(null)
   const wakeOK = wakeLockSupported()
 
-  // A planner's own queue (no rotationId, or one that doesn't match the saved rotation here) is
-  // not this app's to switch off or overwrite. The Scheduling row goes read-only for it.
+  // A planner's queue stays read-only. Locally accepted one-off adjustments can be stopped.
   const liveQ = queueOf(S)
-  const externalQ = !!liveQ && (!S.rotation || liveQ.rotationId !== S.rotation.id)
+  const externalQ = isExternalQueue(S)
 
   // Two honest choices on a unit switch (issue #22): convert the numbers, or keep them and only
   // change the label — the old behaviour, still right for someone who logged in lb all along

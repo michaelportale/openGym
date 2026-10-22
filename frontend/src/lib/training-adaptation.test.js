@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { proposeAdaptation, applyAdaptation, undoAdaptation, dispositionOf, setDisposition } from './training-adaptation.js'
 import { queueDone, queueRemaining } from './queue.js'
-import { refillAfter } from './rotation.js'
+import { refillAfter, chooseFixedWeek, chooseRotation, scheduleModeOf, saveRotation } from './rotation.js'
 import { coverageForState } from './training-coverage.js'
+import { mergeStates, stampChange } from './sync-merge.js'
+import { effectiveRoutineIds } from './history.js'
 const today = '2026-10-21'
 const ts = d => new Date(d + 'T12:00:00').getTime()
 const fixture = () => ({ routines: [
@@ -128,12 +130,91 @@ it('materializes the same reviewed proposal deterministically on two devices',()
   const s=fixture(),p=propose(s)
   expect(applyAdaptation(s,p).state.queue.ids).toEqual(applyAdaptation(structuredClone(s),p).state.queue.ids)
 })
+it('merges concurrent adjustments as one accepted schedule without keeping the losing generated dates',()=>{
+  const s=fixture();s.workouts=[]
+  const accept=(dates,at)=>{
+    const p=propose(s,{availability:{dates,totalSessions:5,minutes:75,baselineIds:{push:'p',pull:'u',legs:'l'}}})
+    const next=applyAdaptation(s,p).state
+    next._ts=stampChange(s,next,at)
+    return next
+  }
+  const a=accept(['2026-10-22','2026-10-24'],100),b=accept(['2026-10-23','2026-10-25'],200)
+  for(const [first,second] of [[a,b],[b,a]]) {
+    const merged=mergeStates(first,second)
+    expect(merged.queue.ids).toEqual(b.queue.ids)
+    expect(merged.dayPlan).toEqual(b.dayPlan)
+    expect(effectiveRoutineIds(merged,'2026-10-22',today)).toEqual([])
+    expect(effectiveRoutineIds(merged,'2026-10-23',today)).toEqual([b.queue.ids[0]])
+    const again=mergeStates(merged,a)
+    expect(again.dayPlan).toEqual(b.dayPlan)
+    expect(again.edited['dayPlan.2026-10-22']).toBeGreaterThan(a.edited['dayPlan.2026-10-22'])
+  }
+  for(const restart of [false,true]) {
+    const stopped=structuredClone(b)
+    chooseFixedWeek(stopped,today)
+    if(restart) chooseRotation(stopped,today,300)
+    stopped._ts=stampChange(b,stopped,300)
+    for(const [first,second] of [[a,stopped],[stopped,a]]) {
+      const merged=mergeStates(first,second)
+      expect(merged.queue).toEqual(stopped.queue)
+      expect(merged.dayPlan).toEqual({})
+      expect(effectiveRoutineIds(merged,'2026-10-22',today)).toEqual([])
+      expect(mergeStates(merged,a).dayPlan).toEqual({})
+    }
+  }
+  const renamed=structuredClone(a)
+  renamed.queue.label='Renamed pass'
+  renamed._ts=stampChange(a,renamed,150)
+  expect(mergeStates(renamed,b).dayPlan).toEqual(b.dayPlan)
+  const edited=structuredClone(a)
+  edited.dayPlan['2026-10-22']='p'
+  edited.dayPlan['2026-10-26']=a.queue.ids[0]
+  edited.workouts.push({id:'offline-done',d:'2026-10-22',start:ts('2026-10-22'),routineId:a.queue.ids[0],entries:[]})
+  edited._ts=stampChange(a,edited,300)
+  const merged=mergeStates(edited,b)
+  expect(merged.queue.ids).toEqual(b.queue.ids)
+  expect(merged.dayPlan).toEqual({...b.dayPlan,'2026-10-22':'p','2026-10-26':a.queue.ids[0]})
+  expect(merged.workouts.map(w=>w.id)).toEqual(['offline-done'])
+})
+it('keeps dated adjusted sessions when the winning rotation deliberately retains their IDs',()=>{
+  const s=fixture();delete s.queue;delete s.rotation;s.week={1:'p',3:'u',5:'l'}
+  const accepted=applyAdaptation(s,propose(s)).state
+  accepted._ts=stampChange(s,accepted,100)
+  const adopted=structuredClone(accepted)
+  saveRotation(adopted,adopted.queue.ids,'My rotation',today,200)
+  adopted._ts=stampChange(accepted,adopted,200)
+  for(const [first,second] of [[accepted,adopted],[adopted,accepted]]) {
+    const merged=mergeStates(first,second)
+    expect(merged.queue).toEqual(adopted.queue)
+    expect(merged.dayPlan).toEqual(accepted.dayPlan)
+    expect(effectiveRoutineIds(merged,'2026-10-22',today)).toEqual([accepted.queue.ids[0]])
+  }
+})
 it('accepts a fixed-week plan as an explicit queue without changing its saved weekdays',()=>{
   const s=fixture();delete s.queue;delete s.rotation;s.week={1:'p',3:'u',5:'l'}
   const result=applyAdaptation(s,propose(s))
   expect(result.error).toBeNull()
   expect(result.state.week).toEqual(s.week)
   expect(result.state.queue.ids).toHaveLength(2)
+})
+it('can leave an accepted fixed-week adjustment without adopting its occurrences as a rotation',()=>{
+  const s=fixture();delete s.queue;delete s.rotation;s.week={1:'p',3:'u',5:'l'}
+  const accepted=applyAdaptation(s,propose(s)).state
+  chooseFixedWeek(accepted,today)
+  expect(scheduleModeOf(accepted)).toBe('week')
+  expect(accepted.queue).toBeNull()
+  expect(accepted.dayPlan).toEqual({})
+  expect(accepted.week).toEqual(s.week)
+  expect(accepted.rotation).toBeUndefined()
+  expect(accepted.workouts).toEqual(s.workouts)
+})
+it('uses the active fixed-week routines after leaving a different saved rotation',()=>{
+  const s=fixture();s.routines.push({id:'old',name:'Old',ex:[]})
+  s.rotation={id:'old-rotation',sequence:['old']};s.queue={ids:['old'],rotationId:'old-rotation',since:1,startsOn:today}
+  s.week={1:'p',3:'u',5:'l'}
+  chooseFixedWeek(s,today)
+  expect(propose(s).error).toBeNull()
+  expect(s.rotation.sequence).toEqual(['old'])
 })
 it('can revise an accepted fixed-week queue when a later sixth date opens',()=>{
   const s=fixture();delete s.queue;delete s.rotation;s.week={1:'p',3:'u',5:'l'}

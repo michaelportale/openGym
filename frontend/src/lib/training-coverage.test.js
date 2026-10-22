@@ -1,10 +1,25 @@
 import { describe, expect, it } from 'vitest'
 import { trainingCoverage, coverageForState } from './training-coverage.js'
+import { buildSets } from './history.js'
 const window = { startDate: '2026-10-15', endDate: '2026-10-21' }
 const snap = (primary = ['chest'], secondary = ['triceps'], role = 'horizontal-press') => ({ primary, secondary, role, status: 'manual' })
 const entry = (n, snapshot = snap()) => ({ id: 'synthetic', trainingSnapshot: snapshot, sets: Array.from({ length: n }, () => ({ done: true, r: 8 })) })
 const workout = (id, d, entries) => ({ id, d, entries })
 describe('training coverage accounting', () => {
+  it('counts completed timed left/right pairs as prescribed sets and exposes partial pairs', () => {
+    const cfg = { id: 'synthetic', mode: 'time', side: true, sets: 2, sec: 30 }
+    const sets = buildSets({ workouts: [] }, cfg).map(row => ({ ...row, done: true }))
+    const sessions = rows => [workout('w', '2026-10-21', [{ ...cfg, trainingSnapshot: snap(), sets: rows }])]
+    const plannedSessions = [{ id: 'p', date: '2026-10-21', entries: [{ ...cfg, trainingSnapshot: snap() }] }]
+    const full = trainingCoverage({ window, workouts: sessions(sets), plannedSessions })
+    expect(full.byMuscle.chest.actual.directSets).toBe(2)
+    expect(full.byMuscle.chest.planned.directSets).toBe(2)
+    const partial = trainingCoverage({ window, workouts: sessions(sets.map((row, i) => ({ ...row, done: i !== 3 }))) })
+    expect(partial.byMuscle.chest.actual.directSets).toBe(1)
+    expect(partial.unknowns.actual.partialRows).toBe(1)
+    const rows = trainingCoverage({ window, plannedSessions: [{ ...plannedSessions[0], entries: sessions(sets)[0].entries }] })
+    expect(rows.byMuscle.chest.planned.directSets).toBe(2)
+  })
   it('keeps four direct and four indirect sets separate and credits six estimated sets without RIR', () => {
     const result = trainingCoverage({ window, workouts: [workout('w', '2026-10-21', [entry(4), entry(4, snap(['triceps'], []))])] })
     expect(result.byMuscle.triceps.actual).toMatchObject({ directSets: 4, secondarySets: 4, secondaryCredit: 2, combinedEstimate: 6, directDates: ['2026-10-21'], secondaryOnlyDates: [], target: { directDays: 2, sets: null }, gap: { directDays: 1, sets: null } })
