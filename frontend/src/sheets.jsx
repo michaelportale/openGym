@@ -1699,6 +1699,7 @@ function ExConfig({ ex, existing, onSave, onDelete, onReplace, close, routine, i
       ? { ...cfg, ...normalizeRepRange(cfg.reps, cfg.repsMin, isPerSide(cfg) ? 2 : 1) }
       : cfg
   })
+  const setDbMeaning = value => setC(x => ({ ...x, dbLoad: value === dbLoadFor(st, ex.id) ? undefined : value, loadConvention: undefined }))
   // Cardio keeps its own duration+speed form; the reps/time choice (issue #16) is offered for
   // everything else, which is where the gap was — planks, hangs, wall sits, loaded carries.
   const mode = cardio ? 'cardio' : modeOf({ ...c, id: ex.id })
@@ -1761,7 +1762,7 @@ function ExConfig({ ex, existing, onSave, onDelete, onReplace, close, routine, i
     // What a dumbbell weight means in this slot (lib/dumbbells.js): written only when the slot
     // picked its own, so every other config stays the shape it was.
     const dbLoad = isBellEx(ex) && !bw ? dbLoadOf(c.dbLoad) : null
-    const withMeant = { ...(dbLoad ? { dbLoad } : {}), ...(c.stationId ? { stationId: c.stationId } : {}), ...(c.loadConvention ? { loadConvention: c.loadConvention } : {}) }
+    const withMeant = { ...(dbLoad ? { dbLoad } : {}), ...(c.stationId ? { stationId: c.stationId } : {}), ...(!isBellEx(ex) && c.loadConvention ? { loadConvention: c.loadConvention } : {}) }
     // "Last set to failure": written only when on, so a plan that never asked keeps its shape.
     const withFailure = c.lastToFailure === true ? { lastToFailure: true } : {}
     if (cardio) onSave({ sets, min: Math.max(1, Math.round(c.min) || 20), speed: Math.max(0, c.speed || 8), ...withNote, ...withRest })
@@ -2033,14 +2034,16 @@ function ExConfig({ ex, existing, onSave, onDelete, onReplace, close, routine, i
     {lockEquipment && <div className="small dim">{t('Equipment identity stays with logged sets. Swap exercise to use another station.')}</div>}
     {!lockEquipment && mode !== 'cardio' && <>
       <SelectRow title={t('Equipment station')} value={c.stationId || ''} options={[{ value: '', label: t('Unknown') }, ...(st.equipProfiles?.find(p => p.id === st.activeEquipId)?.stations || []).filter(row => row.exerciseIds.includes(ex.id)).map(row => ({ value: row.id, label: row.label }))]} onChange={stationId => setC(x => ({ ...x, stationId: stationId || undefined, loadConvention: st.equipProfiles?.find(p => p.id === st.activeEquipId)?.stations?.find(row => row.id === stationId)?.loadConvention || undefined }))} />
-      <SelectRow title={t('Load convention')} value={c.loadConvention || ''} options={conventionOptions()} onChange={loadConvention => setC(x => ({ ...x, loadConvention: loadConvention || undefined }))} />
+      <SelectRow title={t('Load convention')} value={isBellEx(ex) ? dbLoadFor(st, { ...c, id: ex.id }) : c.loadConvention || ''} options={isBellEx(ex)
+        ? [{ value: 'as', label: t('As entered') }, { value: 'each', label: t('Dumbbell per hand') }, { value: 'total', label: t('Dumbbells total') }]
+        : conventionOptions()} onChange={isBellEx(ex) ? setDbMeaning : loadConvention => setC(x => ({ ...x, loadConvention: loadConvention || undefined }))} />
     </>}
     {/* What a dumbbell weight means, for this routine's slot (cfg.dbLoad). Picking what the
         exercise already means drops the key, so the slot follows the exercise's default again. */}
     {!lockEquipment && isBellEx(ex) && !bw && mode !== 'cardio' && <>
       <h4 className="sec">{t('Weight means')}</h4>
       <DbLoadPicker ex={ex} cfg={c} value={dbLoadFor(st, { ...c, id: ex.id })}
-        onChange={v => setC(x => ({ ...x, dbLoad: v === dbLoadFor(st, ex.id) ? undefined : v }))} />
+        onChange={setDbMeaning} />
     </>}
     {/* How the weight is plate-loaded and what the bar weighs — per exercise, not per plan, so
         it sits apart from the config fields above and writes straight to S.barWeights/S.loadKind. */}

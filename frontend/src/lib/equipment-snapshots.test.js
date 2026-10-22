@@ -2,6 +2,8 @@ import { it, expect } from 'vitest'
 import { convertStateUnit } from './units.js'
 import { repeatSessionEntries } from './session-repeat.js'
 import { routineFromSession } from './session-routines.js'
+import { buildPlannedEntry } from './session-start.js'
+import { entryDbLoad, volumeFactor, withMeaning } from './dumbbells.js'
 
 it('converts a stamped mass load with its recorded unit and preserves machine settings', () => {
   const st = { unit: 'lb', routines: [{ id: 'r', ex: [{ id: '0576', weight: 5, loadConvention: 'machine-setting' }] }], workouts: [{ entries: [
@@ -27,4 +29,31 @@ it('repeating work snapshots current metadata while keeping the old record intac
   const cfg = routineFromSession(old).ex[0]
   expect(cfg).not.toHaveProperty('trainingSnapshot')
   expect(cfg).not.toHaveProperty('equipmentSnapshot')
+})
+
+it.each([
+  ['total', 'db-per-hand', 'db-total', 1],
+  ['each', 'db-total', 'db-per-hand', 2],
+  ['as', 'db-per-hand', null, 1],
+])('builds snapshot from the authoritative dumbbell meaning %s despite stale convention %s', (meaning, stale, convention, factor) => {
+  const st = { unit: 'kg', workouts: [], exWeights: {}, dbLoad: { '0289': { mode: meaning } } }
+  const built = buildPlannedEntry(st, { id: '0289', sets: 1, reps: 8, weight: 20, prog: 'off', loadConvention: stale })
+  const entry = { id: '0289', ...built }
+  expect(built.equipmentSnapshot.loadConvention).toBe(convention)
+  expect(built.target).not.toHaveProperty('loadConvention')
+  expect(entryDbLoad(entry)).toBe(meaning)
+  expect(volumeFactor(entry)).toBe(factor)
+})
+it('leaves unchanged legacy as-entered dumbbell entries with unknown convention', () => {
+  const built = buildPlannedEntry({ unit: 'kg', workouts: [], exWeights: {} }, { id: '0289', sets: 1, reps: 8, weight: 20, prog: 'off' })
+  expect(built.target).not.toHaveProperty('dbLoad')
+  expect(built.equipmentSnapshot.loadConvention).toBe(null)
+  expect(volumeFactor({ id: '0289', ...built })).toBe(1)
+})
+
+it('normalizes a freestyle dumbbell target to its actual meaning without mutating its config', () => {
+  const cfg = { sets: 1, weight: 20, dbLoad: 'each', loadConvention: 'db-total' }
+  const target = withMeaning({}, cfg, '0289')
+  expect(target).toEqual({ sets: 1, weight: 20, dbLoad: 'each' })
+  expect(cfg.loadConvention).toBe('db-total')
 })

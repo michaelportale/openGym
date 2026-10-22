@@ -7,7 +7,7 @@ import { api, beacon } from '../lib/api.js'
 import { nextPrescription } from '../lib/progression.js'
 import { buildCombinedEntries } from '../lib/session-merge.js'
 import { buildCompletedWorkout } from '../lib/finish-workout.js'
-import { isWarmupRow } from '../lib/workout-model.js'
+import { isWarmupRow, makeSideSet, setSideField, toggleSide, hasCompletedWork } from '../lib/workout-model.js'
 import { finishWorkout, finishWorkoutSheet } from '../sheets.jsx'
 
 // A menu's actions in order, whether it came as one list or in groups (menuSheet `sections`).
@@ -3462,5 +3462,39 @@ describe('equipment identity while editing a session exercise', () => {
     expect(mocks.S.active.entries[0].equipmentSnapshot).toEqual(oldSnapshot)
     expect(mocks.S.active.entries[0].target.stationId).toBe('a')
     expect(mocks.S.active.entries[0].target.reps).toBe(10)
+  })
+})
+
+
+describe('equipment identity after logging one side', () => {
+  const equipmentSnapshot = { stationId: 'a', label: 'Press A', loadConvention: 'plate-per-side', unit: 'kg', status: 'exact' }
+  const trainingSnapshot = { role: 'horizontal-press', primary: ['chest'], secondary: [], status: 'manual' }
+  const partialEntry = warmup => {
+    let row = makeSideSet({ w: 20, r: 16, ...(warmup ? { warmup: true } : {}) })
+    row = setSideField(setSideField(setSideField(row, 'L', 'w', 23), 'L', 'r', 7), 'L', 'rir', 1)
+    row = toggleSide(row, 'L')
+    return exercise('0576', [], { target: { sets: 1, reps: 16, weight: 20, prog: 'off', side: true, stationId: 'a', loadConvention: 'plate-per-side', ...(warmup ? { warmupSets: 1 } : {}) }, sets: [row], equipmentSnapshot, trainingSnapshot, plan: { kind: 'first', policy: 'linear', why: ['Synthetic plan'] } })
+  }
+  it('locks the editor after either side completes', async () => {
+    const entry = partialEntry(false)
+    expect(entry.sets[0].done).toBe(false)
+    expect(hasCompletedWork(entry.sets[0])).toBe(true)
+    await mount([entry])
+    await pressProgression()
+    expect(mocks.exConfigSheet.mock.calls.at(-1)[8]).toBe(true)
+  })
+  it.each([false, true])('keeps completed limb work and snapshots through a rep edit (warmup=%s)', async warmup => {
+    const entry = partialEntry(warmup)
+    await mount([entry])
+    await pressProgression()
+    await act(async () => mocks.exConfigSheet.mock.calls.at(-1)[2]({ ...entry.target, reps: 20, stationId: 'b', loadConvention: 'machine-setting' }))
+    const saved = mocks.S.active.entries[0]
+    expect(saved.target).toMatchObject({ reps: 20, stationId: 'a', loadConvention: 'plate-per-side' })
+    expect(saved.equipmentSnapshot).toEqual(equipmentSnapshot)
+    expect(saved.trainingSnapshot).toEqual(trainingSnapshot)
+    const kept = saved.sets.find(hasCompletedWork)
+    expect(kept?.sides.L).toEqual({ w: 23, r: 7, rir: 1, done: true })
+    expect(kept?.sides.R).toEqual({ w: 20, r: 8, done: false })
+    expect(!!isWarmupRow(kept)).toBe(warmup)
   })
 })
