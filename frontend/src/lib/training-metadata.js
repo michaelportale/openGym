@@ -1,6 +1,5 @@
-import { EXIDX } from './exercises.js'
 import { hasExplicitMuscleMetadata, muscleWeightsOf } from './muscles.js'
-import { dbLoadFor, isBellEx } from './dumbbells.js'
+import { exerciseForConfig, equipmentSnapshotFor } from './load-identity.js'
 
 // Deliberately curated starting family; unfamiliar catalogue entries keep an unknown role.
 export const TRAINING_ROLES = ['horizontal-press', 'vertical-press', 'horizontal-pull', 'vertical-pull', 'squat', 'hinge', 'chest-isolation', 'shoulder-isolation', 'elbow-flexion', 'elbow-extension', 'knee-flexion', 'knee-extension', 'calf-raise', 'core']
@@ -53,16 +52,7 @@ export function trainingMetadataOf(ex) {
 
 // Capture at session creation, never by re-reading today's profile when finishing old work.
 export function trainingSnapshotFor(st, cfg) {
-  const ex = EXIDX[cfg.id] || cfg
+  const ex = exerciseForConfig(st, cfg)
   const trainingSnapshot = trainingMetadataOf({ ...ex, ...(st.trainingMetadata?.[cfg.id] ? { trainingMetadata: st.trainingMetadata[cfg.id] } : {}) })
-  const profile = st.equipProfiles?.find(p => p.id === st.activeEquipId)
-  const station = profile?.stations?.find(s => s.id === cfg.stationId && s.exerciseIds?.includes(cfg.id))
-  const meaning = dbLoadFor(st, cfg)
-  const loadConvention = isBellEx(ex)
-    ? meaning === 'each' ? 'db-per-hand' : meaning === 'total' ? 'db-total' : null
-    : cfg.loadConvention || station?.loadConvention || (ex.eq === 'barbell' ? 'barbell-total' : null)
-  const equipmentSnapshot = { stationId: station?.id || null,
-    ...(station ? { label: station.label, ...(station.manufacturer ? { manufacturer: station.manufacturer } : {}), ...(station.model ? { model: station.model } : {}) } : {}),
-    loadConvention, unit: loadConvention === 'machine-setting' ? null : st.unit || null, status: station ? 'exact' : 'unknown' }
-  return { trainingSnapshot, equipmentSnapshot }
+  return { trainingSnapshot, equipmentSnapshot: equipmentSnapshotFor(st, cfg) }
 }

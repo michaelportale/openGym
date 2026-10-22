@@ -174,3 +174,13 @@ describe('non-strength Focus history with equipment snapshots', () => {
     expect(container.querySelector('.strength-feedback')).toBeNull()
   })
 })
+
+it('labels native setting controls and prescription without profile mass units', async () => {
+  const { buildSessionEntries } = await import('../lib/session-start.js')
+  const s = { unit: 'kg', workouts: [], exWeights: {}, activeEquipId: 'gym', equipProfiles: [{ id: 'gym', stations: [{ id: 'pin', exerciseIds: ['0576'], loadConvention: 'machine-setting' }] }] }
+  const [entry] = buildSessionEntries(s, { ex: [{ id: '0576', stationId: 'pin', sets: 1, reps: 10, weight: 7, prog: 'off' }] })
+  mount(entry, s)
+  expect(container.textContent).toContain('Setting')
+  expect(container.textContent).not.toContain('Load (kg)')
+  expect(container.querySelector('.focus-prescription').textContent).not.toContain('kg')
+})

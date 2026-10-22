@@ -1,3 +1,4 @@
+import { historyForLoad, isSettingLoad } from './load-identity.js'
 // Pure helpers over the state object S (ported 1:1 from the vanilla app).
 import { syncSupersetMeta } from './superset-meta.js'
 import { todayISO, isoOf, weekKey, weekStartOf, fmtNum } from './format.js'
@@ -163,7 +164,8 @@ export function setLabel(id, s, cfg, speedUnit) {
   // of added weight, since the number is no longer the whole load on its own. As entered, and a
   // one-arm exercise (one bell, so both meanings are the same number), read as they always did.
   const meaning = !bw && bellsIn(c) === 2 ? dbLoadOf(c.dbLoad) : null
-  const load = (w, reps) => (bw ? (w > 0 ? `+${fmtNum(w)} × ` : '') + reps
+  const setting = s.loadConvention != null ? s.loadConvention === 'machine-setting' : isSettingLoad(c)
+  const load = (w, reps) => (setting ? `${fmtNum(w || 0)} ${t('Setting')} × ${reps}` : bw ? (w > 0 ? `+${fmtNum(w)} × ` : '') + reps
     : meaning === 'each' ? `${t('{0} each', fmtNum(w || 0))} × ${reps}`
       : meaning === 'total' ? `${t('{0} total', fmtNum(w || 0))} × ${reps}`
         : `${fmtNum(w || 0)}×${reps}`)
@@ -430,6 +432,7 @@ export const exNoteFor = (S, exId) => ((S?.exNotes || {})[exId] || '').trim() ||
 // built by buildSets(), which copies each completed set by position; only the target shape and
 // number of rows need to be seeded here so the config sheet and the rows agree.
 export function freestyleConfig(S, cfg) {
+  S = historyForLoad(S, cfg)
   const last = lastEntryFor(S, cfg.id)
   if (!last) return { ...cfg }
   // What a dumbbell weight meant last time is that session's stamp, not a choice to copy: a
@@ -531,14 +534,16 @@ export function nextTrainingDay(S, iso) {
  * insertWarmupRow for why this module cannot read it itself).
  */
 export function buildSets(S, cfg, options = {}) {
+  S = historyForLoad(S, cfg)
   const rows = buildWorkSets(S, cfg, options)
+  const review = rows => cfg.loadNeedsReview ? rows.map(row => ({ ...row, loadNeedsReview: true })) : rows
   const warm = Math.max(0, Math.min(MAX_PLANNED_WARMUPS, Math.round(cfg.warmupSets) || 0))
-  if (!warm) return rows
+  if (!warm) return review(rows)
   const mode = modeOf(cfg)
   let out = rows
   const floor = barFloor(S, cfg.id)
   for (let i = 0; i < warm; i++) out = insertWarmupRow(out, mode, cfg, options.step, floor)
-  return out
+  return review(out)
 }
 
 /** Beyond this a "warm-up" is its own workout; the config stepper stops here too. */
@@ -730,9 +735,9 @@ function shapeRows(sets, cfg, grid) {
   }
   return [warmup, work]
 }
-// Only imported uncertainty qualifies a subtotal; legacy rows retain their existing meaning.
-export const entryVolumeIsPartial = entry => (entry?.sets || []).some(s => s.sourceLoad && hasCompletedWork(s) && !isWarmupRow(s)
-  && (s.sourceLoad.physical === false || s.w == null || s.r == null))
+// Explicit settings and imported uncertainty qualify a subtotal; legacy loads keep their meaning.
+export const entryVolumeIsPartial = entry => (entry?.sets || []).some(s => hasCompletedWork(s) && !isWarmupRow(s)
+  && (isSettingLoad(entry) || (s.sourceLoad && (s.sourceLoad.physical === false || s.w == null || s.r == null))))
 export const workoutVolumeIsPartial = w => w?.volumePartial === true || (w?.entries || []).some(entryVolumeIsPartial)
 
 export function workoutVolume(w) {
@@ -752,7 +757,7 @@ export function workoutVolume(w) {
   ;(Array.isArray(w?.entries) ? w.entries : []).forEach(e => {
     const f = volumeFactor(e)
     ;(Array.isArray(e?.sets) ? e.sets : []).forEach(s => {
-      if (!isWarmupRow(s)) v += completedVolumeOf(s) * f
+      if (!isWarmupRow(s)) v += completedVolumeOf(s, e) * f
     })
   })
   return v
@@ -1211,6 +1216,7 @@ export function completedRepsOf(set = {}) {
 /** Best load from completed work rows, with a guarded reps-only legacy topW fallback. */
 
 export function bestWeightForEntry(entry = {}) {
+  if (isSettingLoad(entry)) return 0
   const target = entry.target || entry
   const workRows = Array.isArray(entry.sets)
     ? entry.sets.filter(s => phaseForSet(s) === 'work')

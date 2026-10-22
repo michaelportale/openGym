@@ -1,3 +1,4 @@
+import { equipmentSnapshotFor } from './load-identity.js'
 // Converting a profile between kg and lb. Until now the unit switch only relabelled the numbers
 // (60 kg became "60 lb", issue #22); this walks every stored weight once. Rounded to what a gym
 // can load: lb to the nearest 0.5, kg to the nearest 0.25 — enough that a value converted there
@@ -106,9 +107,9 @@ export function convertStateUnit(S, to) {
   // switching back finds the old list as you left it. The dumbbell list (S.dumbbells) is kept per
   // unit the same way. The load kinds (S.loadKind) and what a dumbbell weight means (S.dbLoad)
   // hold no weight.
-  if (Array.isArray(S.routines)) out.routines = S.routines.map(r => ({ ...r, ex: (r.ex || []).map(cfg => convTarget(cfg, from, to)) }))
+  if (Array.isArray(S.routines)) out.routines = S.routines.map(r => ({ ...r, ex: (r.ex || []).map(cfg => (equipmentSnapshotFor(S, cfg).loadConvention === 'machine-setting' ? cfg : convTarget(cfg, from, to))) }))
   if (Array.isArray(S.queue?.adaptation?.baseline)) out.queue = { ...S.queue, adaptation: { ...S.queue.adaptation,
-    baseline: S.queue.adaptation.baseline.map(r => ({ ...r, ex: (r.ex || []).map(cfg => convTarget(cfg, from, to)) })),
+    baseline: S.queue.adaptation.baseline.map(r => ({ ...r, ex: (r.ex || []).map(cfg => (equipmentSnapshotFor(S, cfg).loadConvention === 'machine-setting' ? cfg : convTarget(cfg, from, to))) })),
   } }
   if (Array.isArray(S.workouts)) out.workouts = S.workouts.map(convSession)
   if (S.active) out.active = convSession(S.active)

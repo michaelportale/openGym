@@ -53,6 +53,7 @@ export default function StrengthFeedback({ entryIdx, onProgressionSettings }) {
       onClick={() => pick(side)}>{label}: {rir == null ? t('Optional') : fmtNum(rir)}</Button>
   }
   return <div className="strength-feedback" style={{ marginBlock: 12 }}>
+    {entry.sets.some(row => row.loadNeedsReview) && <p role="status">{t('Choose the load for this copied exercise before logging it.')}</p>}
     {entry.equipmentSnapshot && <div className="small dim" style={{ marginBottom: 8 }}>
       {prior ? <>{t('Comparable history')} · {fmtDate(prior.d)}: {prior.sets.filter(s => s.done && !isWarmupRow(s)).map(s => setLabel(entry.id, s, prior.target)).join(', ')}</> : t('No comparable history')}
     </div>}

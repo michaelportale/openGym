@@ -1,3 +1,4 @@
+import { isSettingLoad } from './load-identity.js'
 // Focused workout semantics shared by session, history, and strength views.
 // Legacy records have no explicit phase or mode, so the defaults preserve main's work/reps shape.
 
@@ -201,7 +202,8 @@ export const hasCompletedWork = set => isSideSet(set)
   : set?.done === true
 
 /** Actual completed load x reps; the scalar maximum weight is only a summary. */
-export function completedVolumeOf(set) {
+export function completedVolumeOf(set, entry) {
+  if (isSettingLoad(entry)) return 0
   if (isSideSet(set)) return completedVolumeOf(set.sides.L) + completedVolumeOf(set.sides.R)
   if (!set?.done || set.sourceLoad?.physical === false) return 0
   return (Number(set.w) || 0) * (Number(set.r) || 0) + extraVolumeOf(set)

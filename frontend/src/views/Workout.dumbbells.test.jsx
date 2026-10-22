@@ -94,3 +94,12 @@ describe('stepper over owned dumbbells', () => {
     expect(useStore.getState().S.active.entries[0].sets[0].w).toBe(12)
   })
 })
+
+it('labels an inherited native station setting without a mass unit', async () => {
+  const { buildSessionEntries } = await import('../lib/session-start.js')
+  const settings = { unit: 'kg', workouts: [], exWeights: {}, activeEquipId: 'gym', equipProfiles: [{ id: 'gym', stations: [{ id: 'pin', label: 'Pin', exerciseIds: ['0576'], loadConvention: 'machine-setting' }] }] }
+  const entries = buildSessionEntries(settings, { ex: [{ id: '0576', stationId: 'pin', sets: 1, reps: 10, weight: 7, prog: 'off' }] })
+  mount(entries, settings)
+  expect(heads()).toEqual(['Setting'])
+  expect(container.querySelector('.stp input').value).toBe('7')
+})

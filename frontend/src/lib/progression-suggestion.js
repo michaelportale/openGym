@@ -60,7 +60,8 @@ export function suggestProgression({ exercise, history, prescription = exercise?
   result.reps = prescription.reps
   const concern = [exercise, previous, prescription].flatMap(e => ['pain', 'techniqueProblem', 'safetyConcern', 'userOverride'].map(k => e?.[k])).find(Boolean)
   if (concern) return out('review', typeof concern === 'string' ? concern : 'Review safety, form or your override before increasing')
-  if (!(prescription.sets > 0) || rows.length < prescription.sets || !values.length
+  const priorSets = previous.target?.sets ?? previous.planned?.sets
+  if (!(knownNumber(priorSets) && priorSets > 0) || rows.length < priorSets || !(prescription.sets > 0) || rows.length < prescription.sets || !values.length
     || !values.every(s => s.done === true && knownNumber(s.w) && s.w >= 0 && knownNumber(s.r) && s.r > 0 && s.w === first.w))
     return out('hold', 'Complete every prescribed working set with a comparable load and reps')
   const stride = isSideSet(rows[0]) ? 2 : 1

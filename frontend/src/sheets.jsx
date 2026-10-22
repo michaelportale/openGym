@@ -1,3 +1,4 @@
+import { isSettingLoad, equipmentSnapshotFor } from './lib/load-identity.js'
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
@@ -1704,7 +1705,7 @@ const climbsRange = policy => policy === 'double' || policy === 'triple'
 // Triple progression's set ceiling while it is being edited: never below the starting sets.
 const setsMaxOf = c => Math.max(Math.max(1, Math.round(c.sets) || 1), Math.min(MAX_TRIPLE_SETS, Math.round(c.setsMax) || 0))
 
-function ProgressionFields({ ex, mode, c, setC, routine, unit, perSide, bw }) {
+function ProgressionFields({ ex, mode, c, setC, routine, unit, setting, perSide, bw }) {
   // Triple progression adds sets and then load. Bodyweight work with nothing added already climbs
   // reps and then sets on its own (the rep ceiling below), and has no load to finish the cycle
   // with, so it is not offered there.
@@ -1718,11 +1719,11 @@ function ProgressionFields({ ex, mode, c, setC, routine, unit, perSide, bw }) {
   const invalid = !progressionStepIsValid(inc, active, backoff)
   // "26 → 24 → 22 kg": what the sets will open at, from the weight and step typed above.
   const preview = backoff && c.weight > 0 && inc > 0
-    ? backoffWeights(c.weight, Math.max(1, Math.round(c.sets) || 1), inc).map(fmtNum).join(' → ') + ' ' + unit
+    ? backoffWeights(c.weight, Math.max(1, Math.round(c.sets) || 1), inc).map(fmtNum).join(' → ') + ' ' + (setting ? t('Setting') : unit)
     : ''
   const stride = mode === 'reps' && perSide ? 2 : 1
   const range = climbsRange(active) ? normalizeRepRange(c.reps, c.repsMin, stride) : null
-  const epleyEligible = mode === 'reps' && !isBw({ ...c, id: ex.id }) && (active === 'linear' || climbsRange(active))
+  const epleyEligible = !setting && mode === 'reps' && !isBw({ ...c, id: ex.id }) && (active === 'linear' || climbsRange(active))
   // What is typed is shown as typed, 0 for an emptied field included: shown as the default 90
   // instead, the field could not be emptied to type a new percentage.
   const deloadPercent = Math.round((c.deloadFactor != null && Number.isFinite(Number(c.deloadFactor)) ? Number(c.deloadFactor) : 0.9) * 100)
@@ -1750,7 +1751,7 @@ function ProgressionFields({ ex, mode, c, setC, routine, unit, perSide, bw }) {
     {/* Double progression on a weighted exercise fills this row with four steppers; `cfgrow-4`
         lets it wrap into two pairs on phones, where four abreast left the inputs a few px wide. */}
     {(active !== 'off' || backoff) && <div className={'row cfgrow' + ((active === 'double' && epleyEligible) || active === 'triple' ? ' cfgrow-4' : '')} style={{ marginBottom: 18 }}>
-      <Stepper label={mode === 'time' ? t('Step (seconds)') : t('Step ({0})', unit)} value={inc}
+      <Stepper label={mode === 'time' ? t('Step (seconds)') : t('Step ({0})', setting ? t('Setting') : unit)} value={inc}
         step={mode === 'time' ? 5 : 1.25} decimal={mode !== 'time'} invalid={invalid} className={invalid ? 'invalid' : ''}
         onChange={v => setC(x => ({ ...x, inc: v }))} />
       {climbsRange(active) && <>
@@ -1811,6 +1812,7 @@ function ExConfig({ ex, existing, onSave, onDelete, onReplace, close, routine, i
       ? { ...cfg, ...normalizeRepRange(cfg.reps, cfg.repsMin, isPerSide(cfg) ? 2 : 1) }
       : cfg
   })
+  const setting = equipmentSnapshotFor(st, { ...c, id: ex.id }).loadConvention === 'machine-setting'
   const setDbMeaning = value => setC(x => ({ ...x, dbLoad: value === dbLoadFor(st, ex.id) ? undefined : value, loadConvention: undefined }))
   // Cardio keeps its own duration+speed form; the reps/time choice (issue #16) is offered for
   // everything else, which is where the gap was — planks, hangs, wall sits, loaded carries.
@@ -1855,7 +1857,7 @@ function ExConfig({ ex, existing, onSave, onDelete, onReplace, close, routine, i
     // switching to Time too — a timed hold has no rep count to split — but "per side" does not
     // have to mean splitting: for a hold it means doing the whole thing once per side, so the
     // flag now survives the switch and buildWorkSets doubles the planned sets instead.
-    const flags = {}
+    const flags = existing?.loadNeedsReview && c.weight === existing.weight ? { loadNeedsReview: true } : {}
     if (bw !== isBodyweightEq(ex.id)) flags.bodyweight = bw
     // Free text, e.g. a pyramid's per-set loading ("bar only, +1 plate/side each set") — the
     // sets/reps/weight fields are one flat target and have no room for that on their own.
@@ -1946,7 +1948,7 @@ function ExConfig({ ex, existing, onSave, onDelete, onReplace, close, routine, i
         <Stepper label={t('Seconds')} value={c.sec} step={5} decimal={false} onChange={v => setC(x => ({ ...x, sec: v }))} />
         {/* A bodyweight hold's load is the "Added" row below — showing both put two fields on
             one value. */}
-        {!bw && <Stepper label={t('Weight ({0})', st.unit)} value={c.weight} step={2.5} onChange={v => setC(x => ({ ...x, weight: v }))} />}
+        {!bw && <Stepper label={setting ? t('Setting') : t('Weight ({0})', st.unit)} value={c.weight} step={2.5} onChange={v => setC(x => ({ ...x, weight: v }))} />}
       </> : <>
         {/* Rest-pause always trains as exactly two rows — a warm-up at this rep count, then one
             rest-pause work set — so "Sets" has nothing left to mean and only invites a mismatch. */}
@@ -1955,7 +1957,7 @@ function ExConfig({ ex, existing, onSave, onDelete, onReplace, close, routine, i
         {!ranged && !pyramid && <Stepper label={t('Reps')} value={c.reps} step={perSide ? 2 : 1} decimal={false} onChange={v => setC(x => ({ ...x, reps: v }))} />}
         {/* On bodyweight work the weight stepper is the click #32 is about, so it is not here
             until there is a belt to describe — see the added-weight row below. */}
-        {!bw && !pyramid && <Stepper label={t('Weight ({0})', st.unit)} value={c.weight} step={2.5} onChange={v => setC(x => ({ ...x, weight: v }))} />}
+        {!bw && !pyramid && <Stepper label={setting ? t('Setting') : t('Weight ({0})', st.unit)} value={c.weight} step={2.5} onChange={v => setC(x => ({ ...x, weight: v }))} />}
       </>}
     </div>
     {/* Pyramid sets: a row per set, each with its own reps or Max, rest and weight. A set left
@@ -1981,7 +1983,7 @@ function ExConfig({ ex, existing, onSave, onDelete, onReplace, close, routine, i
         </div>
         {/* Bodyweight work has its one "Added" load below instead. */}
         {!bw && <div className="row cfgrow" style={{ marginBottom: 4 }}>
-          <Stepper label={t('Weight ({0})', st.unit)} value={(c.pyramidWeight || [])[i] || 0} step={2.5}
+          <Stepper label={setting ? t('Setting') : t('Weight ({0})', st.unit)} value={(c.pyramidWeight || [])[i] || 0} step={2.5}
             onChange={v => setC(x => {
               const weight = Array.from({ length: x.pyramid.length }, (_, j) => (x.pyramidWeight || [])[j] || 0)
               weight[i] = v
@@ -2165,7 +2167,7 @@ function ExConfig({ ex, existing, onSave, onDelete, onReplace, close, routine, i
     </>}
     {pyramid
       ? <div className="small dim" style={{ marginBottom: 18 }}>{t('Weight is up to you: pyramid sets are not progressed automatically.')}</div>
-      : <ProgressionFields ex={ex} mode={mode} c={c} setC={setC} routine={routine} unit={st.unit} perSide={perSide} bw={bw} />}
+      : <ProgressionFields ex={ex} mode={mode} c={c} setC={setC} routine={routine} unit={st.unit} setting={setting} perSide={perSide} bw={bw} />}
     <textarea className="input" rows={3} maxLength={500} style={{ marginBottom: 18 }}
       placeholder={t('Note (optional): loading cues, "bar only, then +1 plate/side each set", anything worth remembering')}
       value={c.note || ''} onChange={e => setC(x => ({ ...x, note: e.target.value }))} />
@@ -2636,7 +2638,7 @@ function WorkoutDetail({ w, close }) {
     return <div key={i} className="row wd-ex" style={{ alignItems: 'flex-start' }} {...tappable(() => exerciseHistorySheet(e.id))}>
       {ex && <Thumb ex={ex} />}
       <div className="grow"><div className={`tt ${exerciseNameClass(ex)}`} style={{ fontWeight: 600 }}>{nameOf(e)} {w.prs && w.prs.includes(e.id) && <span className="pr"><Icon name="trophy" />PR</span>}</div>
-        <div className="ss">{e.sets.filter(hasCompletedWork).map(s => setLabel(e.id, s, e.target, speedUnitOf(st))).join('  ·  ') || t('no sets')}</div>
+        <div className="ss">{e.sets.filter(hasCompletedWork).map(s => setLabel(e.id, s, { ...e.target, equipmentSnapshot: e.equipmentSnapshot }, speedUnitOf(st))).join('  ·  ') || t('no sets')}</div>
         {e.note && <div className="small dim" style={{ marginTop: 3 }}>
           {e.notePin && <Icon name="pin" style={{ fontSize: 12, marginInlineEnd: 4, verticalAlign: '-1px', color: 'var(--yellow)' }} />}{e.note}
         </div>}</div>
@@ -3442,9 +3444,9 @@ function LastAndNext({ st, w }) {
           {tr ? <span style={{ color: tr[1], display: 'inline-flex' }} aria-label={row.trend > 0 ? t('Up on last time') : row.trend < 0 ? t('Down on last time') : t('Same as last time')}><Icon name={tr[0]} /></span>
             : <span className="tag nocap">{t('First time')}</span>}
         </div>
-        <div className="small">{t('Today')}: {setsLine(row.today, st.unit)}</div>
-        {row.last && <div className="small dim">{t('Last time')}: {setsLine(row.last, st.unit)}</div>}
-        {row.next && <div className="small accent">{t('Next time')}: {row.next.w != null ? fmtNum(row.next.w) + ' ' + st.unit : ''}{row.next.w != null && row.next.r != null ? ' × ' : ''}{row.next.r != null ? row.next.r : ''} · {nextWord[row.next.kind]}</div>}
+        <div className="small">{t('Today')}: {setsLine(row.today, row.setting ? t('Setting') : st.unit)}</div>
+        {row.last && <div className="small dim">{t('Last time')}: {setsLine(row.last, row.setting ? t('Setting') : st.unit)}</div>}
+        {row.next && <div className="small accent">{t('Next time')}: {row.next.w != null ? fmtNum(row.next.w) + ' ' + (row.next.setting ? t('Setting') : st.unit) : ''}{row.next.w != null && row.next.r != null ? ' × ' : ''}{row.next.r != null ? row.next.r : ''} · {nextWord[row.next.kind]}</div>}
       </div>
     })}</div>
   </div>
@@ -3535,6 +3537,7 @@ function doFinishWorkout() {
   // it outdoes loses its own. It used to report none at all while the editor's Save awarded them
   // (QA 1.3.9). The confirmed weights are left alone either way.
   if (!past) A.entries.forEach(e => {
+    if (isSettingLoad(e)) return
     const loads = e.sets.filter(s => s.done && !isWarmupRow(s)).map(s => s.w).filter(w => w > 0)
     const mx = loads.length ? loads.reduce((a, b) => betterWeight(e.id, a, b)) : 0
     // Held against history read the way this session logged a dumbbell weight (lib/dumbbells.js).
