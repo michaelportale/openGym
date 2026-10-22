@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { workoutsOn, backfillStart, backfillEnd, insertChronological, completeBackfill, markAllSetsDone, historyAsOf, sessionHistory } from './backfill.js'
+import { makeSideSet, setSideField } from './workout-model.js'
 
 const w = (id, d, start = 0) => ({ id, d, start })
 
@@ -137,6 +138,38 @@ describe('sessionHistory', () => {
 
 // #284: a past session that went as planned is logged with one tap instead of one per set.
 describe('markAllSetsDone', () => {
+  it('leaves copied unknown loads pending while completing reviewed and legacy zero loads', () => {
+    const sets = [
+      { w: 0, r: 8, done: false, loadNeedsReview: true },
+      { w: 0, r: 5, done: false, phase: 'warmup', loadNeedsReview: true },
+      { w: 0, sec: 30, done: false, loadNeedsReview: true },
+      { w: 0, r: 8, done: false },
+      { w: 25, r: 8, done: true, rir: 2, at: 123 },
+    ]
+    const out = markAllSetsDone([{ id: 'bench', sets }])[0]
+    expect(out.sets.map(s => s.done)).toEqual([false, false, false, true, true])
+    expect(out.sets.slice(0, 3)).toEqual(sets.slice(0, 3))
+    expect(out.sets[4]).toEqual(sets[4])
+    expect(out.topW).toBe(25)
+    expect(sets[3].done).toBe(false)
+  })
+
+  it('completes only explicitly reviewed sides and preserves the other side for review', () => {
+    const pending = makeSideSet({ w: 0, r: 16, loadNeedsReview: true })
+    const halfReviewed = setSideField(pending, 'L', 'w', 0)
+    const reviewed = setSideField(setSideField(pending, 'L', 'w', 12), 'R', 'w', 10)
+    const sets = markAllSetsDone([{ id: 'curl', sets: [pending, halfReviewed, reviewed] }])[0].sets
+    expect(sets.map(s => s.done)).toEqual([false, false, true])
+    expect(sets[0]).toEqual(pending)
+    expect(sets[1]).toMatchObject({ loadNeedsReview: true, sides: {
+      L: { w: 0, done: true, loadNeedsReview: false }, R: { w: 0, done: false },
+    } })
+    expect(sets[2].sides.L.done && sets[2].sides.R.done).toBe(true)
+    expect(halfReviewed.sides.L.done).toBe(false)
+    // Repeated bulk completion must neither confirm the remaining side nor undo logged work.
+    expect(markAllSetsDone([{ id: 'curl', sets }])[0].sets).toEqual(sets)
+  })
+
   it('ticks every row, warm-ups and both sides of a unilateral set included, and stamps the top weight', () => {
     const side = (w, r) => ({ w, r, done: false })
     const entries = [

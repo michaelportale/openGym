@@ -92,12 +92,16 @@ export function completeBackfill(workouts, active, w, now = Date.now()) {
 // fact went as planned more often than not — a routine that is just a run is the case that asked
 // for it — and ticking every box one by one to say so is the chore that leaves it unlogged. Both
 // sides of a unilateral set are ticked, and each exercise gets the top weight that ticking its
-// last set would have stamped. Returns new entries; the caller stores them.
+// last set would have stamped. A copied unknown load still needs an explicit edit: bulk logging
+// cannot confirm it, including the unreviewed side of a partly reviewed row.
+// Returns new entries; the caller stores them.
 export function markAllSetsDone(entries) {
   return (entries || []).map(entry => {
-    const sets = (entry.sets || []).map(s => (isSideSet(s)
-      ? syncSideAggregate({ ...s, sides: { L: { ...s.sides.L, done: true }, R: { ...s.sides.R, done: true } } })
-      : { ...s, done: true }))
+    const sets = (entry.sets || []).map(s => {
+      if (!isSideSet(s)) return s.loadNeedsReview ? { ...s } : { ...s, done: true }
+      const completedSide = side => s.loadNeedsReview && side.loadNeedsReview !== false ? { ...side } : { ...side, done: true }
+      return syncSideAggregate({ ...s, sides: { L: completedSide(s.sides.L), R: completedSide(s.sides.R) } })
+    })
     const next = { ...entry, sets }
     next.topW = bestWeightForEntry(next) || null
     return next

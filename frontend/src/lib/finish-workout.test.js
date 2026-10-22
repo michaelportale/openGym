@@ -85,6 +85,34 @@ describe('completed workout boundary', () => {
     expect(buildCompletedWorkout(active, { end: 2000 }).entries[0].sets[0]).toBe(rows[0])
   })
 
+  it('preserves unknown loads on unfinished straight and timed rows through JSON saving', () => {
+    const rows = [
+      { done: true, w: 20, r: 8 },
+      { done: false, w: 0, r: 8, loadNeedsReview: true, weightOrigin: WEIGHT_ORIGIN_MANUAL },
+      { done: false, w: 0, sec: 3, planSec: 30, loadNeedsReview: true },
+    ]
+    const active = { id: 'a', entries: [{ id: '0025', sets: rows }] }
+    const saved = JSON.parse(JSON.stringify(buildCompletedWorkout(active)))
+    expect(saved.entries[0].sets).toEqual([
+      { done: true, w: 20, r: 8 },
+      { done: false, w: 0, r: 8, loadNeedsReview: true },
+      { done: false, w: 0, sec: 30, loadNeedsReview: true },
+    ])
+    expect(rows[1].weightOrigin).toBe(WEIGHT_ORIGIN_MANUAL)
+    expect(rows[2].planSec).toBe(30)
+  })
+
+  it('removes stale review markers from fully completed rows and sides', () => {
+    const side = toggleSide(toggleSide(makeSideSet({ w: 20, r: 16, loadNeedsReview: true }), 'L'), 'R')
+    side.sides.L.loadNeedsReview = false
+    const active = { id: 'a', entries: [{ id: '0025', sets: [
+      { done: true, w: 20, r: 8, loadNeedsReview: true }, side,
+    ] }] }
+    expect(JSON.stringify(buildCompletedWorkout(active))).not.toContain('loadNeedsReview')
+    expect(side.loadNeedsReview).toBe(true)
+    expect(side.sides.L.loadNeedsReview).toBe(false)
+  })
+
   it('mirrors routineIds → routineId, and tolerates a legacy scalar active.routineId', () => {
     const base = {
       id: 'w', d: '2026-08-08', start: 1,

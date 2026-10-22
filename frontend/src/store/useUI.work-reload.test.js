@@ -33,6 +33,41 @@ afterEach(() => {
 })
 
 describe('a hold across a reload', () => {
+  it.each(['expired away', 'expires after restore', 'finished early', 'displaced by rest'])('keeps elapsed time without completing an unknown load when %s', end => {
+    useStore.getState().update(s => {
+      s.active.entries[1].sets[0] = { sec: 45, w: 0, done: false, loadNeedsReview: true }
+    }, false)
+    localStorage.setItem(WORK_KEY, JSON.stringify({
+      endsAt: Date.now() + (end === 'expired away' ? -5_000 : 40_000), total: 45, label: 'Plank', overtime: false, owner,
+    }))
+    expect(restoreWork()).toBe(true)
+    if (end === 'expires after restore') vi.advanceTimersByTime(41_000)
+    if (end === 'finished early' || end === 'displaced by rest') {
+      vi.advanceTimersByTime(10_000)
+      if (end === 'finished early') useUI.getState().finishWorkEarly()
+      else useUI.getState().startRest(90)
+    }
+    expect(plankSet()).toMatchObject({
+      w: 0, sec: ['finished early', 'displaced by rest'].includes(end) ? 15 : 45,
+      done: false, loadNeedsReview: true, planSec: 45,
+    })
+    expect(plankSet().at).toBeUndefined()
+    expect(useUI.getState().work).toBeNull()
+    expect(saved()).toBeNull()
+  })
+
+  it('allows a restored hold to complete once its load is explicitly reviewed', () => {
+    useStore.getState().update(s => {
+      s.active.entries[1].sets[0] = { sec: 45, w: 0, done: false, loadNeedsReview: true }
+    }, false)
+    localStorage.setItem(WORK_KEY, JSON.stringify({ endsAt: Date.now() + 40_000, total: 45, label: 'Plank', overtime: false, owner }))
+    expect(restoreWork()).toBe(true)
+    useStore.getState().update(s => { delete s.active.entries[1].sets[0].loadNeedsReview }, false)
+    vi.advanceTimersByTime(41_000)
+    expect(plankSet()).toMatchObject({ sec: 45, w: 0, done: true })
+    expect(plankSet().planSec).toBeUndefined()
+  })
+
   it('is kept with its set while it runs, and forgotten once it ends', () => {
     const done = vi.fn()
     useUI.getState().startWork(45, 'Plank', done, owner)

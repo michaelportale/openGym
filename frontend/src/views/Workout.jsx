@@ -1159,10 +1159,11 @@ function ActiveWorkout() {
     else if (m === 'time') {
       const sec = l ? l.sec : (e.target.sec || 45)
       const w = l ? (l.w || 0) : (e.target.weight || 0)
+      const review = l?.loadNeedsReview ? { loadNeedsReview: true } : {}
       // A timed per-side exercise is planned in pairs (buildWorkSets), so one more "set" is one
       // more hold on each side, not a lone row an L/R count would fall out of sync with.
-      if (isPerSide({ ...(e.target || {}), id: e.id })) e.sets.push({ sec, w, done: false, side: 'L' }, { sec, w, done: false, side: 'R' })
-      else e.sets.push({ sec, w, done: false })
+      if (isPerSide({ ...(e.target || {}), id: e.id })) e.sets.push({ sec, w, ...review, done: false, side: 'L' }, { sec, w, ...review, done: false, side: 'R' })
+      else e.sets.push({ sec, w, ...review, done: false })
     }
     else {
       // An extra set past a pyramid copies the last one's target, Max included.
@@ -1171,7 +1172,7 @@ function ActiveWorkout() {
       // previous set's own side when it had one, else split the row's total evenly.
       e.sets.push(isPerSide({ ...(e.target || {}), id: e.id })
         ? (l && isSideSet(l)
-          ? makeSideSet({ w: l.sides.L.w, r: (l.sides.L.r || 0) * 2 })
+          ? makeSideSet({ ...row, w: l.sides.L.w, r: (l.sides.L.r || 0) * 2 })
           : makeSideSet(row))
         : row)
     }
@@ -1372,6 +1373,10 @@ function ActiveWorkout() {
     // Ticked here rather than row by row: without this, unticking and reticking one of them
     // would count as new progress and replay the flow a first tick runs.
     if (fresh) progressHighWater.current = fresh.entries.map(e => e.sets.filter(s => s.done).length)
+    if (fresh?.entries.some(e => e.sets.some(s => !s.done))) {
+      useUI.getState().toast(t('Choose the load for this copied exercise before logging it.'))
+      return
+    }
     workoutCompleteSheet()
   }
   // Adds an exercise after the current unit: the button under the session and the ⋯ menu's Add.
@@ -1594,6 +1599,10 @@ function ActiveWorkout() {
   const startTimed = (idx, i, onFocusProgress) => {
     if (editing) return
     const e = A.entries[idx]
+    if (e.sets[i].loadNeedsReview) {
+      useUI.getState().toast(t('Choose the load for this copied exercise before logging it.'))
+      return
+    }
     // This tap may be the only one before the hold's countdown beeps (a timed first exercise):
     // get the audio context running while it still counts as a gesture (iOS, #152).
     unlock(S.sound)
@@ -1622,12 +1631,16 @@ function ActiveWorkout() {
     // exercise) keeps its seconds and nothing else. It is not a finish: the row stays unticked
     // and starts no rest, because the rest that displaced the hold is already counting down —
     // and the plan it was held against is put aside so the row still knows what it is asking for.
-    if (abandoned) {
+    // A pre-existing hold can also be restored before its copied load was reviewed. Keep its
+    // elapsed time and target just like the store's fallback; time held cannot confirm the load.
+    const needsReview = useStore.getState().S.active?.entries[idx]?.sets[i]?.loadNeedsReview
+    if (abandoned || needsReview) {
       // A row ticked by hand while its hold ran comes through here too — toggle starts the rest
       // that displaces the hold, so the hand-back lands on a row that is already ticked. It
       // still wants the seconds (that is what was held, not the target), but a finished row has
       // no use for a plan set aside.
       mutEntry(idx, en => { if (en.sets[i].planSec == null && !en.sets[i].done) en.sets[i].planSec = plan; en.sets[i].sec = elapsed })
+      if (needsReview && !abandoned) useUI.getState().toast(t('Choose the load for this copied exercise before logging it.'))
       return
     }
     mutEntry(idx, en => { en.sets[i].sec = elapsed; delete en.sets[i].planSec })
