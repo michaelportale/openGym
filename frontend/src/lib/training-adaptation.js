@@ -1,5 +1,5 @@
 import { EXIDX } from './exercises.js'
-import { isoOf } from './format.js'
+import { isoOf, weekKey, weekStartOf } from './format.js'
 import { queueOf, queueDone } from './queue.js'
 import { trainingMetadataOf } from './training-metadata.js'
 import { coverageForState, completedDateOf } from './training-coverage.js'
@@ -30,7 +30,7 @@ export function adaptationFingerprint(s,today) {
   const baseline=baselineOf(s), ids=new Set([...baseline.map(r=>r.id), ...(queueOf(s)?.ids || [])])
   const exerciseIds=new Set([...baseline,...s.routines.filter(r=>ids.has(r.id))].flatMap(r=>(r.ex || []).map(e=>e.id)))
   return encode({unit:s.unit || 'kg',active:s.active?{id:s.active.id,start:s.active.start,routineIds:routineIds(s.active)}:null,today,queue:s.queue || null,rotation:s.rotation || null,week:s.week || {},dayPlan:s.dayPlan || {},
-    routines:s.routines.filter(r=>ids.has(r.id)),workouts:relevantWork(s,today),
+    routines:s.routines.filter(r=>ids.has(r.id)),workouts:relevantWork(s,today),baselineWork:baselineWork(s,baseline),
     trainingMetadata:Object.fromEntries(Object.entries(s.trainingMetadata || {}).filter(([id])=>exerciseIds.has(id))),
     customEx:(s.customEx || []).filter(e=>exerciseIds.has(e.id)),coverageTargets:s.coverageTargets || {},dayDispositions:s.dayDispositions || {}})
 }
@@ -84,18 +84,51 @@ export function proposeAdaptation({state:s,availability,coverage,policy={},today
   const rolling=coverage?.rolling || coverageForState({...s,coverageTargets},today).rolling
   const coverageGaps=Object.fromEntries(Object.entries(rolling.byMuscle).map(([m,v])=>[m,clone(v.actual.gap)]))
   const baseIds=new Set(baseline.map(r=>r.id))
-  const relatedIds=new Set(s.routines.filter(r=>r.adaptationSourceIds?.some(id=>baseIds.has(id))).map(r=>r.id))
-  const completed=new Set(relevantWork(s,today).filter(w=> {
-    const d=completedDateOf(w)
-    return d && d>=shift(today,-6) && d<=today && routineIds(w).some(id=>baseIds.has(id)||relatedIds.has(id))
-  }).map(w=>w.id || `${w.d}|${w.start}`)).size
+  const cycleBoundary=availability.cycleStart != null
+    ? {date:availability.cycleStart,since:null}
+    : adaptationOf(s)?.cycleBoundary || (q ? {date:q.startsOn,since:Number.isFinite(q.since)?q.since:null} : {date:weekKey(today,weekStartOf(s)),since:null})
+  if (!dateOK(cycleBoundary.date) || cycleBoundary.date>today) return {...empty,error:'cycle'}
   const pattern=total===5?['push','pull','legs','upper','lower']:['push','pull','legs','push','pull','legs']
-  const kinds=pattern.slice(Math.min(completed,total),Math.min(completed,total)+dates.length)
+  const credited=new Set(),seen=new Set()
+  let unmatched=0,unknownCycle=0
+  for (const w of [...(s.workouts || [])].sort((a,b)=>(a.start || 0)-(b.start || 0))) {
+    const key=w.id || `${w.d}|${w.start}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    const kinds=[...new Set(routineIds(w).flatMap(id=>{
+      const family=Object.keys(groups).find(kind=>groups[kind].some(r=>r.id===id))
+      if (family) return [family]
+      const r=s.routines.find(r=>r.id===id)
+      return r?.adaptationPolicyVersion===1 && r.adaptationSourceIds?.some(id=>baseIds.has(id)) ? [r.adaptationKind || 'unknown'] : []
+    }))]
+    if (!kinds.length) continue
+    const d=completedDateOf(w)
+    if (!d) { unknownCycle++; continue }
+    if (d<cycleBoundary.date || d>today) continue
+    if (cycleBoundary.since!=null) {
+      if (Number.isFinite(w.start)) { if(w.start<cycleBoundary.since) continue }
+      else {
+        const acceptedDay=isoOf(new Date(cycleBoundary.since))
+        if (d<acceptedDay) continue
+        if (d===acceptedDay) { unknownCycle++; continue }
+      }
+    }
+    let matched=false
+    for (const kind of kinds) {
+      const i=pattern.findIndex((value,index)=>value===kind && !credited.has(index))
+      if (i>=0) { credited.add(i);matched=true }
+    }
+    if (!matched) unmatched++
+  }
+  const pending=pattern.map((kind,i)=>({kind,i})).filter(({i})=>!credited.has(i))
   const shortfalls=[], remainingSessions=[]
-  if (dates.length<Math.max(0,total-completed)) shortfalls.push({code:'availability',sessions:total-completed-dates.length})
+  if (unmatched) shortfalls.push({code:'unmatched-program',sessions:unmatched})
+  if (unknownCycle) shortfalls.push({code:'unknown-cycle',sessions:unknownCycle})
+  if (dates.length<pending.length) shortfalls.push({code:'availability',sessions:pending.length-dates.length})
+  const replacedPins=Object.entries(s.dayPlan || {}).filter(([date,id])=>date>=today && date<=[...dates].sort().at(-1) && baseIds.has(id)).map(([date,id])=>({date,id}))
   const score=e=>metaOf(s,e).primary.reduce((sum,m)=>sum+(coverageGaps[m]?.directDays ?? 0)+(coverageGaps[m]?.sets ?? 0)/10,0)
-  kinds.forEach((kind,index)=>{
-    const second=completed+index>=3
+  pending.slice(0,dates.length).forEach(({kind,i},index)=>{
+    const second=i>=3
     const source=kind==='upper'?[groups.push.at(-1),groups.pull.at(-1)]:kind==='lower'?[groups.legs.at(-1)]:[groups[kind][second?groups[kind].length-1:0]]
     const entries=source.flatMap(r=>(r.ex || []).map(e=>({...clone(e),adaptationSourceId:r.id})))
     const ranked=entries.map((e,i)=>({e,i})).sort((a,b)=>score(b.e)-score(a.e)||a.i-b.i)
@@ -115,7 +148,7 @@ export function proposeAdaptation({state:s,availability,coverage,policy={},today
   })
   shortfalls.push(...coverageShortfalls(s,remainingSessions,coverageGaps))
   if (Object.values(rolling.unknowns.actual).some(n=>n>0)) shortfalls.push({code:'unknown-actual',counts:clone(rolling.unknowns.actual)})
-  return {...empty,baseline,availability:clone(availability),policy:clone(policy),policyVersion:1,remainingSessions,coverageGaps,
+  return {...empty,baseline,cycleBoundary,creditedKinds:pattern.filter((_,i)=>credited.has(i)),replacedPins,availability:clone(availability),policy:clone(policy),policyVersion:1,remainingSessions,coverageGaps,
     reasons:[total===5?'ppl-ul':'ppl', 'rolling-observed','duration-estimate'],shortfalls,estimatedMinutes:remainingSessions.map(r=>r.estimate.minutes)}
 }
 
@@ -140,15 +173,16 @@ export function applyAdaptation(s,proposal) {
   let h=2166136261
   for (let i=0;i<text.length;i++) h=Math.imul(h^text.charCodeAt(i),16777619)
   const token=`adapt-${(h>>>0).toString(36)}`
-  const occurrences=fresh.remainingSessions.map((r,i)=>({id:`${token}-${i}`,name:r.name,ex:clone(r.ex),adaptationSourceIds:r.sourceIds,adaptationPolicyVersion:1}))
+  const occurrences=fresh.remainingSessions.map((r,i)=>({id:`${token}-${i}`,name:r.name,ex:clone(r.ex),adaptationSourceIds:r.sourceIds,adaptationKind:r.kind,adaptationPolicyVersion:1}))
   if (occurrences.some(r=>{const existing=next.routines.find(x=>x.id===r.id);return existing && encode(existing)!==encode(r)})) return {state:s,error:'invalid'}
   next.routines.push(...occurrences.filter(r=>!next.routines.some(x=>x.id===r.id)))
   const ids=occurrences.map(r=>r.id)
   next.dayPlan ||= {}
   for (const [date,id] of Object.entries(next.dayPlan)) if (date>=proposal.today && oldQueue?.ids.includes(id) && !done.includes(id)) delete next.dayPlan[date]
+  fresh.replacedPins.forEach(({date})=>{delete next.dayPlan[date]})
   fresh.remainingSessions.forEach((r,i)=>{next.dayPlan[r.date]=ids[i]})
   next.queue={...(oldQueue || {since:Date.now(),startsOn:proposal.today,strict:true}),ids:[...done,...ids],
-    adaptation:{token,today:proposal.today,baseline:fresh.baseline,policyVersion:1,availability:fresh.availability,reviewedWork:baselineWork(s,fresh.baseline)}}
+    adaptation:{token,today:proposal.today,baseline:fresh.baseline,policyVersion:1,availability:fresh.availability,cycleBoundary:fresh.cycleBoundary,reviewedWork:baselineWork(s,fresh.baseline)}}
   const undo={today:proposal.today,queue:oldQueue,dayPlan:oldPins,afterPins:clone(next.dayPlan),fingerprint:adaptationFingerprint(next,proposal.today)}
   return {state:next,error:null,undo}
 }

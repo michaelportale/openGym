@@ -3,7 +3,7 @@ import { trainingMetadataOf, TRAINING_ROLES } from './training-metadata.js'
 import { hasCompletedWork, isSideSet, isWarmupRow } from './workout-model.js'
 import { isoOf } from './format.js'
 import { effectiveRoutineIds } from './history.js'
-import { queueOf } from './queue.js'
+import { queueOf, adaptationCovers } from './queue.js'
 
 const dateOK = d => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d) && isoOf(new Date(d + 'T12:00:00')) === d
 export const completedDateOf = w => Number.isFinite(w.end) && w.end > 0 ? isoOf(new Date(w.end)) : dateOK(w.d) ? w.d : null
@@ -88,7 +88,7 @@ export function coverageForState(S, today) {
   const fixed = { ...S, week: S.week || {}, dayPlan: S.dayPlan || {}, workouts: S.workouts || [], queue: null }
   for (let date = new Date(first); isoOf(date) <= today; date.setDate(date.getDate() + 1)) {
     const d = isoOf(date)
-    for (const id of unique(effectiveRoutineIds(fixed, d, today)).filter(id => !q?.ids.includes(id) || S.dayPlan?.[d] === id)) {
+    for (const id of unique(effectiveRoutineIds(fixed, d, today)).filter(id => !adaptationCovers(S,id,d) && (!q?.ids.includes(id) || S.dayPlan?.[d] === id))) {
       plannedSessions.push({ id: `${d}:${id}`, date: d, entries: plannedEntries(id) })
     }
   }

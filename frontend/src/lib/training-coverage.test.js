@@ -141,3 +141,7 @@ describe('planned custom exercise definitions', () => {
     }
   })
 })
+it('excludes covered baseline weekdays from rolling prescriptions while retaining historical and unrelated days',()=>{
+  const S={routines:[{id:'p',ex:[{id:'0047',sets:3}]},{id:'other',ex:[{id:'0047',sets:2}]},{id:'future',ex:[{id:'0047',sets:4}]}],workouts:[],week:{3:['p','other'],2:'p'},dayPlan:{'2026-10-22':'future'},queue:{ids:['future'],since:1,startsOn:'2026-10-21',adaptation:{token:'a',policyVersion:1,today:'2026-10-21',baseline:[{id:'p'}],availability:{dates:['2026-10-22','2026-10-24']}}}}
+  expect(coverageForState(S,'2026-10-21').rolling.byMuscle.chest.planned.directSets).toBe(5)
+})

@@ -137,7 +137,9 @@ it('accepts a fixed-week plan as an explicit queue without changing its saved we
 })
 it('can revise an accepted fixed-week queue when a later sixth date opens',()=>{
   const s=fixture();delete s.queue;delete s.rotation;s.week={1:'p',3:'u',5:'l'}
-  const accepted=applyAdaptation(s,propose(s)).state
+  // Sunday belongs to the earlier calendar week; including its Push is an explicit review.
+  const p5=propose(s,{availability:{dates:['2026-10-22','2026-10-24'],totalSessions:5,minutes:75,baselineIds:{push:'p',pull:'u',legs:'l'},cycleStart:'2026-10-18'}})
+  const accepted=applyAdaptation(s,p5).state
   const p=propose(accepted,{availability:{dates:['2026-10-22','2026-10-23','2026-10-24'],totalSessions:6,minutes:75}})
   expect(p.error).toBeNull()
   expect(p.remainingSessions.map(r=>r.kind)).toEqual(['push','pull','legs'])
@@ -192,4 +194,50 @@ it('tolerates a malformed adaptation payload from another writer without taking 
   expect(()=>propose(s)).not.toThrow()
   expect(propose(s).error).toBe('external')
   expect(adaptationNeedsReview(s)).toBe(false)
+})
+
+it('credits actual mapped families, retaining missing families and exposing repeated unmatched work',()=>{
+  const s=fixture();s.workouts=s.workouts.map(w=>({...w,routineId:'p'}))
+  const p=propose(s)
+  expect(p.remainingSessions.map(r=>r.kind)).toEqual(['pull','legs'])
+  expect(p.creditedKinds).toEqual(['push'])
+  expect(p.shortfalls).toContainEqual({code:'unmatched-program',sessions:2})
+})
+it('credits an out-of-order PPL prefix by family, without mistaking two families for three',()=>{
+  const s=fixture();s.workouts.reverse()
+  expect(propose(s).remainingSessions.map(r=>r.kind)).toEqual(['upper','lower'])
+  s.workouts=s.workouts.filter(w=>w.routineId!=='u')
+  expect(propose(s).remainingSessions.map(r=>r.kind)).toEqual(['pull','upper'])
+})
+it('excludes an earlier pass, but permits explicitly reviewing its completed PPL prefix',()=>{
+  const s=fixture();s.queue.since=ts(today);s.queue.startsOn=today
+  expect(propose(s).remainingSessions.map(r=>r.kind)).toEqual(['push','pull'])
+  const p=propose(s,{availability:{...propose(s).availability,dates:['2026-10-22','2026-10-24'],totalSessions:5,baselineIds:{push:'p',pull:'u',legs:'l'},cycleStart:'2026-10-18'}})
+  expect(p.remainingSessions.map(r=>r.kind)).toEqual(['upper','lower'])
+  expect(applyAdaptation(s,p).state.queue.adaptation.cycleBoundary).toEqual(p.cycleBoundary)
+})
+it('reviews and removes only baseline pins within the accepted window and restores them on undo',async()=>{
+  const {effectiveRoutineIds}=await import('./history.js')
+  const s=fixture();delete s.queue;delete s.rotation;s.week={3:'p',4:'u',5:'l'}
+  s.routines.push({id:'other',name:'Other',ex:[]})
+  s.dayPlan={'2026-10-21':'other','2026-10-23':'l','2026-10-25':'l'}
+  const p=propose(s)
+  expect(p.replacedPins).toEqual([{date:'2026-10-23',id:'l'}])
+  const accepted=applyAdaptation(s,p)
+  expect(effectiveRoutineIds(accepted.state,'2026-10-23',today)).toEqual([])
+  expect(accepted.state.dayPlan['2026-10-21']).toBe('other')
+  expect(accepted.state.dayPlan['2026-10-25']).toBe('l')
+  expect(undoAdaptation(accepted.state,accepted.undo).state.dayPlan).toEqual(s.dayPlan)
+})
+it('does not establish same-day cycle credit without a start time, and explains uncertainty',()=>{
+  const s=fixture();s.queue.since=ts(today);s.queue.startsOn=today;s.workouts=[{id:'unknown-time',routineId:'p',d:today,entries:[]}]
+  const p=propose(s)
+  expect(p.remainingSessions.map(r=>r.kind)).toEqual(['push','pull'])
+  expect(p.shortfalls).toContainEqual({code:'unknown-cycle',sessions:1})
+})
+it('uses the exact acceptance day for unknown timing even when startsOn names an earlier calendar day',()=>{
+  const s=fixture();s.queue.since=ts(today);s.queue.startsOn='2026-10-19';s.workouts=[{id:'unknown-time',routineId:'p',d:today,entries:[]}]
+  const p=propose(s)
+  expect(p.creditedKinds).toEqual([])
+  expect(p.shortfalls).toContainEqual({code:'unknown-cycle',sessions:1})
 })
