@@ -99,6 +99,29 @@ describe('swap picker opens on the same muscle', () => {
     expect(host.textContent).toContain('Training metadata unverified')
   })
 
+  it('keeps occupied stations out of searched suggestions and restores them only in All', () => {
+    const S = structuredClone(DEF)
+    S.equipProfiles = [{ id: 'gym', name: 'Gym', accV: 1, equipment: [], stations: [{ id: 'occupied', label: 'Cable stack', exerciseIds: ['0241'] }] }]
+    S.activeEquipId = 'gym'
+    S.equipFilterOn = true
+    useStore.setState({ S, user: null })
+    exercisePicker(vi.fn(), { like: CABLE_TRI.id })
+    const host = renderTop()
+    const occupied = host.querySelector('input[aria-label="Occupied station: Cable stack"]')
+    expect(occupied).toBeTruthy()
+    act(() => occupied.click())
+    const search = host.querySelector('input.input')
+    act(() => {
+      Object.getOwnPropertyDescriptor(search.constructor.prototype, 'value').set.call(search, 'cable triceps pushdown')
+      search.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    const names = () => [...host.querySelectorAll('.list .item .tt')].map(el => el.textContent)
+    expect(isOn(sameChip(host))).toBe(true)
+    expect(names()).not.toContain('cable triceps pushdown (v-bar)')
+    act(() => chipByText(host, 'All').click())
+    expect(names()).toContain('cable triceps pushdown (v-bar)')
+  })
+
   it('an add opens on the whole list, with no same-muscle chip', () => {
     exercisePicker(vi.fn())
     const host = renderTop()

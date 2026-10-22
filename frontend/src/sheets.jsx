@@ -1344,8 +1344,11 @@ function ExercisePicker({ onPick, title, close, like, allEquipment = false }) {
   // results once you have scrolled to their end, so a search almost never ends on nothing.
   // Worked out a beat behind the typing (useDeferredValue): the list itself never waits for it.
   const qLate = useDeferredValue(q)
+  const similarCandidates = bp === SAME
+    ? recommendations.map(r => r.exercise).filter(e => (!catOn || e.cat === catOn) && (!eqOn || e.eq === eqOn))
+    : (profile && !showAll ? all.filter(e => exAvailable(st, e)) : all).filter(e => !bp || e.bp === bp)
   const similar = q.trim() && qLate === q && !special && f.length <= shown
-    ? similarExercises((profile && !showAll ? all.filter(e => exAvailable(st, e)) : all).filter(e => bp === SAME || !bp || e.bp === bp), q, f, f.length ? 12 : 30)
+    ? similarExercises(similarCandidates, q, f, f.length ? 12 : 30)
     : []
   const pickRow = e => <div key={e.id} className="item" {...tappable(() => onPick(e))}>
         <Thumb ex={e} /><div className="grow"><div className={`tt ${exerciseNameClass(e)}`}>{isFav(st, e.id) && <Icon name="starFill" className="fav-star" />}{exerciseNameFor(e)}</div><div className="ss capitalize">{t(MUSCLE_NAME[e.tg] || e.tg || e.bp)} · {t(e.eq)}</div>{reasons.has(e.id) && <div className="small muted">{reasons.get(e.id).map(reason => t(reason)).join(' · ')}</div>}</div>
