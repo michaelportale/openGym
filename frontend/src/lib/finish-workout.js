@@ -18,11 +18,11 @@ import { hasCompletedWork, isSideSet } from './workout-model.js'
 // it always was.
 function finishedRow(set) {
   if (!set) return set
-  const sideMarked = isSideSet(set) && (set.sides.L.weightOrigin != null || set.sides.R.weightOrigin != null)
+  const sideMarked = isSideSet(set) && ['L', 'R'].some(key => set.sides[key].weightOrigin != null || set.sides[key].loadNeedsReview != null)
   if (set.planSec == null && set.weightOrigin == null && !set.loadNeedsReview && !sideMarked) return set
   const { planSec, weightOrigin, loadNeedsReview, ...rest } = set
   if (sideMarked) {
-    const side = ({ weightOrigin: _, ...kept }) => kept
+    const side = ({ weightOrigin: _, loadNeedsReview: __, ...kept }) => kept
     rest.sides = { ...rest.sides, L: side(rest.sides.L), R: side(rest.sides.R) }
   }
   return planSec == null || rest.done ? rest : { ...rest, sec: planSec }

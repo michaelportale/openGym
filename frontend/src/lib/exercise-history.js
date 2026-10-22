@@ -43,8 +43,11 @@ export function exerciseHistory(S, exId, { limit = HISTORY_SESSIONS } = {}) {
     const mode = entries.at(-1).mode
     const sameMode = entries.filter(item => item.mode === mode)
     // Keep each setting visible, without giving its rows the last entry's mass convention.
-    const rows = sameMode.flatMap(item => item.rows.map(row => isSettingLoad(item.entry)
-      ? { ...row, loadConvention: 'machine-setting' } : row))
+    const hasSetting = sameMode.some(item => isSettingLoad(item.entry))
+    const rows = sameMode.flatMap(item => item.rows.map(row => hasSetting ? { ...row,
+      // Even a legacy row must not inherit a later occurrence’s setting target.
+      loadConvention: item.entry.equipmentSnapshot?.loadConvention ?? item.entry.target?.loadConvention ?? 'legacy',
+    } : row))
     const physical = sameMode.filter(item => !isSettingLoad(item.entry))
     const en = { ...physical.at(-1)?.entry, id: exId, sets: physical.flatMap(item => item.rows) }
     if (rows.length) logged.push({ w, en, mode, rows, items: sameMode, target: sameMode.at(-1).entry.target })

@@ -67,6 +67,12 @@ Final checks ran sequentially on Node 22.17.0:
 
 The API retry retains the existing MockTimers experimental warning. Detailed RED/GREEN and failed-attempt evidence is retained in the ignored local final-fix report. This wave does **not** repeat the authenticated offline/retry/import/backup scenario above, and does not promote those earlier results to a new browser/device acceptance run. No API or shared `api/coach/core` source or dependency changed, so the earlier API Docker checks remain earlier evidence. The scoped final re-review remains a separate gate.
 
+### Scoped residual corrections after `67a5435e`
+
+The re-review identified two remaining defects: a mass row could inherit a later setting occurrence’s display label, and explicit per-side load edits could not resolve copied-load review. The correction stamps every row’s display convention in mixed-setting history and tracks confirmation separately for each limb. Actual history-sheet tests cover both entry orders, including legacy mass rows. Focus/list tests cover edited-side logging, blocked untouched sides and later rows, JSON reopening, partial finish, and ordinary legacy zero loads.
+
+After these two corrections, sequential Node 22.17.0 checks passed: **5,294 frontend tests / 413 files**, **95 MCP tests**, production build, 18 locales × 2,440 keys, 1,916 source strings, both plain-Node import graphs, and generated catalogue/prompts. Existing build warnings remain. The API source is unchanged; its 601-test pass and fatigue-probe results in the preceding wave remain earlier checks, not reruns in this narrow correction. Scoped source re-review remains pending; no new browser, Docker or device acceptance claim is made.
+
 ## Remaining gates and limitations
 
 - **Installed iPhone:** paired devices were unavailable/disconnected at the final access check, and no supported user HTTPS origin was supplied. Verify actual installation, iOS keyboard visibility, screen lock/reopen, airplane-mode logging, reconnection, single completion and backup/restore on that origin before claiming daily-device readiness. Desktop touch emulation does not satisfy this gate.

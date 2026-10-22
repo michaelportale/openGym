@@ -1650,7 +1650,8 @@ function ActiveWorkout() {
   // (store/useUI.js). The tick's own beep would sound over the chime's first note and clip it,
   // and its short buzz would cut the pattern off: a new vibrate call replaces the running one.
   const toggle = (idx, i, side, { quiet = false, onFocusProgress } = {}) => {
-    if (useStore.getState().S.active?.entries[idx]?.sets[i]?.loadNeedsReview) {
+    const pending = useStore.getState().S.active?.entries[idx]?.sets[i]
+    if (pending?.loadNeedsReview && (!side || pending.sides?.[side]?.loadNeedsReview !== false)) {
       useUI.getState().toast(t('Choose the load for this copied exercise before logging it.'))
       return
     }
