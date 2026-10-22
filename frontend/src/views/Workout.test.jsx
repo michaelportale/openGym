@@ -3584,3 +3584,45 @@ describe('prominent final working-set effort and comparable prescription', () =>
     expect(container.querySelector('.strength-feedback').textContent).not.toContain('999')
   })
 })
+
+// Advisory acceptance must use the same physically loadable warm-up ramp as session creation.
+describe('advisory editor warm-up loading rules', () => {
+  it.each([
+    { name: 'bar floor and fractional increment', id: '0025', load: 31.25, inc: 1.25, next: 32.5, warm: 20, convention: 'barbell-total', state: { barWeights: { '0025': 20 } } },
+    { name: 'owned per-hand dumbbells', id: '0289', load: 14, inc: 1, next: 18, warm: 6, convention: 'db-per-hand', state: { dumbbells: { kg: { weights: [6, 10, 14, 18] } } }, dbLoad: 'each' },
+  ])('preserves $name when saving the current-session advisory', async fixture => {
+    const target = { id: fixture.id, mode: 'reps', sets: 2, repsMin: 8, reps: 12, weight: fixture.load, inc: fixture.inc, warmupSets: 1, prog: 'double', ...(fixture.dbLoad ? { dbLoad: fixture.dbLoad } : {}) }
+    const equipmentSnapshot = { stationId: null, loadConvention: fixture.convention, unit: 'kg', status: 'unknown' }
+    const entry = { id: fixture.id, target, planned: { sets: 2, repsMin: 8, reps: 12 }, equipmentSnapshot,
+      sets: [{ w: fixture.warm, r: 8, phase: 'warmup', done: false }, { w: fixture.load, r: 12, done: false }, { w: fixture.load, r: 12, done: false }] }
+    const history = [{ id: 'prior', d: '2026-10-20', entries: [{ ...entry, sets: [{ w: fixture.load, r: 12, done: true }, { w: fixture.load, r: 12, done: true, rir: 2 }] }] }]
+    await mount([entry], 0, { ...fixture.state, workouts: history })
+    await click(buttonNamed('Edit this session’s prescription'))
+    const [, opened, save] = mocks.exConfigSheet.mock.calls.at(-1)
+    expect(opened.weight).toBe(fixture.next)
+    await act(async () => { save(opened) })
+    const saved = mocks.S.active.entries[0]
+    expect(saved.sets.filter(isWarmupRow).map(s => s.w)).toEqual([fixture.warm])
+    expect(saved.sets.filter(s => !isWarmupRow(s)).map(s => [s.w, s.r])).toEqual([[fixture.next, 8], [fixture.next, 8]])
+    expect(mocks.S.workouts).toEqual(history)
+  })
+})
+
+describe('non-strength history reference with equipment snapshots', () => {
+  it.each([
+    ['cards', 'time'], ['list', 'time'], ['cards', 'cardio'], ['list', 'cardio'],
+  ])('retains the reference control for %s %s entries', async (view, mode) => {
+    const id = mode === 'time' ? '0025' : '2138'
+    const target = { mode, sets: 1, ...(mode === 'time' ? { sec: 30 } : { min: 20, speed: 8 }) }
+    const row = mode === 'time' ? { sec: 30, w: 0 } : { min: 20, speed: 8 }
+    const entry = { id, target, equipmentSnapshot: { stationId: null, loadConvention: null, unit: 'kg', status: 'unknown' }, sets: [{ ...row, done: false }] }
+    await mount([entry], 0, { active: { workoutView: view }, workouts: [{ id: 'prior', d: '2026-10-20', entries: [{ ...entry, sets: [{ ...row, done: true }] }] }] })
+    const reference = container.querySelector('.refline')
+    expect(reference).toBeTruthy()
+    expect(reference.textContent).toContain('Last time')
+    expect(reference.textContent).toContain(mode === 'time' ? '0:30' : '20 min')
+    await click(reference)
+    expect(mocks.S.logRef).toBe('best')
+    expect(container.querySelector('.strength-feedback')).toBeNull()
+  })
+})

@@ -252,7 +252,7 @@ function ExerciseBlock({ entryIdx, compact, dense, editing, onToggle, onToggleSi
   const refAction = refBest ? t('Show last time instead') : t('Show your best set instead')
   // The button's text is the reference, which says nothing about what a tap does; its name
   // carries both, the reference first as it reads on screen, then the switch.
-  const refLine = !entry.equipmentSnapshot && refText ? <button type="button" className="refline small dim"
+  const refLine = (mode !== 'reps' || !entry.equipmentSnapshot) && refText ? <button type="button" className="refline small dim"
     title={refAction} aria-label={`${refText}. ${refAction}`}
     onClick={() => update(s => { s.logRef = refBest ? 'last' : 'best' })}>
     {/* Each set on its own left-to-right island. In Arabic the first one followed the label's
@@ -1527,7 +1527,8 @@ function ActiveWorkout() {
           const reps = Math.min(full.reps, Math.max(full.repsMin || 1, proposal.reps))
           const manual = { policy: built.plan.policy, kind: 'hold', weight: full.weight, reps,
             why: ['Editable suggestion from comparable history accepted for this session.'] }
-          built.sets = applyPrescription(built.sets, manual)
+          const ramp = ownedWeightsFor(s, full) || weightIncrement(full, s.unit)
+          built.sets = applyPrescription(built.sets, manual, ramp, barFloor(s, full.id))
           built.target = { ...built.target, weight: full.weight, reps }
           built.plan = manual
         }
