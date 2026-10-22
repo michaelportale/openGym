@@ -1,0 +1,10 @@
+/* A dedicated header lane keeps Close clear of long headings and sheet search fields.
+   It remains in normal flow so the existing sticky picker and keyboard insets keep working. */
+.modal-dismiss{
+  display:flex;justify-content:flex-end;align-items:center;
+  min-height:44px;margin-bottom:8px;
+}
+.modal-dismiss .modal-close{
+  min-width:44px;min-height:44px;height:auto;
+  padding:8px 12px;gap:8px;
+}
