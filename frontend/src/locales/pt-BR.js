@@ -1589,6 +1589,8 @@ export const PT_BR_OVERRIDES = {
   "Partial load total": "Partial load total",
   "Machine settings and unknown load conventions stay out of load totals and strength estimates.": "Machine settings and unknown load conventions stay out of load totals and strength estimates.",
 
+  "Setting": "Setting",
+  "Choose the load for this copied exercise before logging it.": "Choose the load for this copied exercise before logging it.",
 }
 
 export default { ...pt, ...PT_BR_OVERRIDES }

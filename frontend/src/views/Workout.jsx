@@ -1,3 +1,4 @@
+import { isSettingLoad, historyForLoad } from '../lib/load-identity.js'
 import { Fragment, useEffect, useId, useRef, useState } from 'react'
 import SwipeCards from '../components/SwipeCards.jsx'
 import SwipeRow from '../components/SwipeRow.jsx'
@@ -188,7 +189,7 @@ function ExerciseBlock({ entryIdx, compact, dense, editing, onToggle, onToggleSi
   const timed = mode === 'time'
   // The history the rows were built from: before the session's day when it is logged into the
   // past (sessionHistory), so "last time", the best set and the Best chip are not from later on.
-  const H = sessionHistory(S)
+  const H = historyForLoad(sessionHistory(S), { ...entry.target, id: entry.id })
   // The routine's own last session of this exercise (or any, for a routine that has none), the
   // same one the rows and the progression line were built from (#216).
   const last = lastEntryFor(H, entry.id, entry.rid)
@@ -276,7 +277,7 @@ function ExerciseBlock({ entryIdx, compact, dense, editing, onToggle, onToggleSi
   // The weight column says what a dumbbell weight means when the exercise has said (#474): one
   // bell or both together. A one-arm exercise holds one bell, so its plain heading is already true.
   const bells = !bw && bellsIn(cfg) === 2 ? meaning : 'as'
-  const loadCol = { f: 'w', step: loadStep, dec: true, hd: bw ? t('Added ({0})', S.unit)
+  const loadCol = { f: 'w', step: loadStep, dec: true, hd: isSettingLoad(entry) ? t('Setting') : bw ? t('Added ({0})', S.unit)
     : bells === 'each' ? t('Each ({0})', S.unit) : bells === 'total' ? t('Both ({0})', S.unit) : t('Weight ({0})', S.unit) }
   // The reps column is the total in every mode, unilateral included — the stepper walks in
   // twos there so the number you land on is one you can actually split evenly.
@@ -1142,8 +1143,12 @@ function ActiveWorkout() {
     // carries through without retyping every row while explicit manual exceptions stay put. A
     // warm-up edit stays on its own row, and the later rungs keep their ramp loads.
     if (field === 'w') {
+      delete e.sets[i].loadNeedsReview
       e.sets[i].weightOrigin = WEIGHT_ORIGIN_MANUAL
       e.sets = cascadeWeight(e.sets, i, v, undefined, e.target?.backoffStep)
+      if (!isWarmupRow(e.sets[i])) e.sets.slice(i + 1).forEach(row => {
+        if (!isWarmupRow(row) && row.w === v) delete row.loadNeedsReview
+      })
     }
   })
   const modeAt = idx => modeOf({ ...(A.entries[idx].target || {}), id: A.entries[idx].id })
@@ -1161,7 +1166,7 @@ function ActiveWorkout() {
     }
     else {
       // An extra set past a pyramid copies the last one's target, Max included.
-      const row = { w: l ? l.w : 0, r: l ? l.r : e.target.reps, done: false, ...(l && l.max ? { max: true } : {}) }
+      const row = { w: l ? l.w : 0, r: l ? l.r : e.target.reps, done: false, ...(l?.loadNeedsReview ? { loadNeedsReview: true } : {}), ...(l && l.max ? { max: true } : {}) }
       // A unilateral exercise keeps adding per-side rows (issue #60): seed each side from the
       // previous set's own side when it had one, else split the row's total evenly.
       e.sets.push(isPerSide({ ...(e.target || {}), id: e.id })
@@ -1510,6 +1515,8 @@ function ActiveWorkout() {
         // stamped as the plan, a later edit of the reps would restart from today's load as though
         // it had been typed in (nextPrescription), so the plan keeps its own.
         if (!proposal && (cfg.weight || 0) === (opened.weight || 0) && activeEntry.planned?.weight != null) full.weight = activeEntry.planned.weight
+        // Changing reps or saving the same load cannot confirm an uncertain imported copy.
+        if (activeEntry.sets.some(row => row.loadNeedsReview) && (cfg.weight || 0) === (opened.weight || 0)) full.loadNeedsReview = true
         const activeRoutine = s.routines.find(r => r.id === activeEntry.rid)
         // A config without a set count keeps the rows the session already has.
         if (!(full.sets > 0)) full.sets = activeEntry.sets.filter(x => !isWarmupRow(x)).length || 1
@@ -1643,6 +1650,10 @@ function ActiveWorkout() {
   // (store/useUI.js). The tick's own beep would sound over the chime's first note and clip it,
   // and its short buzz would cut the pattern off: a new vibrate call replaces the running one.
   const toggle = (idx, i, side, { quiet = false, onFocusProgress } = {}) => {
+    if (useStore.getState().S.active?.entries[idx]?.sets[i]?.loadNeedsReview) {
+      useUI.getState().toast(t('Choose the load for this copied exercise before logging it.'))
+      return
+    }
     // Ticking a set ends the typing in that row: drop the keyboard before the rest timer, the
     // effort sheet or the next exercise moves in. WebKit keeps the input focused across the
     // button tap, and a focused input with its keyboard gone is what leaves the tab bar

@@ -6,7 +6,7 @@
 //   layoutWorkoutCard — where everything goes, given a way to measure text
 //   drawWorkoutCard   — paints a layout onto a 2D canvas context
 // Nothing here stores anything; the workout is read, never written.
-import { sessionSections, workoutVolume, workoutDuration, workoutDay, doneUnits } from './history.js'
+import { sessionSections, workoutVolume, workoutVolumeIsPartial, workoutDuration, workoutDay, doneUnits } from './history.js'
 import { EXIDX } from './exercises.js'
 import { isWarmupRow } from './workout-model.js'
 import { MUSCLES, INERT, levelsOf, loadOfWorkouts } from './muscles.js'
@@ -54,7 +54,7 @@ export function workoutCardModel(w, { unit, nameOf }) {
     stats: [
       ...(ms >= 60000 ? [{ label: t('Duration'), value: fmtDur(ms) }] : []),
       { label: t('Sets'), value: fmtNum(sets) },
-      { label: t('Volume'), value: fmtVol(w.vol ?? workoutVolume(w), unit, w.volumePartial) },
+      { label: t('Volume'), value: fmtVol(w.vol ?? workoutVolume(w), unit, workoutVolumeIsPartial(w)) },
     ],
     records: records.map(r => r.name),
     levels: MUSCLES.some(m => levels[m] > 0) ? levels : null,

@@ -1,8 +1,8 @@
 # Personal strength acceptance
 
-Verified locally on 2026-10-22 at implementation commit `90707cac` (documentation updates follow). Source review and an installed iPhone on the user's supported HTTPS origin remain release gates. Local browser success does not establish iPhone readiness or authorize deployment or importing personal history.
+The earlier integration scenario below was verified locally on 2026-10-22 at implementation commit `90707cac`. The final-review corrections and their separate checks are recorded below. Source review and an installed iPhone on the user's supported HTTPS origin remain release gates. Local browser success does not establish iPhone readiness or authorize deployment or importing personal history.
 
-## Automated verification
+## Earlier integration verification
 
 Host suites used Node 22.17.0 and ran sequentially. Docker 29.1.3 ran Linux/arm64 images built from the repository; the current `node:22-alpine` base reported Node 22.23.4. No paid service or AI request was used.
 
@@ -45,6 +45,27 @@ Setup seeded only invented PPL routines, exact local stations and one comparable
 | Touch, focus and scrolling | Emulated touchscreen tap opened chest coverage details; input focus and scroll-to-field worked. Mobile and 1280 × 900 desktop screenshots were inspected; no horizontal overflow in those observed views. Real iOS keyboard behavior was not established. |
 
 Browser/API evidence, screenshots, console/network logs and synthetic backups remain in ignored local task artifacts. Expected errors were initial unauthenticated `/api/me` (401), deliberately offline requests, and the deliberately dropped committed response. The first web probe returned a transient 502 before nginx finished starting; subsequent authenticated checks used the running API. No guest-only result is counted as acceptance.
+
+## Final-review correction wave
+
+This later wave isolates explicit station/convention identity before automatic history seeding, resolves custom-exercise training metadata, preserves inherited unitless settings during unit conversion, and checks advisory completion against the previous prescription’s actual set count. Native settings remain visible as **Setting** and do not contribute physical mass totals, mass PRs or estimated 1RM. Existing imported uncertainty guards and deliberate legacy/dumbbell conversions remain covered.
+
+Repeat and Save as routine preserve saved native load meaning. An uncertain imported copy requires an explicit load edit before completion; unknown values are not asserted as completed zero. Focus/list completion, JSON reopening, settings edits, finish-early, real add/swap callers and native start → log → finish → detail/history are exercised by focused production-path tests. All fixtures are synthetic.
+
+Final checks ran sequentially on Node 22.17.0:
+
+| Check | Final-wave result |
+| --- | --- |
+| Frontend suite | 413 files, 5,288 tests passed |
+| API suite | 601 passed, zero skipped; first attempt stalled in the unchanged password test harness and was terminated, unchanged retry passed in 25.7 seconds |
+| MCP suite | 95 passed |
+| Production build | Passed; existing chunk-size and ineffective dynamic-import warnings remain |
+| Locale/source strings | 18 locales × 2,440 keys in sync; 1,916 source strings present |
+| Fatigue probe | 108,000 monotonic and 1,800 history-edit comparisons passed |
+| Plain-Node graphs | MCP and API coach/core passed |
+| Generated assets | 5,632-exercise catalogue and six prompts in sync |
+
+The API retry retains the existing MockTimers experimental warning. Detailed RED/GREEN and failed-attempt evidence is retained in the ignored local final-fix report. This wave does **not** repeat the authenticated offline/retry/import/backup scenario above, and does not promote those earlier results to a new browser/device acceptance run. No API or shared `api/coach/core` source or dependency changed, so the earlier API Docker checks remain earlier evidence. The scoped final re-review remains a separate gate.
 
 ## Remaining gates and limitations
 

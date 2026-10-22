@@ -142,3 +142,14 @@ it('uses consistent explicit per-hand dumbbell snapshots without converting the 
   const e = entry(2, { target, equipmentSnapshot })
   expect(suggest(e, prescription, ex)).toMatchObject({ load: 52.5, reps: 8, action: 'increase-load' })
 })
+
+it('cannot turn a removed unfinished third prescribed set into completion after the plan drops to two', () => {
+  const previous = entry(3, { planned: { ...prescription } })
+  previous.sets.pop()
+  const upcoming = { ...prescription, sets: 2 }
+  expect(suggest(previous, upcoming, { ...exercise, target: upcoming }).action).toBe('hold')
+})
+it('cannot assert all prescribed work was completed when its historical count is unknown', () => {
+  const previous = entry(3, { target: { repsMin: 8, reps: 12 } })
+  expect(suggest(previous).action).toBe('hold')
+})

@@ -276,3 +276,18 @@ it('keeps imported history in coverage without awarding adaptation family or occ
   expect(p.remainingSessions.map(r=>r.kind)).toEqual(['push','pull'])
   expect(coverageForState(s,today).rolling.byMuscle.chest.actual.directSets).toBe(2)
 })
+
+it('an accepted lower set count cannot make truncated historical work complete for progression', async () => {
+  const { suggestProgression } = await import('./progression-suggestion.js')
+  const s = fixture()
+  const target = { id: '0576', stationId: 'press', loadConvention: 'machine-total', sets: 3, repsMin: 8, reps: 12, weight: 50, inc: 2.5 }
+  const equipmentSnapshot = { stationId: 'press', loadConvention: 'machine-total', unit: 'kg', status: 'exact' }
+  s.routines[0].ex = [target]
+  s.workouts[0].entries = [{ id: target.id, target, planned: { ...target }, equipmentSnapshot, sets: [{ w: 50, r: 12, done: true }, { w: 50, r: 12, done: true, rir: 3 }] }]
+  const proposal = proposeAdaptation({ state: s, today, availability: { dates: ['2026-10-22'], totalSessions: 6, minutes: 4, baselineIds: { push: 'p', pull: 'u', legs: 'l' } } })
+  const accepted = applyAdaptation(s, proposal)
+  expect(accepted.error).toBeNull()
+  const prescription = accepted.state.routines.find(r => r.adaptationKind === 'push').ex[0]
+  expect(prescription.sets).toBe(2)
+  expect(suggestProgression({ exercise: { id: target.id, target: prescription, equipmentSnapshot }, prescription, history: accepted.state.workouts, policy: 'double' }).action).toBe('hold')
+})
