@@ -55,12 +55,14 @@ it('explains recommendations and temporarily excludes an occupied station while 
   expect(rows(host).some(row => row.textContent.includes(EXIDX['0576'].n))).toBe(false)
   expect(rows(host).some(row => row.textContent.includes('Available press'))).toBe(true)
   expect(useStore.getState().S.equipProfiles[0].stations).toHaveLength(2)
-  act(() => button(host, 'All').click())
   const search = host.querySelector('input.input')
   act(() => {
     Object.getOwnPropertyDescriptor(search.constructor.prototype, 'value').set.call(search, 'lever chest press')
     search.dispatchEvent(new Event('input', { bubbles: true }))
   })
+  expect(rows(host).some(row => row.textContent.includes(EXIDX['0576'].n))).toBe(false)
+  expect([...host.querySelectorAll('.chips .chip.on')].some(chip => chip.textContent.includes('Same muscle:'))).toBe(true)
+  act(() => button(host, 'All').click())
   expect(rows(host).some(row => row.textContent.includes(EXIDX['0576'].n))).toBe(true)
 })
 it('defaults to this workout, separately previews the future plan and accepts only the selected routine slot', () => {
