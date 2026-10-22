@@ -788,7 +788,7 @@ export default function Settings({ page = null, find = null, via = null }) {
       <Section title={t('Bring data in')}>
         <Row icon="download" iconTint="var(--teal)" title={t('Import backup')} accessory="chevron" onClick={() => fileRef.current.click()} />
         <Row icon="download" iconTint="var(--teal)" title={t('Import from another app')}
-          subtitle={t('FitNotes, Strong, Hevy, or body weight from Apple Health')}
+          subtitle={t('CSV, XML or Markdown workout notes')}
           accessory="chevron" onClick={() => importRef.current.click()} />
         <Row icon="key" iconTint="var(--teal)" title={t('Import from Hevy')}
           subtitle={t('Pull your history with a Hevy Pro API key')}
@@ -800,8 +800,8 @@ export default function Settings({ page = null, find = null, via = null }) {
       </Section>
       <input ref={fileRef} type="file" accept=".json,.zip,application/json,application/zip" style={{ display: 'none' }} onChange={doImport} />
       {/* Reset after reading so picking the same file twice still fires onChange. */}
-      <input ref={importRef} type="file" accept=".csv,.xml,text/csv,text/xml" style={{ display: 'none' }}
-        onChange={ev => { const f = ev.target.files[0]; if (f) importFromApp(f); ev.target.value = '' }} />
+      <input ref={importRef} type="file" accept=".csv,.xml,.md,text/csv,text/xml,text/markdown" multiple style={{ display: 'none' }}
+        onChange={ev => { const files = Array.from(ev.target.files); if (files.length) importFromApp(files.length === 1 ? files[0] : files); ev.target.value = '' }} />
     </>,
 
     about: () => <>

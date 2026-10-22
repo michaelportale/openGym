@@ -280,3 +280,11 @@ test('fixed-week acceptance removes reviewed baseline pins on unselected dates w
   assert.equal(effectiveRoutineId(a,'2026-10-23'),null);
   assert.equal(effectiveRoutineId(a,'2026-10-25'),'l');
 });
+
+test('historical imports cannot satisfy current queue through time or dated-name fallback', () => {
+  for (const start of [null, Date.parse('2026-09-09T12:00:00Z')]) {
+    const S={...base,queue:{ids:['r1','r2'],since:1,startsOn:'2026-09-07'},workouts:[{id:'import',historicalImport:true,d:'2026-09-09',routineId:'r1',name:'Push',start}]};
+    assert.equal(effectiveRoutineId(S,'2026-09-09'),'r1');
+    assert.equal(pinState(S,'r1'),'open');
+  }
+});

@@ -34,7 +34,7 @@ function nameParts(w) {
 }
 function queueDone(S, id, startsOn) {
   const currentName = (S.routines || []).find(r => r?.id === id)?.name;
-  return (S.workouts || []).some(w => routineIdsOf(w).includes(id)
+  return (S.workouts || []).some(w => w.historicalImport !== true && routineIdsOf(w).includes(id)
     && ((w.start ?? 0) >= S.queue.since || (S.queue.strict !== true && String(w.d || '') >= startsOn && nameParts(w).includes(currentName))));
 }
 // The calendar date of an instant where the USER is. The frontend's fallback for a missing

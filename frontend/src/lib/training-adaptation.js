@@ -94,6 +94,7 @@ export function proposeAdaptation({state:s,availability,coverage,policy={},today
   const credited=new Set(),seen=new Set()
   let unmatched=0,unknownCycle=0
   for (const w of [...(s.workouts || [])].sort((a,b)=>(a.start || 0)-(b.start || 0))) {
+    if (w.historicalImport === true) continue
     const key=w.id || `${w.d}|${w.start}`
     if (seen.has(key)) continue
     seen.add(key)

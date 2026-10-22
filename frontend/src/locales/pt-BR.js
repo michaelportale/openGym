@@ -1572,6 +1572,23 @@ export const PT_BR_OVERRIDES = {
   "Original dated sessions replaced: {0}": "Original dated sessions replaced: {0}",
   "{0} logged sessions do not match an uncredited family in this cycle. Review the cycle start and mapping.": "{0} logged sessions do not match an uncredited family in this cycle. Review the cycle start and mapping.",
   "{0} logged sessions have uncertain cycle timing and are not credited.": "{0} logged sessions have uncertain cycle timing and are not credited.",
+  "Import fitness notes": "Import fitness notes",
+  "Review actual sets, unknown values and exercise mappings before importing.": "Review actual sets, unknown values and exercise mappings before importing.",
+  "{0} duplicate sources will be skipped.": "{0} duplicate sources will be skipped.",
+  "{0} source conflicts; existing records will be kept.": "{0} source conflicts; existing records will be kept.",
+  "Review exercise mappings": "Review exercise mappings",
+  "Mapping for {0}": "Mapping for {0}",
+  "Keep as a separate exercise": "Keep as a separate exercise",
+  "Baseline proposals (optional)": "Baseline proposals (optional)",
+  "Save selected proposals as routines; your active program stays unchanged.": "Save selected proposals as routines; your active program stays unchanged.",
+  "Choose Markdown notes separately from CSV or XML files.": "Choose Markdown notes separately from CSV or XML files.",
+  "Choose one CSV or XML file at a time.": "Choose one CSV or XML file at a time.",
+  "CSV, XML or Markdown workout notes": "CSV, XML or Markdown workout notes",
+  "Working sets": "Working sets",
+
+  "Partial load total": "Partial load total",
+  "Machine settings and unknown load conventions stay out of load totals and strength estimates.": "Machine settings and unknown load conventions stay out of load totals and strength estimates.",
+
 }
 
 export default { ...pt, ...PT_BR_OVERRIDES }

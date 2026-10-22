@@ -139,6 +139,7 @@ const effortTail = s => {
 // `speedUnit` is the profile's (lib/speed.js speedUnitOf); without one a cardio set reads km/h.
 const EXPLICIT_MODES = new Set(['reps', 'time', 'cardio'])
 export function setLabel(id, s, cfg, speedUnit) {
+  if (s.sourceLoad) return `${s.w == null ? '?' : fmtNum(s.w)} ${(s.sourceLoad.basis || '?').replace(/\b(?:kg|lbs?)\b/gi, s.loadUnit || '?')} × ${s.r == null ? '?' : fmtNum(s.r)}`
   // The id is the caller's when the config does not carry one: a freestyle target is built
   // without it, and modeOf would then fall back to 'reps' and print a run as "0×0".
   const c = cfg ? { ...cfg, id: cfg.id ?? id } : { id }
@@ -1225,6 +1226,7 @@ export function bestWeightForEntry(entry = {}) {
       ? [set.sides.L, set.sides.R].filter(side => side?.done === true)
       : [set]
     completedSets.forEach(completedSet => {
+      if (completedSet?.sourceLoad?.physical === false) return
       const weight = Number(completedSet?.w)
       if (!Number.isFinite(weight)) return
       // A 0 on an assistance machine is a row with no load entered, not a set done with no help
@@ -1247,7 +1249,7 @@ export function bestWeightForEntry(entry = {}) {
   const topWeight = Number(entry.topW)
   // topW predates phase-tagged warm-ups. It remains a fallback for legacy all-work records,
   // but cannot override resolved work rows once any warm-up marker exists.
-  if (parentMode === 'reps' && !hasNonRepsWorkRow && !hasWarmupRow && Number.isFinite(topWeight)
+  if (!workRows.some(s => s.sourceLoad?.physical === false) && parentMode === 'reps' && !hasNonRepsWorkRow && !hasWarmupRow && Number.isFinite(topWeight)
     && (best <= 0 || (assisted ? topWeight > 0 && topWeight < best : topWeight > best))) best = topWeight
   return best
 }

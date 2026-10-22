@@ -17,7 +17,7 @@ import { t, exerciseNameClass } from './i18n-core.js'
 export function workoutText(w, { unit, nameOf, speedUnit }) {
   const facts = [
     ...durPart((w.end || 0) - (w.start || 0)),
-    fmtVol(w.vol ?? workoutVolume(w), unit),
+    fmtVol(w.vol ?? workoutVolume(w), unit, w.volumePartial),
     ...(w.bw ? [t('Body weight') + ' ' + fmtNum(w.bw) + ' ' + unit] : []),
   ]
   const blocks = [[[w.name, fmtDate(w.d, true, true)].filter(Boolean).join(' · '), facts.join(' · ')].join('\n')]

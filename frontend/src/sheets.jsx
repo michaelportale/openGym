@@ -31,7 +31,8 @@ import MuscleExplorer from './components/MuscleExplorer.jsx'
 import ExerciseViewToggle from './components/ExerciseViewToggle.jsx'
 import { rankReplacements, swapMuscleOf } from './lib/similar-exercises.js'
 import { exerciseMuscleSnapshot, loadOfWorkouts, MUSCLES, MUSCLE_NAME, muscleWeightsOf, normalizeMuscleGroups, hasExplicitMuscleMetadata, inMuscleOrder } from './lib/muscles.js'
-import { parseImport, mergeImport } from './lib/import-csv.js'
+import { parseImport, mergeImport, matchExercise, priorCustom } from './lib/import-csv.js'
+import { parseFitnessNotes, prepareFitnessNotes, fitnessNotesPreview } from './lib/import-fitness-notes.js'
 import { importHevyData, HevyApiError, HEVY_DEV_SETTINGS, mergeHevyRoutines } from './lib/import-hevy.js'
 import { buildPlanBundle, parsePlan, mergePlan, printPlan, planPrintHTML } from './lib/plan-share.js'
 import { estimate1RM, best1RM, is1RMRecord, REP_CAP, formulaOf, FORMULA_NAMES } from './lib/onerm.js'
@@ -490,8 +491,81 @@ function ImportSummary({ parsed, close }) {
   </>
 }
 
+function FitnessNotesSummary({ parsed, close }) {
+  const st = useStore(s => s.S)
+  const [mappings, setMappings] = useState({})
+  const [proposalIds, setProposalIds] = useState([])
+  const preview = fitnessNotesPreview(st, parsed)
+  const availableProposals = parsed.proposedRoutines.filter(r => !st.routines.some(x => x.id === r.id))
+  const doImport = () => {
+    let result
+    update(s => { result = mergeImport(s, prepareFitnessNotes(parsed, s, { mappings, proposalIds })) })
+    close()
+    toast(tn('{0} workout imported', '{0} workouts imported', result.added))
+  }
+  return <>
+    <h3>{t('Import fitness notes')}</h3>
+    <p className="small dim">{t('Review actual sets, unknown values and exercise mappings before importing.')}</p>
+    <p className="small dim">{t('Machine settings and unknown load conventions stay out of load totals and strength estimates.')}</p>
+    <div className="small">{t('Workouts')}: {parsed.workouts.length} · {t('New')}: {preview.fresh}</div>
+    {preview.duplicates > 0 && <p className="small dim">{t('{0} duplicate sources will be skipped.', preview.duplicates)}</p>}
+    {preview.conflicts > 0 && <p role="alert">{t('{0} source conflicts; existing records will be kept.', preview.conflicts)}</p>}
+    {parsed.warnings.map((warning, i) => <p key={i} className="small dim" role="alert">{warning}</p>)}
+    {parsed.workouts.map(w => <details key={w.id} style={{ marginBottom: 12 }}>
+      <summary>{w.d} · {w.name} · {w.dataStatus || '?'}</summary>
+      {w.entries.map(e => <div key={e.id} className="small" style={{ margin: '8px 0' }}>
+        <b>{e.name}</b> · {e.equipmentSnapshot.label || '?'} · {e.equipmentSnapshot.sourceBasis || '?'}
+        <div>{e.sets.map((row, i) => <div key={i}>{row.phase === 'warmup' ? t('Warm-up') : t('Working sets')} · {setLabel(e.id, row)}</div>)}</div>
+        {e.note && <div>{e.note}</div>}
+      </div>)}
+      {w.note && <p className="small">{w.note}</p>}
+    </details>)}
+    <h4>{t('Review exercise mappings')}</h4>
+    {parsed.customEx.map(c => {
+      const own = priorCustom(st.customEx, c.id, c.n)
+      const candidate = matchExercise(c.sourceName)
+      const choices = [candidate && EXIDX[candidate], ...(st.customEx || []), ...parsed.customEx.filter(x => x.id !== c.id)].filter(Boolean).filter((x, i, list) => list.findIndex(y => y.id === x.id) === i)
+      return <label key={c.id} style={{ display: 'block', marginBottom: 12 }}>
+        <div className="small">{c.n}</div>
+        <select aria-label={t('Mapping for {0}', c.n)} value={mappings[c.id] || ''} onChange={ev => setMappings({ ...mappings, [c.id]: ev.target.value })}>
+          <option value="">{own ? own.n : t('Keep as a separate exercise')}</option>
+          {choices.map(ex => <option key={ex.id} value={ex.id}>{exerciseNameText(ex)}</option>)}
+        </select>
+      </label>
+    })}
+    {availableProposals.length > 0 && <>
+      <h4>{t('Baseline proposals (optional)')}</h4>
+      <p className="small dim">{t('Save selected proposals as routines; your active program stays unchanged.')}</p>
+      {availableProposals.map(r => <div key={r.id} style={{ marginBottom: 12 }}>
+        <label><input type="checkbox" checked={proposalIds.includes(r.id)} onChange={ev => setProposalIds(ev.target.checked ? [...proposalIds, r.id] : proposalIds.filter(id => id !== r.id))} /> {r.name}</label>
+        {r.ex.map((e, i) => <div key={i} className="small dim">{parsed.customEx.find(c => c.id === e.id)?.n} · {e.sets} × {e.repsMin ? `${e.repsMin}–` : ''}{e.reps} · {e.note}</div>)}
+      </div>)}
+    </>}
+    <Button variant="primary" onClick={doImport} disabled={!preview.fresh && !availableProposals.some(r => proposalIds.includes(r.id))}>{t('Import')}</Button>
+    <div style={{ height: 8 }} />
+    <Button variant="ghost" className="dim" onClick={close}>{t('Cancel')}</Button>
+  </>
+}
+
 /** Read a CSV/XML export, then show what it would do. */
 export function importFromApp(file, onDone) {
+  const files = file && typeof file.length === 'number' && !file.name ? Array.from(file) : [file]
+  if (files.some(f => /\.md$/i.test(f?.name))) {
+    if (!files.every(f => /\.md$/i.test(f?.name))) { toast(t('Choose Markdown notes separately from CSV or XML files.')); return }
+    Promise.all(files.map(f => new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve({ name: f.name, text: String(reader.result) })
+      reader.onerror = reject
+      reader.readAsText(f)
+    }))).then(notes => {
+      const parsed = parseFitnessNotes(notes)
+      ui().openSheet(close => <FitnessNotesSummary parsed={parsed} close={close} />)
+      onDone && onDone()
+    }).catch(() => toast(t('Could not read that file')))
+    return
+  }
+  if (files.length !== 1) { toast(t('Choose one CSV or XML file at a time.')); return }
+  file = files[0]
   const rd = new FileReader()
   rd.onload = () => {
     let parsed
@@ -2604,7 +2678,7 @@ function WorkoutDetail({ w, close }) {
   const grouped = groups.length > 1 || (groups[0] && groups[0].rid && (w.routineIds || []).length > 1)
   return <>
     <h3>{w.name}</h3>
-    <div className="muted small" style={{ marginBottom: 12 }}>{[fmtDate(w.d, true), ...durPart(w.end - w.start), fmtVol(w.vol, st.unit), ...(w.bw ? [fmtNum(w.bw) + ' ' + st.unit] : [])].join(' · ')}</div>
+    <div className="muted small" style={{ marginBottom: 12 }}>{[fmtDate(w.d, true), ...durPart(w.end - w.start), fmtVol(w.vol, st.unit, w.volumePartial), ...(w.bw ? [fmtNum(w.bw) + ' ' + st.unit] : [])].join(' · ')}</div>
     {grouped ? groups.map(g => {
       const r = g.rid ? st.routines.find(x => x.id === g.rid) : null
       const items = g.items.map(i => w.entries[i])
@@ -2813,7 +2887,7 @@ function Calendar({ start, close }) {
       <h3 style={{ margin: 0 }}>{t(MONTHS_LONG[mo])} {y}</h3>
       <button className="iconbtn" onClick={() => setCur(new Date(y, mo + 1, 1))} aria-label={t('Next month')}><Icon name="chevronRight" /></button>
     </div>
-    <div className="small muted" style={{ textAlign: 'center' }}>{monthWs.length ? `${tn('{0} workout', '{0} workouts', monthWs.length)} · ${fmtDur(monthMs)} · ${fmtVol(monthVol, st.unit)}` : t('No workouts this month')}</div>
+    <div className="small muted" style={{ textAlign: 'center' }}>{monthWs.length ? `${tn('{0} workout', '{0} workouts', monthWs.length)} · ${fmtDur(monthMs)} · ${fmtVol(monthVol, st.unit, monthWs.some(w => w.volumePartial))}` : t('No workouts this month')}</div>
     <div className="cal-grid">{weekOrder(ws).map(d => <div key={d} className="cal-h">{t(DAYS[d])}</div>)}{cells}</div>
     <div className="cal-legend">
       <span><i style={{ background: 'var(--acc)' }} />{t('Trained')}</span>
@@ -2835,7 +2909,7 @@ export function WorkoutRow({ w, onClick }) {
   return <div className="item" {...tappable(onClick)}>
     <span className="lrow-i" style={{ width: 34, height: 34, borderRadius: 8, fontSize: 19 }}><Icon name={glyph} /></span>
     <div className="grow"><div className="tt">{w.name}</div>
-      <div className="ss">{[fmtDate(w.d, true), ...durPart(w.end - w.start), tn('{0} set', '{0} sets', setsDone(w)), fmtVol(w.vol, st.unit)].join(' · ')}</div></div>
+      <div className="ss">{[fmtDate(w.d, true), ...durPart(w.end - w.start), tn('{0} set', '{0} sets', setsDone(w)), fmtVol(w.vol, st.unit, w.volumePartial)].join(' · ')}</div></div>
     {mediaN > 0 && <span className="wrow-media" title={tn('{0} photo or video', '{0} photos or videos', mediaN)} aria-label={tn('{0} photo or video', '{0} photos or videos', mediaN)}><Icon name="image" />{mediaN}</span>}
     {w.prs && w.prs.length > 0 && <span className="pr"><Icon name="trophy" />{w.prs.length} PR</span>}
     <Icon name="chevronRight" className="chev" />
@@ -3400,7 +3474,7 @@ function FinishSummary({ w, prs, e1prs = [], close }) {
     <h3 style={{ margin: '8px 0' }}>{t('Workout complete!')}</h3>
     <div className="tiles" style={{ textAlign: 'start' }}>
       <div className="tile"><div className="l">{t('Duration')}</div><div className="v" style={{ fontSize: '1.1rem' }}>{fmtDur(w.end - w.start)}</div></div>
-      <div className="tile"><div className="l">{t('Volume')}</div><div className="v" style={{ fontSize: '1.1rem' }}>{fmtVol(w.vol, st.unit)}</div></div>
+      <div className="tile"><div className="l">{t('Volume')}</div><div className="v" style={{ fontSize: '1.1rem' }}>{fmtVol(w.vol, st.unit, w.volumePartial)}</div></div>
       <div className="tile"><div className="l">{t('Sets')}</div><div className="v" style={{ fontSize: '1.1rem' }}>{setsWorkCount(setsDone(w), workSetsDone(w))}</div></div>
       <div className="tile"><div className="l">{t('PRs')}</div><div className="v" style={{ fontSize: 20 }}>{prs.length || '–'}</div></div>
     </div>

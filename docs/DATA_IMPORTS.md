@@ -6,6 +6,7 @@ Everything here lives in the app under **Settings → Data & backup**, except pl
 | You want to | Use |
 |---|---|
 | Bring your workout history from another app | **Import from another app** (CSV) |
+| Preview structured Markdown workout notes | **Import from another app** (one or more `.md` files) |
 | Pull workouts, routines and weigh-ins from Hevy Pro | **Import from Hevy** (API key) |
 | Bring body weight over from an iPhone | **Import from another app** with the Apple Health export |
 | Give someone your routines | **Plan → Share your plan → Export plan file** |
@@ -34,6 +35,45 @@ Other files work too, as long as they have a date, an exercise name and somethin
 > [!NOTE]
 > History is a log of what you did, so it's imported separately from your routines. Importing
 > workouts doesn't create or change any plan.
+
+## Structured Markdown workout notes
+
+Select one or more `.md` files through **Import from another app**. The preview shows actual
+sets, warnings, equipment/load basis, and exercise mappings. Uncertain variants start as separate
+custom exercises; choose a shared identity only when the movement and equipment are confirmed.
+Nothing is saved until **Import**. This import reads files locally and never edits your notes.
+
+Only the documented table format is accepted. Frontmatter needs `type: workout`, a valid local
+`date: YYYY-MM-DD`, and a durable `source_session_key`. Actual rows require `status: complete`;
+`data_status: partial` is allowed. Optional `timezone`, `session`, `load_unit`, and `load_unit_basis`
+retain their source meaning. Missing times stay unknown.
+
+These exact level-two headings and ordered table columns identify performed sets:
+
+- `## Actual warm-ups`: `Exercise`, `Order`, `Equipment / attachment`, `Load`,
+  `Units / per-hand, per-side, or total`, `Actual reps`, `Evidence / source`.
+- `## Actual working sets`: `Exercise / variant`, `Set`, `Equipment / attachment`, `Load`,
+  `Units / load convention`, `Actual reps`, `Effort / form, if reported`, `Evidence / source`.
+
+Use one row per actual set, scalar numeric loads/reps, and exercise-local integer set ordinals.
+Blank, `Unknown`, or `Unreported` values stay unknown. Free-text effort does not supply numeric
+RIR. `Same setup` and `Same machine` refer only to the prior explicit setup for that exercise in
+that document. Escape pipes inside cells as `\|`. Unsupported headers and numeric shorthand
+produce warnings, without guessing additional sets.
+
+Source keys distinguish sessions on the same day. Reimporting the same source adds nothing;
+changed copies of one key are reported as conflicts and never silently replace results.
+Warm-ups stay out of work totals. Physical units can be converted without doubling per-hand
+loads or adding bar mass. Machine settings and unknown load conventions retain their exact
+reported labels and stay out of load totals and strength estimates; incomplete totals are labeled
+**Partial load total**. Exercise targets and station identities remain unknown until verified.
+Historical imports never advance the current program queue.
+
+`## Planned targets — not completed work` can offer separately labeled baseline proposals with
+columns `Exercise / variant`, `Equipment / attachment`, `Load and units / convention`,
+`Planned sets and reps`, `Rationale / prior source`. Only explicit prescriptions such as
+`3 × 8–12` are supported. These are unchecked by default; selecting them saves independent
+routines without activating a program. Next-exposure prose and summaries never become results.
 
 ## Hevy, directly
 

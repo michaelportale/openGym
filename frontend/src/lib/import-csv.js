@@ -789,6 +789,22 @@ export function mergeImport(S, parsed) {
     S.bodyweight = [...S.bodyweight, ...fresh].sort((a, b) => (a.d < b.d ? -1 : 1))
     return { added: fresh.length, skipped: parsed.bodyweight.length - fresh.length }
   }
+  if (parsed.kind === 'fitness-notes') {
+    const seen = new Map(S.workouts.filter(w => w.sourceKey).map(w => [w.sourceKey, w.sourceFingerprint]))
+    let conflicts = 0
+    const fresh = parsed.workouts.filter(w => {
+      if (seen.has(w.sourceKey)) { if (seen.get(w.sourceKey) !== w.sourceFingerprint) conflicts++; return false }
+      seen.set(w.sourceKey, w.sourceFingerprint)
+      return true
+    })
+    const routines = (parsed.routines || []).filter(r => !S.routines.some(x => x.id === r.id))
+    const used = new Set([...fresh.flatMap(w => w.entries.map(e => e.id)), ...routines.flatMap(r => r.ex.map(e => e.id))])
+    S.customEx = [...(S.customEx || []), ...parsed.customEx.filter(c => used.has(c.id) && !S.customEx?.some(x => x.id === c.id))]
+    S.workouts = [...S.workouts, ...fresh].sort((a, b) => a.d.localeCompare(b.d) || (a.start || 0) - (b.start || 0))
+    S.routines = [...S.routines, ...routines]
+    // Uncertain historical equipment must not seed the next workout's load or program cursor.
+    return { added: fresh.length, skipped: parsed.workouts.length - fresh.length, conflicts, routines: routines.length }
+  }
   const have = new Set(S.workouts.map(w => w.d))
   // Every parse invents fresh ids for the names it cannot match, and a later export of the same
   // account names those exercises again. So a custom exercise is looked up by name among the ones
