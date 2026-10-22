@@ -97,3 +97,47 @@ it('does not apply weekly gaps to a cycle of arbitrary duration', () => {
   expect(r.cycle.byMuscle.chest.actual.gap).toEqual({ directDays: null, sets: null })
   expect(r.cycle.byMuscle.chest.planned.gap).toEqual({ directDays: null, sets: null })
 })
+describe('planned custom exercise definitions', () => {
+  const state = (cfg = {}, override) => ({
+    customEx: [{ id: 'custom-press', custom: true, bp: 'chest', primaries: ['chest'], secondaries: ['triceps'] }],
+    routines: [{ id: 'p', ex: [{ id: 'custom-press', sets: 4, ...cfg }] }],
+    trainingMetadata: override ? { 'custom-press': override } : {},
+    workouts: [], week: {}, dayPlan: { '2026-10-21': 'p' },
+    queue: { ids: ['p'], startsOn: '2026-10-21', since: 1 },
+  })
+  it.each(['rolling', 'cycle'])('counts explicit legacy/imported custom targets in %s without inventing a role', kind => {
+    const S = state(), before = structuredClone(S)
+    const r = coverageForState(S, '2026-10-21')
+    {
+      const view = r[kind]
+      expect(view.byMuscle.chest?.planned.directSets).toBe(4)
+      expect(view.byMuscle.triceps.planned).toMatchObject({ secondarySets: 4, secondaryCredit: 2 })
+      expect(view.unknowns.planned).toMatchObject({ targetSets: 0, roleSets: 4 })
+      expect(view.byRole).toEqual({})
+    }
+    expect(S).toEqual(before)
+  })
+  it('retains explicit override priority over a custom definition in both planned views', () => {
+    const r = coverageForState(state({}, snap(['quadriceps'], [], 'squat')), '2026-10-21')
+    for (const view of [r.rolling, r.cycle]) {
+      expect(view.byMuscle.chest).toBeUndefined()
+      expect(view.byMuscle.quadriceps.planned.directSets).toBe(4)
+      expect(view.byRole.squat.planned.sets).toBe(4)
+    }
+  })
+  it('retains occurrence snapshot priority over the custom definition and manual override', () => {
+    const r = coverageForState(state({ trainingSnapshot: snap([], [], null) }, snap(['quadriceps'], [], 'squat')), '2026-10-21')
+    for (const view of [r.rolling, r.cycle]) {
+      expect(view.byMuscle).toEqual({})
+      expect(view.unknowns.planned).toMatchObject({ targetSets: 4, roleSets: 4 })
+    }
+  })
+  it('keeps body-part-only custom definitions unclassified in both planned views', () => {
+    const S = state(); S.customEx = [{ id: 'custom-press', custom: true, bp: 'chest' }]
+    const r = coverageForState(S, '2026-10-21')
+    for (const view of [r.rolling, r.cycle]) {
+      expect(view.byMuscle).toEqual({})
+      expect(view.unknowns.planned).toMatchObject({ targetSets: 4, roleSets: 4 })
+    }
+  })
+})
