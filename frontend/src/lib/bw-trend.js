@@ -1,10 +1,12 @@
 // Body-weight trend: a day's weigh-in says as much about water and salt as about weight. The
 // trend at each weigh-in is the mean of every weigh-in in the `days` days up to and including
 // it, so one heavy morning moves the line by a fraction instead of all of it.
-// points: [{ t: ms, y: number, d?: iso }] sorted by t. Returns the same shape, one per input.
+// points: [{ t: ms, y: number, d?: iso }] in any order. Returns the same shape, one per input,
+// in time order (a sync merge or an edited weigh-in can leave the stored list out of order).
 export const DAY_MS = 86400000
 
-export function bwTrend(points, days = 7) {
+export function bwTrend(input, days = 7) {
+  const points = [...input].sort((a, b) => a.t - b.t)
   const out = []
   let lo = 0, sum = 0
   for (let i = 0; i < points.length; i++) {

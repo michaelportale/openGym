@@ -232,12 +232,6 @@ export function mixColor(a, b, p) {
   return `rgb(${ch(0)}, ${ch(1)}, ${ch(2)})`
 }
 /**
- * The muscle map's fills for the card, worked out the way index.css works them out for .bodymap:
- * the silhouette and an untouched muscle as a little label over the surface, levels 1–4 as more
- * and more accent over that. A semi-transparent label (the light theme's) is flattened onto the
- * surface first.
- */
-/**
  * The colour new records are painted in: the theme's gold (`--pr`), which the app keeps for
  * personal records alone. On a light card it is darkened the way the finish summary darkens its
  * gold text (70 % gold, 30 % black), since the light gold is too faint to read as text. A gold the
@@ -247,6 +241,12 @@ export function recordColor(pr, acc, light = false) {
   if (!parseColor(pr)) return acc
   return light ? mixColor(pr, '#000000', 0.7) : pr
 }
+/**
+ * The muscle map's fills for the card, worked out the way index.css works them out for .bodymap:
+ * the silhouette and an untouched muscle as a little label over the surface, levels 1–4 as more
+ * and more accent over that. A semi-transparent label (the light theme's) is flattened onto the
+ * surface first.
+ */
 export function mapColors({ label, surface, acc }) {
   const lab = parseColor(label)
   const flat = lab && lab[3] < 1 ? mixColor(`rgb(${lab[0]}, ${lab[1]}, ${lab[2]})`, surface, lab[3]) : label

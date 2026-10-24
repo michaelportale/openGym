@@ -17,7 +17,7 @@ import { Button } from '../components/ui.jsx'
 import { tappable } from '../lib/use-sheet-keyboard.js'
 import { glyphOf } from '../lib/glyphs.js'
 import { dayNoteOf } from '../lib/day-notes.js'
-import { todayPreview } from '../lib/today-preview.js'
+import { todayPreview, PREVIEW_INPUTS } from '../lib/today-preview.js'
 import { exOr } from '../lib/exercises.js'
 import { MUSCLE_NAME } from '../lib/muscles.js'
 import { useFabAsideWhileVisible } from '../lib/use-hide-fab.js'
@@ -110,7 +110,10 @@ export default function Home() {
   const todayIds = effectiveRoutineIds(S, todayISO())
   const previewKey = todayIds.join(',')
   const showPreview = !S.active && !doneToday && todayRoutines.length > 0
-  const preview = useMemo(() => showPreview ? todayPreview(S, previewKey.split(','), todayISO()) : null, [showPreview, previewKey, S])
+  // Redone only when a part of the state the preview reads changes (PREVIEW_INPUTS), or the day.
+  const previewDay = todayISO()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const preview = useMemo(() => showPreview ? todayPreview(S, previewKey.split(','), previewDay) : null, [showPreview, previewKey, previewDay, ...PREVIEW_INPUTS.map(k => S[k])])
   const namesOf = ids => ids.slice(0, 2).map(id => exerciseNameText(exOr(id))).join(', ') + (ids.length > 2 ? ' +' + (ids.length - 2) : '')
   const onQueueStart = id => { if (S.active) nav('/workout'); else startFlow([id]) }
   // The card's Start is the screen's one accent action; while it is in view the tab bar's Start
