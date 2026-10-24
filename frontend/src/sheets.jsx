@@ -70,6 +70,7 @@ import { workoutCardModel, layoutWorkoutCard, drawWorkoutCard, viewAspect, CARD_
 import { copyText } from './lib/clipboard.js'
 import { queueRemaining, pinState } from './lib/queue.js'
 import { DAY_NOTE_TAGS, DAY_NOTE_LABEL, DAY_NOTE_ICON, dayNoteOf, dayNoteLine, canNoteDay, withDayNote } from './lib/day-notes.js'
+import { PALETTE_ACCENT, DEFAULT_PALETTE } from './theme/palettes.js'
 
 const S = () => useStore.getState().S
 const update = (...a) => useStore.getState().update(...a)
@@ -2842,7 +2843,7 @@ function ShareWorkoutImage({ w, nameOf, close }) {
 async function workoutCardImage(model, { map, body }) {
   const root = getComputedStyle(document.documentElement)
   const css = (name, fallback) => root.getPropertyValue(name).trim() || fallback
-  const colors = { bg: css('--bg', '#000'), surface: css('--surface', '#1c1c1e'), tile: css('--surface-2', '#2c2c2e'), label: css('--label', '#fff'), label2: css('--label-2', '#999'), acc: css('--acc', '#30d158') }
+  const colors = { bg: css('--bg', '#000'), surface: css('--surface', '#1c1c1e'), tile: css('--surface-2', '#2c2c2e'), label: css('--label', '#fff'), label2: css('--label-2', '#999'), acc: css('--acc', PALETTE_ACCENT[DEFAULT_PALETTE]) }
   // The body geometry is ~90 KB and lazy everywhere else too (components/BodyMap.jsx).
   const geometry = map && model.levels ? (await import('./lib/body-paths.js')).default : null
   const shape = geometry && (geometry[body] || geometry.male)
