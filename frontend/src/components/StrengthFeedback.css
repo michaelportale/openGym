@@ -7,7 +7,7 @@
 .strength-feedback{display:grid;gap:12px;margin-block:12px;font-size:.875rem;line-height:1.45}
 .strength-feedback:empty{display:none}
 .strength-comparison{color:var(--label-2);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
-.strength-load-review{margin:0;color:var(--orange)}
+.strength-load-review{margin:0;color:var(--warning)}
 .strength-prescription{border-top:var(--hair) solid var(--sep)}
 .strength-prescription>summary{min-height:44px;cursor:pointer;color:var(--label);padding-block:10px}
 .strength-prescription>summary>span{color:var(--label-2);margin-inline-start:8px}

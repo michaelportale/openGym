@@ -49,7 +49,7 @@ export default function BackupFolderRow() {
   return <>
     <Row icon="folder" iconTint="var(--blue)" title={t('Backup folder')}
       subtitle={folder.uri ? (folder.label || t('Chosen folder')) : DEFAULT_FOLDER} accessory="chevron" onClick={choose} />
-    {folder.lost && <Row icon="warning" iconTint="var(--orange)" className="backup-lost"
+    {folder.lost && <Row icon="warning" iconTint="var(--warning)" className="backup-lost"
       title={folder.lostLabel
         ? t('openGym can no longer write to “{0}”, so copies go to Documents/openGym again. Choose the folder again to switch back.', folder.lostLabel)
         : t('openGym can no longer write to the chosen folder, so copies go to Documents/openGym again. Choose the folder again to switch back.')} />}

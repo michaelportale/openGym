@@ -322,7 +322,7 @@ export function PasswordRow({ version = 0 }) {
     : st.set ? t('Set · sign in as “{0}”', st.name)
     : t('Not set. Handy for signing in where passkeys don’t work.')
   return <>
-    <Row icon="key" iconTint="var(--orange)" title={t('Password')} subtitle={subtitle} accessory={blocked ? 'none' : 'chevron'}
+    <Row icon="key" iconTint="var(--warning)" title={t('Password')} subtitle={subtitle} accessory={blocked ? 'none' : 'chevron'}
       onClick={blocked ? undefined : () => ui().openSheet(close => <PasswordSheet status={st} close={close} done={load} />)} />
     {/* The server only signs in by an address that belongs to a profile with a password, so
         without one the row is left out; one already saved stays reachable to change or remove. */}

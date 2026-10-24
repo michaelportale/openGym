@@ -158,7 +158,7 @@ export default function CoachChat() {
     <div className="sect-b">
       {idle && <Row icon="sparkles" iconTint="var(--acc)" title={t('Ask for a review')} subtitle={t('What would the Coach change after your last sessions?')} accessory="chevron" onClick={() => { close(); askReview() }} />}
       {idle && !!lastWorkout && <Row icon="checkCircle" iconTint="var(--success)" title={t('Review my last workout')} subtitle={t('What went well, what to watch, what to do next time')} accessory="chevron" onClick={() => { close(); askDebrief() }} />}
-      {idle && !!(S.routines || []).length && <Row icon="wrench" iconTint="var(--orange)" title={t('Improve a routine')} subtitle={t('Pick one; the Coach works on just that')} accessory="chevron" onClick={() => { close(); pickRoutine() }} />}
+      {idle && !!(S.routines || []).length && <Row icon="wrench" iconTint="var(--warning)" title={t('Improve a routine')} subtitle={t('Pick one; the Coach works on just that')} accessory="chevron" onClick={() => { close(); pickRoutine() }} />}
       {community && <Row icon="person" iconTint="var(--teal)" title={t('Compare with others here')} subtitle={t('Anonymous medians from this instance')} accessory="chevron" onClick={() => { close(); showCohort() }} />}
       <Row icon="history" iconTint="var(--blue)" title={t('Everything the Coach proposed')} subtitle={t('Plans, suggestions and debriefs, kept')} accessory="chevron" onClick={() => { close(); showHistory() }} />
       {idle && <Row icon="clipboard" iconTint="var(--indigo)" title={t('Start a new plan')} subtitle={t('A fresh plan from your answers; your workouts stay')} accessory="chevron" onClick={() => { close(); askNewPlan() }} />}
@@ -764,7 +764,7 @@ function CadenceSheet({ update }) {
           { value: 'every', label: t('After every few workouts'), subtitle: t('As soon as you have logged enough') }
         ]} />
       {mode === 'weekly' && <>
-        <SelectRow icon="calendar" iconTint="var(--orange)" title={t('Day')} value={cadence.weekly.day}
+        <SelectRow icon="calendar" iconTint="var(--warning)" title={t('Day')} value={cadence.weekly.day}
           onChange={v => patch(c => { c.cadence = { weekly: { ...c.cadence.weekly, day: v } } })}
           options={['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((d, i) => ({ value: i, label: t(d) }))} />
         <Row icon="clock" iconTint="var(--purple)" title={t('Time')}>

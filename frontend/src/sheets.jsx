@@ -2068,7 +2068,7 @@ function ExConfig({ ex, existing, onSave, onDelete, onReplace, close, routine, i
     {/* On the same wheel as the default rest timer (v1.3.11): 0:00 is "no rest of its own", so
         the default applies, and the row says which default that is. */}
     <div className="sect-b cfg-rest" style={{ marginBottom: 6 }}>
-      <Row icon="timer" iconTint="var(--orange)" title={t('Rest for this exercise')} accessory="chevron"
+      <Row icon="timer" iconTint="var(--warning)" title={t('Rest for this exercise')} accessory="chevron"
         value={c.restSec > 0 ? fmtRest(c.restSec) : t('Default ({0})', fmtRest(st.restSec))}
         onClick={() => durationSheet({
           title: t('Rest for this exercise'), value: c.restSec > 0 ? c.restSec : 0, max: REST_MAX,
@@ -2460,7 +2460,7 @@ function DayOverride({ iso, close }) {
     {effIds.includes(r.id) && <Icon name="check" className="accent" />}</div>
   return <>
     <h3>{fmtDate(iso, true)}</h3>
-    <div className="muted small" style={{ marginBottom: 12 }}>{t('Weekly plan:')} {weeklyNames.length ? deriveSessionName(weeklyNames) : t('Rest')}{changed && <span style={{ color: 'var(--orange)' }}> · {t('changed for this day')}</span>}<br />{t('Sick, missed a day or want a different session? Pick what to train instead.')}</div>
+    <div className="muted small" style={{ marginBottom: 12 }}>{t('Weekly plan:')} {weeklyNames.length ? deriveSessionName(weeklyNames) : t('Rest')}{changed && <span style={{ color: 'var(--warning)' }}> · {t('changed for this day')}</span>}<br />{t('Sick, missed a day or want a different session? Pick what to train instead.')}</div>
     {missed && <div style={{ marginBottom: 14 }}><Button variant="primary" icon="checkCircle" onClick={logIt}>{t('Log this workout')}</Button></div>}
     {canNote && <div className="day-note" style={{ marginBottom: 14 }}>
       <div className="item day-note-row" {...tappable(() => dayNoteSheet(iso))}>
@@ -2928,7 +2928,7 @@ function Calendar({ start, close }) {
     <div className="cal-legend">
       <span><i style={{ background: 'var(--acc)' }} />{t('Trained')}</span>
       <span><i style={{ background: 'var(--label-3)' }} />{t('Planned')}</span>
-      <span><i style={{ background: 'var(--orange)' }} />{t('Rescheduled')}</span>
+      <span><i style={{ background: 'var(--warning)' }} />{t('Rescheduled')}</span>
       {Object.keys(st.dayNotes || {}).some(k => k.startsWith(y + '-' + String(mo + 1).padStart(2, '0')) && dayNoteOf(st, k)) &&
         <span><i style={{ background: 'var(--indigo)' }} />{t('Day note')}</span>}
     </div>
@@ -3355,7 +3355,7 @@ function SupersetSettings({ meta, onSave, close }) {
       onKeyDown={e => { if (e.key === 'Enter') save() }} />
     <div style={{ height: 12 }} />
     <div className="list">
-      <Row icon="timer" iconTint="var(--orange)" title={t('Rest after each round')}
+      <Row icon="timer" iconTint="var(--warning)" title={t('Rest after each round')}
         value={rest > 0 ? fmtRest(rest) : t('Longest exercise rest')} accessory="chevron"
         onClick={() => durationSheet({ title: t('Rest after each round'), value: rest, max: REST_MAX, off: t('Longest exercise rest'),
           footer: t('Without one, the superset rests as long as its longest exercise rest.'), onDone: setRest })} />
@@ -3462,7 +3462,7 @@ export function setsLine(sets, unit) {
   }
   return sets.map(s => (s.w > 0 ? fmtNum(s.w) + '×' : '') + reps(s)).join(' · ')
 }
-const TREND = { 1: ['arrowUp', 'var(--success)'], 0: ['minus', 'var(--text-2)'], [-1]: ['arrowDown', 'var(--orange)'] }
+const TREND = { 1: ['arrowUp', 'var(--success)'], 0: ['minus', 'var(--text-2)'], [-1]: ['arrowDown', 'var(--warning)'] }
 function LastAndNext({ st, w }) {
   const rows = finishCompare(st, w)
   if (!rows.length) return null

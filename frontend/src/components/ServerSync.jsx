@@ -234,7 +234,7 @@ export function OwedSheet({ kind, count: count0, media: media0 = 0, exportBackup
 }
 
 /* ---------------------------------------------------------------- Settings ------------------- */
-const TINT = { ok: 'var(--success)', wait: 'var(--orange)', off: 'var(--grey)', bad: 'var(--red)', quiet: 'var(--grey)' }
+const TINT = { ok: 'var(--success)', wait: 'var(--warning)', off: 'var(--grey)', bad: 'var(--red)', quiet: 'var(--grey)' }
 
 // Settings → "Server & sync", for a device signed in or paired: which server, which account, how
 // things stand, since when, what is still waiting, and "Sync now". `children` are the account's
@@ -271,7 +271,7 @@ export function ServerSyncSection({ children }) {
       subtitle={t('Signed in as {0}', user.name)} />
     <Row icon={view.icon} iconTint={TINT[view.tone]} title={view.line} subtitle={sub} className="sync-status" />
     <Row icon="reset" iconTint="var(--acc)" title={busy ? t('Syncing…') : t('Sync now')} onClick={now} />
-    {MOBILE && <Row icon="key" iconTint="var(--orange)" title={t('Cloudflare Access')} accessory="chevron"
+    {MOBILE && <Row icon="key" iconTint="var(--warning)" title={t('Cloudflare Access')} accessory="chevron"
       onClick={() => ui().openSheet(close => <CfAccessSheet close={close} server={sync.server || ''} />)} />}
     {sync.status === 'auth' && (MOBILE
       ? <Row icon="qr" iconTint="var(--indigo)" title={t('Pair again')} subtitle={t('Your changes are kept here, and merged into your account once it is paired again.')} accessory="chevron" onClick={pairAgain} />
@@ -309,7 +309,7 @@ export function KeptChangesRows() {
     setTimeout(() => URL.revokeObjectURL(a.href), 60000)
     useUI.getState().toast(t('Backup exported'))
   }
-  return rows.map(k => <Row key={(k.server || '') + '|' + k.uid} icon="history" iconTint="var(--orange)"
+  return rows.map(k => <Row key={(k.server || '') + '|' + k.uid} icon="history" iconTint="var(--warning)"
     title={t('Changes kept for {0}', k.name || k.uid)}
     subtitle={(k.server ? hostOf(k.server) + ' · ' : '') + t('Added back when this device connects as that account again.')}
     accessory="chevron"

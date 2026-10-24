@@ -427,7 +427,7 @@ export default function Settings({ page = null, find = null, via = null }) {
   }
 
   /* ---------------- the pages ---------------- */
-  const restRow = <Row icon="timer" iconTint="var(--orange)" title={t('Rest timer')} value={fmtRest(S.restSec)} accessory="chevron"
+  const restRow = <Row icon="timer" iconTint="var(--warning)" title={t('Rest timer')} value={fmtRest(S.restSec)} accessory="chevron"
     onClick={() => durationSheet({
       title: t('Rest timer'), value: S.restSec, max: REST_MAX, off: t('Off'),
       footer: t('Scroll to 0:00 to turn the rest timer off.'),
@@ -437,7 +437,7 @@ export default function Settings({ page = null, find = null, via = null }) {
   // (in its drop set / burst config) overrides it, the same way the main rest timer is the
   // fallback for an exercise without a rest of its own. On the wheel too, 5 s to 5 min: the
   // burst's rest is never 0 (lib/history.js keeps it at 5 s at least), so the wheel stops there.
-  const restPauseRow = <Row icon="bolt" iconTint="var(--orange)" title={t('Rest-pause rest')} value={fmtDuration(S.restPauseSec || 15)} accessory="chevron"
+  const restPauseRow = <Row icon="bolt" iconTint="var(--warning)" title={t('Rest-pause rest')} value={fmtDuration(S.restPauseSec || 15)} accessory="chevron"
     onClick={() => durationSheet({
       title: t('Rest-pause rest'), value: S.restPauseSec || 15, min: REST_PAUSE_MIN, max: REST_PAUSE_MAX,
       footer: t('The short break between the bursts of a rest-pause set.'),
@@ -529,7 +529,7 @@ export default function Settings({ page = null, find = null, via = null }) {
               { value: 'plan', label: t('Your plan'), subtitle: t('The routine’s sets and reps. Your history decides the weight.') },
               { value: 'last', label: t('Your last session'), subtitle: t('The reps you logged last time in that routine, carried over.') },
             ]} />
-          <Row icon="stopwatch" iconTint="var(--orange)" title={t('Keep timing after target')}
+          <Row icon="stopwatch" iconTint="var(--warning)" title={t('Keep timing after target')}
             subtitle={t('Timed sets continue up to 15 extra minutes. Tap Done to log the actual duration.')}>
             <Switch aria-label={t('Keep timing after target')} checked={!!S.timedSetOvertime}
               onChange={v => update(s => { s.timedSetOvertime = v })} />
@@ -541,7 +541,7 @@ export default function Settings({ page = null, find = null, via = null }) {
           <Row icon="plusCircle" iconTint="var(--success)" title={t('Weight and reps buttons')} subtitle={t('Off: tap the number and type it')}>
             <Switch checked={wc.steppers} onChange={v => setWc('steppers', v)} />
           </Row>
-          <Row icon="bolt" iconTint="var(--orange)" title={t('Drop and burst shortcuts on every set')}>
+          <Row icon="bolt" iconTint="var(--warning)" title={t('Drop and burst shortcuts on every set')}>
             <Switch checked={wc.setShortcuts} onChange={v => setWc('setShortcuts', v)} />
           </Row>
           {/* Swipe actions (v1.3.11): not a button, but the same question of what a set row does. The
@@ -583,7 +583,7 @@ export default function Settings({ page = null, find = null, via = null }) {
               mutes the timer. On, the phone treats the timer like a music player (exclusive, and
               the music app is not told it may resume), so it is a choice, off by default. */}
           {S.sound && playOnSilentSupported() && (
-            <Row icon="speaker" iconTint="var(--orange)" title={t('Play even on silent')}
+            <Row icon="speaker" iconTint="var(--warning)" title={t('Play even on silent')}
               subtitle={<>{t('Music playing on this phone stops during a workout and does not resume by itself.')}<br />{t('iPhone only')}</>}>
               <Switch checked={!!S.soundOnSilent} onChange={v => update(s => { s.soundOnSilent = v })} />
             </Row>
@@ -619,7 +619,7 @@ export default function Settings({ page = null, find = null, via = null }) {
       <Section>
         {/* Fixed Week (S.week) or Rotation (the live queue, lib/queue.js + lib/rotation.js).
             Derived from the queue, never stored. */}
-        <Row icon="repeat" iconTint="var(--orange)" title={t('How you train')}>
+        <Row icon="repeat" iconTint="var(--warning)" title={t('How you train')}>
           {externalQ
             ? <span className="small dim">{t('Rotation')} · {t('Externally managed')}</span>
             : <Segmented className="seg-inline"
@@ -627,11 +627,11 @@ export default function Settings({ page = null, find = null, via = null }) {
                 value={mode} onChange={setScheduleMode} />}
         </Row>
         {/* Rotation chosen with no loop running yet: the loop is built on Plan. */}
-        {mode === 'rotation' && !liveQ && <Row icon="calendar" iconTint="var(--orange)" title={t('Build your loop in Plan')}
+        {mode === 'rotation' && !liveQ && <Row icon="calendar" iconTint="var(--warning)" title={t('Build your loop in Plan')}
           accessory="chevron" onClick={() => nav('/plan')} />}
         {/* Monday or Sunday: the Plan list, the Home strip, the calendar grid and every "this
             week" total follow it. Stored as a getDay() index (see lib/format.js). */}
-        <Row icon="calendar" iconTint="var(--orange)" title={t('Week starts on')}>
+        <Row icon="calendar" iconTint="var(--warning)" title={t('Week starts on')}>
           <Segmented className="seg-inline"
             options={[{ value: MONDAY, label: t('Monday') }, { value: SUNDAY, label: t('Sunday') }]}
             value={weekStartOf(S)} onChange={v => update(s => { s.weekStart = v })} />
@@ -875,14 +875,14 @@ export default function Settings({ page = null, find = null, via = null }) {
           <Row icon="plusCircle" iconTint="var(--acc)" title={t('Create passkey profile')} subtitle={t('Keeps your data safe and separate per person.')} accessory="chevron" onClick={registerHere} />
           <Row icon="fingerprint" iconTint="var(--blue)" title={t('Sign in with passkey')} accessory="chevron" onClick={passkeySignIn} />
           {/* The Login screen offers both of these; a guest who skipped it had no way to either from here. */}
-          {pwOn && <Row icon="plusCircle" iconTint="var(--orange)" title={t('Create profile with a password')} accessory="chevron" onClick={openPasswordRegister} />}
-          {pwOn && <Row icon="key" iconTint="var(--orange)" title={t('Sign in with password')} accessory="chevron" onClick={() => openPasswordSignIn()} />}
+          {pwOn && <Row icon="plusCircle" iconTint="var(--warning)" title={t('Create profile with a password')} accessory="chevron" onClick={openPasswordRegister} />}
+          {pwOn && <Row icon="key" iconTint="var(--warning)" title={t('Sign in with password')} accessory="chevron" onClick={() => openPasswordSignIn()} />}
           <Row icon="qr" iconTint="var(--blue)" title={t('Use a code from your other device')} accessory="chevron" onClick={openDeviceLinkRedeem} />
           <KeptChangesRows />
         </> : pwOn ? <>
           {/* No passkeys in this browser (plain http on a LAN address, say): a password is the way in. */}
           <Row icon="plusCircle" iconTint="var(--acc)" title={t('Create new profile')} subtitle={t('Keeps your data safe and separate per person.')} accessory="chevron" onClick={openPasswordRegister} />
-          <Row icon="key" iconTint="var(--orange)" title={t('Sign in with password')} accessory="chevron" onClick={() => openPasswordSignIn()} />
+          <Row icon="key" iconTint="var(--warning)" title={t('Sign in with password')} accessory="chevron" onClick={() => openPasswordSignIn()} />
           <KeptChangesRows />
         </> : <>
           <Row icon="lock" iconTint="var(--grey)" title={t('Passkeys not supported in this browser.')} />
@@ -1083,7 +1083,7 @@ function MobileReminderCard({ S, update, toast }) {
   return (
     <Section title={t('Notifications')}
       footer={S.reminder?.on ? t('Reminds you at this time on days that have a routine planned.') + nudgeNote(S) : null}>
-      <Row icon="calendar" iconTint="var(--orange)" title={t('Workout day reminder')}>
+      <Row icon="calendar" iconTint="var(--warning)" title={t('Workout day reminder')}>
         <Switch checked={!!S.reminder?.on} onChange={toggle} />
       </Row>
       {S.reminder?.on && (
@@ -1167,7 +1167,7 @@ function PushCard({ S, update, toast }) {
         <Switch checked={on} disabled={busy} onChange={toggle} />
       </Row>
       {on && (
-        <Row icon="calendar" iconTint="var(--orange)" title={t('Workout day reminder')}>
+        <Row icon="calendar" iconTint="var(--warning)" title={t('Workout day reminder')}>
           <Switch checked={!!S.reminder?.on} onChange={() => update(s => { s.reminder = { ...(s.reminder || DEF.reminder), on: !s.reminder?.on, tz: localTZ() } })} />
         </Row>
       )}
@@ -1299,7 +1299,7 @@ function EquipmentCard({ S, update }) {
     ? bells.map(fmtPlate).join(' · ')
     : t('Any weight. Tap to list the ones you own.')
   return <Section title={t('Equipment')} footer={t('Filters the exercise library and picker, and flags routine exercises that need something you don’t have in the active profile.')}>
-    <Row icon="plate" iconTint="var(--orange)" title={t('Plates')} subtitle={plateSummary} accessory="chevron" onClick={() => plateInventorySheet()} />
+    <Row icon="plate" iconTint="var(--warning)" title={t('Plates')} subtitle={plateSummary} accessory="chevron" onClick={() => plateInventorySheet()} />
     <Row icon="dumbbell" iconTint="var(--teal)" title={t('Dumbbells')} subtitle={dumbbellSummary} accessory="chevron" onClick={() => dumbbellInventorySheet()} />
     {profiles.length > 0 && <Row icon="kettlebell" iconTint="var(--acc)" title={t('Filter by equipment')}>
       <Switch checked={!!S.equipFilterOn} onChange={v => update(s => { s.equipFilterOn = v })} />
@@ -1488,7 +1488,7 @@ function HealthConnectCard({ S, toast }) {
         subtitle={t('Finished workouts and weigh-ins, from this phone only.')}>
         <Switch checked={!!h.on} disabled={busy} onChange={v => (v ? turnOn() : askOff())} />
       </Row>
-      {h.on && h.error === 'permission' && <Row icon="warning" iconTint="var(--orange)"
+      {h.on && h.error === 'permission' && <Row icon="warning" iconTint="var(--warning)"
         title={t('Permission withdrawn. Tap to allow again')} accessory="chevron" onClick={turnOn} />}
       {h.on && <Row icon="list" iconTint="var(--blue)" title={t('Open Health Connect')}
         accessory="chevron" onClick={() => openHealthConnect().catch(() => {})} />}
