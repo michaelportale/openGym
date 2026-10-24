@@ -79,6 +79,29 @@ describe('Home — the Today card', () => {
     expect(meta()).toEqual([])
   })
 
+  it('names the row Start {routine} and describes it with every detail line, so none is lost to the label', () => {
+    const hard = session(daysAgo(1))
+    hard.entries[0].sets = Array.from({ length: 12 }, () => ({ w: 60, r: 5, rir: 0, done: true }))
+    setS({ workouts: [hard] }); mount()
+    const row = host.querySelector('.today-row')
+    expect(row.getAttribute('aria-label')).toBe('Start Push')
+    const ids = (row.getAttribute('aria-describedby') || '').split(' ').filter(Boolean)
+    expect(ids.length).toBe(1)
+    const desc = document.getElementById(ids[0])
+    expect(row.contains(desc)).toBe(true)
+    const lines = meta()
+    expect(lines.length).toBeGreaterThan(1)
+    for (const m of lines) expect(desc.textContent).toContain(m)
+    expect(desc.textContent).toMatch(/Still recovering: .*Chest/)
+  })
+
+  it('drops the description with the label once today is done', () => {
+    setS({ workouts: [session(daysAgo(3)), session(todayISO())] }); mount()
+    const row = host.querySelector('.today-row')
+    expect(row.hasAttribute('aria-label')).toBe(false)
+    expect(row.hasAttribute('aria-describedby')).toBe(false)
+  })
+
   it('keeps Start as one control: the row itself, with the action drawn full width', () => {
     setS(); mount()
     const tag = host.querySelector('.today-row .tag')

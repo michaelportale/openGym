@@ -128,6 +128,7 @@ export default function Home() {
   // steps aside rather than repeat it.
   const startRef = useRef(null)
   const todayId = useId()
+  const todayDetailId = useId()
   const showStart = !S.active && !doneToday && !!routine
   useFabAsideWhileVisible(startRef, showStart)
 
@@ -146,7 +147,8 @@ export default function Home() {
           routine name behind a green Start tag and read as still outstanding (issue #4).
           An in-progress session still wins — that one is happening right now. Tapping the
           row keeps working, so a second session in one day is a tap away, just not urged. */}
-      <div className="today-row today-hero" {...tappable(onToday)} aria-label={showStart ? t('Start {0}', todayName) : undefined}>
+      <div className="today-row today-hero" {...tappable(onToday)} aria-label={showStart ? t('Start {0}', todayName) : undefined}
+        aria-describedby={showStart ? todayDetailId : undefined}>
         <div className="row" style={{ gap: 9, minWidth: 0 }}>
           <span className="lrow-i today-glyph" style={{ background: S.active ? 'var(--warning)' : doneToday ? 'var(--surface-3)' : routine ? 'var(--acc)' : 'var(--surface-3)' }}>
             <Icon name={S.active ? (editingSaved ? 'pencil' : 'play') : doneToday ? 'checkCircle' : routine ? glyphOf(routine.emoji) : 'moon'}
@@ -157,6 +159,9 @@ export default function Home() {
             <div className="ttl">{S.active ? (editingSaved ? S.active.name : t('{0} (in progress)', S.active.name))
               : doneToday ? (doneToday.name ? t('{0} (done)', doneToday.name) : t('Workout done'))
               : routine ? todayName : t('Rest day')}{todayOvr && routine && !doneToday ? ' · ' + t('rescheduled') : ''}</div>
+            {/* The Start label names the action; these lines are its description, so a screen
+                reader still hears the exercises, what moves up, recovery and the set to beat. */}
+            <div id={todayDetailId}>
             {preview && <>
               <div className="today-meta">{[tn('{0} exercise', '{0} exercises', preview.exercises), preview.last && t('Last time') + ' (' + fmtDaysAgo(preview.last.d) + ')'].filter(Boolean).join(' · ')}</div>
               {preview.up.length > 0 && <div className="today-meta today-up"><Icon name="arrowUp" />{t('Moving up today: {0}', namesOf(preview.up))}</div>}
@@ -166,6 +171,7 @@ export default function Home() {
             {preview?.toBeat && <div className="today-meta today-beat">{t('Top set to beat: {0}', exerciseNameText(exOr(preview.toBeat.id)))} <span className="tnum">{fmtNum(preview.toBeat.w)}<span className="unit">{S.unit}</span> × {fmtNum(preview.toBeat.r)}</span></div>}
             {doneToday && !S.active && <div className="today-meta">{doneSummary(doneToday)}</div>}
             {next && !doneToday && <div className="ss">{t('Next session: {0}, {1}', t(DAYN[next.weekday]), next.routine.name)}</div>}
+            </div>
           </div>
         </div>
         {S.active ? <span className="tag today-cta" style={{ color: 'var(--warning)', background: 'color-mix(in srgb,var(--warning) 16%,transparent)' }}>{editingSaved ? t('Edit') : <>{t('Resume')} · <span className="tnum"><Elapsed start={S.active.start} /></span></>}</span>
