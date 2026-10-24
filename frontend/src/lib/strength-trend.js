@@ -3,6 +3,7 @@
 // per-workout estimates the Exercise progress chart draws, so the two always agree. Nothing here
 // is stored.
 import { e1rmSeries } from './onerm.js'
+import { workoutAt } from './history.js'
 
 export const TREND_DAYS = 56
 
@@ -14,11 +15,15 @@ export const TREND_DAYS = 56
  */
 export function strengthTrend(S, { now = Date.now(), days = TREND_DAYS, max = 3 } = {}) {
   const from = now - days * 86400000
-  const ids = [...new Set((S.workouts || []).flatMap(w => (w.entries || []).map(e => e && e.id).filter(id => id != null)))]
+  // Only the window's workouts are read, so the cost follows the window rather than the whole
+  // history. Their order and dates are e1rmSeries' own (workoutAt).
+  const recent = (S.workouts || []).filter(w => { const at = workoutAt(w); return at >= from && at <= now })
+  const view = { ...S, workouts: recent }
+  const ids = [...new Set(recent.flatMap(w => (w.entries || []).map(e => e && e.id).filter(id => id != null)))]
   const rows = []
   for (const id of ids) {
     let pts
-    try { pts = e1rmSeries(S, id) } catch { continue }
+    try { pts = e1rmSeries(view, id) } catch { continue }
     pts = pts.filter(p => p.t >= from && p.t <= now && p.y > 0).sort((a, b) => a.t - b.t)
     if (pts.length < 2) continue
     const first = pts[0], last = pts[pts.length - 1]
