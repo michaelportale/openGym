@@ -105,4 +105,36 @@ describe('Stats — weekly muscle volume from the plan', () => {
       expect(scroll).toHaveBeenCalledTimes(1)
     } finally { vi.useRealTimers() }
   })
+
+  it('jumps instead of gliding when the system asks for reduced motion', () => {
+    vi.useFakeTimers()
+    const origMM = window.matchMedia
+    window.matchMedia = q => ({ matches: q.includes('prefers-reduced-motion'), media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} })
+    try {
+      window.location.hash = '#/stats?focus=weekly-volume'
+      mocks.S = state()
+      const scroll = vi.fn()
+      const orig = Element.prototype.scrollIntoView
+      Element.prototype.scrollIntoView = scroll
+      act(() => root.render(<Stats />))
+      act(() => { vi.advanceTimersByTime(50) })
+      Element.prototype.scrollIntoView = orig
+      expect(scroll).toHaveBeenCalledWith({ block: 'start', behavior: 'auto' })
+    } finally { window.matchMedia = origMM; vi.useRealTimers() }
+  })
+
+  it('glides when reduced motion is off', () => {
+    vi.useFakeTimers()
+    try {
+      window.location.hash = '#/stats?focus=weekly-volume'
+      mocks.S = state()
+      const scroll = vi.fn()
+      const orig = Element.prototype.scrollIntoView
+      Element.prototype.scrollIntoView = scroll
+      act(() => root.render(<Stats />))
+      act(() => { vi.advanceTimersByTime(50) })
+      Element.prototype.scrollIntoView = orig
+      expect(scroll).toHaveBeenCalledWith({ block: 'start', behavior: 'smooth' })
+    } finally { vi.useRealTimers() }
+  })
 })

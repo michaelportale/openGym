@@ -28,6 +28,7 @@ import { Button, Segmented, SelectRow } from '../components/ui.jsx'
 import { tappable } from '../lib/use-sheet-keyboard.js'
 import StrengthTrend from '../components/StrengthTrend.jsx'
 import { isWarmupRow } from '../lib/workout-model.js'
+import { reducedMotion } from '../lib/use-swipe-row.js'
 
 // Set 1 to 5 on the per-set chart — system colours, so each line keeps its hue in dark mode.
 const SET_COLORS = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)', 'var(--chart-5)']
@@ -414,7 +415,7 @@ export default function Stats() {
   // scroll-to-top on navigation to have happened first.
   useEffect(() => {
     if (!/[?&]focus=weekly-volume\b/.test(window.location.hash || '')) return
-    const frame = window.requestAnimationFrame(() => document.getElementById('weekly-volume')?.scrollIntoView?.({ block: 'start', behavior: 'smooth' }))
+    const frame = window.requestAnimationFrame(() => document.getElementById('weekly-volume')?.scrollIntoView?.({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' }))
     return () => window.cancelAnimationFrame(frame)
   }, [])
   const [exId, setExId] = useState(null)
@@ -640,7 +641,7 @@ export default function Stats() {
     {/* The lead card opens a lift in Exercise progress on its estimated-1RM chart. */}
     <StrengthTrend S={S} onPick={id => {
       setExId(id); setExMetric('e1rm')
-      window.requestAnimationFrame(() => document.getElementById('exercise-progress')?.scrollIntoView?.({ block: 'start', behavior: 'smooth' }))
+      window.requestAnimationFrame(() => document.getElementById('exercise-progress')?.scrollIntoView?.({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' }))
     }} />
 
     {/* Before the first workout, one card says what will appear here and leads to the Start
