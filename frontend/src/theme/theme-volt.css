@@ -43,6 +43,7 @@
   --acc: #7c85ff;
   --acc-2: #5c64e0;
   --on-acc: #000000;
+  --on-acc-tile: #000000;
   --knob-ring: transparent;
   --acc-soft: #1e2147;
 }
@@ -60,5 +61,6 @@
   --acc: #727cff;
   --acc-2: #565dbf;
   --on-acc: #000000;
+  --on-acc-tile: #000000;
   --knob-ring: transparent;
 }
