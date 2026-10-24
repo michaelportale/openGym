@@ -1893,7 +1893,6 @@ export default {
   'Your server': 'Saját szerver',
   'Your API key': 'Saját API-kulcs',
   'sec': 'mp',
-  'Not on iPhone': 'iPhone-on nem',
   'iPhone only': 'Csak iPhone-on',
   'Android app only': 'Csak az Android-alkalmazásban',
   'Guest': 'Vendég',
@@ -1914,7 +1913,6 @@ export default {
   'Scroll to 0:00 to turn the rest timer off.': 'Görgess 0:00-ra a pihenő időzítő kikapcsolásához.',
   'The short break between the bursts of a rest-pause set.': 'A rövid szünet egy rest-pause sorozat részei között.',
   'Each exercise can have its own rest too. Set it in the exercise settings of a routine.': 'Minden gyakorlatnak lehet saját pihenője is. Egy rutin gyakorlatbeállításaiban adhatod meg.',
-  'iPhone doesn’t let openGym vibrate. A sound or a flash does the job.': 'Az iPhone nem engedi rezegni az openGymet. Egy hang vagy villogás is megteszi.',
   'No account, no cloud. Back it up anytime in Data & backup.': 'Nincs fiók, nincs felhő. Bármikor menthetsz az Adatok és mentés alatt.',
   'Effort per set is off. Turn it on in Settings → Workout to keep rating.': 'A Megerőltetés sorozatonként ki van kapcsolva. Kapcsold be a Beállítások → Edzés alatt a további értékeléshez.',
   'Enter the code your other device shows under Settings → Account → Add another device. This device then gets a passkey of its own.': 'Add meg a kódot, amelyet a másik eszközöd a Beállítások → Fiók → Másik eszköz hozzáadása alatt mutat. Ez az eszköz ezután saját jelszókulcsot kap.',
@@ -2524,4 +2522,6 @@ export default {
   "Create “{0}”": "„{0}” létrehozása",
   "sessions": "edzés",
   "Needs two weigh-ins within 30 days": "Két mérés kell 30 napon belül",
+  "A light tap on iPhone": "Enyhe koppintás iPhone-on",
+  "On iPhone, Vibrate is a light tap when you tick a set (iOS 18 or later). The end of a rest still needs a sound or a flash.": "iPhone-on a Rezgés egy enyhe koppintás, amikor kipipálsz egy sorozatot (iOS 18 vagy újabb). A pihenő végéhez továbbra is hang vagy villanás kell.",
 }

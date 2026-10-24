@@ -1887,7 +1887,6 @@ export default {
   'Your server': 'Твій сервер',
   'Your API key': 'Твій API-ключ',
   'sec': 'с',
-  'Not on iPhone': 'Не на iPhone',
   'iPhone only': 'Лише на iPhone',
   'Android app only': 'Лише в застосунку для Android',
   'Guest': 'Гість',
@@ -1908,7 +1907,6 @@ export default {
   'Scroll to 0:00 to turn the rest timer off.': 'Прокрути до 0:00, щоб вимкнути таймер.',
   'The short break between the bursts of a rest-pause set.': 'Коротка пауза між частинами підходу рест-пауза.',
   'Each exercise can have its own rest too. Set it in the exercise settings of a routine.': 'Кожна вправа може мати й власний відпочинок. Задай його в налаштуваннях вправи в програмі.',
-  'iPhone doesn’t let openGym vibrate. A sound or a flash does the job.': 'iPhone не дає openGym вібрувати. Вистачить звуку чи спалаху.',
   'No account, no cloud. Back it up anytime in Data & backup.': 'Без акаунта й хмари. Зберігай копію будь-коли в розділі Дані та копії.',
   'Effort per set is off. Turn it on in Settings → Workout to keep rating.': 'Зусилля в підході вимкнено. Увімкни його в Налаштування → Тренування, щоб оцінювати далі.',
   'Enter the code your other device shows under Settings → Account → Add another device. This device then gets a passkey of its own.': 'Введи код, який інший пристрій показує в розділі Налаштування → Акаунт → Додати інший пристрій. Тоді цей пристрій отримає власний ключ доступу.',
@@ -2518,4 +2516,6 @@ export default {
   "Create “{0}”": "Створити «{0}»",
   "sessions": {"one": "заняття", "few": "заняття", "many": "занять", "other": "заняття"},
   "Needs two weigh-ins within 30 days": "Потрібно два зважування за 30 днів",
+  "A light tap on iPhone": "Легкий відгук на iPhone",
+  "On iPhone, Vibrate is a light tap when you tick a set (iOS 18 or later). The end of a rest still needs a sound or a flash.": "На iPhone вібрація — це легкий відгук, коли ви позначаєте підхід (iOS 18 і новіші). Для кінця відпочинку все ще потрібен звук або спалах.",
 }

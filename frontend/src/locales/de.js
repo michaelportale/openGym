@@ -1913,7 +1913,6 @@ export default {
   'Your server': 'Dein Server',
   'Your API key': 'Dein API-Schlüssel',
   'sec': 'Sek.',
-  'Not on iPhone': 'Nicht auf dem iPhone',
   'iPhone only': 'Nur auf dem iPhone',
   'Android app only': 'Nur in der Android-App',
   'Guest': 'Gast',
@@ -1934,7 +1933,6 @@ export default {
   'Scroll to 0:00 to turn the rest timer off.': 'Scroll auf 0:00, um den Pausen-Timer auszuschalten.',
   'The short break between the bursts of a rest-pause set.': 'Die kurze Pause zwischen den Schüben eines Rest-Pause-Satzes.',
   'Each exercise can have its own rest too. Set it in the exercise settings of a routine.': 'Jede Übung kann auch ihre eigene Pause haben. Stell sie in den Übungseinstellungen einer Routine ein.',
-  'iPhone doesn’t let openGym vibrate. A sound or a flash does the job.': 'Das iPhone lässt openGym nicht vibrieren. Ein Ton oder ein Blinken tut es auch.',
   'No account, no cloud. Back it up anytime in Data & backup.': 'Kein Konto, keine Cloud. Sichere sie jederzeit unter Daten & Backup.',
   'Effort per set is off. Turn it on in Settings → Workout to keep rating.': 'Anstrengung pro Satz ist aus. Schalte sie unter Einstellungen → Training ein, um weiter zu bewerten.',
   'Enter the code your other device shows under Settings → Account → Add another device. This device then gets a passkey of its own.': 'Gib den Code ein, den dein anderes Gerät unter Einstellungen → Konto → Weiteres Gerät hinzufügen zeigt. Dieses Gerät bekommt dann einen eigenen Passkey.',
@@ -2541,4 +2539,6 @@ export default {
   "Create “{0}”": "„{0}“ anlegen",
   "sessions": "Einheiten",
   "Needs two weigh-ins within 30 days": "Braucht zwei Wiegungen innerhalb von 30 Tagen",
+  "A light tap on iPhone": "Ein leichtes Tippen auf dem iPhone",
+  "On iPhone, Vibrate is a light tap when you tick a set (iOS 18 or later). The end of a rest still needs a sound or a flash.": "Auf dem iPhone ist Vibration ein leichtes Tippen, wenn du einen Satz abhakst (ab iOS 18). Für das Ende der Pause braucht es weiter einen Ton oder ein Blinken.",
 }

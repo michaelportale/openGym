@@ -92,11 +92,23 @@ describe('the in-workout settings sheet', () => {
     act(() => r.unmount()); el.remove()
   })
 
-  it('greys Vibrate out on an iPhone and says why', () => {
+  it('keeps Vibrate live on an iPhone, showing the real setting and what it does there', () => {
     sound.canVibrate = false; sound.iPhone = true
     act(() => root.render(<WorkoutSettings close={close} key="iphone" />))
+    expect(row('Vibrate').classList.contains('dis')).toBe(false)
+    expect(row('Vibrate').querySelector('.lrow-s').textContent).toBe('A light tap on iPhone')
+    const sw = row('Vibrate').querySelector('[role=switch]')
+    expect(sw.disabled).toBe(false)
+    expect(sw.getAttribute('aria-checked')).toBe(S().vibrate !== false ? 'true' : 'false')
+    act(() => sw.click())
+    expect(S().vibrate).toBe(false)
+  })
+
+  it('greys Vibrate out where nothing can buzz', () => {
+    sound.canVibrate = false; sound.iPhone = false
+    act(() => root.render(<WorkoutSettings close={close} key="desktop" />))
     expect(row('Vibrate').classList.contains('dis')).toBe(true)
-    expect(row('Vibrate').querySelector('.lrow-s').textContent).toBe('Not on iPhone')
+    expect(row('Vibrate').querySelector('.lrow-s').textContent).toBe('Not supported in this browser.')
     expect(row('Vibrate').querySelector('[role=switch]').disabled).toBe(true)
   })
 

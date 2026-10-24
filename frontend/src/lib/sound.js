@@ -150,7 +150,7 @@ export const playOnSilentSupported = () => {
   return appleTouchDevice()
 }
 // An iPhone or iPad, in Safari, a home-screen web app or the iOS app (an iPad reports itself as
-// a Mac with a touch screen). Settings says "Not on iPhone" on the Vibrate row here.
+// a Mac with a touch screen). Here Vibrate (Settings) switches the system tap in switchTap.
 export const appleTouchDevice = () => {
   if (typeof navigator === 'undefined') return false
   const ua = navigator.userAgent || ''
@@ -166,7 +166,8 @@ export function setPlayOnSilent(on) {
 // by App.jsx, so the places that buzz do not each have to read the profile. On by default.
 let buzz = true
 export function setVibrate(on) { buzz = on !== false }
-// Offered where the browser can buzz at all: iOS has no navigator.vibrate. The Android app needs
+// Where the browser can buzz at all; iOS has no navigator.vibrate (its stand-in is switchTap,
+// also governed by setVibrate). The Android app needs
 // android.permission.VIBRATE in its manifest, without which the WebView drops every call.
 export const vibrateSupported = () => typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function'
 export function vibrate(p) {

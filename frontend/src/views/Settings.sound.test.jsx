@@ -179,17 +179,47 @@ describe('Settings — vibrate', () => {
     expect(mocks.S.vibrate).toBe(true)
   })
 
-  // v1.3.11: an iPhone user looking for Vibrate finds it, greyed out, with the reason.
-  it('on an iPhone (no navigator.vibrate) the row stays, disabled, says "Not on iPhone" and explains below', () => {
+  // On an iPhone, Vibrate switches the system tap that stands in for a short buzz, so the row is
+  // live: it shows the real setting and says what it does there.
+  it('on an iPhone (no navigator.vibrate) the row is live, shows the real setting and says it is a light tap', () => {
     setVibrateApi(undefined)
+    mocks.S.vibrate = false
     mount()
     const row = rowTitled('Vibrate')
-    expect(row).toBeTruthy()
-    expect(row.classList.contains('dis')).toBe(true)
-    expect(row.querySelector('.lrow-s').textContent).toBe('Not on iPhone')
-    expect(switchIn(row).disabled).toBe(true)
+    expect(row.classList.contains('dis')).toBe(false)
+    expect(row.querySelector('.lrow-s').textContent).toBe('A light tap on iPhone')
+    expect(switchIn(row).disabled).toBe(false)
     expect(switchIn(row).getAttribute('aria-checked')).toBe('false')
-    expect(host.textContent).toContain('iPhone doesn’t let openGym vibrate. A sound or a flash does the job.')
+    expect(host.textContent).toContain('On iPhone, Vibrate is a light tap when you tick a set (iOS 18 or later).')
+    expect(host.textContent).not.toContain('Not on iPhone')
+    mocks.S.vibrate = true
+    mount()
+    expect(switchIn(rowTitled('Vibrate')).getAttribute('aria-checked')).toBe('true')
+  })
+
+  it('on an iPhone, turning Vibrate off stops the switch tap, and on brings it back', async () => {
+    const { setVibrate, vibrate } = await import('../lib/sound.js')
+    setVibrateApi(undefined)
+    mocks.S.vibrate = true
+    mount()
+    act(() => { switchIn(rowTitled('Vibrate')).click() })
+    expect(mocks.S.vibrate).toBe(false)
+    // what App.jsx does with the setting: setVibrate(S.vibrate !== false)
+    setVibrate(mocks.S.vibrate !== false)
+    document.querySelectorAll('.haptic-switch').forEach(n => n.remove())
+    vibrate(30)
+    expect(document.querySelector('.haptic-switch')).toBeNull()
+    mount()
+    act(() => { switchIn(rowTitled('Vibrate')).click() })
+    expect(mocks.S.vibrate).toBe(true)
+    setVibrate(mocks.S.vibrate !== false)
+    vibrate(30)
+    const label = document.querySelector('.haptic-switch')
+    expect(label).not.toBeNull()
+    const toggles = vi.fn(); label.querySelector('input').addEventListener('change', toggles)
+    vibrate(30)
+    expect(toggles).toHaveBeenCalledTimes(1)
+    label.remove(); setVibrate(true)
   })
 
   it('a desktop browser without vibration shows it disabled as not supported, with no iPhone footer', () => {
@@ -197,7 +227,7 @@ describe('Settings — vibrate', () => {
     Object.defineProperty(navigator, 'userAgent', { value: 'Mozilla/5.0 (X11; Linux x86_64) Gecko/20100101 Firefox/130.0', configurable: true })
     mount()
     expect(rowTitled('Vibrate').querySelector('.lrow-s').textContent).toBe('Not supported in this browser.')
-    expect(host.textContent).not.toContain('iPhone doesn’t let openGym vibrate')
+    expect(host.textContent).not.toContain('On iPhone, Vibrate is a light tap')
   })
 })
 

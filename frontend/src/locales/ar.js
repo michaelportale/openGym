@@ -1945,7 +1945,6 @@ export default {
   'Your server': 'خادمك',
   'Your API key': 'مفتاح API الخاص بك',
   'sec': 'ث',
-  'Not on iPhone': 'غير متاح على iPhone',
   'iPhone only': 'على iPhone فقط',
   'Android app only': 'في تطبيق Android فقط',
   'Guest': 'ضيف',
@@ -1966,7 +1965,6 @@ export default {
   'Scroll to 0:00 to turn the rest timer off.': 'مرّر إلى 0:00 لإيقاف مؤقت الراحة.',
   'The short break between the bursts of a rest-pause set.': 'الاستراحة القصيرة بين دفعات مجموعة الريست بوز.',
   'Each exercise can have its own rest too. Set it in the exercise settings of a routine.': 'يمكن أن يكون لكل تمرين راحته الخاصة أيضًا. اضبطها في إعدادات التمرين داخل الروتين.',
-  'iPhone doesn’t let openGym vibrate. A sound or a flash does the job.': 'لا يسمح iPhone لتطبيق openGym بالاهتزاز. الصوت أو الوميض يؤدي المهمة.',
   'No account, no cloud. Back it up anytime in Data & backup.': 'بلا حساب ولا سحابة. انسخها احتياطيًا في أي وقت من البيانات والنسخ الاحتياطي.',
   'Effort per set is off. Turn it on in Settings → Workout to keep rating.': 'الجهد لكل مجموعة متوقف. فعّله في الإعدادات ← التمرين لمواصلة التقييم.',
   'Enter the code your other device shows under Settings → Account → Add another device. This device then gets a passkey of its own.': 'أدخل الرمز الذي يعرضه جهازك الآخر في الإعدادات ← الحساب ← إضافة جهاز آخر. سيحصل هذا الجهاز بعدها على مفتاح مرور خاص به.',
@@ -2576,4 +2574,6 @@ export default {
   "Create “{0}”": "أنشئ “{0}”",
   "sessions": "جلسات",
   "Needs two weigh-ins within 30 days": "يلزم وزنان خلال 30 يومًا",
+  "A light tap on iPhone": "نقرة خفيفة على iPhone",
+  "On iPhone, Vibrate is a light tap when you tick a set (iOS 18 or later). The end of a rest still needs a sound or a flash.": "على iPhone، الاهتزاز نقرة خفيفة عند تحديد مجموعة (iOS 18 أو أحدث). نهاية الراحة ما زالت تحتاج إلى صوت أو وميض.",
 }
