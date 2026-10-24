@@ -82,3 +82,24 @@ describe('switching palettes on <html>', () => {
     expect(darkAttrOf({ dataset: {} })).toBe('dark')
   })
 })
+
+describe('install assets', () => {
+  const pub = new URL('../../public/', import.meta.url)
+  const html = readFileSync(new URL('../../index.html', import.meta.url), 'utf8')
+  it('give the manifest and the page the default palette background', () => {
+    const m = JSON.parse(readFileSync(new URL('manifest.json', pub), 'utf8'))
+    const bg = PALETTE_BG[DEFAULT_PALETTE]
+    expect(m.theme_color).toBe(bg)
+    expect(m.background_color).toBe(bg)
+    expect(html).toContain(`<meta name="theme-color" content="${bg}">`)
+  })
+  it('link an iOS launch image for each listed screen, and each one exists at its size', () => {
+    const links = [...html.matchAll(/<link rel="apple-touch-startup-image" href="([^"]+)" media="\(device-width: (\d+)px\) and \(device-height: (\d+)px\) and \(-webkit-device-pixel-ratio: (\d)\)/g)]
+    expect(links.length).toBeGreaterThanOrEqual(10)
+    for (const [, href, w, h, r] of links) {
+      const png = readFileSync(new URL(href, pub))
+      // PNG IHDR: width and height, big-endian, at bytes 16 and 20
+      expect([png.readUInt32BE(16), png.readUInt32BE(20)], href).toEqual([w * r, h * r])
+    }
+  })
+})
