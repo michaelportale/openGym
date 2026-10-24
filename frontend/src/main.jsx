@@ -15,6 +15,10 @@ import './views/WorkoutLedger.css'
 import './components/RestTimer.css'
 import './components/Modals.css'
 import './components/WorkoutReplacementSheet.css'
+// Palettes last, so their values win over every stylesheet above (scripts/gen-palettes.mjs).
+import './theme/theme-ember.css'
+import './theme/theme-volt.css'
+import './theme/theme-chalk.css'
 
 // App.jsx restores per-route scroll itself; the browser's own attempt races it.
 if ('scrollRestoration' in history) history.scrollRestoration = 'manual'
