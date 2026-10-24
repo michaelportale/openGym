@@ -2521,4 +2521,6 @@ export default {
   "Create “{0}”": "“{0}” oluştur",
   "sessions": "seans",
   "Needs two weigh-ins within 30 days": "30 gün içinde iki tartım gerekir",
+  "{0} session in a row": "Üst üste {0} seans",
+  "{0} sessions in a row": "Üst üste {0} seans",
 }

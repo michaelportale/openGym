@@ -2521,4 +2521,6 @@ export default {
   "Create “{0}”": "Utwórz „{0}”",
   "sessions": {"one": "sesja", "few": "sesje", "many": "sesji", "other": "sesji"},
   "Needs two weigh-ins within 30 days": "Potrzebne dwa ważenia w ciągu 30 dni",
+  "{0} session in a row": "{0} sesja z rzędu",
+  "{0} sessions in a row": {"one": "{0} sesja z rzędu", "few": "{0} sesje z rzędu", "many": "{0} sesji z rzędu", "other": "{0} sesji z rzędu"},
 }

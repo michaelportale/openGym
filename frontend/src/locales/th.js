@@ -2532,4 +2532,6 @@ export default {
   "Create “{0}”": "สร้าง “{0}”",
   "sessions": "เซสชัน",
   "Needs two weigh-ins within 30 days": "ต้องชั่งน้ำหนักสองครั้งภายใน 30 วัน",
+  "{0} session in a row": "{0} เซสชันติดต่อกัน",
+  "{0} sessions in a row": "{0} เซสชันติดต่อกัน",
 }

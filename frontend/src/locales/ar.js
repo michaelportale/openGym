@@ -2576,4 +2576,6 @@ export default {
   "Create “{0}”": "أنشئ “{0}”",
   "sessions": "جلسات",
   "Needs two weigh-ins within 30 days": "يلزم وزنان خلال 30 يومًا",
+  "{0} session in a row": "{0} جلسة متتالية",
+  "{0} sessions in a row": "{0} جلسات متتالية",
 }

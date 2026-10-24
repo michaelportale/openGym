@@ -2521,4 +2521,6 @@ export default {
   "Create “{0}”": "“{0}” 만들기",
   "sessions": "세션",
   "Needs two weigh-ins within 30 days": "30일 안에 체중 기록이 두 번 필요해요",
+  "{0} session in a row": "{0}회 연속",
+  "{0} sessions in a row": "{0}회 연속",
 }

@@ -69,14 +69,26 @@ export function streakLoop(S) {
 
 export const roundDaysOf = (S, N) => (ROUND_DAY_OPTIONS.includes(S?.roundDays) ? S.roundDays : defaultRoundDays(N))
 
-// Pause intervals as day numbers, the running one ending today.
+// The running pause, if it is well-formed and has begun (a since after today is not a pause yet).
+const statusSince = (S, todayN) => {
+  const st = S?.status
+  return st && ISO.test(st.since || '') && dayNum(st.since) <= todayN ? dayNum(st.since) : null
+}
+
+// Pause intervals as day numbers, the running one ending today. A saved state can carry a
+// malformed pause (an import, a clock change, a hand-edited backup): one that ends before it
+// starts, or starts after today, covers nothing and is dropped; an end after today counts only
+// up to today.
 function pausesOf(S, todayN) {
   const out = []
   for (const p of Array.isArray(S?.pauses) ? S.pauses : []) {
-    if (p && ISO.test(p.since || '') && ISO.test(p.until || '')) out.push([dayNum(p.since), dayNum(p.until)])
+    if (!p || !ISO.test(p.since || '') || !ISO.test(p.until || '')) continue
+    const a = dayNum(p.since), b = dayNum(p.until)
+    if (!Number.isFinite(a) || !Number.isFinite(b) || b < a || a > todayN) continue
+    out.push([a, Math.min(b, todayN)])
   }
-  const st = S?.status
-  if (st && ISO.test(st.since || '')) out.push([dayNum(st.since), todayN])
+  const since = statusSince(S, todayN)
+  if (since !== null) out.push([since, todayN])
   return out
 }
 
@@ -148,7 +160,7 @@ export function rotationStreak(S, today = todayISO()) {
   const limit = passes > 0 ? 2 * maxGap : maxGap
   const from = clockFrom(anchor, todayN, pauses, limit)
   const gap = todayN - from
-  if (gap <= limit && S?.status && ISO.test(S.status.since || '')) {
+  if (gap <= limit && statusSince(S, todayN) !== null) {
     return { ...base, count, state: 'paused', kind: PAUSE_KINDS.includes(S.status.kind) ? S.status.kind : 'break', since: S.status.since }
   }
   if (count === 0 || gap > limit) return { ...base, count: 0, rounds: 0, passes: 0, state: best > 0 ? 'broken' : 'zero' }
