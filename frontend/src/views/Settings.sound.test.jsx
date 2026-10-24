@@ -222,6 +222,26 @@ describe('Settings — vibrate', () => {
     label.remove(); setVibrate(true)
   })
 
+  // The Timer alerts row on the root page sums up how a rest ends; the iPhone tap is not one of them.
+  const alertsPreview = () => {
+    act(() => root.render(<Settings page={null} />))
+    return [...host.querySelectorAll('.sp-root-row')].find(r => r.querySelector('.lrow-t')?.textContent === 'Timer alerts')?.querySelector('.lrow-v')?.textContent
+  }
+  it('the Alerts summary on an iPhone leaves Vibrate out: with no sound or flash it says Silent', () => {
+    setVibrateApi(undefined)
+    mocks.S.vibrate = true; mocks.S.sound = false; mocks.S.timerFlash = false
+    expect(alertsPreview()).toBe('Silent')
+    mocks.S.sound = true
+    expect(alertsPreview()).toBe('Sound')
+  })
+  it('the Alerts summary names Vibrate where the browser really buzzes at the end of a rest', () => {
+    setVibrateApi(() => true)
+    mocks.S.vibrate = true; mocks.S.sound = false; mocks.S.timerFlash = true
+    expect(alertsPreview()).toBe('Vibrate · Flash')
+    mocks.S.vibrate = false
+    expect(alertsPreview()).toBe('Flash')
+  })
+
   it('a desktop browser without vibration shows it disabled as not supported, with no iPhone footer', () => {
     setVibrateApi(undefined)
     Object.defineProperty(navigator, 'userAgent', { value: 'Mozilla/5.0 (X11; Linux x86_64) Gecko/20100101 Firefox/130.0', configurable: true })
