@@ -1,5 +1,6 @@
+// @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { holdRepeat, HOLD_DELAY, HOLD_EVERY } from './hold-repeat.js'
+import { holdRepeat, cancelHold, HOLD_DELAY, HOLD_EVERY } from './hold-repeat.js'
 
 beforeEach(() => vi.useFakeTimers())
 afterEach(() => vi.useRealTimers())
@@ -33,6 +34,37 @@ describe('hold to repeat', () => {
     const step = vi.fn(); const h = holdRepeat(step)
     h.onPointerDown({ button: 0 }); vi.advanceTimersByTime(HOLD_DELAY + HOLD_EVERY)
     h.onPointerLeave(); vi.advanceTimersByTime(1000)
+    expect(step).toHaveBeenCalledTimes(2)
+  })
+  it('a lift anywhere on the page ends the hold', () => {
+    const step = vi.fn(); const h = holdRepeat(step)
+    h.onPointerDown({ button: 0 }); vi.advanceTimersByTime(HOLD_DELAY + HOLD_EVERY)
+    document.body.dispatchEvent(new Event('pointerup', { bubbles: true }))
+    vi.advanceTimersByTime(1000)
+    expect(step).toHaveBeenCalledTimes(2)
+  })
+  it('a cancelled pointer anywhere ends the hold too', () => {
+    const step = vi.fn(); const h = holdRepeat(step)
+    h.onPointerDown({ button: 0 }); vi.advanceTimersByTime(HOLD_DELAY)
+    document.dispatchEvent(new Event('pointercancel'))
+    vi.advanceTimersByTime(1000)
+    expect(step).toHaveBeenCalledTimes(1)
+  })
+  it('the view leaving stops its own hold, and only its own', () => {
+    const mine = {}, other = {}
+    const step = vi.fn(); const h = holdRepeat(step, mine)
+    h.onPointerDown({ button: 0 }); vi.advanceTimersByTime(HOLD_DELAY)
+    cancelHold(other); vi.advanceTimersByTime(HOLD_EVERY)
+    expect(step).toHaveBeenCalledTimes(2)
+    cancelHold(mine); vi.advanceTimersByTime(1000)
+    expect(step).toHaveBeenCalledTimes(2)
+  })
+  it('after sliding off a hold, the next tap on the button still steps', () => {
+    const step = vi.fn(); const h = holdRepeat(step)
+    h.onPointerDown({ button: 0 }); vi.advanceTimersByTime(HOLD_DELAY)
+    h.onPointerLeave()
+    expect(step).toHaveBeenCalledTimes(1)
+    h.onClick()
     expect(step).toHaveBeenCalledTimes(2)
   })
 })
