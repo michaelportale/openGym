@@ -57,11 +57,9 @@
   /* motion */
   --ease:cubic-bezier(.32,.72,0,1);
   --fast:140ms; --med:220ms;
-  /* a press: quick in, the same scale everywhere. --ease-out for things arriving, --ease-spring
-     for a small overshoot (a tab, a toggle); linear() falls back to --ease-out where unsupported */
+  /* a press: quick in, the same scale everywhere; --ease-out for things arriving */
   --dur-press:90ms; --press-scale:.97;
   --ease-out:cubic-bezier(.2,.8,.2,1);
-  --ease-spring:cubic-bezier(.2,.8,.2,1);
 
   /* The system bars the page is drawn under. env() is all a browser and the iOS app give; the
      Android WebView reports only the camera cutout there, and on Android 15, which draws the app
@@ -401,7 +399,6 @@ h4.sec{
 }
 .btn .icn{font-size:19px}
 .btn:active{transform:scale(var(--press-scale));transition-duration:var(--dur-press)}
-.btn.primary:active{background:var(--acc-2)}
 /* rows and tappable cards answer a press the same way, by scale (transform only, no reflow) */
 .lrow:active,.card.tappable:active,.today-row:active{transform:scale(var(--press-scale))}
 .lrow,.card.tappable,.today-row{transition:transform var(--dur-press) var(--ease-out)}
@@ -2331,6 +2328,3 @@ body.fab-aside #tabbar button.start{opacity:0;pointer-events:none;visibility:hid
 
 /* "Share your week" under the streak card, at its trailing edge like "All weigh-ins". */
 .week-recap-row{justify-content:flex-end;margin-top:-4px}
-@supports (transition-timing-function:linear(0, 1)){
-  :root{--ease-spring:linear(0, .009, .035 2.1%, .141 4.4%, .723 12.9%, .938 16.7%, 1.017 20.4%, 1.051 24.1%, 1.056 28.3%, 1.038 33.5%, 1.009 41.5%, .998 51.7%, 1)}
-}
