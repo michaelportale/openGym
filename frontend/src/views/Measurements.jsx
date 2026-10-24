@@ -232,6 +232,7 @@ export default function Measurements() {
         </div>
         {previewFields.length > 0 && <div className="measure-preview">{previewFields.map(({ field: f, value }) => <span key={f.key}>{t(f.label)} <b>{fmtNum(value)} {fieldUnit(f, S.unit)}</b></span>)}</div>}
       </div>
-    })}</div> : <div className="empty small">{t('No measurements yet')}</div>}
+    })}</div> : <div className="empty small">{t('No measurements yet')}
+      <div><Button size="sm" className="empty-cta-btn" icon="plus" onClick={() => measurementLogSheet()}>{t('Add a measurement')}</Button></div></div>}
   </div>
 }

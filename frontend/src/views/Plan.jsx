@@ -23,6 +23,7 @@ import { MOBILE } from '../lib/mobile.js'
 import { coachAvailable } from '../lib/coach.js'
 import { queueOf, queueView } from '../lib/queue.js'
 import { deriveSessionName } from '../lib/session-merge.js'
+import { workoutDay } from '../lib/history.js'
 import { markUndone, undoMarks } from '../lib/sync-merge.js'
 import {
   scheduleModeOf, queueRecovery, rotationIds, saveRotation, startNewPass, startPass, stopPass,
@@ -227,7 +228,18 @@ function Schedule({ S, update, nav, mode }) {
   const loopReorder = useListReorder(seq.length, (from, to) => setSeq(moved(seq, from, to)))
   const takeOut = id => takeOutOfLoop(id, setSeq, seq, seqLabel)
   const swipe = workoutControls(S).swipeSets && !external
-  const addToSeq = () => menuSheet({
+  // A new routine made from the loop's Add joins the loop at the end, then opens to fill in.
+  const newRoutine = () => {
+    const r = { id: uid(), name: t('New routine'), emoji: DEFAULT_GLYPH, ex: [] }
+    update(s => { s.routines.push(r); saveRotation(s, [...seq, r.id], seqLabel) })
+    nav('/plan/r/' + r.id)
+  }
+  // "+ Add" stays enabled: with every routine already in the loop it says so and
+  // offers a new routine instead of sitting there faded with no reason given.
+  const addToSeq = () => S.routines.every(r => seq.includes(r.id)) ? menuSheet({
+    title: t('Every routine is already in the loop'),
+    items: [{ icon: 'plus', label: t('New routine'), onClick: newRoutine }],
+  }) : menuSheet({
     title: t('Add to the rotation'),
     items: S.routines.filter(r => !seq.includes(r.id)).map(r => ({
       icon: glyphOf(r.emoji), label: r.name, onClick: () => setSeq([...seq, r.id]),
@@ -271,8 +283,23 @@ function Schedule({ S, update, nav, mode }) {
   const extraRoutines = d => dayRoutines(d).filter(r => !seq.includes(r.id))
   const plannedDays = weekOrder(ws).filter(d => extraRoutines(d).length)
   const doneCount = qv ? qv.items.filter(i => i.state === 'done').length : 0
-  const stateWord = item => item.state === 'pinned' ? fmtDate(item.on, true)
-    : { done: t('Done'), next: t('Up next'), later: t('Later') }[item.state]
+  // A slot that is neither done nor next says when it was last trained, not "Later".
+  const lastDone = id => {
+    let best = ''
+    for (const w of S.workouts || []) {
+      const ids = Array.isArray(w.routineIds) ? w.routineIds : w.routineId ? [w.routineId] : []
+      const d = workoutDay(w)
+      if (d && d > best && ids.includes(id)) best = d
+    }
+    return best
+  }
+  const stateWord = item => {
+    if (item.state === 'pinned') return fmtDate(item.on, true)
+    if (item.state === 'done') return t('Done')
+    if (item.state === 'next') return t('Up next')
+    const d = lastDone(item.id)
+    return d ? t('Last done {0}', fmtDate(d, true)) : t('Not done yet')
+  }
   const editing = editLoop && !external
 
   return <>
@@ -314,7 +341,7 @@ function Schedule({ S, update, nav, mode }) {
         {!external && <div className="row plan-sec-acts" style={{ gap: 6 }}>
           {seq.length > 0 && <button className="plan-textbtn" aria-pressed={editLoop} onClick={() => setEditLoop(e => !e)}>{editLoop ? t('Done') : t('Edit')}</button>}
           <Button size="sm" variant="tinted" icon="plus" aria-label={t('Add routine to the rotation')}
-            disabled={S.routines.every(r => seq.includes(r.id))} onClick={addToSeq}>{t('Add')}</Button>
+            onClick={addToSeq}>{t('Add')}</Button>
         </div>}
       </div>
       {seq.length ? <div className="list plan-loop" ref={loopReorder.listRef}>

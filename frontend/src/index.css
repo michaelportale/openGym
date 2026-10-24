@@ -411,7 +411,13 @@ h4.sec{
 .btn.sm{padding:8px 14px;width:auto;font-size:15px;border-radius:var(--r-sm);gap:5px}
 .btn.sm .icn{font-size:16px}
 .btn.xs{padding:5px 10px;width:auto;font-size:13px;border-radius:7px;gap:4px}
-.btn:disabled{opacity:.32;pointer-events:none}
+.btn:disabled{pointer-events:none}
+/* Disabled means readable and explained: an inert fill instead of a fade, always next to
+   a hint that says why. A control that must stay focusable for VoiceOver uses aria-disabled. */
+.btn:disabled,.btn[aria-disabled="true"]{opacity:1;background:var(--surface-2);color:var(--label-3);box-shadow:inset 0 0 0 1px var(--sep);cursor:not-allowed}
+.btn[aria-disabled="true"]{pointer-events:auto}
+.btn:disabled .icn,.btn[aria-disabled="true"] .icn{color:var(--label-3)}
+.disabled-hint{font-size:13px;color:var(--label-2);margin-top:6px}
 .weekly-volume-toggle{padding-block:0}
 .weekly-volume-toggle .icn{transition:transform var(--fast) var(--ease)}
 .weekly-volume-toggle[aria-expanded="true"] .icn{transform:rotate(180deg)}
@@ -2366,3 +2372,11 @@ body.fab-aside #tabbar button.start{opacity:0;pointer-events:none;visibility:hid
 .seg-44 button::before{inset:-2px 0}
 .bw-btn{min-height:44px}
 .bw-empty{display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding:8px 0}
+
+/* --- empty states: a sentence and a 44 px secondary button, never an accent fill --- */
+.empty .btn.empty-cta-btn{width:auto;margin-top:12px;min-height:44px;background:var(--surface-2);color:var(--label)}
+.tile .empty-tile{font-size:15px;font-weight:400;color:var(--label-2)}
+.tile .btn.empty-cta-btn{width:auto;min-height:44px;margin-top:8px;padding:8px 14px;font-size:15px;background:var(--surface-2);color:var(--label)}
+/* --- rotation chips: only the next slot carries a word --- */
+.chip.is-done{color:var(--label-2)}
+.chip.is-done .icn{color:var(--success)}

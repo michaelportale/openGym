@@ -673,7 +673,10 @@ export default function Stats() {
       {rotStreak
         ? <div className="tile"><div className="l"><Icon name="repeat" />{t('Streak')}</div><div className="v tnum">{rotStreak.count}</div><div className="streak-tile-s">{rotStreak.mode === 'rotation' ? tn('session on rotation', 'sessions on rotation', rotStreak.count) : tn('session', 'sessions', rotStreak.count)}</div></div>
         : <div className="tile"><div className="l"><Icon name="flame" />{t('Week streak')}</div><div className="v">{streakWeeks(S)}</div></div>}
-      <div className="tile"><div className="l"><Icon name="scale" />{t('Weight 30d')}</div><div className="v" style={{ fontSize: 22 }}>{bwDelta30 === null ? '–' : bwSigned(bwDelta30)}</div></div>
+      <div className="tile"><div className="l"><Icon name="scale" />{t('Weight 30d')}</div>{bwDelta30 === null
+        // One weigh-in (or none other within 30 days of the latest) is not "no weigh-ins yet".
+        ? <><div className="v empty-tile">{S.bodyweight.length ? t('Needs two weigh-ins within 30 days') : t('No weigh-ins yet')}</div><Button size="sm" className="empty-cta-btn" onClick={() => bwSheet()}>{t('Log weight')}</Button></>
+        : <div className="v" style={{ fontSize: 22 }}>{bwSigned(bwDelta30)}</div>}</div>
 
     </div>}
 
@@ -717,9 +720,9 @@ export default function Stats() {
             <Button size="sm" className="bw-btn" icon="plus" onClick={() => bwSheet()}>{t('Log')}</Button>
           </div>
         </div>
-        {S.bodyweight.length === 0 ? <div className="bw-empty">
-          <div className="muted small">{t('No weigh-ins yet')}</div>
-          <Button size="sm" variant="tinted" className="bw-btn" icon="plus" onClick={() => bwSheet()}>{t('Log weight')}</Button>
+        {S.bodyweight.length === 0 ? <div className="empty-cta bw-empty">
+          <p>{t('No weigh-ins yet')}</p>
+          <Button size="sm" className="empty-cta-btn" icon="plus" onClick={() => bwSheet()}>{t('Log weight')}</Button>
         </div> : <>
         <Segmented className="seg-range seg-44" value={range} onChange={setRange}
           options={rangeOptions()} />
@@ -730,8 +733,9 @@ export default function Stats() {
           <caption>{t('Last 7 weigh-ins')}</caption>
           <tbody>{bwLast7.map(b => <tr key={b.d + (b.t || '')}><th scope="row">{fmtDate(b.d, true)}</th><td>{fmtNum(b.w) + ' ' + S.unit}</td></tr>)}</tbody>
         </table>
-        {bwPts.length < BW_TREND_MIN && <div className="bw-trend-line small muted">
-          {tn('Log {0} more weigh-in to see your trend', 'Log {0} more weigh-ins to see your trend', BW_TREND_MIN - bwPts.length)}
+        {bwPts.length < BW_TREND_MIN && <div className="empty-cta" style={{ marginTop: 8 }}>
+          <p className="bw-trend-line">{tn('Log {0} more weigh-in to see your trend', 'Log {0} more weigh-ins to see your trend', BW_TREND_MIN - bwPts.length)}</p>
+          <Button size="sm" className="empty-cta-btn" icon="plus" onClick={() => bwSheet()}>{t('Log weight')}</Button>
         </div>}
         {/* The smoothed line in words: where the week's average is, and how far it moved in a week.
             The change is plain text with an arrow; whether it heads toward the goal is said, not coloured. */}
