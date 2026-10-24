@@ -2493,4 +2493,5 @@ export default {
   "A pause freezes your streak until you are back. Each finished round banks a rest pass (up to {0}) that covers one long gap.": "Duraklatma, sen dönene kadar serini dondurur. Tamamlanan her tur, bir uzun arayı kapatan bir dinlenme hakkı kazandırır (en fazla {0}).",
   "Aim to finish a round every": "Hedef: her turu şu sürede bitir",
   "{0} days": "{0} gün",
+  "sessions": "seans",
 }

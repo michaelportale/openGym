@@ -2493,4 +2493,5 @@ export default {
   "A pause freezes your streak until you are back. Each finished round banks a rest pass (up to {0}) that covers one long gap.": "ब्रेक आपके लौटने तक सिलसिले को रोक देता है। हर पूरा राउंड एक आराम पास देता है (अधिकतम {0}), जो एक लंबा अंतराल ढक लेता है।",
   "Aim to finish a round every": "हर इतने दिनों में एक राउंड पूरा करने का लक्ष्य",
   "{0} days": "{0} दिन",
+  "sessions": "सत्र",
 }

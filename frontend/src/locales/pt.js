@@ -2493,4 +2493,5 @@ export default {
   "A pause freezes your streak until you are back. Each finished round banks a rest pass (up to {0}) that covers one long gap.": "Uma pausa congela a tua sequência até voltares. Cada volta concluída dá um passe de descanso (até {0}) que cobre uma ausência longa.",
   "Aim to finish a round every": "Objetivo: acabar uma volta a cada",
   "{0} days": "{0} dias",
+  "sessions": "sessões",
 }

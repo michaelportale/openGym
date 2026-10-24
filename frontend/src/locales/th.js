@@ -2504,4 +2504,5 @@ export default {
   "A pause freezes your streak until you are back. Each finished round banks a rest pass (up to {0}) that covers one long gap.": "การหยุดพักจะตรึงสถิติไว้จนกว่าคุณจะกลับมา ทุกรอบที่ทำครบจะได้บัตรพัก (สูงสุด {0} ใบ) ใช้ชดเชยช่วงห่างยาวได้หนึ่งครั้ง",
   "Aim to finish a round every": "เป้าหมาย: ทำครบหนึ่งรอบทุก",
   "{0} days": "{0} วัน",
+  "sessions": "เซสชัน",
 }

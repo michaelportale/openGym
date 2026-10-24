@@ -2490,4 +2490,5 @@ export default {
   "A pause freezes your streak until you are back. Each finished round banks a rest pass (up to {0}) that covers one long gap.": "Пауза заморожує серію до вашого повернення. Кожне завершене коло дає перепустку (до {0}), яка покриває одну довгу перерву.",
   "Aim to finish a round every": "Мета: проходити коло кожні",
   "{0} days": {"one": "{0} день", "few": "{0} дні", "many": "{0} днів", "other": "{0} дня"},
+  "sessions": {"one": "заняття", "few": "заняття", "many": "занять", "other": "заняття"},
 }

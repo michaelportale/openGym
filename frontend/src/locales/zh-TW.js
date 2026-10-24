@@ -2486,4 +2486,5 @@ export default {
   "A pause freezes your streak until you are back. Each finished round banks a rest pass (up to {0}) that covers one long gap.": "暫停會凍結連續紀錄，直到你回來。每完成一輪就能存下一張休息券（最多 {0} 張），可抵銷一次較長的空檔。",
   "Aim to finish a round every": "目標：每輪完成週期",
   "{0} days": "{0} 天",
+  "sessions": "次訓練",
 }

@@ -2497,4 +2497,5 @@ export default {
   "A pause freezes your streak until you are back. Each finished round banks a rest pass (up to {0}) that covers one long gap.": "Пауза замораживает серию до вашего возвращения. Каждый пройденный круг даёт пропуск (до {0}), который покрывает один долгий перерыв.",
   "Aim to finish a round every": "Цель: проходить круг каждые",
   "{0} days": {"one": "{0} день", "few": "{0} дня", "many": "{0} дней", "other": "{0} дня"},
+  "sessions": {"one": "тренировка", "few": "тренировки", "many": "тренировок", "other": "тренировки"},
 }
