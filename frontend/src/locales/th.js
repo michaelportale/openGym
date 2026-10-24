@@ -2519,4 +2519,8 @@ export default {
   "Body weight, {0}": "น้ำหนักตัว, {0}",
   "Log {0} more weigh-ins to see your trend": "บันทึกน้ำหนักอีก {0} ครั้งเพื่อดูแนวโน้ม",
   "Your goal is drawn as a dashed line through the weight charts.": "เป้าหมายของคุณแสดงเป็นเส้นประบนกราฟน้ำหนัก",
+  "{0} of {1} sessions": "{0} จาก {1} เซสชัน",
+  "New bests": "สถิติใหม่",
+  "{0} sessions on rotation": "{0} เซสชันตามรอบ",
+  "Add your 7-day average. Off unless you turn it on.": "เพิ่มค่าเฉลี่ย 7 วันของคุณ ปิดไว้จนกว่าคุณจะเปิด",
 }

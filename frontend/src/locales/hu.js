@@ -2511,4 +2511,8 @@ export default {
   "Body weight, {0}": "Testsúly, {0}",
   "Log {0} more weigh-ins to see your trend": "Még {0} mérés, és látod a trendet",
   "Your goal is drawn as a dashed line through the weight charts.": "A célod szaggatott vonalként jelenik meg a súlygrafikonokon.",
+  "{0} of {1} sessions": "{0} / {1} edzés",
+  "New bests": "Új csúcsok",
+  "{0} sessions on rotation": "{0} edzés a körforgásban",
+  "Add your 7-day average. Off unless you turn it on.": "Hozzáadja a 7 napos átlagodat. Kikapcsolva, amíg be nem kapcsolod.",
 }

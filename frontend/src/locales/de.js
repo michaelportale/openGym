@@ -2528,4 +2528,8 @@ export default {
   "Body weight, {0}": "Körpergewicht, {0}",
   "Log {0} more weigh-ins to see your trend": "Noch {0}× wiegen, dann erscheint dein Trend",
   "Your goal is drawn as a dashed line through the weight charts.": "Dein Ziel erscheint als gestrichelte Linie in den Gewichtsdiagrammen.",
+  "{0} of {1} sessions": "{0} von {1} Einheiten",
+  "New bests": "Neue Bestwerte",
+  "{0} sessions on rotation": "{0} Einheiten in der Rotation",
+  "Add your 7-day average. Off unless you turn it on.": "Fügt deinen 7-Tage-Schnitt hinzu. Aus, bis du es einschaltest.",
 }
