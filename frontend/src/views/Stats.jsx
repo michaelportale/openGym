@@ -643,13 +643,23 @@ export default function Stats() {
       window.requestAnimationFrame(() => document.getElementById('exercise-progress')?.scrollIntoView?.({ block: 'start', behavior: 'smooth' }))
     }} />
 
-    <div className="tiles">
+    {/* Before the first workout, one card says what will appear here and leads to the Start
+        screen. The count tiles would all read 0, so they wait for the first workout unless a
+        weigh-in already gives the weight tile something to say. The activity grid stays: a tap
+        on a past day is one way to log it. */}
+    {workouts.length === 0 && <div className="card stats-empty">
+      <div className="empty"><div className="ico"><Icon name="chartLine" /></div>
+        <div>{t('Finish your first workout and your progress curves will show up here.')}</div>
+        <Button variant="primary" icon="play" onClick={() => nav('/workout')}>{t('Start workout')}</Button>
+      </div>
+    </div>}
+    {(workouts.length > 0 || bwDelta30 !== null) && <div className="tiles">
       <div className="tile"><div className="l"><Icon name="dumbbell" />{t('Workouts')}</div><div className="v">{workouts.length}</div></div>
       <div className="tile"><div className="l"><Icon name="calendar" />{t('This month')}</div><div className="v">{monthW}</div></div>
       <div className="tile"><div className="l"><Icon name="flame" />{t('Week streak')}</div><div className="v">{streakWeeks(S)}</div></div>
       <div className="tile"><div className="l"><Icon name="scale" />{t('Weight 30d')}</div><div className="v" style={{ fontSize: 22, color: bwDelta30 === null ? 'inherit' : bwDeltaColor(bwDelta30, (lastBW(S) || {}).w || 0) }}>{bwDelta30 === null ? '–' : (bwDelta30 > 0 ? '+' : '') + fmtNum(bwDelta30) + ' ' + S.unit}</div></div>
 
-    </div>
+    </div>}
 
     <div className="card">
       <h2>{t('Activity (last 12 months)')}</h2>
@@ -700,7 +710,7 @@ export default function Stats() {
         </div>}
       </div>
 
-      <div className="card" id="exercise-progress">
+      {workouts.length > 0 && <div className="card" id="exercise-progress">
         <h2>{t('Exercise progress')}</h2>
         {exHist.length ? <>
           <div className="sect-b" style={{ marginBottom: 10 }}>
@@ -749,7 +759,7 @@ export default function Stats() {
             {t('A fuller dot means less left in the tank. The same weight at a lower {0} is progress the line alone doesn’t show.', hd)}
           </div>}
         </> : <div className="muted small">{t('Finish your first workout and your progress curves will show up here.')}</div>}
-      </div>
+      </div>}
     </div>
 
     {workouts.length > 0 && <>
