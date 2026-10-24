@@ -2439,4 +2439,7 @@ export default {
   "Strength trend": "肌力趨勢",
   "Last 8 weeks": "最近 8 週",
   "Still recovering: {0}": "仍在恢復：{0}",
+  "Filters": "篩選",
+  "Filters: {0}": "篩選：{0}",
+  "Type": "類型",
 }

@@ -2446,4 +2446,7 @@ export default {
   "Strength trend": "शक्ति का रुझान",
   "Last 8 weeks": "पिछले 8 सप्ताह",
   "Still recovering: {0}": "अभी रिकवर हो रहे हैं: {0}",
+  "Filters": "फ़िल्टर",
+  "Filters: {0}": "फ़िल्टर: {0}",
+  "Type": "प्रकार",
 }

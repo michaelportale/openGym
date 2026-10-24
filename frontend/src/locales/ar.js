@@ -2501,4 +2501,7 @@ export default {
   "Strength trend": "اتجاه القوة",
   "Last 8 weeks": "آخر 8 أسابيع",
   "Still recovering: {0}": "لا يزال يتعافى: {0}",
+  "Filters": "عوامل التصفية",
+  "Filters: {0}": "عوامل التصفية: {0}",
+  "Type": "النوع",
 }
