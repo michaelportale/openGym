@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import React, { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeEach, expect, it, vi } from 'vitest'
 vi.mock('react-router-dom', () => ({ useNavigate: () => () => {} }))
 vi.mock('../lib/api.js', async original => ({ ...await original(), api: vi.fn() }))
 import Plan from '../views/Plan.jsx'
@@ -15,6 +15,9 @@ let root,host
 const state=()=>({...freshState(),routines:[{id:'p',name:'Push',ex:[{id:'0047',sets:3}]},{id:'u',name:'Pull',ex:[{id:'2330',sets:3}]},{id:'l',name:'Legs',ex:[{id:'0043',sets:3}]}],rotation:{id:'rot',sequence:['p','u','l']},queue:{ids:['p','u','l'],since:1,startsOn:todayISO(),rotationId:'rot'}})
 beforeEach(()=>{globalThis.IS_REACT_ACT_ENVIRONMENT=true;useUI.setState({sheets:[]});host=document.createElement('div');document.body.append(host);root=createRoot(host);useStore.setState({S:state(),user:null});localStorage.removeItem('gym_plan_view')})
 afterEach(()=>{act(()=>root.unmount());host.remove();localStorage.clear()})
+// A sheet that closes arms Modals' scroll-restore timer (350 ms). Let the last one run before the
+// test environment is torn down, or it fires against a missing window.
+afterAll(()=>new Promise(r=>setTimeout(r,400)))
 // Plan shows a row; the form itself opens in a sheet.
 const row=()=>[...host.querySelectorAll('.adaptation-row .lrow')].find(x=>x.textContent.includes('Adjust upcoming training'))
 const openForm=()=>{act(()=>root.render(<><Plan/><Modals/></>));act(()=>row().click())}
