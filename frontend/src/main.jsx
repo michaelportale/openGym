@@ -6,6 +6,8 @@ import { useStore } from './store/useStore.js'
 import { startMediaSync } from './lib/media-sync.js'
 import { startNativeKeyboard } from './lib/native-keyboard.js'
 import './index.css'
+// Semantic tokens (success, warning, chart scales…) on top of the raw ones in index.css.
+import './theme/tokens.css'
 // Scoped workout refinements follow the shared control foundation.
 import './views/FocusView.css'
 import './components/StrengthFeedback.css'
