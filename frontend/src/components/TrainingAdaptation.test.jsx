@@ -23,7 +23,11 @@ const prepare=()=>{
   act(()=>{checks[0].click();checks[1].click()})
   act(()=>button('Preview adjustment').click())
 }
-it.each([['Plan',Plan],['Home',Home]])('offers explicit day disposition in %s and saving missed previews without changing the queue',(_,View)=>{
+// The form lives in Plan only; Home used to render a second copy.
+it('is not rendered on Home',()=>{
+  act(()=>root.render(<Home/>));expect(card()).toBeNull()
+})
+it.each([['Plan',Plan]])('offers explicit day disposition in %s and saving missed previews without changing the queue',(_,View)=>{
   act(()=>root.render(<View/>));expect(card()).not.toBeNull()
   expect(card().textContent).toContain('Unknown')
   input('Day status','missed')
