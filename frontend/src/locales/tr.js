@@ -2451,4 +2451,8 @@ export default {
   "Type": "Tür",
   "7-day average {0}": "7 günlük ortalama {0}",
   "{0} this week": "bu hafta {0}",
+  "Your week": "Haftan",
+  "Top muscle": "En çok çalışan kas",
+  "Share your week": "Haftanı paylaş",
+  "Show which muscles this week trained.": "Bu hafta hangi kasların çalıştığını göster.",
 }

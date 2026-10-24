@@ -2506,4 +2506,8 @@ export default {
   "Type": "النوع",
   "7-day average {0}": "متوسط 7 أيام {0}",
   "{0} this week": "{0} هذا الأسبوع",
+  "Your week": "أسبوعك",
+  "Top muscle": "العضلة الأكثر تدريبًا",
+  "Share your week": "شارك أسبوعك",
+  "Show which muscles this week trained.": "اعرض العضلات التي دربتها هذا الأسبوع.",
 }

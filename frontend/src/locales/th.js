@@ -2462,4 +2462,8 @@ export default {
   "Type": "ประเภท",
   "7-day average {0}": "ค่าเฉลี่ย 7 วัน {0}",
   "{0} this week": "{0} สัปดาห์นี้",
+  "Your week": "สัปดาห์ของคุณ",
+  "Top muscle": "กล้ามเนื้อหลัก",
+  "Share your week": "แชร์สัปดาห์ของคุณ",
+  "Show which muscles this week trained.": "แสดงกล้ามเนื้อที่ฝึกในสัปดาห์นี้",
 }

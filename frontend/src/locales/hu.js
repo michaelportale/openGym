@@ -2454,4 +2454,8 @@ export default {
   "Type": "Típus",
   "7-day average {0}": "7 napos átlag {0}",
   "{0} this week": "{0} ezen a héten",
+  "Your week": "A heted",
+  "Top muscle": "Fő izom",
+  "Share your week": "A heted megosztása",
+  "Show which muscles this week trained.": "Megmutatja, mely izmokat edzetted a héten.",
 }
