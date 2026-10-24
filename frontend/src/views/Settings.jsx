@@ -388,7 +388,10 @@ export default function Settings({ page = null, find = null, via = null }) {
   })
 
   /* ---------------- what the pages and the search need to know about this device ---------------- */
-  const canVibrate = vibrateSupported()
+  // Vibrate is a live setting wherever something can buzz: navigator.vibrate, or on an iPhone or
+  // iPad the system switch tap that stands in for a short buzz (lib/sound.js switchTap). It is
+  // the same S.vibrate either way, so turning it off silences the iPhone tap too.
+  const canVibrate = vibrateSupported() || appleTouchDevice()
   const ctx = {
     user, mobile: MOBILE, android, demo: DEMO, wakeOK, hasMedia, pwOn, webauthn: webauthnOK(),
     sound: !!S.sound, playOnSilent: playOnSilentSupported(), canVibrate, vibrate: S.vibrate !== false,
@@ -404,7 +407,9 @@ export default function Settings({ page = null, find = null, via = null }) {
   // The value a root row shows, so most questions are answered without opening the page.
   const preview = {
     workout: () => (S.restSec > 0 ? t('{0} rest', fmtRest(S.restSec)) : t('No rest timer')) + ' · ' + layoutLabel,
-    alerts: () => [S.sound ? t('Sound') : null, canVibrate && S.vibrate !== false ? t('Vibrate') : null, S.timerFlash ? t('Flash') : null].filter(Boolean).join(' · ') || t('Silent'),
+    // How the end of a rest reaches you. On an iPhone (no navigator.vibrate) Vibrate is only the
+    // light tap on a ticked set, so it does not count here: with no sound or flash a rest ends silent.
+    alerts: () => [S.sound ? t('Sound') : null, vibrateSupported() && S.vibrate !== false ? t('Vibrate') : null, S.timerFlash ? t('Flash') : null].filter(Boolean).join(' · ') || t('Silent'),
     reminders: () => (S.reminder?.on ? (S.reminder.time || DEF.reminder?.time || '') : t('Off')),
     plan: () => (mode === 'rotation' ? t('Rotation') : t('Fixed Week')) + ' · ' + shortWeekday(weekStartOf(S) === SUNDAY ? 0 : 1),
     units: () => (S.unit || 'kg') + ' · ' + (LANGS[lang] || lang),
@@ -591,11 +596,11 @@ export default function Settings({ page = null, find = null, via = null }) {
           )}
         </Section>
         {/* The buzz at the end of a rest or a hold and on a set tick, on its own switch like the
-            sound (Discord, asierlama). iOS has no navigator.vibrate: the row stays, greyed out,
-            and says so, instead of an iPhone user looking for a setting that is not there. */}
-        <Section footer={!canVibrate && iPhone ? t('iPhone doesn’t let openGym vibrate. A sound or a flash does the job.') : null}>
+            sound (Discord, asierlama). iOS has no navigator.vibrate, but a short buzz plays the
+            system switch tap there, so on an iPhone the row is live and says what it does. */}
+        <Section footer={iPhone && !vibrateSupported() ? t('On iPhone, Vibrate is a light tap when you tick a set (iOS 18 or later). The end of a rest still needs a sound or a flash.') : null}>
           <Row icon="vibrate" iconTint="var(--indigo)" title={t('Vibrate')} className={canVibrate ? '' : 'dis'}
-            subtitle={canVibrate ? null : iPhone ? t('Not on iPhone') : t('Not supported in this browser.')}>
+            subtitle={canVibrate ? (iPhone && !vibrateSupported() ? t('A light tap on iPhone') : null) : t('Not supported in this browser.')}>
             <Switch checked={canVibrate && S.vibrate !== false} disabled={!canVibrate} onChange={v => update(s => { s.vibrate = v })} />
           </Row>
           {/* Android app only (#375), and only shown there, so it needs no "Android app only" hint: silent mode mutes the ordinary buzz and the notification's,

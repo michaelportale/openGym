@@ -141,7 +141,8 @@
 
 /* ---------- setup progress ---------- */
 .adm-progress{height:5px;border-radius:99px;background:var(--surface-2);overflow:hidden;margin:0 0 10px}
-.adm-progress i{display:block;height:100%;border-radius:99px;background:var(--acc);transition:width var(--med) var(--ease)}
+.adm-progress i{display:block;height:100%;width:100%;border-radius:99px;background:var(--acc);transform-origin:0 50%;transition:transform var(--med) var(--ease)}
+[dir="rtl"] .adm-progress i{transform-origin:100% 50%}
 
 /* ---------- provider chips: clearly idle vs. clearly chosen ---------- */
 .adm-chips .chip{

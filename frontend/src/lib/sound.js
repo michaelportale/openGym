@@ -150,7 +150,7 @@ export const playOnSilentSupported = () => {
   return appleTouchDevice()
 }
 // An iPhone or iPad, in Safari, a home-screen web app or the iOS app (an iPad reports itself as
-// a Mac with a touch screen). Settings says "Not on iPhone" on the Vibrate row here.
+// a Mac with a touch screen). Here Vibrate (Settings) switches the system tap in switchTap.
 export const appleTouchDevice = () => {
   if (typeof navigator === 'undefined') return false
   const ua = navigator.userAgent || ''
@@ -166,12 +166,40 @@ export function setPlayOnSilent(on) {
 // by App.jsx, so the places that buzz do not each have to read the profile. On by default.
 let buzz = true
 export function setVibrate(on) { buzz = on !== false }
-// Offered where the browser can buzz at all: iOS has no navigator.vibrate. The Android app needs
+// Where the browser can buzz at all; iOS has no navigator.vibrate (its stand-in is switchTap,
+// also governed by setVibrate). The Android app needs
 // android.permission.VIBRATE in its manifest, without which the WebView drops every call.
 export const vibrateSupported = () => typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function'
 export function vibrate(p) {
   if (!buzz) return
-  try { navigator.vibrate && navigator.vibrate(p) } catch (e) { /* */ }
+  if (vibrateSupported()) { try { navigator.vibrate(p) } catch (e) { /* */ } return }
+  // A single short buzz is a tap (a set ticked, a swipe crossing its line); without vibrate, iOS
+  // gets the system switch haptic for it instead. Patterns and long buzzes have no stand-in.
+  if (typeof p === 'number' && p <= 30) switchTap()
+}
+
+// iOS Safari and the iOS app's WebView have no navigator.vibrate. Since iOS 18, toggling an
+// <input type="checkbox" switch> plays the system switch haptic, also when its label is clicked
+// from a tap handler (outside a user gesture it stays silent, and nothing else happens). One hidden
+// switch is kept for this: it takes no focus, no space and no part in the accessibility tree.
+let hapticLabel = null
+export function switchTap() {
+  if (typeof document === 'undefined' || !appleTouchDevice()) return false
+  try {
+    if (!hapticLabel || !hapticLabel.isConnected) {
+      hapticLabel = document.createElement('label')
+      hapticLabel.setAttribute('aria-hidden', 'true')
+      hapticLabel.className = 'haptic-switch'
+      // the label's click (and the input's) stays here, so no outside-click handler sees it
+      hapticLabel.addEventListener('click', e => e.stopPropagation())
+      const input = document.createElement('input')
+      input.type = 'checkbox'; input.setAttribute('switch', ''); input.tabIndex = -1
+      hapticLabel.appendChild(input)
+      document.body.appendChild(hapticLabel)
+    }
+    hapticLabel.click()
+    return true
+  } catch (e) { return false }
 }
 
 // Settings → "Vibrate when the phone is on silent" (#375), Android app only. The page's buzz is an
