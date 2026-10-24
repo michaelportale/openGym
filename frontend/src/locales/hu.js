@@ -2350,6 +2350,7 @@ export default {
   "Rows with unknown working-set status: {0}": "Rows with unknown working-set status: {0}",
   "Save aims": "Save aims",
   "Secondary credit uses 0.5 per set. Day aims describe your schedule, not stimulus adequacy.": "Secondary credit uses 0.5 per set. Day aims describe your schedule, not stimulus adequacy.",
+  "Secondary credit uses 0.5 per set.": "Secondary credit uses 0.5 per set.",
   "Secondary sets: {0} · estimated credit: {1}": "Secondary sets: {0} · estimated credit: {1}",
   "Secondary-only days: {0}": "Secondary-only days: {0}",
   "Sessions without known dates: {0}": "Sessions without known dates: {0}",

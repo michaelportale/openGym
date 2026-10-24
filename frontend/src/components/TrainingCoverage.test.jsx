@@ -25,7 +25,8 @@ it.each([['Home', Home], ['Plan', Plan]])('renders actual vs planned coverage in
   expect(chest.textContent).toContain('Planned: 4 estimated sets')
   expect(chest.textContent).toContain('Direct sets: 1')
   expect(chest.textContent).toContain('Direct-work days: 1')
-  expect(card().textContent).toContain('Secondary credit uses 0.5 per set. Day aims describe your schedule, not stimulus adequacy.')
+  expect(card().textContent).toContain('Secondary credit uses 0.5 per set.')
+  expect(card().textContent).not.toContain('stimulus adequacy')
   // the rolling view carries no method note
   expect(card().textContent).not.toContain('dated prescriptions')
 })

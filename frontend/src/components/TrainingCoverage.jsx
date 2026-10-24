@@ -72,7 +72,7 @@ export default function TrainingCoverage({ S }) {
         {!!data.unknowns[kind].acceptanceSessions && <div>{t('Sessions with unknown cycle timing: {0}', data.unknowns[kind].acceptanceSessions)}</div>}
       </div>)}
     </details>
-    <p className="sect-f">{t('Secondary credit uses 0.5 per set. Day aims describe your schedule, not stimulus adequacy.')}</p>
+    <p className="sect-f">{t('Secondary credit uses 0.5 per set.')}</p>
     <TargetEditor S={S} />
   </section>
 }
