@@ -2454,4 +2454,7 @@ export default {
   "A set where a muscle only helps counts as half a set.": "肌群只是輔助的組數算半組。",
   "No sets in these days yet.": "這幾天還沒有組數。",
   "Set your aims": "設定目標",
+  "<1 min": "不到 1 分鐘",
+  "all working": "全部為正式組",
+  "{0} working": "{0} 組正式組",
 }

@@ -2516,4 +2516,7 @@ export default {
   "A set where a muscle only helps counts as half a set.": "المجموعة التي تساعد فيها العضلة فقط تُحتسب نصف مجموعة.",
   "No sets in these days yet.": "لا توجد مجموعات في هذه الأيام بعد.",
   "Set your aims": "حدّد أهدافك",
+  "<1 min": "أقل من دقيقة",
+  "all working": "كلها مجموعات عمل",
+  "{0} working": "{0} مجموعات عمل",
 }

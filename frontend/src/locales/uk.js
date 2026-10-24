@@ -2458,4 +2458,7 @@ export default {
   "A set where a muscle only helps counts as half a set.": "Підхід, де м’яз лише допомагає, рахується як половина.",
   "No sets in these days yet.": "У ці дні підходів ще немає.",
   "Set your aims": "Задати цілі",
+  "<1 min": "<1 хв",
+  "all working": "усі робочі",
+  "{0} working": "{0} робочих",
 }

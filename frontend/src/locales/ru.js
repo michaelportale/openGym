@@ -2465,4 +2465,7 @@ export default {
   "A set where a muscle only helps counts as half a set.": "Подход, где мышца только помогает, считается за половину.",
   "No sets in these days yet.": "В эти дни подходов пока нет.",
   "Set your aims": "Задать цели",
+  "<1 min": "<1 мин",
+  "all working": "все рабочие",
+  "{0} working": "{0} рабочих",
 }
