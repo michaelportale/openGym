@@ -2512,4 +2512,6 @@ export default {
   "{0} sessions on rotation": {"one": "{0} sesja z rotacji", "few": "{0} sesje z rotacji", "many": "{0} sesji z rotacji", "other": "{0} sesji z rotacji"},
   "Add your 7-day average. Off unless you turn it on.": "Dodaje Twoją średnią 7-dniową. Wyłączone, dopóki tego nie włączysz.",
   "sessions": {"one": "sesja", "few": "sesje", "many": "sesji", "other": "sesji"},
+  "{0} session in a row": "{0} sesja z rzędu",
+  "{0} sessions in a row": {"one": "{0} sesja z rzędu", "few": "{0} sesje z rzędu", "many": "{0} sesji z rzędu", "other": "{0} sesji z rzędu"},
 }

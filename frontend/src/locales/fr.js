@@ -2512,4 +2512,6 @@ export default {
   "{0} sessions on rotation": "{0} séances du cycle",
   "Add your 7-day average. Off unless you turn it on.": "Ajoute ta moyenne sur 7 jours. Désactivé sauf si tu l’actives.",
   "sessions": "séances",
+  "{0} session in a row": "{0} séance d’affilée",
+  "{0} sessions in a row": "{0} séances d’affilée",
 }

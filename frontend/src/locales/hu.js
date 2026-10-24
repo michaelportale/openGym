@@ -2515,4 +2515,6 @@ export default {
   "{0} sessions on rotation": "{0} edzés a körforgásban",
   "Add your 7-day average. Off unless you turn it on.": "Hozzáadja a 7 napos átlagodat. Kikapcsolva, amíg be nem kapcsolod.",
   "sessions": "edzés",
+  "{0} session in a row": "{0} edzés egymás után",
+  "{0} sessions in a row": "{0} edzés egymás után",
 }

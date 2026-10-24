@@ -2512,4 +2512,6 @@ export default {
   "{0} sessions on rotation": "Rotasyonda {0} seans",
   "Add your 7-day average. Off unless you turn it on.": "7 günlük ortalamanı ekler. Sen açmadıkça kapalı kalır.",
   "sessions": "seans",
+  "{0} session in a row": "Üst üste {0} seans",
+  "{0} sessions in a row": "Üst üste {0} seans",
 }

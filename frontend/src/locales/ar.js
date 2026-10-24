@@ -2567,4 +2567,6 @@ export default {
   "{0} sessions on rotation": "{0} جلسات ضمن الدورة",
   "Add your 7-day average. Off unless you turn it on.": "أضف متوسط 7 أيام. يبقى مطفأً ما لم تشغّله.",
   "sessions": "جلسات",
+  "{0} session in a row": "{0} جلسة متتالية",
+  "{0} sessions in a row": "{0} جلسات متتالية",
 }
