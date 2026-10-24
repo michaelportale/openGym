@@ -462,3 +462,23 @@ test('explicit day dispositions are independently stamped for older writers', ()
   assert.equal(next.dayDispositions['2026-10-20']._ts,NOW-100);
   assert.ok(next.dayDispositions['2026-10-21']._ts>=NOW);
 });
+
+test('nutrition days are stamped per day for older writers, never as a whole setting', () => {
+  const cur = stored();
+  cur.nutritionDays = { '2026-10-20': { kcal: 2000, protein: 150, carbs: 200, fat: 70, fiber: 30, dayType: 'rest', _ts: NOW - 100 } };
+  const next = clone(cur);
+  next.nutritionDays['2026-10-21'] = { kcal: 2500, protein: 160, carbs: 280, fat: 80, fiber: 35, dayType: 'training' };
+  stampPut(cur, next, { overRead: true, stamped: false, now: NOW });
+  assert.equal(next.edited?.nutritionDays, undefined);
+  assert.equal(next.nutritionDays['2026-10-20']._ts, NOW - 100);
+  assert.ok(next.nutritionDays['2026-10-21']._ts >= NOW);
+});
+
+test('a stamping writer keeps its own nutrition stamps', () => {
+  const cur = stored();
+  cur.nutritionDays = { '2026-10-20': { kcal: 2000, protein: 150, carbs: 200, fat: 70, fiber: 30, dayType: 'rest', _ts: NOW - 100 } };
+  const next = clone(cur);
+  next.nutritionDays['2026-10-20'] = { _ts: NOW - 50 };
+  stampPut(cur, next, { overRead: true, stamped: true, now: NOW });
+  assert.deepEqual(next.nutritionDays['2026-10-20'], { _ts: NOW - 50 });
+});

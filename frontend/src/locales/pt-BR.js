@@ -1594,6 +1594,23 @@ export const PT_BR_OVERRIDES = {
   'Show which muscles this week trained.': 'Mostrar quais músculos você treinou nesta semana.',
   '{0} of {1} planned sets done': '{0} de {1} séries planejadas feitas',
   'Set your aims': 'Defina suas metas',
+  "Carbs": "Carboidratos",
+  "Day saved": "Dia salvo",
+  "Days logged": "Dias registrados",
+  "Last logged {0}": "Último registro {0}",
+  "Log a day": "Registrar um dia",
+  "Log today": "Registrar hoje",
+  "Log your first day": "Registre o primeiro dia",
+  "No totals logged": "Sem totais registrados",
+  "Days you log show here, newest first.": "Os dias que você registrar aparecem aqui, os mais recentes primeiro.",
+  "Nothing logged today yet.": "Nada registrado hoje ainda.",
+  "Your week's averages show here once you log a day.": "Assim que você registrar um dia, as médias da semana aparecem aqui.",
+  "Daily calories, protein and fiber against targets you set.": "Calorias, proteína e fibra diárias em relação às metas que você definir.",
+  "{0} vs last week": "{0} em relação à semana passada",
+  "Add the supplements you take, then tick them off each day.": "Adicione os suplementos que você toma e marque-os todos os dias.",
+  "Removing one keeps the days it was ticked.": "Remover um mantém os dias em que ele foi marcado.",
+  "The day's totals. All five are needed for the day to count.": "Os totais do dia. Os cinco são necessários para o dia contar.",
+  "No weigh-ins this week": "Nenhuma pesagem nesta semana",
 }
 
 export default { ...pt, ...PT_BR_OVERRIDES }

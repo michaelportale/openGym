@@ -141,6 +141,9 @@ export const DEF = {
   // e.g. "Home" vs "Gym" — building on the session-only equipment filter from issue #6).
   equipProfiles: [], activeEquipId: null, equipFilterOn: false,
   trainingMetadata: {}, coverageTargets: {}, dayDispositions: {},
+  // Nutrition (lib/nutrition.js): one entry per day, merged per day like dayNotes; targets per
+  // day type and the supplement list are the user's own and start empty.
+  nutritionDays: {}, nutritionTargets: {}, supplements: [],
   // Standing per-exercise notes, keyed by exercise id: the gym-specific facts that are true
   // every time you do the movement ("seat 4, pin 7"). Distinct from a routine's `note`, which
   // belongs to one exercise in one plan, and from a session note, which belongs to one day.
