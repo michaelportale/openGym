@@ -26,12 +26,14 @@ export const REST_QUIET_CHANNEL_ID = 'rest-over-quiet'
 // The lock screen follows the user's notification settings.
 // `key` is a preset's key, 'theme' or the user's own colour as '#rrggbb' (lib/accent.js
 // accentValue). 'theme' is the accent of the palette on the page (theme/palettes.js).
-const paletteAccent = () => {
-  const p = typeof document !== 'undefined' ? document.documentElement.dataset.palette : null
+// A palette named by the caller wins over the page's: Settings repaints the countdown in the
+// same tap that picks the palette, before the page has switched to it.
+const paletteAccent = palette => {
+  const p = palette || (typeof document !== 'undefined' ? document.documentElement.dataset.palette : null)
   return PALETTE_ACCENT[p] || PALETTE_ACCENT[DEFAULT_PALETTE]
 }
-export function accentColors(key) {
-  const { accent, ink } = accentPair(key, paletteAccent())
+export function accentColors(key, palette) {
+  const { accent, ink } = accentPair(key, paletteAccent(palette))
   return { accent: argb(accent), ink: argb(ink) }
 }
 
@@ -170,9 +172,9 @@ export function toneNative(kind) {
 }
 
 // The running countdown repaints with this swatch. No-op when no rest is on screen.
-export function setRestAccent(key) {
+export function setRestAccent(key, palette) {
   if (!MOBILE) return
-  const { accent, ink } = accentColors(key)
+  const { accent, ink } = accentColors(key, palette)
   enqueue(async () => {
     const p = await restPlugin()
     if (p) await p.RestAlert.setAccent({ accent, ink })

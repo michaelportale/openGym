@@ -58,3 +58,19 @@ describe("Home's Today preview", () => {
     expect(todayPreview(S, ['r1'], '2026-10-10', Date.parse('2026-10-10T09:00:00')).recovering).toEqual([])
   })
 })
+
+describe('what the Today preview reads', () => {
+  it('touches no part of the state outside PREVIEW_INPUTS, so Home can redo it on those alone', async () => {
+    const { PREVIEW_INPUTS } = await import('./today-preview.js')
+    const seen = new Set()
+    const watch = o => new Proxy(o, { get(t, k) { if (typeof k === 'string') seen.add(k); return t[k] }, has(t, k) { seen.add(String(k)); return k in t } })
+    const cfgs = [bench, { id: 'db-press', sets: 3, reps: 8, weight: 20, mode: 'reps', dbLoad: 'each' }, { id: 'plank', sets: 3, sec: 30, mode: 'time' }, { id: 'pullup', sets: 3, reps: 5, mode: 'reps', sides: true }]
+    const r = routine({ ex: cfgs })
+    const w = workout('w1', '2026-10-01', cfgs.map(c => entry(c, [set(60, 5), set(60, 5), set(60, 5)])))
+    for (const extra of [{}, { plates: { kg: [20, 10, 5] }, dumbbells: { kg: [10, 20] }, barWeights: {}, dbLoad: { 'db-press': 'total' }, bodyweight: [{ d: '2026-10-01', w: 80 }] }]) {
+      todayPreview(watch({ unit: 'kg', routines: [r], workouts: [w], exWeights: {}, ...extra }), ['r1'], '2026-10-05')
+    }
+    expect(seen.size).toBeGreaterThan(3)
+    expect([...seen].filter(k => !PREVIEW_INPUTS.includes(k))).toEqual([])
+  })
+})
