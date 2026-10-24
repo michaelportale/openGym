@@ -211,7 +211,6 @@ export default {
   'Freestyle workout. Add your first exercise and off you go.': 'Свободная тренировка. Добавьте первое упражнение, и вперёд.',
   'Finish workout early · {0} exercises': 'Завершить раньше · упражнений: {0}',
   'Rest’s over. Next set!': 'Отдых окончен. Следующий подход!',
-  'Hi {0}': 'Привет, {0}',
   'This week': 'Эта неделя',
   '{0} (in progress)': '{0} (идёт)',
   'Resume ▶': 'Продолжить ▶',
@@ -2516,4 +2515,5 @@ export default {
   "New bests": "Новые рекорды",
   "{0} sessions on rotation": {"one": "{0} тренировка по ротации", "few": "{0} тренировки по ротации", "many": "{0} тренировок по ротации", "other": "{0} тренировки по ротации"},
   "Add your 7-day average. Off unless you turn it on.": "Добавляет среднее за 7 дней. Выключено, пока вы не включите.",
+  "sessions": {"one": "тренировка", "few": "тренировки", "many": "тренировок", "other": "тренировки"},
 }

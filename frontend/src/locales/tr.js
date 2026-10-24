@@ -217,7 +217,6 @@ export default {
   'Freestyle workout. Add your first exercise and off you go.': 'Serbest antrenman. İlk egzersizini ekle ve başla.',
   'Finish workout early · {0} exercises': 'Erken bitir · {0} egzersiz',
   'Rest’s over. Next set!': 'Dinlenme bitti. Sıradaki set!',
-  'Hi {0}': 'Selam {0}',
   'This week': 'Bu hafta',
   '{0} (in progress)': '{0} (devam ediyor)',
   'Resume ▶': 'Devam et ▶',
@@ -2512,4 +2511,5 @@ export default {
   "New bests": "Yeni rekorlar",
   "{0} sessions on rotation": "Rotasyonda {0} seans",
   "Add your 7-day average. Off unless you turn it on.": "7 günlük ortalamanı ekler. Sen açmadıkça kapalı kalır.",
+  "sessions": "seans",
 }

@@ -226,7 +226,6 @@ export default {
   'Finish workout early · {0} exercises': 'Training vorzeitig beenden · {0} Übungen',
   'Rest’s over. Next set!': 'Pause vorbei. Nächster Satz!',
   // --- home ---
-  'Hi {0}': 'Hi {0}',
   'This week': 'Diese Woche',
   '{0} (in progress)': '{0} (läuft)',
   'Resume ▶': 'Weiter ▶',
@@ -2532,4 +2531,5 @@ export default {
   "New bests": "Neue Bestwerte",
   "{0} sessions on rotation": "{0} Einheiten in der Rotation",
   "Add your 7-day average. Off unless you turn it on.": "Fügt deinen 7-Tage-Schnitt hinzu. Aus, bis du es einschaltest.",
+  "sessions": "Einheiten",
 }

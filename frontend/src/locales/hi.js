@@ -217,7 +217,6 @@ export default {
   'Freestyle workout. Add your first exercise and off you go.': 'फ्रीस्टाइल वर्कआउट। पहला व्यायाम जोड़ें और शुरू हो जाइए।',
   'Finish workout early · {0} exercises': 'जल्दी समाप्त करें · {0} व्यायाम',
   'Rest’s over. Next set!': 'आराम खत्म। अगला सेट!',
-  'Hi {0}': 'नमस्ते {0}',
   'This week': 'इस हफ़्ते',
   '{0} (in progress)': '{0} (चल रहा है)',
   'Resume ▶': 'जारी रखें ▶',
@@ -2512,4 +2511,5 @@ export default {
   "New bests": "नए सर्वश्रेष्ठ",
   "{0} sessions on rotation": "रोटेशन पर {0} सेशन",
   "Add your 7-day average. Off unless you turn it on.": "अपना 7 दिन का औसत जोड़ें। जब तक आप चालू न करें, बंद रहता है।",
+  "sessions": "सत्र",
 }

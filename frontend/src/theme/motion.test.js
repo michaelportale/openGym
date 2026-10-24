@@ -13,7 +13,15 @@ const css = readFileSync('src/index.css', 'utf8')
 
 describe('motion', () => {
   it('defines the press and easing tokens', () => {
-    for (const tok of ['--dur-press:90ms', '--press-scale:.97', '--ease-out:', '--ease-spring:']) expect(css).toContain(tok)
+    for (const tok of ['--dur-press:90ms', '--press-scale:.97', '--ease-out:']) expect(css).toContain(tok)
+  })
+  it('defines no easing token that nothing uses', () => {
+    const all = files.map(f => readFileSync(f, 'utf8')).join('\n')
+    const defined = [...new Set([...css.matchAll(/(--ease[\w-]*):/g)].map(m => m[1]))]
+    expect(defined.filter(tok => !all.includes('var(' + tok + ')'))).toEqual([])
+  })
+  it('styles the primary button press once', () => {
+    expect(css.match(/\.btn\.primary:active\{/g)?.length).toBe(1)
   })
   it('writes no literal duration in a transition, apart from the rest bar\'s one-second tick and zero-length visibility flips', () => {
     const bad = transitions.filter(({ v }) => /(^|[\s,])\.?\d*\.?\d+m?s\b/.test(v.replace(/\b0s\b/g, '').replace(/1s linear/, '')))
