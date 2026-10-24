@@ -263,3 +263,28 @@ describe('the palette accent as the default', () => {
     expect(accentPair(THEME, 'nope').accent).toBe(ACCENTS.lime)
   })
 })
+
+describe('the old default green across a sync', () => {
+  const base = { _ts: 10, unit: 'kg', workouts: [], routines: [] }
+  it('a copy migrated here and an unmigrated server copy merge to the palette accent', () => {
+    const here = { ...base, _ts: 10, accent: THEME, accentV: ACCENT_VERSION }
+    const server = { ...base, _ts: 20, accent: 'lime' }
+    for (const out of [mergeStates(here, server), mergeStates(server, here)]) {
+      expect(out.accent).toBe(THEME)
+      expect(out.accentV).toBe(ACCENT_VERSION)
+    }
+  })
+  it('green picked after the change still wins over an unmigrated copy', () => {
+    const T = 1_800_000_000_000
+    const prev = { ...base, _ts: T, accent: THEME, accentV: ACCENT_VERSION }
+    const next = { ...prev, accent: 'lime' }
+    next._ts = stampChange(prev, next, T + 1000)
+    const old = { ...base, _ts: T - 1000, accent: 'lime' }
+    for (const out of [mergeStates(next, old), mergeStates(old, next)]) expect(out.accent).toBe('lime')
+  })
+  it('does not touch the copies it is given', () => {
+    const server = { ...base, accent: 'lime' }
+    mergeStates({ ...base, accent: THEME, accentV: ACCENT_VERSION }, server)
+    expect(server).toEqual({ ...base, accent: 'lime' })
+  })
+})
