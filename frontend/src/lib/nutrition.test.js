@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   canLogNutrition, clearNutritionDay, hasTargets, isLoggedDay, nutrientValue, nutritionDayOf,
   lastNutritionDay, nutritionHistory, nutritionInputError, readNutritionDay, readSupplements, readTargets, weekDays,
-  weekSummary, withNutritionDay, withSupplement, withSupplementTick, withTarget, withoutSupplement,
+  weekSummary, withNutritionDay, withSupplement, withSupplementTick, withTarget, withoutSupplement, SUPPLEMENTS_MAX,
 } from './nutrition.js'
 import { MONDAY, SUNDAY } from './format.js'
 
@@ -190,5 +190,53 @@ describe('nutritionHistory', () => {
     const S = { nutritionDays: { '2026-10-19': full(), '2026-10-21': { supps: ['a'], _ts: 1 } } }
     expect(lastNutritionDay(S)).toBe('2026-10-19')
     expect(lastNutritionDay({})).toBeNull()
+  })
+})
+
+describe('reading a saved state strictly', () => {
+  it('takes only real numbers as saved totals: true is not 1 and [30] is not 30', () => {
+    const d = readNutritionDay({ kcal: true, protein: [30], carbs: '200', fat: { valueOf: () => 70 }, fiber: 30, dayType: 'rest', _ts: 1 })
+    expect(d.kcal).toBeNull()
+    expect(d.protein).toBeNull()
+    expect(d.carbs).toBeNull()
+    expect(d.fat).toBeNull()
+    expect(d.fiber).toBe(30)
+    expect(isLoggedDay(d)).toBe(false)
+    expect(isLoggedDay(readNutritionDay({ ...full(), _ts: 1 }))).toBe(true)
+  })
+  it('the form still takes typed text: only saved days are strict', () => {
+    expect(nutritionInputError({ kcal: '2000', protein: '150', carbs: '200', fat: '70', fiber: '30', dayType: 'rest' })).toBeNull()
+  })
+  it('caps a saved day\'s ticks at SUPPLEMENTS_MAX and keeps string ids only', () => {
+    const many = Array.from({ length: SUPPLEMENTS_MAX + 20 }, (_, i) => 's' + i)
+    const d = readNutritionDay({ supps: [...many, 7, null, '', { id: 'x' }], _ts: 1 })
+    expect(d.supps).toHaveLength(SUPPLEMENTS_MAX)
+    expect(d.supps.every(x => typeof x === 'string' && x)).toBe(true)
+  })
+  it('a tick needs a string id, and a full day takes no new tick but can still untick', () => {
+    expect(() => withSupplementTick({}, '2026-10-20', 7, true)).toThrow()
+    expect(() => withSupplementTick({}, '2026-10-20', '', true)).toThrow()
+    expect(() => withSupplementTick({}, '2026-10-20', null, true)).toThrow()
+    const many = Array.from({ length: SUPPLEMENTS_MAX }, (_, i) => 's' + i)
+    let m = { '2026-10-20': { supps: [...many, 'over', 5], _ts: 1 } }
+    m = withSupplementTick(m, '2026-10-20', 'new', true, 2)
+    expect(m['2026-10-20'].supps).toHaveLength(SUPPLEMENTS_MAX)
+    expect(m['2026-10-20'].supps).not.toContain('new')
+    expect(m['2026-10-20'].supps).not.toContain(5)
+    m = withSupplementTick(m, '2026-10-20', 's0', false, 3)
+    m = withSupplementTick(m, '2026-10-20', 'new', true, 4)
+    expect(m['2026-10-20'].supps).toContain('new')
+    expect(m['2026-10-20'].supps).toHaveLength(SUPPLEMENTS_MAX)
+  })
+  it('refuses dates that are not on the calendar', () => {
+    for (const d of ['9999-99-99', '2026-02-30', '2026-13-01', '2026-00-10', '2026-10-32']) {
+      expect(canLogNutrition(d, '9999-12-31')).toBe(false)
+      expect(() => withNutritionDay({}, d, full())).toThrow()
+      expect(() => withSupplementTick({}, d, 's1', true)).toThrow()
+    }
+    expect(canLogNutrition('2024-02-29', '2026-10-21')).toBe(true)
+    const S = { nutritionDays: { '9999-99-99': { ...full(), _ts: 1 }, '2026-02-30': { ...full(), _ts: 1 }, '2026-10-20': { ...full(), _ts: 1 } } }
+    expect(nutritionHistory(S)).toEqual(['2026-10-20'])
+    expect(lastNutritionDay(S)).toBe('2026-10-20')
   })
 })
