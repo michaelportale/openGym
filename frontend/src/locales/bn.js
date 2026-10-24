@@ -2547,5 +2547,4 @@ export default {
   "{0} muscles on target": "লক্ষ্যে পৌঁছানো পেশি: {0}",
   "Train a few sessions to see coverage": "কভারেজ দেখতে কয়েকটি সেশন করুন",
   "Set coverage aims": "কভারেজের লক্ষ্য ঠিক করুন",
-  "Swap": "বদলান",
 }

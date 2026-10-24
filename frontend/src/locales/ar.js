@@ -2523,5 +2523,4 @@ export default {
   "{0} muscles on target": "عضلات بلغت الهدف: {0}",
   "Train a few sessions to see coverage": "تمرّن بضع جلسات لترى التغطية",
   "Set coverage aims": "حدّد أهداف التغطية",
-  "Swap": "تبديل",
 }

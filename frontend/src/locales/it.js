@@ -2468,5 +2468,4 @@ export default {
   "{0} muscles on target": "{0} muscoli in linea",
   "Train a few sessions to see coverage": "Allenati qualche volta per vedere la copertura",
   "Set coverage aims": "Imposta gli obiettivi",
-  "Swap": "Cambia",
 }

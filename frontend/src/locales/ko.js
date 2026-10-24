@@ -2468,5 +2468,4 @@ export default {
   "{0} muscles on target": "목표 달성 근육 {0}개",
   "Train a few sessions to see coverage": "몇 번 운동하면 커버리지가 보여요",
   "Set coverage aims": "커버리지 목표 설정",
-  "Swap": "바꾸기",
 }

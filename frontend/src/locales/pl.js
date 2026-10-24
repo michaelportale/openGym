@@ -2468,5 +2468,4 @@ export default {
   "{0} muscles on target": { one: '{0} mięsień w normie', few: '{0} mięśnie w normie', many: '{0} mięśni w normie', other: '{0} mięśnia w normie' },
   "Train a few sessions to see coverage": "Zrób kilka treningów, aby zobaczyć pokrycie",
   "Set coverage aims": "Ustaw cele pokrycia",
-  "Swap": "Zamień",
 }
