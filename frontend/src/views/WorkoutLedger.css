@@ -134,7 +134,9 @@ body.no-tabbar .workout-end-spacer { height: 20px; }
 .finish-record-s { display: flex; align-items: center; gap: 5px; color: var(--label-2); font-size: var(--fs-footnote); margin-top: 2px; }
 .finish-record-v { flex: none; color: var(--pr); font-weight: 700; font-size: var(--fs-title-3); font-variant-numeric: tabular-nums; }
 .workout-finish-summary .pr-tile .v { color: var(--pr); }
-.workout-finish-summary .finish-foot { position: sticky; bottom: 0; z-index: 2; display: flex; gap: 8px; margin: 16px calc(-1 * var(--pad, 16px)) 0; padding: 12px var(--pad, 16px) calc(12px + var(--sab, 0px)); background: color-mix(in srgb, var(--bg-el) 94%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); box-shadow: 0 -.5px 0 var(--sep); }
+.workout-finish-summary .finish-foot { position: sticky; bottom: 0; z-index: 2; display: flex; gap: 8px; margin: 16px -18px calc(-20px - var(--sab, 0px)); padding: 12px 18px calc(12px + var(--sab, 0px)); background: color-mix(in srgb, var(--bg-el) 94%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); box-shadow: 0 -.5px 0 var(--sep); }
+/* The summary is long: its sheet rises to just under the status bar, as a full-height sheet does. */
+.sheet:has(> .workout-finish-summary), .sheet:has(> * > .workout-finish-summary) { max-height: calc(100dvh - var(--sat) - 8px); }
 .workout-finish-summary .finish-foot .btn { flex: 1; min-height: 52px; margin: 0; }
 .workout-finish-summary .finish-foot .btn.primary { background: var(--label); color: var(--bg); }
 .workout-finish-summary .tile-cap { color: var(--label-2); font-size: var(--fs-caption-1, 12px); margin-top: 2px; }
