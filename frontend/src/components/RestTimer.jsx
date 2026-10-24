@@ -110,7 +110,7 @@ export default function RestTimer() {
 
   if (work) return (
     <div id="timer" ref={dockRef} className="working">
-      <div className="bar" aria-hidden="true"><i style={{ width: pct + '%' }} /></div>
+      <div className="bar" aria-hidden="true"><i style={{ transform: `scaleX(${pct / 100})` }} /></div>
       <div className="tclock">
         <span className="t">{work.left <= 0 && work.overtime ? '+' + clock(-work.left) : clock(work.left)}</span>
         {work.label && <span className="lbl">{work.label}</span>}
@@ -135,7 +135,7 @@ export default function RestTimer() {
     && entry.sets[finalIdx]?.done && timer.forSet === finalIdx
   return (
     <div id="timer" ref={dockRef} className={'rest' + (timer.paused ? ' paused' : '') + (timer.kind === 'switch' ? ' switch' : '') + (timer.ready ? ' ready' : '')}>
-      <div className="bar" aria-hidden="true"><i style={{ width: pct + '%' }} /></div>
+      <div className="bar" aria-hidden="true"><i style={{ transform: `scaleX(${pct / 100})` }} /></div>
       {finalRest && <div className="rest-effort">
         <span>{exerciseNameFor(exOr(entry.id))}</span>
         <Button size="sm" variant="ghost" onClick={() => useUI.getState().openSheet(() => <>
