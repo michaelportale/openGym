@@ -9,6 +9,14 @@ describe('bwTrend', () => {
     const tr = bwTrend([p(0, 80), p(2, 82), p(4, 81), p(7, 79)])
     expect(tr.map(x => x.y)).toEqual([80, 81, 81, 80.67])
   })
+  it('sorts weigh-ins that arrive out of order before averaging, and leaves the input alone', () => {
+    const pts = [p(7, 79), p(0, 80), p(4, 81), p(2, 82)]
+    const copy = pts.map(x => ({ ...x }))
+    const tr = bwTrend(pts)
+    expect(tr.map(x => x.y)).toEqual([80, 81, 81, 80.67])
+    expect(tr.map(x => x.t)).toEqual([0, 2, 4, 7].map(d => T0 + d * DAY_MS))
+    expect(pts).toEqual(copy)
+  })
   it('keeps one point per weigh-in and their times', () => {
     const pts = [p(0, 80), p(1, 81)]
     expect(bwTrend(pts).map(x => x.t)).toEqual(pts.map(x => x.t))
