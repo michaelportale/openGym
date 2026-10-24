@@ -50,9 +50,15 @@ export function holdRepeat(step, owner) {
       }, HOLD_DELAY)
     },
     onPointerUp: stop,
-    // Sliding off the button ends the hold and forgets that it repeated, so the next tap on
-    // this button is not taken for a hold's closing click and swallowed.
-    onPointerLeave: () => { stop(); if (hold) hold.repeated = false },
+    // Sliding off the button ends the hold. A mouse or pen that slides off while still pressed
+    // sends no closing click, so the hold forgets that it repeated and the next tap is not
+    // swallowed. A finger is different: its lift sends pointerup, then pointerleave, then the
+    // click, so a touch leave (or any leave with nothing pressed) keeps `repeated` and the click
+    // that ends a long press is still swallowed.
+    onPointerLeave: e => {
+      stop()
+      if (hold && e?.pointerType !== 'touch' && e?.buttons > 0) hold.repeated = false
+    },
     onPointerCancel: stop,
     onContextMenu: e => { if (hold?.repeated) e.preventDefault() },
     onClick: () => {
