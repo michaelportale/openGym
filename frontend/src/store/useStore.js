@@ -104,6 +104,9 @@ export const DEF = {
   // to keep Rotation selected, and the weekday grid hidden, from the moment it's chosen in
   // Settings/Plan through to the first routine being added — there's no queue yet to derive it from.
   scheduleMode: null,
+  // The rotation streak (lib/rotation-streak.js): how many days a round is meant to take (7, 10
+  // or 14; null = 14 for 6+ routines, else 7), the pause running now, and the pauses that ended.
+  roundDays: null, status: null, pauses: [],
   exWeights: {}, workouts: [], active: null, customEx: [], gifSize: 'full',
   // Stats activity heatmap metric. Profiles without this key continue to open on time.
   heatmapMetric: 'time',
