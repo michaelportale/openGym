@@ -15,6 +15,7 @@ import { loadOfWeeklyPlan, loadOfWorkouts, muscleBalanceWindow, rankOf, MUSCLES,
 import { fatigueOf, strengthOf, STRENGTH_FLOOR } from '../lib/recovery.js'
 import { strengthExerciseRowsForMuscle } from '../lib/strength-exercises.js'
 import { fatigueStateOf, profileBodyweightKg } from '../lib/recovery-view.js'
+import { bwTrend, bwWeekChange } from '../lib/bw-trend.js'
 import { e1rmSeries, best1RM, formulaOf } from '../lib/onerm.js'
 import { currentDbLoad, workoutAs } from '../lib/dumbbells.js'
 import { maxRepsSeries } from '../lib/pyramid.js'
@@ -423,6 +424,13 @@ export default function Stats() {
 
   const bwPts = S.bodyweight.filter(b => range === 0 || (b.t || new Date(b.d).getTime()) > now - range * 86400000)
     .map(b => ({ t: b.t || new Date(b.d).getTime(), y: b.w, d: b.d }))
+  // The 7-day trend runs over every weigh-in, then is cut to the range, so the first point of
+  // a 30-day view still averages the week before it.
+  const bwAll = S.bodyweight.map(b => ({ t: b.t || new Date(b.d).getTime(), y: b.w, d: b.d }))
+  const bwTrendAll = bwTrend(bwAll)
+  const bwTrendPts = bwTrendAll.filter(p => range === 0 || p.t > now - range * 86400000)
+  const bwWeek = bwWeekChange(bwTrendAll)
+  const bwTrendNow = bwTrendAll.at(-1)
   const bw30 = S.bodyweight.filter(b => (b.t || new Date(b.d).getTime()) > now - 30 * 86400000)
   const bwDelta30 = bw30.length > 1 ? bw30[bw30.length - 1].w - bw30[0].w : null
   const workouts = S.workouts
@@ -696,7 +704,13 @@ export default function Stats() {
         </div>
         <Segmented className="seg-range" value={range} onChange={setRange}
           options={rangeOptions()} />
-        <div className="chart"><LineChart points={bwPts} h={160} unit={S.unit} goal={S.targetW} /></div>
+        <div className="chart"><LineChart points={bwPts} trend={bwTrendPts.length > 2 ? bwTrendPts : null} h={160} unit={S.unit} goal={S.targetW} /></div>
+        {/* The smoothed line in words: where the week's average is, and how far it moved in a week. */}
+        {bwTrendPts.length > 2 && bwTrendNow && <div className="bw-trend-line small">
+          <span className="bw-trend-key" aria-hidden="true" />
+          <span>{t('7-day average {0}', fmtNum(bwTrendNow.y) + ' ' + S.unit)}</span>
+          {bwWeek !== null && <span className="bw-trend-week" style={{ color: bwDeltaColor(bwWeek, bwTrendNow.y) }}>{t('{0} this week', (bwWeek > 0 ? '+' : bwWeek < 0 ? '−' : '±') + fmtNum(Math.abs(bwWeek)) + ' ' + S.unit)}</span>}
+        </div>}
         {/* every weigh-in, week by week with its average (Discord 'Weight') */}
         {S.bodyweight.length > 0 && <div className="row" style={{ justifyContent: 'flex-end', marginTop: 4 }}>
           <Button size="sm" variant="ghost" trailingIcon="chevronRight" onClick={weighInsSheet}>{t('All weigh-ins')}</Button>

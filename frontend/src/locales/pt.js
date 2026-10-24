@@ -2449,4 +2449,6 @@ export default {
   "Filters": "Filtros",
   "Filters: {0}": "Filtros: {0}",
   "Type": "Tipo",
+  "7-day average {0}": "Média de 7 dias {0}",
+  "{0} this week": "{0} esta semana",
 }
