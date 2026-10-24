@@ -2468,5 +2468,4 @@ export default {
   "{0} muscles on target": "लक्ष्य पर मांसपेशियाँ: {0}",
   "Train a few sessions to see coverage": "कवरेज देखने के लिए कुछ सेशन करें",
   "Set coverage aims": "कवरेज लक्ष्य तय करें",
-  "Swap": "बदलें",
 }

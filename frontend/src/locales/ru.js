@@ -2472,5 +2472,4 @@ export default {
   "{0} muscles on target": { one: '{0} мышца в норме', few: '{0} мышцы в норме', many: '{0} мышц в норме', other: '{0} мышцы в норме' },
   "Train a few sessions to see coverage": "Проведите несколько тренировок, чтобы увидеть охват",
   "Set coverage aims": "Задать цели охвата",
-  "Swap": "Заменить",
 }

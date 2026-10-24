@@ -2488,5 +2488,4 @@ export default {
   "{0} muscles on target": "{0} Muskeln im Ziel",
   "Train a few sessions to see coverage": "Trainiere ein paar Einheiten, um die Abdeckung zu sehen",
   "Set coverage aims": "Abdeckungsziele festlegen",
-  "Swap": "Tauschen",
 }

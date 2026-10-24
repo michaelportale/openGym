@@ -2461,5 +2461,4 @@ export default {
   "{0} muscles on target": "已達標肌群：{0}",
   "Train a few sessions to see coverage": "訓練幾次後即可查看覆蓋情況",
   "Set coverage aims": "設定覆蓋目標",
-  "Swap": "換一個",
 }
