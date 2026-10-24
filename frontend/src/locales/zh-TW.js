@@ -213,7 +213,6 @@ export default {
   'Freestyle workout. Add your first exercise and off you go.': '自由訓練。新增第一個動作，開練吧。',
   'Finish workout early · {0} exercises': '提早結束訓練 · 共 {0} 個動作',
   'Rest’s over. Next set!': '休息結束，下一組！',
-  'Hi {0}': '嗨，{0}',
   'This week': '本週',
   '{0} (in progress)': '{0}（進行中）',
   'Resume ▶': '繼續 ▶',
@@ -2505,4 +2504,5 @@ export default {
   "New bests": "新紀錄",
   "{0} sessions on rotation": "輪替連續 {0} 次",
   "Add your 7-day average. Off unless you turn it on.": "加入你的 7 天平均。除非你開啟，否則保持關閉。",
+  "sessions": "次訓練",
 }

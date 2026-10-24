@@ -217,7 +217,6 @@ export default {
   'Freestyle workout. Add your first exercise and off you go.': '自由训练。添加第一个动作，开练吧。',
   'Finish workout early · {0} exercises': '提前结束 · {0} 个动作',
   'Rest’s over. Next set!': '休息结束，下一组！',
-  'Hi {0}': '你好，{0}',
   'This week': '本周',
   '{0} (in progress)': '{0}（进行中）',
   'Resume ▶': '继续 ▶',
@@ -2512,4 +2511,5 @@ export default {
   "New bests": "新纪录",
   "{0} sessions on rotation": "轮换连续 {0} 次",
   "Add your 7-day average. Off unless you turn it on.": "加入你的 7 天平均。除非你开启，否则保持关闭。",
+  "sessions": "次训练",
 }

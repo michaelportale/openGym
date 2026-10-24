@@ -199,7 +199,6 @@ export default {
   'Freestyle workout. Add your first exercise and off you go.': 'Довільне тренування. Додай першу вправу, і вперед.',
   'Finish workout early · {0} exercises': 'Завершити раніше · вправ: {0}',
   'Rest’s over. Next set!': 'Відпочинок скінчився. Наступний підхід!',
-  'Hi {0}': 'Привіт, {0}',
   'This week': 'Цього тижня',
   '{0} (in progress)': '{0} (триває)',
   'Resume ▶': 'Продовжити ▶',
@@ -2509,4 +2508,5 @@ export default {
   "New bests": "Нові рекорди",
   "{0} sessions on rotation": {"one": "{0} тренування за ротацією", "few": "{0} тренування за ротацією", "many": "{0} тренувань за ротацією", "other": "{0} тренування за ротацією"},
   "Add your 7-day average. Off unless you turn it on.": "Додає середнє за 7 днів. Вимкнено, доки ви не ввімкнете.",
+  "sessions": {"one": "заняття", "few": "заняття", "many": "занять", "other": "заняття"},
 }

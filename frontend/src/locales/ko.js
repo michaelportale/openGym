@@ -217,7 +217,6 @@ export default {
   'Freestyle workout. Add your first exercise and off you go.': '자유 운동. 첫 운동을 추가하고 바로 시작하세요.',
   'Finish workout early · {0} exercises': '일찍 마치기 · 운동 {0}개',
   'Rest’s over. Next set!': '휴식 끝. 다음 세트!',
-  'Hi {0}': '안녕하세요 {0}',
   'This week': '이번 주',
   '{0} (in progress)': '{0}(진행 중)',
   'Resume ▶': '이어하기 ▶',
@@ -2512,4 +2511,5 @@ export default {
   "New bests": "새 최고 기록",
   "{0} sessions on rotation": "로테이션 {0}회 연속",
   "Add your 7-day average. Off unless you turn it on.": "7일 평균을 추가해요. 켜기 전까지는 꺼져 있어요.",
+  "sessions": "세션",
 }

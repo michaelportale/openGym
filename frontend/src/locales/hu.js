@@ -216,7 +216,6 @@ export default {
   'Finish workout early · {0} exercises': 'Edzés korai befejezése · {0} gyakorlat',
   'Rest’s over. Next set!': 'Vége a pihenőnek. Jöhet a következő sorozat!',
   // --- home ---
-  'Hi {0}': 'Szia {0}',
   'This week': 'Ezen a héten',
   '{0} (in progress)': '{0} (folyamatban)',
   'Resume ▶': 'Folytatás ▶',
@@ -2515,4 +2514,5 @@ export default {
   "New bests": "Új csúcsok",
   "{0} sessions on rotation": "{0} edzés a körforgásban",
   "Add your 7-day average. Off unless you turn it on.": "Hozzáadja a 7 napos átlagodat. Kikapcsolva, amíg be nem kapcsolod.",
+  "sessions": "edzés",
 }

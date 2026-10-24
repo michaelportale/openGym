@@ -10,7 +10,7 @@ const W = 340   // viewBox width; the svg stretches to its container, height com
 //        the same weight with less left in the tank is not the same session.
 //   note extra text for that point's tooltip.
 // opts: { h, unit, color, axes, goal, invert, series, trend, yTicks, dotsOnly, label }
-//   yTicks: draw exactly that many y labels (11 px, --label-3) instead of the stepped grid.
+//   yTicks: draw exactly that many y labels (11 px, .lc-text) instead of the stepped grid.
 //   dotsOnly: the readings as dots, no line or fill (too few points for a curve to mean much).
 //   label: the chart is one image to a screen reader, with this summary as its name.
 //   trend draws a smoothed line ([{ t, y }], same times as `points`) in the colour on top, and
@@ -79,7 +79,7 @@ export default function LineChart({ points, h = 150, unit = '', color = 'var(--a
         const y = Y(v)
         gridlines.push(<g key={'y' + i}>
           <line x1={P.l} y1={y} x2={W - P.r} y2={y} stroke="var(--sep-op)" strokeWidth="1" strokeDasharray="2 4" />
-          <text x={P.l - 5} y={y + 4} textAnchor="end" fontSize="11" fill="var(--label-3)">{fmtNum(v)}</text>
+          <text x={P.l - 5} y={y + 4} textAnchor="end" fontSize="11" className="lc-text">{fmtNum(v)}</text>
         </g>)
       }
     } else {
@@ -94,7 +94,7 @@ export default function LineChart({ points, h = 150, unit = '', color = 'var(--a
         const y = Y(v)
         gridlines.push(<g key={'y' + v}>
           <line x1={P.l} y1={y} x2={W - P.r} y2={y} stroke="var(--sep-op)" strokeWidth="1" strokeDasharray="2 4" />
-          <text x={P.l - 5} y={y + 3.5} textAnchor="end" fontSize="9.5" fill="var(--label-2)">{fmtNum(v)}</text>
+          <text x={P.l - 5} y={y + 3.5} textAnchor="end" fontSize="9.5" className="lc-text">{fmtNum(v)}</text>
         </g>)
       }
     }
@@ -114,7 +114,7 @@ export default function LineChart({ points, h = 150, unit = '', color = 'var(--a
       const x = X(tk.t)
       gridlines.push(<g key={'x' + i}>
         <line x1={x} y1={P.t} x2={x} y2={H - P.b} stroke="var(--sep-op)" strokeWidth="1" strokeDasharray="2 4" />
-        <text x={x} y={H - 7} textAnchor={tk.anchor || 'middle'} fontSize="9.5" fill="var(--label-2)">{tk.txt}</text>
+        <text x={x} y={H - 7} textAnchor={tk.anchor || 'middle'} fontSize="9.5" className="lc-text">{tk.txt}</text>
       </g>)
     })
   }
@@ -155,7 +155,7 @@ export default function LineChart({ points, h = 150, unit = '', color = 'var(--a
         {gridlines}
         {goal != null && isFinite(goal) && <>
           <line x1={P.l} y1={Y(goal)} x2={W - P.r} y2={Y(goal)} stroke="var(--goal)" strokeWidth="1" strokeDasharray="4 4" />
-          <text x={W - P.r - 2} y={Y(goal) - 5} textAnchor="end" fontSize="11" fill="var(--label-2)">{t('Goal {0}', fmtNum(goal) + (unit ? ' ' + unit : ''))}</text>
+          <text x={W - P.r - 2} y={Y(goal) - 5} textAnchor="end" fontSize="11" className="lc-text">{t('Goal {0}', fmtNum(goal) + (unit ? ' ' + unit : ''))}</text>
         </>}
         {/* The first series is drawn widest and underneath, each next one thinner on top, so
             lines that share their values show as nested stripes instead of hiding each other. */}

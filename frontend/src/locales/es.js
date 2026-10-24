@@ -217,7 +217,6 @@ export default {
   'Freestyle workout. Add your first exercise and off you go.': 'Entrenamiento libre. Añade tu primer ejercicio y a darle.',
   'Finish workout early · {0} exercises': 'Terminar antes · {0} ejercicios',
   'Rest’s over. Next set!': 'Se acabó el descanso. ¡Siguiente serie!',
-  'Hi {0}': 'Hola {0}',
   'This week': 'Esta semana',
   '{0} (in progress)': '{0} (en curso)',
   'Resume ▶': 'Seguir ▶',
@@ -2512,4 +2511,5 @@ export default {
   "New bests": "Nuevas marcas",
   "{0} sessions on rotation": "{0} sesiones de la rotación",
   "Add your 7-day average. Off unless you turn it on.": "Añade tu media de 7 días. Desactivado salvo que lo actives.",
+  "sessions": "sesiones",
 }
