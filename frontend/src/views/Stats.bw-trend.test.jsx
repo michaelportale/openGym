@@ -80,7 +80,7 @@ describe('Stats body-weight trend', () => {
 
   it('draws three y labels on a 180 px chart', () => {
     const el = mount([wi(10, 82), wi(8, 82), wi(3, 81), wi(1, 80)])
-    const ys = [...el.querySelectorAll('.chart text[text-anchor="end"][font-size="11"]')].filter(n => n.getAttribute('fill') === 'var(--label-3)')
+    const ys = [...el.querySelectorAll('.chart text[text-anchor="end"][font-size="11"]')].filter(n => n.getAttribute('class') === 'lc-text')
     expect(ys.length).toBe(3)
   })
 
