@@ -78,6 +78,8 @@ const drag = value => act(() => {
 // The picker closing: 'change'.
 const release = () => act(() => { picker().dispatchEvent(new Event('change', { bubbles: true })) })
 const pick = value => { drag(value); release() }
+// The accent row's value (the Palette row above it has one too).
+const accentValue = () => host.querySelector('.swatches').closest('.lrow').querySelector('.lrow-v').textContent
 
 describe('Settings: your own accent colour', () => {
   it('starts as a rainbow swatch that opens the colour picker', () => {
@@ -94,7 +96,7 @@ describe('Settings: your own accent colour', () => {
     expect(mocks.S.accentCustom).toBe('#ff00aa')
     expect(setRestAccent).toHaveBeenCalledWith('#ff00aa')
     mount()
-    expect(host.querySelector('.lrow-v').textContent).toBe('Your own color')
+    expect(accentValue()).toBe('Your own color')
     expect(own().classList.contains('on')).toBe(true)
     expect(own().style.background).toContain('#ff00aa')
   })
@@ -171,8 +173,38 @@ describe('Settings: your own accent colour', () => {
   it('ignores a value that is not a colour', () => {
     mocks.S.accent = 'custom'; mocks.S.accentCustom = 'red;}'
     mount()
-    expect(host.querySelector('.lrow-v').textContent).toBe('Green')
+    // an unusable own colour draws the default, the palette's accent
+    expect(accentValue()).toBe('From palette')
     expect(own().classList.contains('unset')).toBe(true)
+  })
+
+  it('shows the palette and offers its accent first', () => {
+    mount()
+    const palette = [...host.querySelectorAll('.lrow')].find(r => r.textContent.includes('Palette'))
+    expect(palette.querySelector('.lrow-v').textContent).toBe('Ember')
+    const first = host.querySelector('.swatches .swatch')
+    expect(first.getAttribute('aria-label')).toBe('From palette')
+    act(() => first.click())
+    expect(mocks.S.accent).toBe('theme')
+    expect(setRestAccent).toHaveBeenCalledWith('theme')
+    mount()   // the mocked store does not re-render by itself
+    expect(accentValue()).toBe('From palette')
+    expect(host.querySelector('.swatches .swatch').classList.contains('on')).toBe(true)
+  })
+
+  it('marks a picked preset as chosen, so the old-default move leaves it alone', () => {
+    mocks.S.accent = 'theme'
+    mount()
+    const lime = [...host.querySelectorAll('.swatches .swatch')].find(b => b.getAttribute('aria-label') === 'Green')
+    act(() => lime.click())
+    expect(mocks.S.accent).toBe('lime')
+    expect(mocks.S.accentV).toBeGreaterThanOrEqual(2)
+  })
+
+  it('the settings search finds the palette', () => {
+    for (const q of ['palette', 'ember', 'chalk']) {
+      expect(searchSettings(q, {}).map(h => h.title), q).toContain('Palette')
+    }
   })
 
   it('the settings search finds it', () => {

@@ -11,6 +11,7 @@
 import { t } from './i18n-core.js'
 import { argb } from './format.js'
 import { accentPair } from './accent.js'
+import { PALETTE_ACCENT, DEFAULT_PALETTE } from '../theme/palettes.js'
 import { MOBILE, isAndroid } from './mobile.js'
 import { REST_SOUNDS } from './rest-sounds.js'
 
@@ -23,9 +24,14 @@ export const REST_QUIET_CHANNEL_ID = 'rest-over-quiet'
 
 // One object the native side schedules. Public + high is what the notification shade can show.
 // The lock screen follows the user's notification settings.
-// `key` is a preset's key or the user's own colour as '#rrggbb' (lib/accent.js accentValue).
+// `key` is a preset's key, 'theme' or the user's own colour as '#rrggbb' (lib/accent.js
+// accentValue). 'theme' is the accent of the palette on the page (theme/palettes.js).
+const paletteAccent = () => {
+  const p = typeof document !== 'undefined' ? document.documentElement.dataset.palette : null
+  return PALETTE_ACCENT[p] || PALETTE_ACCENT[DEFAULT_PALETTE]
+}
 export function accentColors(key) {
-  const { accent, ink } = accentPair(key)
+  const { accent, ink } = accentPair(key, paletteAccent())
   return { accent: argb(accent), ink: argb(ink) }
 }
 

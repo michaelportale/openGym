@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { outputs, loadPalettes } from '../../scripts/gen-palettes.mjs'
 import { isGreenRgb } from '../../scripts/color-audit.mjs'
 import { contrast, readableIn } from '../lib/accent.js'
+import { CLASSIC, DEFAULT_PALETTE, PALETTES, PALETTE_NAMES, PALETTE_BG, paletteKey, themeAttr, darkAttrOf } from './palettes.js'
 
 const data = loadPalettes()
 const rgb = h => { const n = parseInt(h.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255] }
@@ -53,5 +54,31 @@ describe('generated palette CSS', () => {
     for (const { css } of outputs(data)) {
       for (const m of css.matchAll(/^([^\n{]+)\{[^}]*--acc:/gm)) expect(m[1]).toContain('[data-accent="theme"]')
     }
+  })
+})
+
+describe('switching palettes on <html>', () => {
+  it('names the palette in dark mode, light in light mode, and dark for Classic', () => {
+    expect(themeAttr('dark', 'ember')).toBe('ember')
+    expect(themeAttr('dark', 'volt')).toBe('volt')
+    expect(themeAttr('light', 'ember')).toBe('light')
+    expect(themeAttr('dark', CLASSIC)).toBe('dark')
+    expect(themeAttr('dark', 'nope')).toBe('dark')
+  })
+  it('defaults to the palette named in palettes.json', () => {
+    expect(DEFAULT_PALETTE).toBe('ember')
+    expect(paletteKey({})).toBe('ember')
+    expect(paletteKey({ palette: 'chalk' })).toBe('chalk')
+    expect(paletteKey({ palette: '"><x' })).toBe('ember')
+    expect(paletteKey({ palette: CLASSIC })).toBe(CLASSIC)
+  })
+  it('lists every palette in Settings, with Classic last', () => {
+    expect(PALETTES).toEqual([...data.palettes.map(p => p.name), CLASSIC])
+    for (const p of PALETTES) expect(PALETTE_NAMES[p]).toBeTruthy()
+    for (const p of PALETTES) expect(PALETTE_BG[p]).toMatch(/^#[0-9a-f]{6}$/)
+  })
+  it('reads the dark value back from data-palette (the timer flash)', () => {
+    expect(darkAttrOf({ dataset: { palette: 'volt' } })).toBe('volt')
+    expect(darkAttrOf({ dataset: {} })).toBe('dark')
   })
 })
