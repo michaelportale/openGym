@@ -107,7 +107,10 @@ export default function Library() {
         <div className="grow"><div className="tt">{t('Create your own exercise')}</div><div className="ss">{t('name + body part, and a photo or video if you like')}</div></div><Icon name="plus" className="chev" />
       </div>
       {f.slice(0, shown).map(row)}
-      {f.length === 0 && !similar.length && <div className="empty"><div className="ico"><Icon name="magnifier" /></div>{t('No match')}</div>}
+      {f.length === 0 && !similar.length && <div className="empty"><div className="ico"><Icon name="magnifier" /></div>
+        {q.trim() ? t('No match for “{0}”', q.trim()) : t('No match')}
+        {q.trim() && <div><Button size="sm" className="empty-cta-btn" icon="plus" onClick={() => customExSheet(null, ex => exerciseDetailSheet(ex), q.trim())}>{t('Create “{0}”', q.trim())}</Button></div>}
+      </div>}
       {similar.length > 0 && <h4 className="sec similar-label">{f.length ? t('Similar exercises') : t('No exact match. These come close:')}</h4>}
       {similar.map(row)}
     </div>

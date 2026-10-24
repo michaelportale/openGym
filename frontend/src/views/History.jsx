@@ -27,6 +27,7 @@ export default function History() {
     {rows.length ? <div className="list">{rows.map(r => r.w
       ? <WorkoutRow key={r.w.id} w={r.w} onClick={() => workoutDetailSheet(r.w)} />
       : <DayNoteRow key={'note-' + r.d} iso={r.d} note={r.note} />)}</div>
-      : <div className="empty"><div className="ico"><Icon name="history" /></div>{t('No workouts yet. Your first one will land here.')}</div>}
+      : <div className="empty"><div className="ico"><Icon name="history" /></div>{t('No workouts yet. Your first one will land here.')}
+        <div><Button size="sm" className="empty-cta-btn" icon="play" onClick={() => nav('/')}>{t('Start your first workout')}</Button></div></div>}
   </>
 }

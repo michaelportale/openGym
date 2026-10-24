@@ -66,7 +66,7 @@ describe('Home — coach week progress row', () => {
     expect(host.querySelector('.week')).toBeNull()
     expect(host.querySelectorAll('.wday').length).toBe(0)
     expect(host.querySelector('.queue .row .small').textContent).toBe('US W1')
-    expect(chipTexts()).toEqual(['US W1 D1Up next', 'US W1 D2Later', 'US W1 D3Later'])
+    expect(chipTexts()).toEqual(['US W1 D1Up next', 'US W1 D2', 'US W1 D3'])
     expect(chips()[0].className).toBe('chip on')
     expect(status()).toBe('Next: US W1 D1, today')
     expect(todayTitle()).toBe('US W1 D1')
@@ -84,7 +84,7 @@ describe('Home — coach week progress row', () => {
   it('a finished workout on a routine marks its chip done and moves the light on', () => {
     setS({ workouts: [logged('d1')] })
     mount()
-    expect(chipTexts()).toEqual(['US W1 D1Done', 'US W1 D2Up next', 'US W1 D3Later'])
+    expect(chipTexts()).toEqual(['US W1 D1', 'US W1 D2Up next', 'US W1 D3'])
     expect(chips()[0].disabled).toBe(true)
     expect(chips()[1].className).toBe('chip on')
     expect(host.querySelectorAll('.queue .row .small')[1].textContent).toBe('1 / 3')
@@ -236,7 +236,7 @@ describe('Home — a session pinned to a day', () => {
   it('a fulfilled pin — pinned to today, done on an earlier day — reads as no override on the today row', () => {
     setS({ dayPlan: { [todayISO()]: 'd1' }, workouts: [logged('d1')] })
     mount()
-    expect(chipTexts()).toEqual(['US W1 D1Done', 'US W1 D2Up next', 'US W1 D3Later'])
+    expect(chipTexts()).toEqual(['US W1 D1', 'US W1 D2Up next', 'US W1 D3'])
     expect(status()).toBe('Next: US W1 D2, today')
     expect(todayTitle()).toBe('US W1 D2')
   })
@@ -245,7 +245,7 @@ describe('Home — a session pinned to a day', () => {
     const on = daysFromToday(2)
     setS({ dayPlan: { [on]: 'd1' } })
     mount()
-    expect(chipTexts()).toEqual(['US W1 D1' + fmtDate(on, true), 'US W1 D2Up next', 'US W1 D3Later'])
+    expect(chipTexts()).toEqual(['US W1 D1pinned' + fmtDate(on, true), 'US W1 D2Up next', 'US W1 D3'])
     expect(chips()[0].className).toBe('chip')
     // the date keeps .chip's capitals ("Seg." in Portuguese); only the state words opt out
     expect(chips()[0].querySelector('.qstate')).toBeNull()
@@ -259,7 +259,7 @@ describe('Home — a session pinned to a day', () => {
   it('a session pinned to today is the day\'s session, ahead of the floating order', () => {
     setS({ dayPlan: { [todayISO()]: 'd3' } })
     mount()
-    expect(chipTexts()).toEqual(['US W1 D1Later', 'US W1 D2Later', 'US W1 D3Up next'])
+    expect(chipTexts()).toEqual(['US W1 D1', 'US W1 D2', 'US W1 D3Up next'])
     expect(chips()[2].className).toBe('chip on')
     expect(status()).toBe('Next: US W1 D3, today')
     // Home reads any per-date override on today as a reschedule — a pin is one.
@@ -270,7 +270,7 @@ describe('Home — a session pinned to a day', () => {
     const d1 = daysFromToday(1), d2 = daysFromToday(3), d3 = daysFromToday(2)
     setS({ dayPlan: { [d1]: 'd1', [d2]: 'd2', [d3]: 'd3' } })
     mount()
-    expect(chipTexts()).toEqual(['US W1 D1' + fmtDate(d1, true), 'US W1 D2' + fmtDate(d2, true), 'US W1 D3' + fmtDate(d3, true)])
+    expect(chipTexts()).toEqual(['US W1 D1pinned' + fmtDate(d1, true), 'US W1 D2pinned' + fmtDate(d2, true), 'US W1 D3pinned' + fmtDate(d3, true)])
     expect(chips().some(c => c.className.includes('on'))).toBe(false)
     expect(chips().every(c => !c.disabled)).toBe(true)
     expect(status()).toBe('Next: US W1 D1 · ' + fmtDate(d1, true))
@@ -328,7 +328,7 @@ describe('Home — the today row follows today\'s plan, not just the last sessio
       workouts: [at('d1', now - 3600000)],
     })
     mount()
-    expect(chipTexts()).toEqual(['US W1 D1Up next', 'US W1 D2Later', 'US W1 D3Later'])
+    expect(chipTexts()).toEqual(['US W1 D1Up next', 'US W1 D2', 'US W1 D3'])
     expect(status()).toBe('Next: US W1 D1, today')
     expect(todayTitle()).toBe('US W1 D1')
     expect(tag()).toBe('Start')

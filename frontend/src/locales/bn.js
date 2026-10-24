@@ -2591,4 +2591,12 @@ export default {
   "New bests": "নতুন সেরা",
   "{0} sessions on rotation": "রোটেশনে {0}টি সেশন",
   "Add your 7-day average. Off unless you turn it on.": "আপনার ৭ দিনের গড় যোগ করুন। আপনি চালু না করলে বন্ধ থাকে।",
+  "Every routine is already in the loop": "সব রুটিন ইতিমধ্যে লুপে আছে",
+  "Last done {0}": "শেষবার {0}",
+  "Not done yet": "এখনো করা হয়নি",
+  "pinned": "পিন করা",
+  "Start your first workout": "আপনার প্রথম ওয়ার্কআউট শুরু করুন",
+  "Add a measurement": "একটি মাপ যোগ করুন",
+  "No match for “{0}”": "“{0}”-এর কোনো মিল নেই",
+  "Create “{0}”": "“{0}” তৈরি করুন",
 }

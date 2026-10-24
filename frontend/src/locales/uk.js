@@ -2509,4 +2509,12 @@ export default {
   "New bests": "Нові рекорди",
   "{0} sessions on rotation": {"one": "{0} тренування за ротацією", "few": "{0} тренування за ротацією", "many": "{0} тренувань за ротацією", "other": "{0} тренування за ротацією"},
   "Add your 7-day average. Off unless you turn it on.": "Додає середнє за 7 днів. Вимкнено, доки ви не ввімкнете.",
+  "Every routine is already in the loop": "Усі програми вже в циклі",
+  "Last done {0}": "Востаннє {0}",
+  "Not done yet": "Ще не було",
+  "pinned": "закріплено",
+  "Start your first workout": "Почати перше тренування",
+  "Add a measurement": "Додати вимір",
+  "No match for “{0}”": "Нічого не знайдено за «{0}»",
+  "Create “{0}”": "Створити «{0}»",
 }
