@@ -2449,4 +2449,6 @@ export default {
   "Filters": "筛选",
   "Filters: {0}": "筛选：{0}",
   "Type": "类型",
+  "7-day average {0}": "7 天平均 {0}",
+  "{0} this week": "本周 {0}",
 }

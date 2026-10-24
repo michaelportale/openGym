@@ -2449,4 +2449,6 @@ export default {
   "Filters": "फ़िल्टर",
   "Filters: {0}": "फ़िल्टर: {0}",
   "Type": "प्रकार",
+  "7-day average {0}": "7 दिन का औसत {0}",
+  "{0} this week": "इस सप्ताह {0}",
 }
