@@ -2469,4 +2469,6 @@ export default {
   "Filters": "Filter",
   "Filters: {0}": "Filter: {0}",
   "Type": "Art",
+  "7-day average {0}": "7-Tage-Schnitt {0}",
+  "{0} this week": "{0} diese Woche",
 }

@@ -2452,4 +2452,6 @@ export default {
   "Filters": "Szűrők",
   "Filters: {0}": "Szűrők: {0}",
   "Type": "Típus",
+  "7-day average {0}": "7 napos átlag {0}",
+  "{0} this week": "{0} ezen a héten",
 }
