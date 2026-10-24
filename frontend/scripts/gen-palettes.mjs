@@ -45,6 +45,7 @@ export function paletteCss(p) {
   const accDark = {
     '--acc': t.accent, '--acc-2': t.accentPressed, '--on-acc': t.onAccent, '--on-acc-tile': t.onAccent,
     '--knob-ring': contrast('#ffffff', t.accent) < 1.5 ? KNOB_RING : 'transparent',
+    '--acc-text': 'var(--acc)',
   }
   // Light mode keeps the app's light surfaces; only colours that sit on them are adjusted.
   const accL = readableIn(t.accent, 'light'), accL2 = mix(accL, '#000000', 0.25)
@@ -58,6 +59,8 @@ export function paletteCss(p) {
   const accLight = {
     '--acc': accL, '--acc-2': accL2, '--on-acc': inkOnBoth(accL, accL2), '--on-acc-tile': inkOn(accL),
     '--knob-ring': contrast('#ffffff', accL) < 1.5 ? KNOB_RING : 'transparent',
+    // accent-coloured text; fills keep --acc
+    '--acc-text': L.accentText || 'var(--acc)',
   }
   const labelsLight = {}
   if (L.text2) labelsLight['--label-2'] = L.text2

@@ -47,6 +47,7 @@
   --on-acc: #000000;
   --on-acc-tile: #000000;
   --knob-ring: rgba(0,0,0,.28);
+  --acc-text: var(--acc);
   --acc-soft: #262626;
 }
 
@@ -67,4 +68,5 @@
   --on-acc: #ffffff;
   --on-acc-tile: #ffffff;
   --knob-ring: transparent;
+  --acc-text: var(--acc);
 }
