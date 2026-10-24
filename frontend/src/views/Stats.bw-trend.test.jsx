@@ -80,8 +80,29 @@ describe('Stats body-weight trend', () => {
 
   it('draws three y labels on a 180 px chart', () => {
     const el = mount([wi(10, 82), wi(8, 82), wi(3, 81), wi(1, 80)])
-    const ys = [...el.querySelectorAll('.chart text[text-anchor="end"][font-size="11"]')].filter(n => n.getAttribute('fill') === 'var(--label-3)')
+    const ys = [...el.querySelectorAll('.chart text[text-anchor="end"][font-size="11"]')].filter(n => n.getAttribute('class') === 'lc-text')
     expect(ys.length).toBe(3)
+  })
+
+  const weightTile = el => [...el.querySelectorAll('.tile')].find(n => n.textContent.includes('Weight 30d'))
+  const oneWorkout = { workouts: [{ id: 'w1', d: wi(2, 0).d, start: NOW - 2 * day, end: NOW - 2 * day + 3600000, entries: [] }] }
+
+  it('says "No weigh-ins yet" on the Weight 30d tile only when there are none', () => {
+    const el = mount([], oneWorkout)
+    expect(weightTile(el).querySelector('.v').textContent).toBe('No weigh-ins yet')
+  })
+
+  it('with exactly one weigh-in the Weight 30d tile asks for a second, not for a first', () => {
+    const el = mount([wi(1, 80)], oneWorkout)
+    const tile = weightTile(el)
+    expect(tile.querySelector('.v').textContent).toBe('Needs two weigh-ins within 30 days')
+    expect(tile.textContent).not.toContain('No weigh-ins yet')
+    expect(tile.querySelector('button').textContent).toContain('Log weight')
+  })
+
+  it('says the same when the other weigh-ins are more than 30 days before the latest', () => {
+    const el = mount([wi(60, 82), wi(1, 80)], oneWorkout)
+    expect(weightTile(el).querySelector('.v').textContent).toBe('Needs two weigh-ins within 30 days')
   })
 
   it('offers Log weight when there are no weigh-ins, and Set goal without a goal', () => {

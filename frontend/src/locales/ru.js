@@ -211,7 +211,6 @@ export default {
   'Freestyle workout. Add your first exercise and off you go.': 'Свободная тренировка. Добавьте первое упражнение, и вперёд.',
   'Finish workout early · {0} exercises': 'Завершить раньше · упражнений: {0}',
   'Rest’s over. Next set!': 'Отдых окончен. Следующий подход!',
-  'Hi {0}': 'Привет, {0}',
   'This week': 'Эта неделя',
   '{0} (in progress)': '{0} (идёт)',
   'Resume ▶': 'Продолжить ▶',
@@ -2524,4 +2523,6 @@ export default {
   "Add a measurement": "Добавить замер",
   "No match for “{0}”": "Ничего не найдено по «{0}»",
   "Create “{0}”": "Создать «{0}»",
+  "sessions": {"one": "тренировка", "few": "тренировки", "many": "тренировок", "other": "тренировки"},
+  "Needs two weigh-ins within 30 days": "Нужно два взвешивания за 30 дней",
 }

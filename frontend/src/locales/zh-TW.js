@@ -213,7 +213,6 @@ export default {
   'Freestyle workout. Add your first exercise and off you go.': '自由訓練。新增第一個動作，開練吧。',
   'Finish workout early · {0} exercises': '提早結束訓練 · 共 {0} 個動作',
   'Rest’s over. Next set!': '休息結束，下一組！',
-  'Hi {0}': '嗨，{0}',
   'This week': '本週',
   '{0} (in progress)': '{0}（進行中）',
   'Resume ▶': '繼續 ▶',
@@ -2513,4 +2512,6 @@ export default {
   "Add a measurement": "新增測量",
   "No match for “{0}”": "找不到「{0}」",
   "Create “{0}”": "建立「{0}」",
+  "sessions": "次訓練",
+  "Needs two weigh-ins within 30 days": "需要 30 天內兩次體重紀錄",
 }
