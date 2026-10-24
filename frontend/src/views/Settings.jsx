@@ -30,7 +30,8 @@ import { syncMedia, fetchToStore } from '../lib/media-sync.js'
 import { getMediaStatus, subscribeMediaStatus, pendingRefCount } from '../lib/media-owed.js'
 import { limitsFrom, fmtMB, MB } from '../lib/media-limits.js'
 import { setRestAccent } from '../lib/rest-alert.js'
-import { CUSTOM, accentKey, adjustedIn, applyAccent, cleanHex, inkOn, isGrey } from '../lib/accent.js'
+import { CUSTOM, THEME, ACCENT_VERSION, accentKey, adjustedIn, applyAccent, cleanHex, inkOn, isGrey } from '../lib/accent.js'
+import { PALETTES, PALETTE_NAMES, PALETTE_ACCENT, paletteKey } from '../theme/palettes.js'
 import { checkForUpdate, downloadAndInstall, fetchChecksum, RELEASES_PAGE } from '../lib/update.js'
 import { forgetCoach } from '../lib/coach-api.js'
 import { REST_MAX, REST_PAUSE_MIN, REST_PAUSE_MAX, fmtRest, fmtDuration } from '../lib/duration.js'
@@ -721,6 +722,9 @@ export default function Settings({ page = null, find = null, via = null }) {
             onChange={v => update(s => { s.theme = v })}
           />
         </Row>
+        <SelectRow icon="palette" iconTint="var(--acc)" title={t('Palette')}
+          value={paletteKey(S)} onChange={v => { update(s => { s.palette = v }); if (accentKey(S) === THEME) setRestAccent(THEME) }}
+          options={PALETTES.map(p => ({ value: p, label: t(PALETTE_NAMES[p]) }))} />
         <div className="lrow" style={{ flexWrap: 'wrap', rowGap: 12, paddingBottom: 14 }}>
           <span className="lrow-i" style={{ '--tint': 'var(--purple)' }}><Icon name="palette" /></span>
           <span className="lrow-m"><span className="lrow-t">{t('Accent color')}</span></span>
@@ -1191,6 +1195,7 @@ function PushCard({ S, update, toast }) {
 // What the chosen accent is called: a preset's colour name, or the user's own.
 function accentLabel(S) {
   const k = accentKey(S)
+  if (k === THEME) return t('From palette')
   return k === CUSTOM ? t('Your own color') : t(ACCENT_NAMES[k] || 'Green')
 }
 
@@ -1210,11 +1215,14 @@ function AccentSwatches({ S, update }) {
   const key = accentKey(S)
   const own = cleanHex(S.accentCustom)
   const onCustom = key === CUSTOM
-  const pickPreset = k => { update(s => { s.accent = k }); setRestAccent(k) }
+  const themeHex = PALETTE_ACCENT[paletteKey(S)]
+  // Stamping the version marks the pick as the user's own, so a green chosen here is never
+  // taken for the old default and moved to the palette (lib/accent.js ACCENT_VERSION).
+  const pickPreset = k => { update(s => { s.accent = k; s.accentV = ACCENT_VERSION }); setRestAccent(k) }
   const pickOwn = hex => {
     const c = cleanHex(hex)
     if (!c || (onCustom && c === own)) return
-    update(s => { s.accent = CUSTOM; s.accentCustom = c })
+    update(s => { s.accent = CUSTOM; s.accentCustom = c; s.accentV = ACCENT_VERSION })
     setRestAccent(c)
   }
   // The picker sends a colour for every step of a drag (React's onChange is the `input` event).
@@ -1235,7 +1243,7 @@ function AccentSwatches({ S, update }) {
     const c = cleanHex(hex)
     if (!c) return
     const de = document.documentElement
-    applyAccent(de, c, de.dataset.theme)
+    applyAccent(de, c, de.dataset.theme === 'light' ? 'light' : 'dark')
     pending.current = c
     clearTimeout(timer.current)
     timer.current = setTimeout(commit, OWN_COLOR_SETTLE_MS)
@@ -1252,7 +1260,7 @@ function AccentSwatches({ S, update }) {
   // The input is not controlled (React would put the saved colour back after every drag step);
   // a colour changed elsewhere (sync, another tab) is put in by hand.
   useEffect(() => {
-    if (!pending.current && inputRef.current) inputRef.current.value = own || '#30d158'
+    if (!pending.current && inputRef.current) inputRef.current.value = own || themeHex
   }, [own])
   const ownLabel = t('Your own color')
   const grey = own && isGrey(own)
@@ -1262,6 +1270,8 @@ function AccentSwatches({ S, update }) {
   ].filter(Boolean) : []
   return <>
     <div className="swatches" style={{ flexBasis: '100%', paddingInlineStart: 41 }}>
+      <button className={'swatch' + (key === THEME ? ' on' : '')} style={{ background: themeHex }}
+        onClick={() => pickPreset(THEME)} aria-label={t('From palette')} />
       {Object.entries(ACCENTS).map(([k, c]) => (
         <button key={k} className={'swatch' + (key === k ? ' on' : '')}
           style={{ background: c }} onClick={() => pickPreset(k)} aria-label={t(ACCENT_NAMES[k] || k)} />
@@ -1270,7 +1280,7 @@ function AccentSwatches({ S, update }) {
         ? <button className="swatch swatch-own" style={{ background: own }} onClick={() => pickOwn(own)} aria-label={ownLabel} />
         : <span className={'swatch swatch-own' + (own ? ' on' : ' unset')} style={own ? { background: own, color: inkOn(own) } : undefined}>
           {own ? <Icon name="pencil" /> : <Icon name="plus" />}
-          <input ref={inputRef} type="color" className="swatch-input" defaultValue={own || '#30d158'}
+          <input ref={inputRef} type="color" className="swatch-input" defaultValue={own || themeHex}
             onChange={e => preview(e.target.value)}
             aria-label={own ? t('Change your own color') : t('Pick your own color')} />
         </span>}
