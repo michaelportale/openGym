@@ -9,7 +9,10 @@ const W = 340   // viewBox width; the svg stretches to its container, height com
 //        more of it). Used for effort on the weight curve, where the two belong on one line:
 //        the same weight with less left in the tank is not the same session.
 //   note extra text for that point's tooltip.
-// opts: { h, unit, color, axes, goal, invert, series, trend }
+// opts: { h, unit, color, axes, goal, invert, series, trend, yTicks, dotsOnly, label }
+//   yTicks: draw exactly that many y labels (11 px, --label-3) instead of the stepped grid.
+//   dotsOnly: the readings as dots, no line or fill (too few points for a curve to mean much).
+//   label: the chart is one image to a screen reader, with this summary as its name.
 //   trend draws a smoothed line ([{ t, y }], same times as `points`) in the colour on top, and
 //   the readings themselves faded underneath as a thin line with dots (body weight).
 //   invert flips the y axis, for a scale that counts down as it gets harder (RIR). Without it
@@ -17,7 +20,7 @@ const W = 340   // viewBox width; the svg stretches to its container, height com
 //   series draws several lines instead of one: [{ points, color }] (issue #145, one per set
 //   number). `points` then only anchors the hover — one per date, its `note` the tooltip — and
 //   the y axis spans every series.
-export default function LineChart({ points, h = 150, unit = '', color = 'var(--acc)', axes = true, goal = null, invert = false, series = null, trend = null }) {
+export default function LineChart({ points, h = 150, unit = '', color = 'var(--acc)', axes = true, goal = null, invert = false, series = null, trend = null, yTicks = 0, dotsOnly = false, label = null }) {
   const svgRef = useRef(null)
   const wrapRef = useRef(null)
   const tipRef = useRef(null)
@@ -68,19 +71,32 @@ export default function LineChart({ points, h = 150, unit = '', color = 'var(--a
 
   const gridlines = []
   if (axes) {
-    const range = ymax - ymin, raw = range / 3
-    const pow = Math.pow(10, Math.floor(Math.log10(raw)))
-    let step = 10 * pow
-    for (const m of [1, 2, 2.5, 5, 10]) if (raw <= m * pow) { step = m * pow; break }
-    for (let v0 = Math.ceil(ymin / step) * step; v0 <= ymax + 1e-9; v0 += step) {
-      // Snapped to the step, so adding it up never drifts, and `|| 0` turns the -0 that
-      // Math.ceil gives a range just under zero into a plain 0 instead of a "-0" label.
-      const v = Math.round(v0 / step) * step || 0
-      const y = Y(v)
-      gridlines.push(<g key={'y' + v}>
-        <line x1={P.l} y1={y} x2={W - P.r} y2={y} stroke="var(--sep-op)" strokeWidth="1" strokeDasharray="2 4" />
-        <text x={P.l - 5} y={y + 3.5} textAnchor="end" fontSize="9.5" fill="var(--label-2)">{fmtNum(v)}</text>
-      </g>)
+    if (yTicks > 0) {
+      // A few labels only, evenly inside the padded range, at the display's own precision.
+      for (let i = 0; i < yTicks; i++) {
+        const f = yTicks === 1 ? 0.5 : 0.15 + 0.7 * i / (yTicks - 1)
+        const v = Math.round((ymin + f * (ymax - ymin)) * 10) / 10
+        const y = Y(v)
+        gridlines.push(<g key={'y' + i}>
+          <line x1={P.l} y1={y} x2={W - P.r} y2={y} stroke="var(--sep-op)" strokeWidth="1" strokeDasharray="2 4" />
+          <text x={P.l - 5} y={y + 4} textAnchor="end" fontSize="11" fill="var(--label-3)">{fmtNum(v)}</text>
+        </g>)
+      }
+    } else {
+      const range = ymax - ymin, raw = range / 3
+      const pow = Math.pow(10, Math.floor(Math.log10(raw)))
+      let step = 10 * pow
+      for (const m of [1, 2, 2.5, 5, 10]) if (raw <= m * pow) { step = m * pow; break }
+      for (let v0 = Math.ceil(ymin / step) * step; v0 <= ymax + 1e-9; v0 += step) {
+        // Snapped to the step, so adding it up never drifts, and `|| 0` turns the -0 that
+        // Math.ceil gives a range just under zero into a plain 0 instead of a "-0" label.
+        const v = Math.round(v0 / step) * step || 0
+        const y = Y(v)
+        gridlines.push(<g key={'y' + v}>
+          <line x1={P.l} y1={y} x2={W - P.r} y2={y} stroke="var(--sep-op)" strokeWidth="1" strokeDasharray="2 4" />
+          <text x={P.l - 5} y={y + 3.5} textAnchor="end" fontSize="9.5" fill="var(--label-2)">{fmtNum(v)}</text>
+        </g>)
+      }
     }
     const d0 = new Date(t0), d1 = new Date(t1)
     const ticks = []
@@ -127,7 +143,7 @@ export default function LineChart({ points, h = 150, unit = '', color = 'var(--a
   }
 
   return (
-    <div className="chart-i" ref={wrapRef}
+    <div className="chart-i" ref={wrapRef} role={label ? 'img' : undefined} aria-label={label || undefined}
       onMouseMove={onMove} onMouseDown={onMove}
       onMouseLeave={() => setHover(null)}
       onTouchStart={onMove} onTouchMove={onMove}>
@@ -138,8 +154,8 @@ export default function LineChart({ points, h = 150, unit = '', color = 'var(--a
         </linearGradient></defs>
         {gridlines}
         {goal != null && isFinite(goal) && <>
-          <line x1={P.l} y1={Y(goal)} x2={W - P.r} y2={Y(goal)} stroke="var(--goal)" strokeWidth="1.5" strokeDasharray="4 4" />
-          <text x={W - P.r - 2} y={Y(goal) - 5} textAnchor="end" fontSize="9.5" fontWeight="700" fill="var(--goal)">{fmtNum(goal)}</text>
+          <line x1={P.l} y1={Y(goal)} x2={W - P.r} y2={Y(goal)} stroke="var(--goal)" strokeWidth="1" strokeDasharray="4 4" />
+          <text x={W - P.r - 2} y={Y(goal) - 5} textAnchor="end" fontSize="11" fill="var(--label-2)">{t('Goal {0}', fmtNum(goal) + (unit ? ' ' + unit : ''))}</text>
         </>}
         {/* The first series is drawn widest and underneath, each next one thinner on top, so
             lines that share their values show as nested stripes instead of hiding each other. */}
@@ -152,20 +168,20 @@ export default function LineChart({ points, h = 150, unit = '', color = 'var(--a
           </g>
         }) : <>
           {smooth ? <>
-            <polyline className="raw" points={poly} fill="none" stroke={color} strokeWidth="1.2" strokeOpacity=".35" strokeLinejoin="round" />
-            {pts.map((p, i) => <circle key={'r' + i} className="raw" cx={X(p.t)} cy={Y(p.y)} r="2" fill={color} opacity=".4" />)}
+            <polyline className="raw" points={poly} fill="none" stroke="var(--label-3)" strokeWidth="1.2" strokeOpacity=".5" strokeLinejoin="round" />
+            {pts.map((p, i) => <circle key={'r' + i} className="raw" cx={X(p.t)} cy={Y(p.y)} r="2" fill="var(--label-3)" opacity=".5" />)}
             <polygon points={`${P.l},${H - P.b} ${tpoly} ${X(tlast.t).toFixed(1)},${H - P.b}`} fill={`url(#${gid})`} />
             <polyline className="trend" points={tpoly} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
-          </> : <>
+          </> : dotsOnly ? pts.map((p, i) => <circle key={'d' + i} className="raw" cx={X(p.t)} cy={Y(p.y)} r="3.5" fill={color} />) : <>
           <polygon points={`${P.l},${H - P.b} ${poly} ${X(last.t).toFixed(1)},${H - P.b}`} fill={`url(#${gid})`} />
           <polyline points={poly} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
           </>}
           {marked && pts.map((p, i) => (p.m == null ? null :
             <circle key={'m' + i} cx={X(p.t)} cy={Y(p.y)} r={2.4 + p.m * 3} fill={color} opacity={0.3 + p.m * 0.7} />))}
-          <circle cx={X((smooth ? tlast : last).t)} cy={Y((smooth ? tlast : last).y)} r="4" fill={color} />
+          {!dotsOnly && <circle cx={X((smooth ? tlast : last).t)} cy={Y((smooth ? tlast : last).y)} r="4" fill={color} />}
         </>}
         {hover && <g>
-          <line className="cvl" x1={hover.x} y1={P.t} x2={hover.x} y2={H - P.b} stroke="var(--label-3)" strokeWidth="1" strokeDasharray="3 3" />
+          <line className="cvl" x1={hover.x} y1={P.t} x2={hover.x} y2={H - P.b} stroke="var(--label-2)" strokeWidth="1" />
           {multi
             ? series.map((s, k) => s.points.filter(p => p.t === hover.t).map((p, i) =>
               <circle key={k + '_' + i} cx={X(p.t)} cy={Y(p.y)} r="4.5" fill={s.color} stroke="var(--bg)" strokeWidth="2" />))

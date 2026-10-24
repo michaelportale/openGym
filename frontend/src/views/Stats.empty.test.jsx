@@ -47,7 +47,7 @@ describe('Stats before the first workout', () => {
   it('shows the tiles when a weigh-in gives the weight tile a change to show', () => {
     const day = 86400000
     const el = mount({ bodyweight: [{ d: '2026-10-03', t: NOW - 20 * day, w: 80 }, { d: '2026-10-22', t: NOW - day, w: 79 }] })
-    expect(el.querySelector('.tiles').textContent).toContain('-1 kg')
+    expect(el.querySelector('.tiles').textContent).toContain('−1 kg')
   })
 
   it('is replaced by the usual Stats once a workout is logged', () => {
