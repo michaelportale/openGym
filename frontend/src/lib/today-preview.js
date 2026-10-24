@@ -5,7 +5,8 @@
 // It also names the muscles the session works hard that are still fatigued from recent
 // training, read from the same fatigue scoring as the Stats body map (lib/recovery.js).
 import { buildPlannedEntry } from './session-start.js'
-import { workoutAt } from './history.js'
+import { workoutAt, lastEntryFor } from './history.js'
+import { isWarmupRow } from './workout-model.js'
 import { exOr } from './exercises.js'
 import { MUSCLES, musclesOf } from './muscles.js'
 import { fatigueOf } from './recovery.js'
@@ -31,6 +32,8 @@ export const PREVIEW_INPUTS = ['routines', 'workouts', 'unit', 'exWeights', 'sta
  * exercise the builder cannot read, contributes to the count and to neither list.
  * `recovering` lists the muscle slugs the session trains as a primary mover whose fatigue at
  * `now` reads 'fatigued' on the Stats map, in body-map order (empty without history).
+ * `toBeat` is the top set of the session's first lift last time, `{ id, w, r }` (the heaviest
+ * work set, more reps breaking a tie), or null when that lift has no loaded set logged.
  */
 export function todayPreview(S, ids, day, now = Date.now()) {
   const routines = (ids || []).map(id => (S?.routines || []).find(r => r?.id === id)).filter(Boolean)
@@ -60,5 +63,19 @@ export function todayPreview(S, ids, day, now = Date.now()) {
     const fatigue = fatigueOf(S.workouts, now, { bodyweightKg: profileBodyweightKg(S), unit: S.unit })
     recovering = MUSCLES.filter(m => worked.has(m) && fatigueStateOf(fatigue[m]) === 'fatigued')
   }
-  return { exercises, last, up, lighter, recovering }
+  return { exercises, last, up, lighter, recovering, toBeat: topSetToBeat(S, routines) }
+}
+
+function topSetToBeat(S, routines) {
+  const routine = routines[0]
+  const cfg = (Array.isArray(routine?.ex) ? routine.ex : []).find(c => c?.id)
+  if (!cfg) return null
+  let entry = null
+  try { entry = lastEntryFor(S, cfg.id, routine.id) } catch { entry = null }
+  let top = null
+  for (const s of entry?.sets || []) {
+    if (isWarmupRow(s) || !(s.w > 0) || !(s.r > 0)) continue
+    if (!top || s.w > top.w || (s.w === top.w && s.r > top.r)) top = s
+  }
+  return top ? { id: cfg.id, w: top.w, r: top.r } : null
 }
