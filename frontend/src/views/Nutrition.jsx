@@ -12,6 +12,7 @@ import { t } from '../lib/i18n.js'
 import Icon from '../components/Icon.jsx'
 import { Button, Check, NumberField, Section, Segmented, TextArea, TextField } from '../components/ui.jsx'
 import { bwSheet, confirmSheet } from '../sheets.jsx'
+import NutritionWeek from '../components/NutritionWeek.jsx'
 
 const update = (fn, ...rest) => useStore.getState().update(fn, ...rest)
 const toast = message => useUI.getState().toast(message)
@@ -175,6 +176,7 @@ export default function Nutrition() {
   const nav = useNavigate()
   const S = useStore(s => s.S)
   const today = todayISO()
+  const [anchor, setAnchor] = useState(today)
   const supplements = readSupplements(S.supplements)
   const todayDay = nutritionDayOf(S, today)
   const loggedToday = isLoggedDay(todayDay)
@@ -205,6 +207,8 @@ export default function Nutrition() {
         <Button size="sm" variant="ghost" icon="scale" onClick={() => bwSheet()}>{t('Log weight')}</Button>
       </div>
     </div>
+
+    <NutritionWeek S={S} anchor={anchor} setAnchor={setAnchor} onLog={() => nutritionLogSheet()} />
 
     <div className="card nutri-supps">
       <h2 style={{ margin: '0 0 6px' }}>{t('Supplements')}</h2>
