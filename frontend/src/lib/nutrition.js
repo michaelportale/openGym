@@ -31,6 +31,9 @@ export const SUPPLEMENTS_MAX = 50
 
 const isMap = v => !!v && typeof v === 'object' && !Array.isArray(v)
 const ISO = /^\d{4}-\d{2}-\d{2}$/
+// A real calendar date: the shape, and it survives a round trip through Date unchanged, so
+// 9999-99-99 or 2026-02-30 are refused rather than rolled over into another day.
+const isISODate = v => typeof v === 'string' && ISO.test(v) && isoOf(new Date(v + 'T12:00:00')) === v
 const round = (key, n) => (key === 'kcal' ? Math.round(n) : Math.round(n * 10) / 10)
 
 /** A number a field can hold: finite, 0 or more, within its bound, rounded; null otherwise. */
@@ -41,14 +44,20 @@ export function nutrientValue(key, v) {
   return round(key, n)
 }
 
+// A saved total is only ever a number (withNutritionDay writes nutrientValue's result), so a read
+// takes real numbers only: true is not 1 and [30] is not 30, as Number() would have them.
+const savedValue = (key, v) => (typeof v === 'number' ? nutrientValue(key, v) : null)
+// A day's ticks as read or written: string ids, each once, no more than the list can hold.
+const tickIds = v => [...new Set(Array.isArray(v) ? v.filter(x => typeof x === 'string' && x) : [])].slice(0, SUPPLEMENTS_MAX)
+
 /** A stored day read back with the junk left out, or null for none or a cleared one. */
 export function readNutritionDay(entry) {
   if (!isMap(entry)) return null
   const out = {}
-  for (const k of NUTRIENTS) out[k] = nutrientValue(k, entry[k])
+  for (const k of NUTRIENTS) out[k] = savedValue(k, entry[k])
   out.dayType = DAY_TYPES.includes(entry.dayType) ? entry.dayType : null
   out.note = typeof entry.note === 'string' ? entry.note.trim().slice(0, NOTE_MAX) : ''
-  out.supps = Array.isArray(entry.supps) ? [...new Set(entry.supps.filter(x => typeof x === 'string'))] : []
+  out.supps = tickIds(entry.supps)
   const any = NUTRIENTS.some(k => out[k] != null) || out.supps.length || out.note
   return any ? out : null
 }
@@ -60,7 +69,7 @@ export const isLoggedDay = day => !!day && NUTRIENTS.every(k => day[k] != null) 
 export const nutritionDayOf = (S, iso) => readNutritionDay(isMap(S?.nutritionDays) ? S.nutritionDays[iso] : null)
 
 /** Whether `iso` can be logged at all: a real date, today or earlier. */
-export const canLogNutrition = (iso, today = todayISO()) => ISO.test(String(iso || '')) && iso <= today
+export const canLogNutrition = (iso, today = todayISO()) => isISODate(iso) && iso <= today
 
 /**
  * What is wrong with a form's values, as an English source string for t(), or null when they can
@@ -81,7 +90,7 @@ export function nutritionInputError(values) {
  * The day's supplement ticks are kept. Throws on values nutritionInputError refuses.
  */
 export function withNutritionDay(map, iso, values, now = Date.now()) {
-  if (!ISO.test(String(iso || ''))) throw new Error('bad date')
+  if (!isISODate(iso)) throw new Error('bad date')
   if (nutritionInputError(values)) throw new Error('bad values')
   const base = isMap(map) ? map : {}
   const prev = readNutritionDay(base[iso])
@@ -100,15 +109,21 @@ export function clearNutritionDay(map, iso, now = Date.now()) {
   return { ...base, [iso]: prev?.supps.length ? { supps: prev.supps, _ts: now } : { _ts: now } }
 }
 
-/** S.nutritionDays with supplement `id` ticked (or not) on `iso`; the totals are kept as they are. */
+/**
+ * S.nutritionDays with supplement `id` ticked (or not) on `iso`; the totals are kept as they are.
+ * `id` must be a non-empty string. A day holds at most SUPPLEMENTS_MAX ticks: past that a new tick
+ * is not added (unticking still works).
+ */
 export function withSupplementTick(map, iso, id, on, now = Date.now()) {
-  if (!ISO.test(String(iso || ''))) throw new Error('bad date')
+  if (!isISODate(iso)) throw new Error('bad date')
+  if (typeof id !== 'string' || !id) throw new Error('bad supplement id')
   const base = isMap(map) ? map : {}
   const cur = isMap(base[iso]) ? base[iso] : {}
-  const set = new Set(Array.isArray(cur.supps) ? cur.supps : [])
-  if (on) set.add(id); else set.delete(id)
+  let ids = tickIds(cur.supps)
+  if (!on) ids = ids.filter(x => x !== id)
+  else if (!ids.includes(id) && ids.length < SUPPLEMENTS_MAX) ids = [...ids, id]
   const { supps: _drop, ...rest } = cur
-  return { ...base, [iso]: { ...rest, ...(set.size ? { supps: [...set] } : {}), _ts: now } }
+  return { ...base, [iso]: { ...rest, ...(ids.length ? { supps: ids } : {}), _ts: now } }
 }
 
 /** The supplement list with junk dropped: [{ id, name }], names trimmed, each id once. */
@@ -202,7 +217,7 @@ export function weekSummary(S, iso, ws) {
 /** Days with a log of any kind (totals, a note or a tick), newest first: the screen's history. */
 export function nutritionHistory(S) {
   const map = isMap(S?.nutritionDays) ? S.nutritionDays : {}
-  return Object.keys(map).filter(d => ISO.test(d) && readNutritionDay(map[d])).sort().reverse()
+  return Object.keys(map).filter(d => isISODate(d) && readNutritionDay(map[d])).sort().reverse()
 }
 
 /** The latest day with all five totals logged, or null: the Stats card's "Last logged" line. */
