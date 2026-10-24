@@ -32,7 +32,7 @@ body.no-tabbar #timer { border-radius: 0; box-shadow: none; border-top: 1px soli
 #timer.rest.paused .rest-ring { opacity: .5; }
 #timer.rest.switch .rest-ring .arc { stroke: var(--label-2); }
 #timer.rest.ready .rest-ring { animation: rest-ring-pulse 900ms var(--ease) 3; }
-#timer.rest.ready .t { color: var(--acc); }
+#timer.rest.ready .t { color: var(--acc-text); }
 @keyframes rest-ring-pulse {
   0% { transform: rotate(-90deg) scale(1); opacity: 1; }
   40% { transform: rotate(-90deg) scale(1.15); opacity: .55; }

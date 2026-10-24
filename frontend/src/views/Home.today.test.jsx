@@ -7,6 +7,7 @@ import { createRoot } from 'react-dom/client'
 import { useStore } from '../store/useStore.js'
 import { todayISO } from '../lib/format.js'
 import Home from './Home.jsx'
+import { startFlow } from '../sheets.jsx'
 
 vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }))
 vi.mock('../sheets.jsx', () => ({
@@ -86,4 +87,46 @@ describe('Home — the Today card', () => {
     expect(host.querySelectorAll('.today-card button').length).toBeGreaterThan(0)
     expect(tag.closest('button')).toBeNull()
   })
+
+  it('keeps every button out of the tappable today row, and offers one way to pick another workout', () => {
+    const hard = session(daysAgo(1))
+    hard.entries[0].sets = Array.from({ length: 12 }, () => ({ w: 60, r: 5, rir: 0, done: true }))
+    setS({ workouts: [hard] }); mount()
+    const row = host.querySelector('.today-row')
+    expect(row.getAttribute('role')).toBe('button')
+    expect(host.querySelector('.today-recovering')).not.toBeNull()
+    expect(row.querySelectorAll('button, [role="button"], a[href]').length).toBe(0)
+    const choose = [...host.querySelectorAll('button')].filter(b => b.textContent === 'Choose a different workout')
+    expect(choose.length).toBe(1)
+    expect(choose[0].closest('[role="button"]')).toBeNull()
+    expect(host.querySelectorAll('[aria-label="Choose a different workout"]').length).toBe(0)
+    startFlow.mockClear()
+    act(() => choose[0].click())
+    expect(startFlow).not.toHaveBeenCalled()
+  })
+
+  it('draws the progression line in the text colour with only its arrow in the accent', async () => {
+    const { readFileSync } = await import('node:fs')
+    const css = readFileSync('src/index.css', 'utf8')
+    expect(css).toContain('.today-up{color:var(--label)}')
+    expect(css).toContain('.today-up .icn{color:var(--acc-text)}')
+  })
+
+  it('moves the tab bar Start aside while the card Start is in view, and back when it leaves', () => {
+    let cb
+    const observe = vi.fn(), disconnect = vi.fn()
+    globalThis.IntersectionObserver = vi.fn(function (fn) { cb = fn; this.observe = observe; this.disconnect = disconnect })
+    setS(); mount()
+    expect(observe).toHaveBeenCalledWith(host.querySelector('.today-cta'))
+    act(() => cb([{ isIntersecting: true }]))
+    expect(document.body.classList.contains('fab-aside')).toBe(true)
+    act(() => cb([{ isIntersecting: false }]))
+    expect(document.body.classList.contains('fab-aside')).toBe(false)
+    act(() => cb([{ isIntersecting: true }]))
+    act(() => root.render(<div />))
+    expect(document.body.classList.contains('fab-aside')).toBe(false)
+    expect(disconnect).toHaveBeenCalled()
+    delete globalThis.IntersectionObserver
+  })
 })
+

@@ -2459,4 +2459,13 @@ export default {
   "A set where a muscle only helps counts as half a set.": "Seria, w której mięsień tylko pomaga, liczy się jako pół serii.",
   "No sets in these days yet.": "W tych dniach nie ma jeszcze serii.",
   "Set your aims": "Ustaw swoje cele",
+  "<1 min": "<1 min",
+  "all working": "wszystkie robocze",
+  "{0} working": "{0} roboczych",
+  "Show all {0}": "Pokaż wszystkie ({0})",
+  "Show fewer": "Pokaż mniej",
+  "{0} muscle on target": "{0} mięsień w normie",
+  "{0} muscles on target": { one: '{0} mięsień w normie', few: '{0} mięśnie w normie', many: '{0} mięśni w normie', other: '{0} mięśnia w normie' },
+  "Train a few sessions to see coverage": "Zrób kilka treningów, aby zobaczyć pokrycie",
+  "Set coverage aims": "Ustaw cele pokrycia",
 }

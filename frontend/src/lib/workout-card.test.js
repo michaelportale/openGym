@@ -225,3 +225,13 @@ describe('card colours', () => {
     expect(viewAspect({})).toBeGreaterThan(1)
   })
 })
+
+describe('record values on the card', () => {
+  it('gives each record its top weight and, when the best it passed is known, the step', () => {
+    const w = { name: 'Push', d: '2026-09-03', start: 0, end: 3600e3, prs: ['0025'],
+      entries: [{ id: '0025', sets: [{ w: 90, r: 5, done: true }, { w: 92.5, r: 3, done: true }] }] }
+    const nameOf = () => 'Barbell Bench Press'
+    expect(workoutCardModel(w, { unit: 'kg', nameOf, prBest: { '0025': { was: 87.5, w: 92.5 } } }).recordValues).toEqual(['92.5 kg · +5'])
+    expect(workoutCardModel(w, { unit: 'kg', nameOf }).recordValues).toEqual(['92.5 kg'])
+  })
+})

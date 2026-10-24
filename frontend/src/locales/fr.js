@@ -2459,4 +2459,13 @@ export default {
   "A set where a muscle only helps counts as half a set.": "Une série où un muscle ne fait qu’aider compte pour une demi-série.",
   "No sets in these days yet.": "Pas encore de séries sur ces jours.",
   "Set your aims": "Fixer tes objectifs",
+  "<1 min": "<1 min",
+  "all working": "toutes de travail",
+  "{0} working": "{0} de travail",
+  "Show all {0}": "Tout afficher ({0})",
+  "Show fewer": "Afficher moins",
+  "{0} muscle on target": "{0} muscle dans l’objectif",
+  "{0} muscles on target": "{0} muscles dans l’objectif",
+  "Train a few sessions to see coverage": "Faites quelques séances pour voir la couverture",
+  "Set coverage aims": "Définir les objectifs",
 }

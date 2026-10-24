@@ -2470,4 +2470,13 @@ export default {
   "A set where a muscle only helps counts as half a set.": "เซ็ตที่กล้ามเนื้อเป็นเพียงตัวช่วย นับเป็นครึ่งเซ็ต",
   "No sets in these days yet.": "ยังไม่มีเซ็ตในช่วงวันนี้",
   "Set your aims": "ตั้งเป้าหมาย",
+  "<1 min": "<1 นาที",
+  "all working": "เซ็ตทำงานทั้งหมด",
+  "{0} working": "เซ็ตทำงาน {0}",
+  "Show all {0}": "แสดงทั้งหมด {0}",
+  "Show fewer": "แสดงน้อยลง",
+  "{0} muscle on target": "กล้ามเนื้อที่ถึงเป้า {0}",
+  "{0} muscles on target": "กล้ามเนื้อที่ถึงเป้า {0}",
+  "Train a few sessions to see coverage": "ฝึกสักสองสามครั้งเพื่อดูความครอบคลุม",
+  "Set coverage aims": "ตั้งเป้าความครอบคลุม",
 }

@@ -14,7 +14,8 @@
    border / hairline     --sep, --sep-op, --hair (index.css); --line (below)
    text tiers            --label, --label-2, --label-3, --label-4
    accent                --acc, --acc-2 (pressed), --on-acc (text on accent),
-                         --acc-soft (muted fill), --acc-line (index.css)
+                         --acc-soft (muted fill), --acc-line (index.css),
+                         --acc-text (accent-coloured text, below)
    status                --success, --warning, --danger, --pr (below)
    chart / scales        --chart-1…5, --heat-1…4, --effort-0…5 (below)
    radius                --r-sm, --r, --r-lg, --r-xl, --r-card (index.css)
@@ -24,6 +25,16 @@
    motion                --fast, --med, --slow (below), --ease (index.css)
    ========================================================================== */
 :root {
+  /* The backplate of a progress bar: visible but quiet. Ember dark sets its own (#4A443D). */
+  --track: var(--surface-3);
+
+  /* A goal the user set (body-weight goal line and figure): neutral, never the PR gold. */
+  --goal: var(--label-2);
+
+  /* Accent-coloured text and small glyphs. A palette darkens it in light mode where the fill
+     colour is too faint to read as text (Ember: 5.3:1 on white); fills keep --acc. */
+  --acc-text: var(--acc);
+
   /* status. Done/complete uses --success with a check glyph; a personal record uses --pr. */
   --success:      var(--green);
   --success-soft: color-mix(in srgb, var(--success) 16%, transparent);

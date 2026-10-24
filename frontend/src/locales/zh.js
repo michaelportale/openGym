@@ -2459,4 +2459,13 @@ export default {
   "A set where a muscle only helps counts as half a set.": "肌群只是辅助的组数算半组。",
   "No sets in these days yet.": "这几天还没有组数。",
   "Set your aims": "设定目标",
+  "<1 min": "不到 1 分钟",
+  "all working": "全部为正式组",
+  "{0} working": "{0} 组正式组",
+  "Show all {0}": "显示全部 {0} 项",
+  "Show fewer": "收起",
+  "{0} muscle on target": "已达标肌群：{0}",
+  "{0} muscles on target": "已达标肌群：{0}",
+  "Train a few sessions to see coverage": "训练几次后即可查看覆盖情况",
+  "Set coverage aims": "设置覆盖目标",
 }

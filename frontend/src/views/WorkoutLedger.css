@@ -11,16 +11,17 @@ body.no-tabbar {
   --label-3: #9ba195;
   --sep: #454a42;
 }
+/* Light: plain neutral greys (a palette's generated theme file may set its own). */
 :root[data-theme="light"] body.no-tabbar {
-  --bg: #f2f3ee;
-  --bg-el: #fafbf7;
+  --bg: #f2f2f4;
+  --bg-el: #fafafa;
   --surface: #ffffff;
-  --surface-2: #e9ece4;
-  --surface-3: #d3d8cc;
-  --label: #1b2119;
-  --label-2: #515a4d;
-  --label-3: #606b5b;
-  --sep: #adb5a6;
+  --surface-2: #e9e9ec;
+  --surface-3: #d6d6da;
+  --label: #1c1c1e;
+  --label-2: #545458;
+  --label-3: #636366;
+  --sep: #8e8e93;
 }
 body.no-tabbar .whdr.stick { background: var(--bg); backdrop-filter: none; }
 body.no-tabbar .whdr { container-type: inline-size; }
@@ -133,9 +134,17 @@ body.no-tabbar .workout-end-spacer { height: 20px; }
 .finish-record-s { display: flex; align-items: center; gap: 5px; color: var(--label-2); font-size: var(--fs-footnote); margin-top: 2px; }
 .finish-record-v { flex: none; color: var(--pr); font-weight: 700; font-size: var(--fs-title-3); font-variant-numeric: tabular-nums; }
 .workout-finish-summary .pr-tile .v { color: var(--pr); }
-.workout-finish-summary .btn.finish-share { width: 100%; margin-bottom: 10px; }
+.workout-finish-summary .finish-foot { position: sticky; bottom: -20px; z-index: 2; display: flex; gap: 8px; margin: 16px -20px -28px; padding: 12px 20px 20px; background: var(--bg-el); box-shadow: 0 -.5px 0 var(--sep); }
+/* The summary is long: its dialog rises to just under the status bar (8px clear of it). */
+.center:has(> .workout-finish-summary) { max-height: calc(100dvh - 2 * var(--sat) - 16px); }
+:root[data-theme="light"] .workout-finish-summary .finish-foot { background: #fff; }
+.workout-finish-summary .finish-foot .btn { flex: 1; min-height: 52px; margin: 0; }
+.workout-finish-summary .finish-foot .btn.primary { background: var(--label); color: var(--bg); }
+.workout-finish-summary .finish-foot .btn.finish-share { background: var(--surface-2); color: var(--label); }
+.workout-finish-summary .tile-cap { color: var(--label-2); font-size: var(--fs-caption-1, 12px); margin-top: 2px; }
 /* On light surfaces the theme's --pr is a mid gold (about 2.8:1 on the tinted card); the text in
    gold is darkened to about 5:1. The trophy and the card's tint keep the plain --pr. */
 :root[data-theme="light"] .finish-records-h,
 :root[data-theme="light"] .finish-record-v,
 :root[data-theme="light"] .workout-finish-summary .pr-tile .v { color: color-mix(in srgb, var(--pr) 70%, black); }
+:root[data-theme="light"] .workout-finish-summary .tiles .tile { background: var(--bg); }

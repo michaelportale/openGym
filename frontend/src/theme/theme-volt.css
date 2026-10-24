@@ -16,6 +16,7 @@
   --label-4: color-mix(in srgb, #f2f4fa 18%, transparent);
   --sep: #2c3040;
   --sep-op: color-mix(in srgb, #2c3040 70%, transparent);
+  --track: #41434a;
   --success: #7cd4ff;
   --on-success: #000000;
   --warning: #ffc857;
@@ -38,6 +39,7 @@
   --label-4: color-mix(in srgb, #f2f4fa 18%, transparent);
   --sep: #2c3040;
   --sep-op: color-mix(in srgb, #2c3040 70%, transparent);
+  --track: #41434a;
 }
 
 /* accent, only while the accent setting is "palette" (a preset or own colour still wins) */
@@ -47,6 +49,7 @@
   --on-acc: #000000;
   --on-acc-tile: #000000;
   --knob-ring: transparent;
+  --acc-text: var(--acc);
   --acc-soft: #1e2147;
 }
 
@@ -67,4 +70,5 @@
   --on-acc: #000000;
   --on-acc-tile: #000000;
   --knob-ring: transparent;
+  --acc-text: var(--acc);
 }
