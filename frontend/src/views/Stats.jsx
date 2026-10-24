@@ -208,7 +208,7 @@ function MuscleBalance({ S }) {
     </div>}
     {!sel && completedMuscles.map(m => <div key={m} className="mrow" data-muscle-volume={m}>
       <span className="nm">{t(MUSCLE_NAME[m])}</span>
-      <span className="bar"><i style={{ width: Math.round(load[m] / max * 100) + '%', background: on ? 'var(--yellow)' : undefined }} /></span>
+      <span className="bar"><i style={{ width: Math.round(load[m] / max * 100) + '%', background: on ? 'var(--acc)' : undefined }} /></span>
       <span className="v">{t('{0} sets', sets(m))}</span>
     </div>)}
     {weeklyToggle(worked.length)}
@@ -221,7 +221,7 @@ function MuscleBalance({ S }) {
     {view === 'balance' ? <>
       <div className="row between" style={{ marginBottom: 8 }}>
         <h2 style={{ margin: 0 }}>{t('Muscle balance')} <span className="dim" style={{ textTransform: 'none', letterSpacing: 0 }}>· {on ? t('by hard sets') : t('by sets worked')}</span></h2>
-        {!weekly && rated && <Button size="sm" icon="gauge" style={on ? { color: 'var(--yellow)' } : undefined}
+        {!weekly && rated && <Button size="sm" icon="gauge" style={on ? { color: 'var(--acc-text)' } : undefined}
           onClick={() => { setHard(h => !h); setSel(null) }}>{on ? t('Hard') : t('All')}</Button>}
       </div>
       <Segmented className="seg-range" value={win} onChange={v => { setWin(v); setSel(null); setWeeklyExpanded(false) }}
@@ -345,24 +345,24 @@ function EffortCard({ S }) {
           <div className="small dim">{t('average effort')}</div>
         </div>
         <div style={{ textAlign: 'end' }}>
-          <div className="stat-v" style={{ color: 'var(--yellow)' }}>{sum.hardPct == null ? '–' : Math.round(sum.hardPct * 100) + '%'}</div>
+          <div className="stat-v">{sum.hardPct == null ? '–' : Math.round(sum.hardPct * 100) + '%'}</div>
           <div className="small dim">{t('at {0} {1} or harder', hd, fmtNum(toScale(kind, HARD_RIR)))}</div>
         </div>
       </div>
       <div className="small dim" style={{ marginTop: 8 }}>{estimated
         ? t('{0} rated · {1} estimated of {2} sets', sum.rated, sum.est, sum.done)
         : t('{0} of {1} finished sets rated', sum.rated, sum.done)}</div>
-      {effortOf(S) === 'none' && <div className="small" style={{ color: 'var(--yellow)', marginTop: 4 }}>
+      {effortOf(S) === 'none' && <div className="small" style={{ color: 'var(--label-2)', marginTop: 4 }}>
         {t('Effort per set is off. Turn it on in Settings → Workout to keep rating.')}
       </div>}
       {pts.length > 1 && <>
         <h4 className="sec" style={{ marginTop: 12 }}>{t('Week by week')}</h4>
-        <div className="chart"><LineChart points={pts} h={140} unit={hd} color="var(--yellow)" invert={kind === 'rir'} /></div>
+        <div className="chart"><LineChart points={pts} h={140} unit={hd} color="var(--acc)" invert={kind === 'rir'} /></div>
       </>}
       <h4 className="sec" style={{ marginTop: 12 }}>{t('Where the sets land')}</h4>
       {hist.map(b => <div key={b.rir} className="mrow">
         <span className="nm">{hd} {binLabel(b)}</span>
-        <span className="bar"><i style={{ width: Math.round(b.n / maxBin * 100) + '%', background: b.rir <= HARD_RIR ? 'var(--yellow)' : 'var(--label-3)' }} /></span>
+        <span className="bar"><i style={{ width: Math.round(b.n / maxBin * 100) + '%', background: b.rir <= HARD_RIR ? 'var(--acc)' : 'var(--label-3)' }} /></span>
         <span className="v">{b.n ? b.n + ' · ' + Math.round(b.pct * 100) + '%' : '–'}</span>
       </div>)}
       <div className="small dim" style={{ marginTop: 8 }}>
@@ -698,7 +698,7 @@ export default function Stats() {
         <div className="row between bw-head" style={{ marginBottom: 8 }}>
           <h2 style={{ margin: 0 }}>{t('Body weight')}</h2>
           <div className="row" style={{ gap: 8 }}>
-            <Button size="sm" icon="target" style={S.targetW ? { color: 'var(--yellow)' } : undefined} onClick={goalSheet}>{S.targetW ? fmtNum(S.targetW) : t('Goal')}</Button>
+            <Button size="sm" icon="target" style={S.targetW ? { color: 'var(--goal)' } : undefined} onClick={goalSheet}>{S.targetW ? fmtNum(S.targetW) : t('Goal')}</Button>
             <Button size="sm" icon="plus" onClick={() => bwSheet()}>{t('Log')}</Button>
           </div>
         </div>
@@ -740,7 +740,7 @@ export default function Stats() {
               : onMax
               ? <LineChart points={maxChartPts} h={150} unit={t('reps')} color="var(--blue)" />
               : onEff
-              ? <LineChart points={effPts} h={150} unit={hd} color="var(--yellow)" invert={kind === 'rir'} />
+              ? <LineChart points={effPts} h={150} unit={hd} color="var(--acc)" invert={kind === 'rir'} />
               : <LineChart points={chartPts} h={150} unit={exUnit} color="var(--blue)" />}
           </div>
           {onSets && !rangeTooShort && <div className="row small" style={{ gap: 12, flexWrap: 'wrap', marginTop: 6 }}>

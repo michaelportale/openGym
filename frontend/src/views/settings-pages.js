@@ -58,7 +58,7 @@ export const SEARCH = [
   { page: 'workout', title: 'Layout', icon: 'layout', tint: 'var(--blue)', kw: 'workout view cards list compact', opts: ['Cards', 'List', 'Compact'] },
   { page: 'workout', title: 'Collapse completed exercises', icon: 'minimize', tint: 'var(--teal)', kw: 'collapse fold minimize hide done finished completed exercises list compact remaining left to do' },
   { page: 'workout', title: 'Weigh in before workouts', icon: 'scale', tint: 'var(--success)', kw: 'body weight weigh scale start' },
-  { page: 'workout', title: 'Keep screen awake', icon: 'phoneScreen', tint: 'var(--yellow)', kw: 'wake lock screen sleep display on', when: c => c.wakeOK || !c.mobile },
+  { page: 'workout', title: 'Keep screen awake', icon: 'phoneScreen', tint: 'var(--orange)', kw: 'wake lock screen sleep display on', when: c => c.wakeOK || !c.mobile },
   { page: 'workout', title: 'Exercise animations', icon: 'image', tint: 'var(--teal)', kw: 'gif animation video media pictures images', opts: ['Full', 'Small', 'Hidden'] },
   { page: 'workout', title: 'Fine-tuning', icon: 'wrench', tint: 'var(--grey)', kw: 'advanced more options' },
   // Fine-tuning
@@ -76,7 +76,7 @@ export const SEARCH = [
   { page: 'alerts', title: 'Play even on silent', icon: 'speaker', tint: 'var(--warning)', kw: 'silent mute ring switch iphone music', when: c => c.sound && c.playOnSilent },
   { page: 'alerts', title: 'Vibrate', icon: 'vibrate', tint: 'var(--indigo)', kw: 'vibrate vibration haptic haptics buzz' },
   { page: 'alerts', title: 'Vibrate on silent too', icon: 'vibrate', tint: 'var(--indigo)', kw: 'alarm silent vibrate android', when: c => c.mobile && c.android && c.canVibrate && c.vibrate },
-  { page: 'alerts', title: 'Flash the screen', icon: 'sun', tint: 'var(--yellow)', kw: 'flash light blink screen' },
+  { page: 'alerts', title: 'Flash the screen', icon: 'sun', tint: 'var(--orange)', kw: 'flash light blink screen' },
   // Reminders
   { page: 'reminders', title: PUSH, icon: 'bell', tint: 'var(--danger)', kw: 'push notification alerts', when: c => !c.mobile && !!c.user && c.pushOK },
   { page: 'reminders', title: 'Workout day reminder', icon: 'calendar', tint: 'var(--warning)', kw: 'reminder notification remind', when: remind, via: PUSH },
