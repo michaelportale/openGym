@@ -2508,4 +2508,8 @@ export default {
   "Body weight, {0}": "Masa ciała, {0}",
   "Log {0} more weigh-ins to see your trend": {"one": "Zapisz jeszcze {0} pomiar, by zobaczyć trend", "few": "Zapisz jeszcze {0} pomiary, by zobaczyć trend", "many": "Zapisz jeszcze {0} pomiarów, by zobaczyć trend", "other": "Zapisz jeszcze {0} pomiaru, by zobaczyć trend"},
   "Your goal is drawn as a dashed line through the weight charts.": "Twój cel jest zaznaczony przerywaną linią na wykresach wagi.",
+  "{0} of {1} sessions": "{0} z {1} sesji",
+  "New bests": "Nowe rekordy",
+  "{0} sessions on rotation": {"one": "{0} sesja z rotacji", "few": "{0} sesje z rotacji", "many": "{0} sesji z rotacji", "other": "{0} sesji z rotacji"},
+  "Add your 7-day average. Off unless you turn it on.": "Dodaje Twoją średnią 7-dniową. Wyłączone, dopóki tego nie włączysz.",
 }

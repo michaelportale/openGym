@@ -2501,4 +2501,8 @@ export default {
   "Body weight, {0}": "體重，{0}",
   "Log {0} more weigh-ins to see your trend": "再記錄 {0} 次體重即可看到趨勢",
   "Your goal is drawn as a dashed line through the weight charts.": "你的目標會以虛線顯示在體重圖表上。",
+  "{0} of {1} sessions": "{1} 次中完成 {0} 次",
+  "New bests": "新紀錄",
+  "{0} sessions on rotation": "輪替連續 {0} 次",
+  "Add your 7-day average. Off unless you turn it on.": "加入你的 7 天平均。除非你開啟，否則保持關閉。",
 }

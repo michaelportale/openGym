@@ -2508,4 +2508,8 @@ export default {
   "Body weight, {0}": "Vücut ağırlığı, {0}",
   "Log {0} more weigh-ins to see your trend": "Eğilimini görmek için {0} tartım daha kaydet",
   "Your goal is drawn as a dashed line through the weight charts.": "Hedefin kilo grafiklerinde kesikli bir çizgi olarak görünür.",
+  "{0} of {1} sessions": "{1} seansın {0}'i",
+  "New bests": "Yeni rekorlar",
+  "{0} sessions on rotation": "Rotasyonda {0} seans",
+  "Add your 7-day average. Off unless you turn it on.": "7 günlük ortalamanı ekler. Sen açmadıkça kapalı kalır.",
 }
