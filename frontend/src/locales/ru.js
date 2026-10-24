@@ -2468,4 +2468,10 @@ export default {
   "<1 min": "<1 мин",
   "all working": "все рабочие",
   "{0} working": "{0} рабочих",
+  "Show all {0}": "Показать все ({0})",
+  "Show fewer": "Свернуть",
+  "{0} muscle on target": "Мышцы в норме: {0}",
+  "{0} muscles on target": "Мышцы в норме: {0}",
+  "Train a few sessions to see coverage": "Проведите несколько тренировок, чтобы увидеть охват",
+  "Set coverage aims": "Задать цели охвата",
 }

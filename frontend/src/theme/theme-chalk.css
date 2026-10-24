@@ -16,6 +16,7 @@
   --label-4: color-mix(in srgb, #fafafa 18%, transparent);
   --sep: #333333;
   --sep-op: color-mix(in srgb, #333333 70%, transparent);
+  --track: #444444;
   --success: #fafafa;
   --on-success: #000000;
   --warning: #ffb000;
@@ -38,6 +39,7 @@
   --label-4: color-mix(in srgb, #fafafa 18%, transparent);
   --sep: #333333;
   --sep-op: color-mix(in srgb, #333333 70%, transparent);
+  --track: #444444;
 }
 
 /* accent, only while the accent setting is "palette" (a preset or own colour still wins) */

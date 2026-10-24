@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect } from 'vitest'
-import { glanceRows } from './CoverageGlance.jsx'
+import { glanceRows, glanceOrder, setsLabel } from './CoverageGlance.jsx'
 
 const pair = (done, planned) => ({ actual: { combinedEstimate: done }, planned: { combinedEstimate: planned } })
 
@@ -18,4 +18,21 @@ describe('the coverage glance rows', () => {
     expect(rows[0]).toMatchObject({ met: false, fill: 1 })
     expect(glanceRows(undefined)).toEqual([])
   })
+
+  it('puts the muscle most behind first, then work without a plan, and folds met aims away', () => {
+    const rows = glanceRows({ chest: pair(10, 10), triceps: pair(2, 4), quads: pair(0, 6), biceps: pair(3, 0), glutes: pair(1, 2) })
+    const { open, met } = glanceOrder(rows)
+    expect(open.map(r => r.m)).toEqual(['quads', 'triceps', 'glutes', 'biceps'])
+    expect(met.map(r => r.m)).toEqual(['chest'])
+  })
 })
+
+describe('the coverage glance numbers', () => {
+  it('shows whole sets, with ≈ when a half set was rounded', () => {
+    expect(setsLabel(3, 4)).toBe('3 / 4')
+    expect(setsLabel(1.5, 2)).toBe('≈2 / 2')
+    expect(setsLabel(2, 2.5)).toBe('≈2 / 3')
+    expect(setsLabel(4, 0)).toBe('4')
+  })
+})
+

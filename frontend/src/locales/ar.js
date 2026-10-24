@@ -2519,4 +2519,10 @@ export default {
   "<1 min": "أقل من دقيقة",
   "all working": "كلها مجموعات عمل",
   "{0} working": "{0} مجموعات عمل",
+  "Show all {0}": "عرض الكل ({0})",
+  "Show fewer": "عرض أقل",
+  "{0} muscle on target": "عضلات بلغت الهدف: {0}",
+  "{0} muscles on target": "عضلات بلغت الهدف: {0}",
+  "Train a few sessions to see coverage": "تمرّن بضع جلسات لترى التغطية",
+  "Set coverage aims": "حدّد أهداف التغطية",
 }

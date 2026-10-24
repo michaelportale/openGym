@@ -2464,4 +2464,10 @@ export default {
   "<1 min": "<1 min",
   "all working": "wszystkie robocze",
   "{0} working": "{0} roboczych",
+  "Show all {0}": "Pokaż wszystkie ({0})",
+  "Show fewer": "Pokaż mniej",
+  "{0} muscle on target": "Mięśnie w celu: {0}",
+  "{0} muscles on target": "Mięśnie w celu: {0}",
+  "Train a few sessions to see coverage": "Zrób kilka treningów, aby zobaczyć pokrycie",
+  "Set coverage aims": "Ustaw cele pokrycia",
 }

@@ -2461,4 +2461,10 @@ export default {
   "<1 min": "<1 хв",
   "all working": "усі робочі",
   "{0} working": "{0} робочих",
+  "Show all {0}": "Показати всі ({0})",
+  "Show fewer": "Згорнути",
+  "{0} muscle on target": "М’язи в нормі: {0}",
+  "{0} muscles on target": "М’язи в нормі: {0}",
+  "Train a few sessions to see coverage": "Проведіть кілька тренувань, щоб побачити охоплення",
+  "Set coverage aims": "Задати цілі охоплення",
 }

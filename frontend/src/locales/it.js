@@ -2464,4 +2464,10 @@ export default {
   "<1 min": "<1 min",
   "all working": "tutte allenanti",
   "{0} working": "{0} allenanti",
+  "Show all {0}": "Mostra tutti ({0})",
+  "Show fewer": "Mostra meno",
+  "{0} muscle on target": "{0} muscolo in linea",
+  "{0} muscles on target": "{0} muscoli in linea",
+  "Train a few sessions to see coverage": "Allenati qualche volta per vedere la copertura",
+  "Set coverage aims": "Imposta gli obiettivi",
 }
