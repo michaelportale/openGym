@@ -2801,7 +2801,9 @@ function ShareWorkoutImage({ w, nameOf, close, card = null, prBest }) {
   const st = useStore(s => s.S)
   const update = useStore(s => s.update)
   const withMap = st.shareMap !== false
-  const model = useMemo(() => card ? card.model : workoutCardModel(w, { unit: st.unit, nameOf, prBest }), [card, w, st.unit, prBest])
+  // Body weight on the week card is private, so it is off until switched on for this share.
+  const [withBW, setWithBW] = useState(false)
+  const model = useMemo(() => card ? (withBW && card.build ? card.build(true) : card.model) : workoutCardModel(w, { unit: st.unit, nameOf, prBest }), [card, w, st.unit, prBest, withBW])
   // The last picture stays up while the next one is drawn, so the toggle never blanks the sheet.
   const [img, setImg] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -2840,6 +2842,11 @@ function ShareWorkoutImage({ w, nameOf, close, card = null, prBest }) {
         <Switch checked={withMap} aria-label={t('Muscle map')} onChange={v => update(s => { s.shareMap = v })} />
       </Row>
     </div>}
+    {card?.bwOption && <div className="sect-b" style={{ marginBottom: 12 }}>
+      <Row icon="scale" iconTint="var(--acc)" title={t('Body weight')} subtitle={t('Add your 7-day average. Off unless you turn it on.')}>
+        <Switch checked={withBW} aria-label={t('Body weight')} onChange={setWithBW} />
+      </Row>
+    </div>}
     <Button variant="primary" icon="share" disabled={!img?.blob || busy} onClick={share}>{t('Share')}</Button>
   </>
 }
@@ -2849,8 +2856,8 @@ export function weekRecapSheet() {
   const st = S()
   const nameOf = e => (EXIDX[e.id] ? exerciseNameFor(EXIDX[e.id]) : (e.n || e.id))
   const today = todayISO()
-  const model = weekRecapModel(st.workouts, { today, ws: weekStartOf(st), unit: st.unit, nameOf })
-  const card = { model, heading: t('Your week'), fileName: 'opengym-week-' + weekKey(today, weekStartOf(st)) + '.png', mapSubtitle: t('Show which muscles this week trained.') }
+  const build = bw => weekRecapModel(st.workouts, { today, ws: weekStartOf(st), unit: st.unit, nameOf, S: st, bw })
+  const card = { model: build(false), build, bwOption: st.bodyweight.length > 0, heading: t('Your week'), fileName: 'opengym-week-' + weekKey(today, weekStartOf(st)) + '.png', mapSubtitle: t('Show which muscles this week trained.') }
   ui().openSheet(close => <ShareWorkoutImage card={card} close={close} />)
 }
 async function workoutCardImage(model, { map, body }) {
@@ -2858,6 +2865,7 @@ async function workoutCardImage(model, { map, body }) {
   const css = (name, fallback) => root.getPropertyValue(name).trim() || fallback
   const colors = { bg: css('--bg', '#000'), surface: css('--surface', '#1c1c1e'), tile: css('--surface-2', '#2c2c2e'), label: css('--label', '#fff'), label2: css('--label-2', '#999'), acc: css('--acc', PALETTE_ACCENT[DEFAULT_PALETTE]) }
   colors.pr = recordColor(css('--pr', ''), colors.acc, document.documentElement.dataset.theme === 'light')
+  colors.track = css('--track', '') || undefined
   // The body geometry is ~90 KB and lazy everywhere else too (components/BodyMap.jsx).
   const geometry = map && model.levels ? (await import('./lib/body-paths.js')).default : null
   const shape = geometry && (geometry[body] || geometry.male)

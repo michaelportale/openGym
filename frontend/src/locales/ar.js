@@ -2562,5 +2562,11 @@ export default {
   "Body weight, {0}": "وزن الجسم، {0}",
   "Log {0} more weigh-ins to see your trend": "سجّل {0} وزن إضافي لترى اتجاهك",
   "Your goal is drawn as a dashed line through the weight charts.": "يظهر هدفك كخط متقطع عبر مخططات الوزن.",
+  "{0} of {1} sessions": "{0} من {1} جلسات",
+  "New bests": "أرقام جديدة",
+  "{0} sessions on rotation": "{0} جلسات ضمن الدورة",
+  "Add your 7-day average. Off unless you turn it on.": "أضف متوسط 7 أيام. يبقى مطفأً ما لم تشغّله.",
   "sessions": "جلسات",
+  "{0} session in a row": "{0} جلسة متتالية",
+  "{0} sessions in a row": "{0} جلسات متتالية",
 }

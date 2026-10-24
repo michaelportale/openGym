@@ -144,6 +144,32 @@ export function layoutWorkoutCard(model, { measure, rtl = false, width = CARD_WI
   })
   y += tileH
 
+  // The week recap's slots (lib/week-recap.js): a pill per rotation slot or planned day, chalk ✓
+  // when done, a gold dot beside the ✓ for a session with a record, an outline when missed.
+  if (model.sessions?.length) {
+    y += 48
+    if (model.sessionsLine) text(model.sessionsLine, 34, 600, 'label2')
+    y += 12
+    const size = 72
+    const pillGap = 16
+    const perRow = Math.max(1, Math.floor((inner + pillGap) / (size + pillGap)))
+    model.sessions.forEach((slot, i) => {
+      const col = i % perRow
+      const row = Math.floor(i / perRow)
+      const x = rtl ? width - PAD - (col + 1) * size - col * pillGap : PAD + col * (size + pillGap)
+      items.push({ kind: 'pill', x, y: y + row * (size + pillGap), size, done: !!slot.done, pr: !!(slot.done && slot.pr) })
+    })
+    y += Math.ceil(model.sessions.length / perRow) * (size + pillGap) - pillGap
+  }
+  if (model.lines?.length) {
+    y += 36
+    for (const line of model.lines) {
+      const [l] = wrapText(line, inner, s => measure(s, 500, 36), 1)
+      text(l, 36, 500, 'label2')
+      y += 6
+    }
+  }
+
   // Front and back side by side, as large as the width allows without running past a phone
   // screen, with the finish summary's five-step legend under them.
   if (map && model.levels) {
@@ -181,7 +207,7 @@ export function layoutWorkoutCard(model, { measure, rtl = false, width = CARD_WI
 
   if (model.records.length) {
     y += 52
-    text(t('New personal records'), 34, 600, 'pr')
+    text(model.recordsTitle || t('New personal records'), 34, 600, 'pr')
     y += 10
     const icon = 44
     const indent = icon + 22
@@ -199,7 +225,7 @@ export function layoutWorkoutCard(model, { measure, rtl = false, width = CARD_WI
 
   y += 64
   const height = Math.max(MIN_HEIGHT, Math.round(y + 34 + PAD))
-  items.push({ kind: 'text', text: 'openGym', x: start, y: height - PAD, size: 34, weight: 700, color: 'acc' })
+  items.push({ kind: 'text', text: model.footer || 'openGym', x: start, y: height - PAD, size: 34, weight: 700, color: 'acc' })
   return { width, height, rtl, items }
 }
 
@@ -304,6 +330,33 @@ export function drawWorkoutCard(ctx, layout, colors, map = null, family = CARD_F
     } else if (item.kind === 'map') {
       const view = map?.body?.[item.view]
       if (view) drawView(ctx, view, item, map.levels, shades)
+    } else if (item.kind === 'pill') {
+      const r = item.size / 2
+      if (item.done) {
+        ctx.fillStyle = colors.tile || colors.bg
+        roundRect(ctx, item.x, item.y, item.size, item.size, r)
+        ctx.fill()
+        ctx.strokeStyle = colors.label
+        ctx.lineWidth = item.size / 12
+        ctx.lineCap = 'round'
+        ctx.lineJoin = 'round'
+        ctx.beginPath()
+        ctx.moveTo(item.x + item.size * 0.3, item.y + item.size * 0.52)
+        ctx.lineTo(item.x + item.size * 0.45, item.y + item.size * 0.66)
+        ctx.lineTo(item.x + item.size * 0.72, item.y + item.size * 0.36)
+        ctx.stroke()
+        if (item.pr) {
+          ctx.fillStyle = colors.pr || colors.acc
+          ctx.beginPath()
+          ctx.arc(item.x + item.size * 0.84, item.y + item.size * 0.16, item.size * 0.12, 0, Math.PI * 2)
+          ctx.fill()
+        }
+      } else {
+        ctx.strokeStyle = colors.track || mixColor(colors.label2, colors.surface, 0.5)
+        ctx.lineWidth = 4
+        roundRect(ctx, item.x + 2, item.y + 2, item.size - 4, item.size - 4, r - 2)
+        ctx.stroke()
+      }
     } else if (item.kind === 'trophy') {
       ctx.save()
       ctx.translate(item.x, item.y)

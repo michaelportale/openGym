@@ -2507,5 +2507,11 @@ export default {
   "Body weight, {0}": "Peso corporeo, {0}",
   "Log {0} more weigh-ins to see your trend": "Ancora {0} pesata/e per vedere il tuo andamento",
   "Your goal is drawn as a dashed line through the weight charts.": "Il tuo obiettivo appare come una linea tratteggiata nei grafici del peso.",
+  "{0} of {1} sessions": "{0} sessioni su {1}",
+  "New bests": "Nuovi record",
+  "{0} sessions on rotation": "{0} sessioni della rotazione",
+  "Add your 7-day average. Off unless you turn it on.": "Aggiunge la tua media a 7 giorni. Disattivato finché non lo attivi.",
   "sessions": "sessioni",
+  "{0} session in a row": "{0} sessione di fila",
+  "{0} sessions in a row": "{0} sessioni di fila",
 }
