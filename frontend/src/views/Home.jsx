@@ -22,6 +22,8 @@ import { exOr } from '../lib/exercises.js'
 import { MUSCLE_NAME } from '../lib/muscles.js'
 import { useFabAsideWhileVisible } from '../lib/use-hide-fab.js'
 import Elapsed from '../components/Elapsed.jsx'
+import StreakCard from '../components/StreakCard.jsx'
+import { rotationStreak } from '../lib/rotation-streak.js'
 import { isWarmupRow } from '../lib/workout-model.js'
 
 // A logged session in one line: how long it took and how many work sets it held.
@@ -106,6 +108,8 @@ export default function Home() {
   // The streak card's fraction: this calendar week's workouts over the weekdays with a plan, or,
   // in a coach week, the queue's sessions and your own days together (lib/queue.js weekTally).
   const { done: doneThisWeek, planned: plannedPerWeek } = weekTally(S, todayISO())
+  const weekSummary = `${doneThisWeek}${plannedPerWeek ? ' / ' + plannedPerWeek : ''} ${t('this week')} · ${tn('{0} workout total', '{0} workouts total', S.workouts.length)}`
+  const rotStreak = rotationStreak(S, todayISO())
   const weekCount = useMemo(() => weekWorkouts(S.workouts, todayISO(), weekStartOf(S)).length, [S.workouts, S.weekStart])
   const bwPoints = S.bodyweight.slice(-30).map(b => ({ t: b.t || new Date(b.d).getTime(), y: b.w, d: b.d }))
 
@@ -269,18 +273,21 @@ export default function Home() {
         : t("No weigh-ins yet. Log your weight to start the curve (we also ask before every workout).")}</div>}
     </div>}
 
-    <div className="card tappable" style={{ cursor: 'pointer' }} {...tappable(() => calendarSheet())}>
+    {/* The rotation streak (lib/rotation-streak.js) when there is a loop to keep, else weeks. */}
+    {rotStreak ? <StreakCard streak={rotStreak} summary={weekSummary} onCalendar={() => calendarSheet()}
+      startLabel={todayRoutines[0]?.name} onStart={todayRoutines.length && !S.active ? onToday : null} />
+    : <div className="card tappable" style={{ cursor: 'pointer' }} {...tappable(() => calendarSheet())}>
       <div className="row between">
         <div>
           <div className="row" style={{ gap: 7, fontSize: 22, fontWeight: 600, letterSpacing: '-.021em' }}>
             <Icon name="flame" style={{ color: 'var(--warning)' }} />
             {t('{0} week streak', streakWeeks(S))}
           </div>
-          <div className="muted small" style={{ marginTop: 2 }}>{doneThisWeek}{plannedPerWeek ? ' / ' + plannedPerWeek : ''} {t('this week')} · {tn('{0} workout total', '{0} workouts total', S.workouts.length)}</div>
+          <div className="muted small" style={{ marginTop: 2 }}>{weekSummary}</div>
         </div>
         <Icon name="calendar" className="chev" style={{ fontSize: 20 }} />
       </div>
-    </div>
+    </div>}
     {/* The week so far as a card to share (lib/week-recap.js), once there is a workout in it. */}
     {weekCount > 0 && <div className="row week-recap-row">
       <Button size="sm" variant="ghost" icon="share" onClick={() => weekRecapSheet()}>{t('Share your week')}</Button>

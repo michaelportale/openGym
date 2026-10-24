@@ -2334,3 +2334,25 @@ body.fab-aside #tabbar button.start{opacity:0;pointer-events:none;visibility:hid
 @supports (transition-timing-function:linear(0, 1)){
   :root{--ease-spring:linear(0, .009, .035 2.1%, .141 4.4%, .723 12.9%, .938 16.7%, 1.017 20.4%, 1.051 24.1%, 1.056 28.3%, 1.038 33.5%, 1.009 41.5%, .998 51.7%, 1)}
 }
+
+/* Rotation streak card (components/StreakCard.jsx): no flame and no accent; chalk dots for rounds,
+   warning text only for "train by", and a frozen grey number while paused. 8pt spacing. */
+.streak-card{display:flex;flex-direction:column;gap:0;padding:16px}
+.streak-top{min-height:44px;margin:-8px -8px 0 0}
+.streak-kicker{font-size:var(--fs-caption);font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--label-2)}
+.streak-actions{gap:0}
+.streak-btn{width:44px;height:44px;flex:0 0 44px;border-radius:12px;font-size:var(--fs-title-3);color:var(--label-2);background:none}
+.streak-num{font-family:var(--font-num);font-size:var(--fs-display);font-weight:700;line-height:1.1;color:var(--label);font-variant-numeric:tabular-nums}
+.streak-num.frozen{color:var(--label-2)}
+.streak-label{font-size:var(--fs-footnote);color:var(--label-2);margin-top:0}
+.streak-meta{gap:8px;margin-top:8px;font-size:var(--fs-footnote);color:var(--label-2)}
+.streak-dots{display:inline-flex;gap:4px}
+.streak-dots i{width:8px;height:8px;border-radius:50%;background:var(--success)}
+.streak-risk{gap:8px;margin-top:8px;font-size:var(--fs-footnote);font-weight:600;color:var(--warning)}
+.streak-pause{margin-top:8px;font-size:var(--fs-footnote);color:var(--label-2)}
+.streak-lead{font-size:var(--fs-title-3);font-weight:600;color:var(--label);margin-top:0}
+.streak-cta{margin-top:16px;min-height:44px;background:var(--surface-2);color:var(--label)}
+.streak-summary{margin-top:8px;padding-top:8px;border-top:1px solid var(--sep);font-size:var(--fs-footnote);color:var(--label-2)}
+.streak-tile-s{font-size:var(--fs-caption);color:var(--label-2);margin-top:2px}
+.streak-sheet-h{margin:16px 0 8px;font-size:var(--fs-footnote);font-weight:600;color:var(--label-2)}
+.streak-sheet-list{margin-top:8px}
