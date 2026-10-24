@@ -312,6 +312,11 @@ h4.sec{
   display:flex;align-items:center;justify-content:center;
   background:var(--tint,var(--acc));color:#fff;
 }
+/* Tiles drawn in the accent (no tint of their own, or the accent named) take the accent's
+   glyph colour, so a light accent (Chalk) keeps its icon readable. Other tints stay white. */
+.lrow-i:not([style*="--tint"]):not([style*="background"]),
+.lrow-i[style*="--tint: var(--acc)"],
+.lrow-i[style*="background: var(--acc)"]{color:var(--on-acc-tile)}
 /* The title column never shrinks below its own longest word. With a basis of 0 and min-width:0 it
    only got what a capped value left over, and on a 320px phone "Progression" (96px) was painted over
    by "Linear progression" in a 37px box; min-width:auto — the flex default — is exactly the floor
