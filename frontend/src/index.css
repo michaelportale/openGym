@@ -146,6 +146,20 @@ button,.chip,.tile,.item,.wday,.cal-d,.swatch,.hm-c,.lrow,.seg button,.stp butto
 
 @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
 
+/* Disclosures: the browser's ▶ marker gives way to the icon set's chevron (chevronRight, at the
+   list-row stroke), turned down when open. 14px + 4px keeps the 18px indent that
+   .coverage-muscle aligns its second line to. Summaries that draw their own .chev (admin) keep
+   theirs; a browser without :has() keeps the native marker. */
+summary:not(:has(.chev)){list-style:none}
+summary:not(:has(.chev))::-webkit-details-marker{display:none}
+summary:not(:has(.chev))::before{
+  content:"";display:inline-block;width:14px;height:14px;margin-inline-end:4px;vertical-align:-2px;
+  background:var(--label-3);-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9.6 5.6 6.6 6.4-6.6 6.4'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9.6 5.6 6.6 6.4-6.6 6.4'/%3E%3C/svg%3E") center/contain no-repeat;
+  transition:transform .18s ease;
+}
+[dir="rtl"] summary:not(:has(.chev))::before{transform:scaleX(-1)}
+details[open]>summary:not(:has(.chev))::before,[dir="rtl"] details[open]>summary:not(:has(.chev))::before{transform:rotate(90deg)}
+
 /* ------------------------------------------------------------ type scale -- */
 /* The nine .t-* classes that used to live here emitted from no JSX in the app, while the views
    typed their numbers inline (Home.jsx:223 is .t-title2 with a different weight). Deleted
