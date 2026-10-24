@@ -118,3 +118,24 @@ body.no-tabbar .workout-end-spacer { height: 20px; }
   body.no-tabbar .whdr-mid { order: -1; flex: 1 0 100%; text-align: start; }
   body.no-tabbar .whdr-bar > .iconbtn:first-child { margin-inline-end: auto; }
 }
+
+/* PR moment: a load PR turns the finish check into a gold trophy and lists what was beaten.
+   Gold (--pr) is used for load PRs only; a best estimated 1RM row stays neutral. */
+.workout-finish-summary .finish-check.finish-pr { color: var(--pr); border-color: color-mix(in srgb, var(--pr) 55%, transparent); background: color-mix(in srgb, var(--pr) 14%, transparent); animation: pr-arrive .42s cubic-bezier(.2, .9, .3, 1.25) both; }
+@keyframes pr-arrive { from { transform: scale(.6); opacity: 0; } to { transform: none; opacity: 1; } }
+.finish-records { text-align: start; margin: 4px 0 14px; padding: 12px 14px; border-radius: 14px; background: var(--surface-2); }
+.finish-records.gold { background: color-mix(in srgb, var(--pr) 9%, var(--surface-2)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pr) 30%, transparent); }
+.finish-records-h { display: flex; align-items: center; gap: 6px; color: var(--pr); font-size: var(--fs-footnote); font-weight: 600; margin-bottom: 4px; }
+.finish-record { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; }
+.finish-record + .finish-record { border-top: .5px solid var(--sep); }
+.finish-record-l { min-width: 0; }
+.finish-record-n { font-weight: 600; font-size: var(--fs-subhead); }
+.finish-record-s { display: flex; align-items: center; gap: 5px; color: var(--label-2); font-size: var(--fs-footnote); margin-top: 2px; }
+.finish-record-v { flex: none; color: var(--pr); font-weight: 700; font-size: var(--fs-title-3); font-variant-numeric: tabular-nums; }
+.workout-finish-summary .pr-tile .v { color: var(--pr); }
+.workout-finish-summary .btn.finish-share { width: 100%; margin-bottom: 10px; }
+/* On light surfaces the theme's --pr is a mid gold (about 2.8:1 on the tinted card); the text in
+   gold is darkened to about 5:1. The trophy and the card's tint keep the plain --pr. */
+:root[data-theme="light"] .finish-records-h,
+:root[data-theme="light"] .finish-record-v,
+:root[data-theme="light"] .workout-finish-summary .pr-tile .v { color: color-mix(in srgb, var(--pr) 70%, black); }
