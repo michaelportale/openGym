@@ -723,7 +723,7 @@ export default function Settings({ page = null, find = null, via = null }) {
           />
         </Row>
         <SelectRow icon="palette" iconTint="var(--acc)" title={t('Palette')}
-          value={paletteKey(S)} onChange={v => { update(s => { s.palette = v }); if (accentKey(S) === THEME) setRestAccent(THEME) }}
+          value={paletteKey(S)} onChange={v => { update(s => { s.palette = v }); if (accentKey(S) === THEME) setRestAccent(THEME, v) }}
           options={PALETTES.map(p => ({ value: p, label: t(PALETTE_NAMES[p]) }))} />
         <div className="lrow" style={{ flexWrap: 'wrap', rowGap: 12, paddingBottom: 14 }}>
           <span className="lrow-i" style={{ '--tint': 'var(--purple)' }}><Icon name="palette" /></span>
