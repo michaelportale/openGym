@@ -8,8 +8,9 @@
 //   node scripts/check-source-strings.mjs --strict # exit 1 if anything is missing
 //
 // English is the source language and has no pack, so the key IS the English string.
-// Only literal single-argument calls are collected — t(variable) and template literals are
-// resolved at runtime and are deliberately out of scope.
+// Literal calls are collected, and so are the literal branches of a conditional first argument,
+// t(on ? 'Pause' : 'Resume'), whose keys are as fixed as a literal's. t(variable), lookups such
+// as t(NAMES[k]) and template literals are resolved at runtime and stay out of scope.
 
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
@@ -36,15 +37,50 @@ function walk(dir, out = []) {
 // t('literal') / t("literal") — preceded by a non-identifier char so DateTimeFormat( misses.
 const CALL = /(^|[^A-Za-z0-9_$.])t\(\s*(['"])((?:\\.|(?!\2)[^\\])*)\2/g
 
+// The first argument of every t( call, read up to its top-level comma or closing paren.
+const OPEN = /(^|[^A-Za-z0-9_$.])t\(/g
+export function firstArgs(text) {
+  const out = []
+  for (const m of text.matchAll(OPEN)) {
+    let arg = '', depth = 0
+    for (let i = m.index + m[0].length; i < text.length; i++) {
+      const c = text[i]
+      if (c === '"' || c === "'" || c === '`') {
+        let j = i + 1
+        while (j < text.length && text[j] !== c) { if (text[j] === '\\') j++; j++ }
+        arg += text.slice(i, j + 1); i = j; continue
+      }
+      if ('([{'.includes(c)) depth++
+      else if (')]}'.includes(c)) { if (depth === 0) break; depth-- }
+      else if (c === ',' && depth === 0) break
+      arg += c
+    }
+    out.push(arg)
+  }
+  return out
+}
+// The literal results of a conditional first argument: the strings right after ? or :.
+const BRANCH = /[?:]\s*(['"])((?:\\.|(?!\1)[^\\])*)\1/g
+export function branchKeys(text) {
+  const keys = []
+  for (const arg of firstArgs(text)) {
+    if (/^\s*(['"])(?:\\.|(?!\1)[^\\])*\1\s*$/.test(arg)) continue
+    for (const b of arg.matchAll(BRANCH)) keys.push(b[2].replace(/\\(['"\\])/g, '$1'))
+  }
+  return keys
+}
+
 const used = new Map()
+const note = (key, file) => {
+  if (!key) return
+  if (!used.has(key)) used.set(key, new Set())
+  used.get(key).add(relative(root, file))
+}
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
 for (const file of walk(srcDir)) {
   const text = readFileSync(file, 'utf8')
-  for (const m of text.matchAll(CALL)) {
-    const key = m[3].replace(/\\(['"\\])/g, '$1')
-    if (!key) continue
-    if (!used.has(key)) used.set(key, new Set())
-    used.get(key).add(relative(root, file))
-  }
+  for (const m of text.matchAll(CALL)) note(m[3].replace(/\\(['"\\])/g, '$1'), file)
+  for (const key of branchKeys(text)) note(key, file)
 }
 
 const defined = new Set()
@@ -67,3 +103,4 @@ for (const key of missing) {
 }
 console.log(`\nThese render English in all ${readdirSync(localesDir).filter(f => f.endsWith('.js')).length} translated languages.`)
 process.exit(strict ? 1 : 0)
+}
