@@ -185,7 +185,7 @@ export default function AdminCoach() {
       <span className={'adm-pill ' + (live ? 'ok' : 'warn')}>{live ? 'ready' : 'not ready'}</span>
       <span>{status}</span>
     </div>
-    {!live && <div className="adm-progress" aria-hidden="true"><i style={{ width: Math.round(doneCount / flags.length * 100) + '%' }} /></div>}
+    {!live && <div className="adm-progress" aria-hidden="true"><i style={{ transform: `scaleX(${Math.round(doneCount / flags.length * 100) / 100})` }} /></div>}
     <div className="adm-lead">
       {live ? 'Users find the Coach under Plan → Coach. This switch is the only place it can be turned off for everyone.'
         : `${doneCount} of ${flags.length} steps done. Finish the open step and the next one unfolds.`}

@@ -281,6 +281,14 @@ button.conn:active{filter:brightness(1.12)}
 .iconbtn,.chip,.seg button,.helpbtn{position:relative}
 .iconbtn::before,.chip::before,.seg button::before,.helpbtn::before{content:'';position:absolute;inset:-6px}
 .seg button::before{inset:-6px 0}
+/* whatever the painted size, the reach is at least 44px: top/bottom percentages resolve against
+   the element's height, left/right against its width. Icon buttons sized down inline (the 30px
+   week arrows) and the 28-30px segments get there; small buttons, the settings back link, the
+   Show more toggle and the 31px switches grow vertically only, as they sit in rows. */
+.iconbtn::before{inset:min(-6px, calc((100% - 44px) / 2))}
+.seg button::before{inset-block:min(-6px, calc((100% - 44px) / 2));inset-inline:0}
+.btn.sm,.sp-back,.weekly-volume-toggle,.sw{position:relative}
+.btn.sm::before,.sp-back::before,.weekly-volume-toggle::before,.sw::before{content:'';position:absolute;inset-block:min(0px, calc((100% - 44px) / 2));inset-inline:0}
 .iconbtn.on-ss{background:var(--acc-soft);color:var(--acc-text)}
 .iconbtn:disabled{opacity:.32}
 
@@ -1236,6 +1244,7 @@ body::before{
 .swpane{position:absolute;top:0;bottom:0;width:0;overflow:hidden;z-index:0}
 .swpane.del{inset-inline-end:0;background:color-mix(in srgb,var(--danger) 22%,var(--surface))}
 .swpane.cp{inset-inline-start:0;background:var(--acc-soft)}
+.haptic-switch{position:fixed;inset-inline-start:0;top:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;clip-path:inset(50%)}
 .swpane button{position:absolute;top:0;bottom:0;width:76px;padding:0;color:#fff;transition:width var(--fast) var(--ease)}
 .swpane.del button{inset-inline-end:0;background:var(--danger)}
 .swpane.cp button{inset-inline-start:0;background:var(--acc);color:var(--on-acc)}
