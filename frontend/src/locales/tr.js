@@ -2476,4 +2476,6 @@ export default {
   "{0} rep": "{0} tekrar",
   "{0} reps": "{0} tekrar",
   "New PR · {0}": "Yeni rekor · {0}",
+  "Train anyway": "Yine de antrenman yap",
+  "Top set to beat: {0}": "Geçilecek en iyi set: {0}",
 }

@@ -2479,4 +2479,6 @@ export default {
   "{0} rep": "{0} ism.",
   "{0} reps": "{0} ism.",
   "New PR · {0}": "Új rekord · {0}",
+  "Train anyway": "Edzés mégis",
+  "Top set to beat: {0}": "Túlszárnyalandó legjobb sorozat: {0}",
 }

@@ -2476,4 +2476,6 @@ export default {
   "{0} rep": "{0} rip.",
   "{0} reps": "{0} rip.",
   "New PR · {0}": "Nuovo record · {0}",
+  "Train anyway": "Allenati comunque",
+  "Top set to beat: {0}": "Serie migliore da superare: {0}",
 }

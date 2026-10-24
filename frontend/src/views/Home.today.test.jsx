@@ -72,9 +72,9 @@ describe('Home — the Today card', () => {
     expect(meta()).toEqual(['2 exercises'])
   })
 
-  it('says nothing about the plan once today is done or while a session is open', () => {
+  it('says nothing about the plan once today is done (only how the session went) or while a session is open', () => {
     setS({ workouts: [session(daysAgo(3)), session(todayISO())] }); mount()
-    expect(meta()).toEqual([])
+    expect(meta()).toEqual(['60 min · 3 sets'])
     setS({ workouts: [session(daysAgo(3))], active: { id: 'a', name: 'Push', start: Date.now(), cur: 0, entries: [] } }); mount()
     expect(meta()).toEqual([])
   })
@@ -128,5 +128,22 @@ describe('Home — the Today card', () => {
     expect(disconnect).toHaveBeenCalled()
     delete globalThis.IntersectionObserver
   })
-})
 
+  it('leads with the day rather than a greeting', () => {
+    setS(); useStore.setState({ user: { name: 'Sam' } }); mount()
+    expect(host.querySelector('h1').textContent).not.toContain('Sam')
+    expect(host.querySelector('.today-card').tagName).toBe('SECTION')
+    expect(host.querySelector('.today-card').getAttribute('aria-labelledby')).toBe(host.querySelector('.today-card .lbl2').id)
+  })
+
+  it('names the top set to beat from the first lift last time', () => {
+    setS({ workouts: [session(daysAgo(3))] }); mount()
+    const beat = host.querySelector('.today-beat')
+    expect(beat.textContent).toMatch(/^Top set to beat: .+ 60kg × 5$/)
+  })
+
+  it('labels the row with what it starts', () => {
+    setS(); mount()
+    expect(host.querySelector('.today-row').getAttribute('aria-label')).toBe('Start Push')
+  })
+})
