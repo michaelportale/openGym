@@ -114,9 +114,6 @@ function fatigueLabel(value) {
   return t(state === 'ready' ? 'Ready' : state === 'recovering' ? 'Recovering' : 'Fatigued')
 }
 
-// The user's own last registered bodyweight, in kg: the body-mass part of a bodyweight
-// exercise's load for fatigue and for estimated effort, so both read the same set the same way.
-
 function MuscleBalance({ S }) {
   const [view, setView] = useState('balance')
   const [win, setWin] = useState(7)
@@ -127,6 +124,8 @@ function MuscleBalance({ S }) {
   const now = useNow()
   const lang = getLang()
   const workouts = S.workouts
+  // The user's own last registered bodyweight, in kg: the body-mass part of a bodyweight
+  // exercise's load for fatigue and for estimated effort, so both read the same set the same way.
   const bodyweightKg = useMemo(() => profileBodyweightKg(S), [S.bodyweight, S.unit])
   const fatigue = useMemo(() => fatigueOf(workouts, now, { bodyweightKg, unit: S.unit }), [workouts, now, bodyweightKg, S.unit])
   const strength = useMemo(() => strengthOf(workouts, now, { bodyweightKg, unit: S.unit }), [workouts, now, bodyweightKg, S.unit])
