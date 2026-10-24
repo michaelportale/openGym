@@ -2326,6 +2326,12 @@ body.fab-aside #tabbar button.start{opacity:0;pointer-events:none;visibility:hid
 .bw-trend-key{width:14px;height:3px;border-radius:2px;background:var(--acc);flex:none}
 .bw-trend-week{display:inline-flex;align-items:center;gap:2px;font-weight:600;color:var(--label)}
 
+/* Chart text (axis values, dates, the goal label) is text, so it gets text contrast, 4.5:1, not the
+   3:1 for graphics: 62% of the label colour over the card measures 4.96:1 or more in every theme,
+   light and dark (it was --label-3 at 1.73:1 and --label-2 at 3.44:1 in light mode). Mixed where
+   it is drawn, so it follows the surface it sits on. */
+.lc-text{fill:color-mix(in srgb,var(--label) 62%,var(--surface))}
+
 /* "Share your week" under the streak card, at its trailing edge like "All weigh-ins". */
 .week-recap-row{justify-content:flex-end;margin-top:-4px}
 /* Rotation streak card (components/StreakCard.jsx): no flame and no accent; chalk dots for rounds,
