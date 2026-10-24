@@ -2521,4 +2521,6 @@ export default {
   "Needs two weigh-ins within 30 days": "30 gün içinde iki tartım gerekir",
   "A light tap on iPhone": "iPhone'da hafif bir dokunuş",
   "On iPhone, Vibrate is a light tap when you tick a set (iOS 18 or later). The end of a rest still needs a sound or a flash.": "iPhone'da Titreşim, bir seti işaretlediğinde hafif bir dokunuştur (iOS 18 veya sonrası). Dinlenmenin bitişi için yine bir ses ya da ışık gerekir.",
+  "{0} session in a row": "Üst üste {0} seans",
+  "{0} sessions in a row": "Üst üste {0} seans",
 }

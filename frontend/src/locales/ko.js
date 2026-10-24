@@ -2521,4 +2521,6 @@ export default {
   "Needs two weigh-ins within 30 days": "30일 안에 체중 기록이 두 번 필요해요",
   "A light tap on iPhone": "iPhone에서는 가벼운 탭",
   "On iPhone, Vibrate is a light tap when you tick a set (iOS 18 or later). The end of a rest still needs a sound or a flash.": "iPhone에서는 세트를 체크할 때 진동이 가벼운 탭으로 울려요(iOS 18 이상). 휴식 종료는 여전히 소리나 깜빡임이 필요해요.",
+  "{0} session in a row": "{0}회 연속",
+  "{0} sessions in a row": "{0}회 연속",
 }

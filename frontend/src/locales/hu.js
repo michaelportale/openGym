@@ -2524,4 +2524,6 @@ export default {
   "Needs two weigh-ins within 30 days": "Két mérés kell 30 napon belül",
   "A light tap on iPhone": "Enyhe koppintás iPhone-on",
   "On iPhone, Vibrate is a light tap when you tick a set (iOS 18 or later). The end of a rest still needs a sound or a flash.": "iPhone-on a Rezgés egy enyhe koppintás, amikor kipipálsz egy sorozatot (iOS 18 vagy újabb). A pihenő végéhez továbbra is hang vagy villanás kell.",
+  "{0} session in a row": "{0} edzés egymás után",
+  "{0} sessions in a row": "{0} edzés egymás után",
 }

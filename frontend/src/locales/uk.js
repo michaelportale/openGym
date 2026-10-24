@@ -2518,4 +2518,6 @@ export default {
   "Needs two weigh-ins within 30 days": "Потрібно два зважування за 30 днів",
   "A light tap on iPhone": "Легкий відгук на iPhone",
   "On iPhone, Vibrate is a light tap when you tick a set (iOS 18 or later). The end of a rest still needs a sound or a flash.": "На iPhone вібрація — це легкий відгук, коли ви позначаєте підхід (iOS 18 і новіші). Для кінця відпочинку все ще потрібен звук або спалах.",
+  "{0} session in a row": "{0} тренування поспіль",
+  "{0} sessions in a row": {"one": "{0} тренування поспіль", "few": "{0} тренування поспіль", "many": "{0} тренувань поспіль", "other": "{0} тренування поспіль"},
 }

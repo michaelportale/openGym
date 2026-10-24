@@ -10,7 +10,7 @@
 //   sessions  one pill per rotation slot or planned day this week: { label, done, pr }
 //   sessionsLine "{n} of {N} sessions" over the pills
 //   recordValues each record's top weight this week and how far it passed the best before it
-//   lines     the streak ("14 sessions on rotation") and, only when asked for, the body weight
+//   lines     the streak ("14 sessions on rotation", or "14 sessions in a row" in Fixed Week) and, only when asked for, the body weight
 //   footer    "Made with openGym"
 import { workoutVolume, workoutVolumeIsPartial, workoutDay, doneUnits } from './history.js'
 import { isWarmupRow } from './workout-model.js'
@@ -107,7 +107,10 @@ export function weekRecapModel(workouts, { today, ws = MONDAY, unit, nameOf, S =
     const lines = []
     const streak = rotationStreak(S, today)
     if (streak && streak.count > 0 && streak.state !== 'broken') {
-      lines.push(tn('{0} session on rotation', '{0} sessions on rotation', streak.count))
+      // "on rotation" only in Rotation mode; a Fixed Week streak counts its planned sessions.
+      lines.push(streak.mode === 'rotation'
+        ? tn('{0} session on rotation', '{0} sessions on rotation', streak.count)
+        : tn('{0} session in a row', '{0} sessions in a row', streak.count))
     }
     if (bw && (S.bodyweight || []).length) {
       const trend = bwTrend(S.bodyweight.map(b => ({ t: b.t || new Date(b.d).getTime(), y: b.w })))
