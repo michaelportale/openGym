@@ -25,6 +25,9 @@
    motion                --fast, --med, --slow (below), --ease (index.css)
    ========================================================================== */
 :root {
+  /* A goal the user set (body-weight goal line and figure): neutral, never the PR gold. */
+  --goal: var(--label-2);
+
   /* Accent-coloured text and small glyphs. A palette darkens it in light mode where the fill
      colour is too faint to read as text (Ember: 5.3:1 on white); fills keep --acc. */
   --acc-text: var(--acc);

@@ -493,7 +493,7 @@ export default function Settings({ page = null, find = null, via = null }) {
           <Switch checked={S.weighIn !== false} onChange={v => update(s => { s.weighIn = v })} />
         </Row>
         {(wakeOK || !MOBILE) && (
-          <Row icon="phoneScreen" iconTint="var(--yellow)" title={t('Keep screen awake')}
+          <Row icon="phoneScreen" iconTint="var(--orange)" title={t('Keep screen awake')}
             subtitle={wakeOK ? t('The screen stays on while a workout is running, so you don’t have to unlock your phone between sets.') : t('Not supported in this browser.')}>
             <Switch checked={wakeOK && S.keepAwake !== false} disabled={!wakeOK}
               onChange={v => update(s => { s.keepAwake = v })} />
@@ -607,7 +607,7 @@ export default function Settings({ page = null, find = null, via = null }) {
               <Switch checked={!!S.vibrateOnSilent} onChange={v => update(s => { s.vibrateOnSilent = v })} />
             </Row>
           )}
-          <Row icon="sun" iconTint="var(--yellow)" title={t('Flash the screen')}>
+          <Row icon="sun" iconTint="var(--orange)" title={t('Flash the screen')}>
             <Switch checked={!!S.timerFlash} onChange={v => update(s => { s.timerFlash = v })} />
           </Row>
         </Section>

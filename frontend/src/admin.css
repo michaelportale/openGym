@@ -16,7 +16,7 @@
 }
 .adm-pill::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}
 .adm-pill.ok{background:color-mix(in srgb,var(--success) 16%,transparent);color:var(--success)}
-.adm-pill.warn{background:color-mix(in srgb,var(--yellow) 18%,transparent);color:var(--yellow)}
+.adm-pill.warn{background:color-mix(in srgb,var(--warning) 18%,transparent);color:var(--warning)}
 .adm-pill.bad{background:color-mix(in srgb,var(--danger) 16%,transparent);color:var(--danger)}
 .adm-pill.acc{background:var(--acc-soft);color:var(--acc-text)}
 

@@ -459,9 +459,9 @@ function ImportSummary({ parsed, close }) {
       </>}
     </div>
 
-    {parsed.mixedUnits ? <div className="small" style={{ color: 'var(--yellow)', marginBottom: 10 }}>
+    {parsed.mixedUnits ? <div className="small" style={{ color: 'var(--warning)', marginBottom: 10 }}>
       {t('The file mixes kg and lb, so each set is converted to {0}.', st.unit)}
-    </div> : parsed.converted ? <div className="small" style={{ color: 'var(--yellow)', marginBottom: 10 }}>
+    </div> : parsed.converted ? <div className="small" style={{ color: 'var(--warning)', marginBottom: 10 }}>
       {t('The file is in {0} and your profile is in {1}, so weights get converted.', parsed.fileUnit, st.unit)}
     </div> : null}
     {!isBW && !parsed.fileUnit && !parsed.mixedUnits && <div className="small dim" style={{ marginBottom: 10 }}>
@@ -761,7 +761,7 @@ function HevyImportSheet({ close }) {
     </div>}
     {!b.bodyweight.length && <div style={{ borderBottom: '1px solid var(--sep)', marginBottom: 8 }} />}
 
-    {(w.converted || r.converted) && <div className="small" style={{ color: 'var(--yellow)', marginBottom: 10 }}>
+    {(w.converted || r.converted) && <div className="small" style={{ color: 'var(--warning)', marginBottom: 10 }}>
       {t('Hevy stores weights in kg, so they’ll be converted to {0}.', st.unit)}
     </div>}
     {wantWorkouts && (w.rirSets + w.rpeSets) > 0 && <div className="small dim" style={{ marginBottom: 10 }}>
@@ -2400,7 +2400,7 @@ function PlanImport({ bundle, close }) {
         : ''}
     </div>
     <div className="dim small" style={{ marginBottom: 14, lineHeight: 1.4 }}>{t('These are added as new routines. Nothing you already have is touched.')}</div>
-    {bundle.dropped > 0 && <div className="small" style={{ color: 'var(--yellow)', marginBottom: 14, lineHeight: 1.4 }}>
+    {bundle.dropped > 0 && <div className="small" style={{ color: 'var(--warning)', marginBottom: 14, lineHeight: 1.4 }}>
       {t(bundle.dropped === 1
         ? '{0} exercise in the file isn’t in your library and was left out.'
         : '{0} exercises in the file aren’t in your library and were left out.', bundle.dropped)}
@@ -2676,7 +2676,7 @@ function WorkoutDetail({ w, close }) {
       <div className="grow"><div className={`tt ${exerciseNameClass(ex)}`} style={{ fontWeight: 600 }}>{nameOf(e)} {w.prs && w.prs.includes(e.id) && <span className="pr"><Icon name="trophy" />PR</span>}</div>
         <div className="ss">{e.sets.filter(hasCompletedWork).map(s => setLabel(e.id, s, { ...e.target, equipmentSnapshot: e.equipmentSnapshot }, speedUnitOf(st))).join('  ·  ') || t('no sets')}</div>
         {e.note && <div className="small dim" style={{ marginTop: 3 }}>
-          {e.notePin && <Icon name="pin" style={{ fontSize: 12, marginInlineEnd: 4, verticalAlign: '-1px', color: 'var(--yellow)' }} />}{e.note}
+          {e.notePin && <Icon name="pin" style={{ fontSize: 12, marginInlineEnd: 4, verticalAlign: '-1px', color: 'var(--warning)' }} />}{e.note}
         </div>}</div>
       <Icon name="chevronRight" className="chev" style={{ alignSelf: 'center' }} />
     </div>
@@ -3237,7 +3237,7 @@ function ExerciseNote({ entryIdx, close }) {
       onFocus={onNoteFocus} onChange={e => setNote(e.target.value)} />
     <div style={{ height: 10 }} />
     <div className="sect-b">
-      <Row icon="pin" iconTint="var(--yellow)" title={t('Show this next time')}
+      <Row icon="pin" iconTint="var(--warning)" title={t('Show this next time')}
         subtitle={t('Brings it up again the next time you train this exercise.')}>
         <Switch checked={pin} onChange={setPin} disabled={!note.trim()} />
       </Row>

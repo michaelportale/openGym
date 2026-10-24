@@ -676,7 +676,7 @@ function ExerciseBlock({ entryIdx, compact, dense, editing, onToggle, onToggleSi
         session. Today's own note is edited through the button in the header and shown last. */}
     {cfg.note && <div className="exnote">{cfg.note}</div>}
     {standingNote && <div className="exnote"><Icon name="info" style={{ fontSize: 13, marginInlineEnd: 5, verticalAlign: '-2px' }} />{standingNote}</div>}
-    {pinnedNote && <div className="exnote" style={{ color: 'var(--yellow)' }}>
+    {pinnedNote && <div className="exnote" style={{ color: 'var(--warning)' }}>
       <Icon name="pin" style={{ fontSize: 13, marginInlineEnd: 5, verticalAlign: '-2px' }} />
       {t('From {0}:', fmtDate(pinnedNote.d, true))} {pinnedNote.note}
     </div>}
