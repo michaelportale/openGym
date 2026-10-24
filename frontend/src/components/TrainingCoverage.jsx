@@ -8,14 +8,15 @@ import { t } from '../lib/i18n.js'
 import { Button, NumberField, Segmented, SelectRow } from './ui.jsx'
 
 const ROLE_NAMES = ['Horizontal press', 'Vertical press', 'Horizontal pull', 'Vertical pull', 'Squat', 'Hinge', 'Chest isolation', 'Shoulder isolation', 'Elbow flexion', 'Elbow extension', 'Knee flexion', 'Knee extension', 'Calf raise', 'Core']
-// The "could not be counted" lines, as [string key, count], leaving out the zeroes.
+// The "could not be counted" lines, as [field, text], leaving out the zeroes. Each line is a
+// literal t() call so the source-string check sees every key.
 const UNKNOWN_LINES = [
-  ['targetSets', 'Sets with unknown targets: {0}'], ['roleSets', 'Sets with unknown role: {0}'],
-  ['phaseRows', 'Rows with unknown working-set status: {0}'], ['completionRows', 'Rows with unknown completion: {0}'],
-  ['partialRows', 'Partially completed limb rows: {0}'], ['dateSessions', 'Sessions without known dates: {0}'],
-  ['prescriptionEntries', 'Entries without known set counts: {0}'], ['acceptanceSessions', 'Sessions with unknown cycle timing: {0}'],
+  ['targetSets', n => t('Sets with unknown targets: {0}', n)], ['roleSets', n => t('Sets with unknown role: {0}', n)],
+  ['phaseRows', n => t('Rows with unknown working-set status: {0}', n)], ['completionRows', n => t('Rows with unknown completion: {0}', n)],
+  ['partialRows', n => t('Partially completed limb rows: {0}', n)], ['dateSessions', n => t('Sessions without known dates: {0}', n)],
+  ['prescriptionEntries', n => t('Entries without known set counts: {0}', n)], ['acceptanceSessions', n => t('Sessions with unknown cycle timing: {0}', n)],
 ]
-export const unknownLines = u => UNKNOWN_LINES.filter(([k]) => u?.[k] > 0).map(([k, key]) => [key, u[k]])
+export const unknownLines = u => UNKNOWN_LINES.filter(([k]) => u?.[k] > 0).map(([k, line]) => [k, line(u[k])])
 export const hasUnknowns = unknowns => ['actual', 'planned'].some(kind => unknownLines(unknowns?.[kind]).length > 0)
 function Counts({ value, planned, cycle }) {
   return <div className="coverage-counts small">
@@ -73,7 +74,7 @@ export default function TrainingCoverage({ S }) {
         lines that are not zero: a list of zeroes read as a list of problems. */}
     {hasUnknowns(data.unknowns) && <details className="coverage-extra"><summary>{t('Sets that could not be counted')}</summary>
       {['actual', 'planned'].filter(kind => unknownLines(data.unknowns[kind]).length).map(kind => <div className="small" key={kind}><strong>{kind === 'actual' ? t('Completed records') : t('Planned records')}</strong>
-        {unknownLines(data.unknowns[kind]).map(([key, n]) => <div key={key}>{t(key, n)}</div>)}
+        {unknownLines(data.unknowns[kind]).map(([k, text]) => <div key={k}>{text}</div>)}
       </div>)}
     </details>}
     <p className="sect-f">{t('A set where a muscle only helps counts as half a set.')}</p>
