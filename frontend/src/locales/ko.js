@@ -2493,4 +2493,5 @@ export default {
   "A pause freezes your streak until you are back. Each finished round banks a rest pass (up to {0}) that covers one long gap.": "일시 중지하면 돌아올 때까지 연속 기록이 멈춰요. 한 바퀴를 마칠 때마다 긴 공백 한 번을 메워 주는 휴식권이 쌓여요(최대 {0}개).",
   "Aim to finish a round every": "한 바퀴 완료 목표 주기",
   "{0} days": "{0}일",
+  "sessions": "세션",
 }

@@ -2496,4 +2496,5 @@ export default {
   "A pause freezes your streak until you are back. Each finished round banks a rest pass (up to {0}) that covers one long gap.": "A szünet befagyasztja a sorozatot, amíg vissza nem térsz. Minden befejezett kör ad egy pihenőjegyet (legfeljebb {0}), ami egy hosszabb kihagyást fed le.",
   "Aim to finish a round every": "Cél: egy kör ennyi naponta",
   "{0} days": "{0} nap",
+  "sessions": "edzés",
 }

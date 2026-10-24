@@ -2548,4 +2548,5 @@ export default {
   "A pause freezes your streak until you are back. Each finished round banks a rest pass (up to {0}) that covers one long gap.": "يجمّد الإيقاف المؤقت سلسلتك حتى تعود. كل جولة مكتملة تمنحك تصريح راحة (حتى {0}) يغطي فجوة طويلة واحدة.",
   "Aim to finish a round every": "اهدف إلى إنهاء جولة كل",
   "{0} days": "{0} أيام",
+  "sessions": "جلسات",
 }
