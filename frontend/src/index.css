@@ -1833,6 +1833,9 @@ body.no-tabbar.resting #toast{bottom:calc(100px + var(--sab))}
 }
 .workout-swipe-surface{touch-action:pan-y}
 .workout-swipe-stack{position:relative;isolation:isolate;overflow:hidden}
+/* clip, where supported, also stops the stack being a scroll box: the ⋯ button's 6px hit area
+   overhangs the card, and scrollIntoView on a set row scrolled the stack sideways by it */
+@supports (overflow:clip){.workout-swipe-stack{overflow:clip}}
 .workout-swipe-stack>.workout-swipe-card,.workout-swipe-stack>.workout-swipe-preview{min-width:0}
 .workout-swipe-card{position:relative;z-index:2;background:var(--bg)}
 .workout-swipe-preview{position:absolute;z-index:1;top:0;inset-inline-start:0;width:100%;pointer-events:none;background:var(--bg)}
