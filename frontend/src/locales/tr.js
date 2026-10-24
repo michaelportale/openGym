@@ -2464,4 +2464,10 @@ export default {
   "<1 min": "<1 dk",
   "all working": "hepsi çalışma seti",
   "{0} working": "{0} çalışma seti",
+  "Show all {0}": "Tümünü göster ({0})",
+  "Show fewer": "Daha az göster",
+  "{0} muscle on target": "Hedefteki kaslar: {0}",
+  "{0} muscles on target": "Hedefteki kaslar: {0}",
+  "Train a few sessions to see coverage": "Kapsamı görmek için birkaç antrenman yap",
+  "Set coverage aims": "Kapsam hedeflerini belirle",
 }

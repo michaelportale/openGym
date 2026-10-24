@@ -93,8 +93,8 @@ it('Home shows one bar per muscle and opens the full report, aims editor include
   expect(glance.querySelector('details')).toBeNull()
   const bar = name => [...glance.querySelectorAll('.coverage-bar')].find(b => b.querySelector('.coverage-bar-n').textContent === name)
   expect(bar('Chest').querySelector('.coverage-bar-v').textContent).toBe('1 / 4')
-  expect(bar('Triceps').querySelector('.coverage-bar-v').textContent).toBe('0.5 / 2')
-  act(() => glance.click())
+  expect(bar('Triceps').querySelector('.coverage-bar-v').textContent).toBe('≈1 / 2')
+  act(() => glance.querySelector('.coverage-glance-h').click())
   const sheets = useUI.getState().sheets
   expect(sheets.length).toBe(1)
   act(() => root.render(<>{sheets[0].render(() => {})}</>))
@@ -107,6 +107,33 @@ it('Home leaves the glance out when nothing was done or planned in the last 7 da
   useStore.setState({ S: { ...freshState(), routines: [], week: {}, workouts: [] } })
   render(Home)
   expect(host.querySelector('.coverage-glance')).toBeNull()
+})
+
+it('Home folds muscles on target into one line and lists at most six rows, behind first', () => {
+  const st = S()
+  const many = [1, 2, 3, 4]
+  st.routines = [{ id: 'push', name: 'Push', ex: [{ id: '0047', sets: 4 }] }]
+  st.workouts = [{ id: 'w', d: todayISO(), entries: [
+    { id: 'a', trainingSnapshot: { primary: ['chest'], secondary: [], role: 'horizontal-press', status: 'manual' }, sets: many.map(() => ({ done: true })) },
+    ...['quads', 'hamstrings', 'glutes', 'calves', 'lats', 'biceps', 'abs'].map(m => ({ id: m, trainingSnapshot: { primary: [m], secondary: [], role: null, status: 'manual' }, sets: [{ done: true }] })),
+  ] }]
+  useStore.setState({ S: st }); render(Home)
+  const glance = host.querySelector('.coverage-glance')
+  expect(glance.querySelectorAll('.coverage-bar').length).toBe(6)
+  expect(glance.querySelector('.coverage-met').textContent).toBe('1 muscle on target')
+  const more = glance.querySelector('.coverage-more')
+  const n = Number(/^Show all (\d+)$/.exec(more.textContent)[1])
+  expect(n).toBeGreaterThan(6)
+  act(() => more.click())
+  expect(glance.querySelectorAll('.coverage-bar').length).toBe(n)
+  expect(more.textContent).toBe('Show fewer')
+})
+it('the full report, with nothing counted yet, says what fills in and opens the aims', () => {
+  useStore.setState({ S: { ...freshState(), routines: [], week: {}, workouts: [] } })
+  render(Plan)
+  expect(card().textContent).toContain('Train a few sessions to see coverage')
+  act(() => button('Set coverage aims').click())
+  expect(card().querySelector('.coverage-targets').open).toBe(true)
 })
 
 describe('coverage unknowns', () => {

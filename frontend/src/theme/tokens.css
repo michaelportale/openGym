@@ -25,6 +25,9 @@
    motion                --fast, --med, --slow (below), --ease (index.css)
    ========================================================================== */
 :root {
+  /* The backplate of a progress bar: visible but quiet. Ember dark sets its own (#4A443D). */
+  --track: var(--surface-3);
+
   /* A goal the user set (body-weight goal line and figure): neutral, never the PR gold. */
   --goal: var(--label-2);
 

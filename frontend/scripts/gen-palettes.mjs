@@ -35,6 +35,8 @@ export function paletteCss(p) {
     '--label': t.text1, '--label-2': t.text2, '--label-3': t.text3,
     '--label-4': `color-mix(in srgb, ${t.text1} 18%, transparent)`,
     '--sep': t.line, '--sep-op': `color-mix(in srgb, ${t.line} 70%, transparent)`,
+    // a progress bar's backplate, when the palette names one (otherwise tokens.css: --surface-3)
+    ...(t.track ? { '--track': t.track } : {}),
   }
   const status = {
     '--success': t.success, '--on-success': inkOn(mix(t.success, t.surface, 0.3)),

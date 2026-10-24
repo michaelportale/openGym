@@ -2467,4 +2467,10 @@ export default {
   "<1 min": "<1 perc",
   "all working": "mind munkasorozat",
   "{0} working": "{0} munkasorozat",
+  "Show all {0}": "Mind a(z) {0} mutatása",
+  "Show fewer": "Kevesebb",
+  "{0} muscle on target": "Célban lévő izmok: {0}",
+  "{0} muscles on target": "Célban lévő izmok: {0}",
+  "Train a few sessions to see coverage": "Edz néhány alkalmat, hogy lásd a lefedettséget",
+  "Set coverage aims": "Lefedettségi célok beállítása",
 }

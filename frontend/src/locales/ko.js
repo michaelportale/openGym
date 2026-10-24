@@ -2464,4 +2464,10 @@ export default {
   "<1 min": "1분 미만",
   "all working": "모두 본세트",
   "{0} working": "본세트 {0}",
+  "Show all {0}": "{0}개 모두 보기",
+  "Show fewer": "간략히 보기",
+  "{0} muscle on target": "목표 달성 근육 {0}개",
+  "{0} muscles on target": "목표 달성 근육 {0}개",
+  "Train a few sessions to see coverage": "몇 번 운동하면 커버리지가 보여요",
+  "Set coverage aims": "커버리지 목표 설정",
 }

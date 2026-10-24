@@ -2464,4 +2464,10 @@ export default {
   "<1 min": "<1 मिनट",
   "all working": "सभी वर्किंग सेट",
   "{0} working": "{0} वर्किंग",
+  "Show all {0}": "सभी {0} दिखाएँ",
+  "Show fewer": "कम दिखाएँ",
+  "{0} muscle on target": "लक्ष्य पर मांसपेशियाँ: {0}",
+  "{0} muscles on target": "लक्ष्य पर मांसपेशियाँ: {0}",
+  "Train a few sessions to see coverage": "कवरेज देखने के लिए कुछ सेशन करें",
+  "Set coverage aims": "कवरेज लक्ष्य तय करें",
 }
