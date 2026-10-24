@@ -157,8 +157,8 @@ export default function CoachChat() {
     <h3>{t('Coach')}</h3>
     <div className="sect-b">
       {idle && <Row icon="sparkles" iconTint="var(--acc)" title={t('Ask for a review')} subtitle={t('What would the Coach change after your last sessions?')} accessory="chevron" onClick={() => { close(); askReview() }} />}
-      {idle && !!lastWorkout && <Row icon="checkCircle" iconTint="var(--green)" title={t('Review my last workout')} subtitle={t('What went well, what to watch, what to do next time')} accessory="chevron" onClick={() => { close(); askDebrief() }} />}
-      {idle && !!(S.routines || []).length && <Row icon="wrench" iconTint="var(--orange)" title={t('Improve a routine')} subtitle={t('Pick one; the Coach works on just that')} accessory="chevron" onClick={() => { close(); pickRoutine() }} />}
+      {idle && !!lastWorkout && <Row icon="checkCircle" iconTint="var(--success)" title={t('Review my last workout')} subtitle={t('What went well, what to watch, what to do next time')} accessory="chevron" onClick={() => { close(); askDebrief() }} />}
+      {idle && !!(S.routines || []).length && <Row icon="wrench" iconTint="var(--warning)" title={t('Improve a routine')} subtitle={t('Pick one; the Coach works on just that')} accessory="chevron" onClick={() => { close(); pickRoutine() }} />}
       {community && <Row icon="person" iconTint="var(--teal)" title={t('Compare with others here')} subtitle={t('Anonymous medians from this instance')} accessory="chevron" onClick={() => { close(); showCohort() }} />}
       <Row icon="history" iconTint="var(--blue)" title={t('Everything the Coach proposed')} subtitle={t('Plans, suggestions and debriefs, kept')} accessory="chevron" onClick={() => { close(); showHistory() }} />
       {idle && <Row icon="clipboard" iconTint="var(--indigo)" title={t('Start a new plan')} subtitle={t('A fresh plan from your answers; your workouts stay')} accessory="chevron" onClick={() => { close(); askNewPlan() }} />}
@@ -545,7 +545,7 @@ function DebriefBody({ p, S }) {
         </div>)}
       </div>}
     </div>}
-    <DebriefList icon="checkCircle" tint="var(--green)" title={t('What went well')} items={p.highlights} />
+    <DebriefList icon="checkCircle" tint="var(--success)" title={t('What went well')} items={p.highlights} />
     <DebriefList icon="warning" tint="var(--yellow)" title={t('Worth watching')} items={p.watch} />
     <DebriefList icon="arrowUp" tint="var(--acc)" title={t('Next time')} items={p.nextTime} />
   </>
@@ -624,7 +624,7 @@ function ProposalDetail({ entry, S }) {
       <div className="pcard-eyebrow">{kind === 'create' ? t('Plan') : kind === 'debrief' ? t('Workout debrief') : t('Suggestions')} · {fmtDate(new Date(entry.at).toISOString().slice(0, 10))}</div>
       <h2 className="pcard-h">{kind === 'create' ? (b?.name || t('Coach plan')) : kind === 'debrief' ? (entry.workout?.name || t('Workout')) : tn('{0} suggestion', '{0} suggestions', entry.decisions?.length || 0)}</h2>
       {!!entry.summary && <p className="pcard-sum">{entry.summary}</p>}
-      {entry.dismissed && <p className="pcard-sum" style={{ color: 'var(--red)' }}>{t('You declined this.')}</p>}
+      {entry.dismissed && <p className="pcard-sum" style={{ color: 'var(--danger)' }}>{t('You declined this.')}</p>}
       {!!entry.evidence?.sessions && <p className="pcard-sum" style={{ fontSize: 13 }}>
         {t('Based on your last {0} sessions', entry.evidence.sessions)}{entry.evidence.from ? ` · ${fmtDate(entry.evidence.from)} – ${fmtDate(entry.evidence.to)}` : ''}
       </p>}
@@ -656,7 +656,7 @@ function ProposalDetail({ entry, S }) {
 /** Every proposal ever made, newest first. Nothing the Coach said is gone after a decision. */
 function HistorySheet({ S, close, openSheet }) {
   const log = [...(S.coach?.log || [])].reverse()
-  const icon = { create: ['clipboard', 'var(--indigo)'], review: ['sparkles', 'var(--acc)'], debrief: ['checkCircle', 'var(--green)'], revert: ['reset', 'var(--blue)'] }
+  const icon = { create: ['clipboard', 'var(--indigo)'], review: ['sparkles', 'var(--acc)'], debrief: ['checkCircle', 'var(--success)'], revert: ['reset', 'var(--blue)'] }
   return <div className="chat-menu">
     <h3>{t('Everything the Coach proposed')}</h3>
     {!log.length && <div className="chat-empty">{t('Nothing yet. Every plan, suggestion and debrief will be kept here, whether you said yes or no.')}</div>}
@@ -764,7 +764,7 @@ function CadenceSheet({ update }) {
           { value: 'every', label: t('After every few workouts'), subtitle: t('As soon as you have logged enough') }
         ]} />
       {mode === 'weekly' && <>
-        <SelectRow icon="calendar" iconTint="var(--orange)" title={t('Day')} value={cadence.weekly.day}
+        <SelectRow icon="calendar" iconTint="var(--warning)" title={t('Day')} value={cadence.weekly.day}
           onChange={v => patch(c => { c.cadence = { weekly: { ...c.cadence.weekly, day: v } } })}
           options={['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((d, i) => ({ value: i, label: t(d) }))} />
         <Row icon="clock" iconTint="var(--purple)" title={t('Time')}>

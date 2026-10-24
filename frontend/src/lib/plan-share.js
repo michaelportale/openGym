@@ -21,6 +21,8 @@ import { t, exerciseNameFor, exerciseNameClass, getLang, RTL_LANGS } from './i18
 import { convertWeight } from './units.js'
 import { fmtSpeed, speedUnitOf } from './speed.js'
 import { MUSCLES, inMuscleOrder } from './muscles.js'
+import { contrast, mix } from './accent.js'
+import { PALETTE_ACCENT, paletteKey } from '../theme/palettes.js'
 
 const PLAN_FMT = 1
 const WEEK_DAYS = [1, 2, 3, 4, 5, 6, 0]   // every getDay() index; only the reader's own
@@ -398,12 +400,23 @@ function weekHTML(S) {
   return `<div class="week">${rows}</div>`
 }
 
+// The print page is white whatever the app's theme, so its accent is the palette's, moved toward
+// black until it reads at 5.3:1 on white (text). The superset rule is that ink lifted a quarter
+// toward white, so it stays visible even when the palette's accent is itself near white (Chalk).
+export function printAccent(S) {
+  const acc = PALETTE_ACCENT[paletteKey(S)]
+  let ink = acc
+  for (let k = 1; contrast(ink, '#ffffff') < 5.3 && k <= 100; k++) ink = mix(acc, '#000000', k / 100)
+  return { ink, rule: mix(ink, '#ffffff', 0.25) }
+}
+
 /**
  * Full self-contained HTML for the print/PDF view. With `routineId` it is that one routine on
  * its own page (#282) — the session you take to the gym, not the week around it — so the week
  * schedule is left out and the routine's name is the page title.
  */
 export function planPrintHTML(S, owner, { routineId } = {}) {
+  const pa = printAccent(S)
   const unit = S.unit || 'kg'
   const single = routineId ? (S.routines || []).find(r => r.id === routineId) || null : null
   const routines = routineId ? [single].filter(Boolean) : (S.routines || []).filter(r => r.ex && r.ex.length)
@@ -418,6 +431,7 @@ export function planPrintHTML(S, owner, { routineId } = {}) {
   return `<!doctype html><html lang="${getLang()}" dir="${RTL_LANGS.has(getLang()) ? 'rtl' : 'ltr'}"><head><meta charset="utf-8">
 <title>${esc(title)}</title>
 <style>
+  /* Print colours are fixed (the page is white); the accent ones come from printAccent. */
   @page { margin: 16mm 15mm; }
   * { box-sizing: border-box; }
   html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -428,7 +442,7 @@ export function planPrintHTML(S, owner, { routineId } = {}) {
   }
   .doc { max-width: 720px; margin: 0 auto; }
   header { border-bottom: 2px solid #16181d; padding-bottom: 12px; margin-bottom: 20px; }
-  header .kicker { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: #6a7a3a; font-weight: 700; }
+  header .kicker { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: ${pa.ink}; font-weight: 700; }
   header h1 { font-size: 27px; letter-spacing: -.02em; margin: 3px 0 0; }
   header .sub { color: #6b7180; font-size: 13px; margin-top: 4px; }
 
@@ -458,8 +472,8 @@ export function planPrintHTML(S, owner, { routineId } = {}) {
   .ex-note { color: #6a7080; font-size: 12px; margin-top: 2px; }
   .ex.empty, .none { color: #a2a8b6; }
 
-  .ss { break-inside: avoid; page-break-inside: avoid; border-inline-start: 3px solid #cfe08a; padding-inline-start: 12px; margin: 4px 0; }
-  .ss-tag { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: #6a7a3a; font-weight: 700; padding-top: 4px; }
+  .ss { break-inside: avoid; page-break-inside: avoid; border-inline-start: 3px solid ${pa.rule}; padding-inline-start: 12px; margin: 4px 0; }
+  .ss-tag { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: ${pa.ink}; font-weight: 700; padding-top: 4px; }
   .ss .ex:first-of-type { padding-top: 2px; }
 
   footer { margin-top: 26px; padding-top: 10px; border-top: 1px solid #eef0f4; color: #a2a8b6; font-size: 11px; text-align: center; }

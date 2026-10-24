@@ -250,7 +250,7 @@ export default function AdminCoach() {
             })}>Remove</Button>
           </div>
         </> : <>
-          {authState === 'unreadable' && <div className="adm-hint" style={{ color: 'var(--red)' }}>
+          {authState === 'unreadable' && <div className="adm-hint" style={{ color: 'var(--danger)' }}>
             The stored credential can't be decrypted. This usually means <code>./data</code> was restored without its <code>secret</code> file. Add the key again to fix it.
           </div>}
           {authState === 'optional' && <div className="adm-hint">This endpoint works without a key. Add one only if your server asks for it (OpenRouter does; a model on your own network usually does not).</div>}
@@ -305,7 +305,7 @@ export default function AdminCoach() {
         </div>}
         <div className="adm-kv" style={{ marginTop: 10 }}>
           <span className="k">Runtime</span>
-          <span className="v">{d.runtime.ok ? <span className="adm-pill ok">ready</span> : <span className="adm-pill bad">missing</span>}{d.runtime.version ? <div className="dim small">{d.runtime.version}</div> : null}{!d.runtime.ok && d.runtime.error ? <div className="small" style={{ color: 'var(--red)' }}>{d.runtime.error}</div> : null}</span>
+          <span className="v">{d.runtime.ok ? <span className="adm-pill ok">ready</span> : <span className="adm-pill bad">missing</span>}{d.runtime.version ? <div className="dim small">{d.runtime.version}</div> : null}{!d.runtime.ok && d.runtime.error ? <div className="small" style={{ color: 'var(--danger)' }}>{d.runtime.error}</div> : null}</span>
         </div>
       </Step>
 
@@ -349,7 +349,7 @@ export default function AdminCoach() {
 
           <div className="adm-group-t" style={{ marginTop: 14 }}>Isolation</div>
           <div className="adm-hint">{d.unprivileged && !d.unprivileged.ok
-            ? <span style={{ color: 'var(--red)' }}>Jobs are blocked: {d.unprivileged.why}. Nothing runs until this is fixed.</span>
+            ? <span style={{ color: 'var(--danger)' }}>Jobs are blocked: {d.unprivileged.why}. Nothing runs until this is fixed.</span>
             : d.unprivileged?.dropped
               ? 'Jobs run as a separate unprivileged user that cannot read your data directory or secrets.'
               : d.unprivileged?.why?.includes('no child process')
@@ -377,7 +377,7 @@ export default function AdminCoach() {
           <div className="adm-group-t">Recent jobs</div>
           {d.recent?.length ? <div className="adm-log">
             {d.recent.slice(0, 10).map((e, i) => <div key={i} className="adm-log-row">
-              <span>{e.kind === 'create' ? 'Plan' : 'Review'}{e.trigger === 'scheduled' ? ' · scheduled' : ''} · <span style={{ color: e.outcome === 'failed' ? 'var(--red)' : e.outcome === 'ready' ? 'var(--acc)' : 'var(--label-2)' }}>{e.outcome}</span>{e.ms ? ' · ' + Math.round(e.ms / 1000) + ' s' : ''}</span>
+              <span>{e.kind === 'create' ? 'Plan' : 'Review'}{e.trigger === 'scheduled' ? ' · scheduled' : ''} · <span style={{ color: e.outcome === 'failed' ? 'var(--danger)' : e.outcome === 'ready' ? 'var(--acc)' : 'var(--label-2)' }}>{e.outcome}</span>{e.ms ? ' · ' + Math.round(e.ms / 1000) + ' s' : ''}</span>
               <span className="when">{rel(e.at)}</span>
             </div>)}
           </div> : <div className="adm-empty">No jobs yet.</div>}

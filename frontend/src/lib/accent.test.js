@@ -4,6 +4,7 @@ import { ACCENTS } from './format.js'
 import {
   cleanHex, sanitizeAccent, accentKey, accentValue, contrast, inkOn, readableIn, adjustedIn,
   customAccentVars, accentPair, applyAccent, THEMES, isGrey, inkOnBoth, mix, GREY_TEXT, GREY_GAP,
+  THEME, DEFAULT_ACCENT, ACCENT_VERSION,
 } from './accent.js'
 import { mergeStates, stampChange } from './sync-merge.js'
 
@@ -24,8 +25,8 @@ describe('sanitizeAccent', () => {
   })
   it('keeps an unknown preset word (a newer app’s) but not junk', () => {
     expect(sanitizeAccent({ accent: 'mint' }).accent).toBe('mint')
-    expect(sanitizeAccent({ accent: '"><script>' }).accent).toBe('lime')
-    expect(sanitizeAccent({ accent: 42 }).accent).toBe('lime')
+    expect(sanitizeAccent({ accent: '"><script>' }).accent).toBe(DEFAULT_ACCENT)
+    expect(sanitizeAccent({ accent: 42 }).accent).toBe(DEFAULT_ACCENT)
     expect(sanitizeAccent({ theme: 'dark' })).toEqual({ theme: 'dark' })
   })
 })
@@ -33,11 +34,11 @@ describe('sanitizeAccent', () => {
 describe('accentKey / accentValue', () => {
   it('draws a preset, the own colour, or the default', () => {
     expect(accentKey({ accent: 'sky' })).toBe('sky')
-    expect(accentKey({})).toBe('lime')
-    expect(accentKey({ accent: 'mint' })).toBe('lime')
-    expect(accentKey({ accent: 'toString' })).toBe('lime')
-    expect(accentKey({ accent: 'custom' })).toBe('lime')
-    expect(accentKey({ accent: 'custom', accentCustom: 'nope' })).toBe('lime')
+    expect(accentKey({})).toBe(DEFAULT_ACCENT)
+    expect(accentKey({ accent: 'mint' })).toBe(DEFAULT_ACCENT)
+    expect(accentKey({ accent: 'toString' })).toBe(DEFAULT_ACCENT)
+    expect(accentKey({ accent: 'custom' })).toBe(DEFAULT_ACCENT)
+    expect(accentKey({ accent: 'custom', accentCustom: 'nope' })).toBe(DEFAULT_ACCENT)
     expect(accentValue({ accent: 'custom', accentCustom: '#123ABC' })).toBe('#123abc')
     // the own colour is kept while a preset is the accent
     expect(accentValue({ accent: 'red', accentCustom: '#123abc' })).toBe('red')
@@ -175,7 +176,7 @@ describe('CSS for the own colour', () => {
     expect(el.style.getPropertyValue('--acc')).toBe('')
     expect(el.style.getPropertyValue('--knob-ring')).toBe('')
     applyAccent(el, 'url(x)', 'dark')
-    expect(el.dataset.accent).toBe('lime')
+    expect(el.dataset.accent).toBe(DEFAULT_ACCENT)
   })
 })
 
@@ -215,7 +216,7 @@ describe('sync with an app from before own colours', () => {
     const theirs = { ...base, _ts: 20, accent: 'custom', accentCustom: '#fff;}*{color:red' }
     const out = mergeStates(mine, theirs)
     expect('accentCustom' in out).toBe(false)
-    expect(accentValue(out)).toBe('lime')
+    expect(accentValue(out)).toBe(DEFAULT_ACCENT)
   })
 })
 
@@ -237,5 +238,53 @@ describe('an own colour and a preset picked on two devices', () => {
     const A = change(base, T + 1000, s => { s.accent = 'custom'; s.accentCustom = '#00aa00' })
     const B = change(base, T + 4000, s => { s.accent = 'sky' })
     for (const out of [mergeStates(A, B), mergeStates(B, A)]) expect(out.accent).toBe('sky')
+  })
+})
+
+describe('the palette accent as the default', () => {
+  it('is the default key', () => {
+    expect(DEFAULT_ACCENT).toBe(THEME)
+    expect(accentKey({ accent: THEME })).toBe(THEME)
+  })
+  it('moves the old default green to the palette accent once', () => {
+    expect(sanitizeAccent({ accent: 'lime' })).toEqual({ accent: THEME, accentV: ACCENT_VERSION })
+  })
+  it('keeps a green picked after the change', () => {
+    const s = { accent: 'lime', accentV: ACCENT_VERSION }
+    expect(sanitizeAccent({ ...s })).toEqual(s)
+  })
+  it('leaves other presets and own colours alone', () => {
+    expect(sanitizeAccent({ accent: 'sky' })).toEqual({ accent: 'sky' })
+    expect(sanitizeAccent({ accent: 'custom', accentCustom: '#30d158' })).toEqual({ accent: 'custom', accentCustom: '#30d158' })
+  })
+  it('gives the native countdown the palette colour for the palette accent', () => {
+    expect(accentPair(THEME, '#ff6b35')).toEqual({ accent: '#ff6b35', ink: inkOn('#ff6b35') })
+    expect(accentPair('sky', '#ff6b35').accent).toBe(ACCENTS.sky)
+    expect(accentPair(THEME, 'nope').accent).toBe(ACCENTS.lime)
+  })
+})
+
+describe('the old default green across a sync', () => {
+  const base = { _ts: 10, unit: 'kg', workouts: [], routines: [] }
+  it('a copy migrated here and an unmigrated server copy merge to the palette accent', () => {
+    const here = { ...base, _ts: 10, accent: THEME, accentV: ACCENT_VERSION }
+    const server = { ...base, _ts: 20, accent: 'lime' }
+    for (const out of [mergeStates(here, server), mergeStates(server, here)]) {
+      expect(out.accent).toBe(THEME)
+      expect(out.accentV).toBe(ACCENT_VERSION)
+    }
+  })
+  it('green picked after the change still wins over an unmigrated copy', () => {
+    const T = 1_800_000_000_000
+    const prev = { ...base, _ts: T, accent: THEME, accentV: ACCENT_VERSION }
+    const next = { ...prev, accent: 'lime' }
+    next._ts = stampChange(prev, next, T + 1000)
+    const old = { ...base, _ts: T - 1000, accent: 'lime' }
+    for (const out of [mergeStates(next, old), mergeStates(old, next)]) expect(out.accent).toBe('lime')
+  })
+  it('does not touch the copies it is given', () => {
+    const server = { ...base, accent: 'lime' }
+    mergeStates({ ...base, accent: THEME, accentV: ACCENT_VERSION }, server)
+    expect(server).toEqual({ ...base, accent: 'lime' })
   })
 })

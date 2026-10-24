@@ -279,7 +279,7 @@ function Schedule({ S, update, nav, mode }) {
     <Section className="plan-mode" footer={mode === 'rotation'
       ? t('Routines in a loop. Whatever is next stays next until you train it, whatever the day.')
       : t('The same routines on the same weekdays, every week.')}>
-      <Row icon="repeat" iconTint="var(--orange)" title={t('How you train')}>
+      <Row icon="repeat" iconTint="var(--warning)" title={t('How you train')}>
         {/* A planner's own queue is not this app's to switch off: text, not a control. */}
         {external
           ? <span className="small dim plan-mode-locked">{t('Rotation')} · {t('Externally managed')}</span>

@@ -34,7 +34,7 @@ export const looksLikeEmail = s => {
 const ui = () => useUI.getState()
 const toast = m => ui().toast(m)
 const length = s => [...String(s || '')].length
-const errStyle = { color: 'var(--red)', marginTop: 10 }
+const errStyle = { color: 'var(--danger)', marginTop: 10 }
 
 // "in 5 minutes" in the UI language, for how long a pause (429, Retry-After) still lasts.
 function fmtIn(sec) {
@@ -322,7 +322,7 @@ export function PasswordRow({ version = 0 }) {
     : st.set ? t('Set · sign in as “{0}”', st.name)
     : t('Not set. Handy for signing in where passkeys don’t work.')
   return <>
-    <Row icon="key" iconTint="var(--orange)" title={t('Password')} subtitle={subtitle} accessory={blocked ? 'none' : 'chevron'}
+    <Row icon="key" iconTint="var(--warning)" title={t('Password')} subtitle={subtitle} accessory={blocked ? 'none' : 'chevron'}
       onClick={blocked ? undefined : () => ui().openSheet(close => <PasswordSheet status={st} close={close} done={load} />)} />
     {/* The server only signs in by an address that belongs to a profile with a password, so
         without one the row is left out; one already saved stays reachable to change or remove. */}

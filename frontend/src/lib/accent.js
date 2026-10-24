@@ -1,6 +1,6 @@
 // The accent colour: one of the presets (lib/format.js ACCENTS) or a colour of the user's own.
 //
-// Stored as two synced settings: `accent` names the choice ('lime', 'sky', … or 'custom') and
+// Stored as two synced settings: `accent` names the choice ('theme', 'lime', 'sky', … or 'custom') and
 // `accentCustom` keeps the user's own colour as '#rrggbb', also while a preset is picked, so
 // going back to it brings the same colour back. An app from before this knows no 'custom' and
 // draws its default green (App.jsx falls back on any key it does not know), and leaves
@@ -16,8 +16,15 @@
 // A grey goes further, so it never looks like a switched-off button (THEMES below, accent.test.js).
 import { ACCENTS, ACCENT_INK } from './format.js'
 
-export const DEFAULT_ACCENT = 'lime'
+// 'theme' draws the palette's own accent (theme/theme-<name>.css, under data-accent="theme").
+export const THEME = 'theme'
+export const DEFAULT_ACCENT = THEME
 export const CUSTOM = 'custom'
+// Bumped when the default accent moved from the green preset ('lime') to the palette's own.
+// A copy at an older version that still says 'lime' was almost always the old default, so it
+// moves to the palette once; picking a colour in Settings stamps the version, so a green picked
+// after that stays green.
+export const ACCENT_VERSION = 2
 
 const HEX = /^#[0-9a-f]{6}$/i
 // What a stored `accent` may be at all: a short lowercase word. One this version does not know
@@ -40,12 +47,23 @@ export function sanitizeAccent(s) {
     if (hex) s.accentCustom = hex; else delete s.accentCustom
   }
   if ('accent' in s && !(typeof s.accent === 'string' && KEY.test(s.accent))) s.accent = DEFAULT_ACCENT
+  if (s.accent === 'lime' && !(s.accentV >= ACCENT_VERSION)) { s.accent = THEME; s.accentV = ACCENT_VERSION }
   return s
+}
+
+/** A copy (not mutated) with the old default green moved to the palette accent, as
+ *  sanitizeAccent does. The sync merge applies it to both copies before comparing them, so a
+ *  copy migrated on this device and an unmigrated one on the server agree instead of
+ *  merging to the server's 'lime' with this device's version stamp. */
+export function withAccentMigrated(s) {
+  return s && typeof s === 'object' && s.accent === 'lime' && !(s.accentV >= ACCENT_VERSION)
+    ? { ...s, accent: THEME, accentV: ACCENT_VERSION } : s
 }
 
 /** The choice to draw: a known preset key, 'custom' with a usable colour, or the default. */
 export function accentKey(S) {
   const k = S?.accent
+  if (k === THEME) return THEME
   if (typeof k === 'string' && Object.hasOwn(ACCENTS, k)) return k
   if (k === CUSTOM && cleanHex(S?.accentCustom)) return CUSTOM
   return DEFAULT_ACCENT
@@ -190,22 +208,28 @@ export function customAccentVars(hex, theme) {
   }
 }
 
-/** The colour and its text colour for a preset key or a '#rrggbb' value (native notification). */
-export function accentPair(v) {
+/**
+ * The colour and its text colour for a preset key or a '#rrggbb' value (native notification).
+ * 'theme' (and anything unknown) is the palette's accent, `themeHex`; without one, the green.
+ */
+export function accentPair(v, themeHex) {
   const hex = cleanHex(v)
   if (hex) return { accent: hex, ink: inkOn(hex) }
-  const k = typeof v === 'string' && Object.hasOwn(ACCENTS, v) ? v : DEFAULT_ACCENT
-  return { accent: ACCENTS[k], ink: ACCENT_INK[k] }
+  if (typeof v === 'string' && Object.hasOwn(ACCENTS, v)) return { accent: ACCENTS[v], ink: ACCENT_INK[v] }
+  const th = cleanHex(themeHex)
+  return th ? { accent: th, ink: inkOn(th) } : { accent: ACCENTS.lime, ink: ACCENT_INK.lime }
 }
 
 const CUSTOM_VARS = ['--acc', '--acc-2', '--on-acc', '--knob-ring']
 
 /**
  * Puts the accent on the page root: a preset by `data-accent` (index.css does the rest), the
- * user's colour as inline custom properties for the resolved `theme`. `value` is accentValue's.
+ * palette's own as data-accent="theme" (theme-<name>.css), the user's colour as inline custom
+ * properties for the resolved `theme` ('light', anything else counts as dark). `value` is
+ * accentValue's.
  */
 export function applyAccent(el, value, theme) {
-  const vars = customAccentVars(value, theme)
+  const vars = customAccentVars(value, theme === 'light' ? 'light' : 'dark')
   if (vars) {
     el.dataset.accent = CUSTOM
     for (const [k, v] of Object.entries(vars)) el.style.setProperty(k, v)

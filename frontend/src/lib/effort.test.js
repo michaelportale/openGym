@@ -213,12 +213,12 @@ describe('EFFORT_BANDS / EFFORT_PRESETS', () => {
 describe('effortColor', () => {
   it('gives each preset value its own band colour', () => {
     // hardest to easiest — the colours the picker shows on its buttons
-    expect(effortColor(0)).toBe('var(--purple)')
-    expect(effortColor(0.5)).toBe('var(--red)')
-    expect(effortColor(1)).toBe('var(--orange)')
-    expect(effortColor(2)).toBe('var(--yellow)')
-    expect(effortColor(3)).toBe('var(--green)')
-    expect(effortColor(4)).toBe('var(--acc-2)')
+    expect(effortColor(0)).toBe('var(--effort-0)')
+    expect(effortColor(0.5)).toBe('var(--effort-1)')
+    expect(effortColor(1)).toBe('var(--effort-2)')
+    expect(effortColor(2)).toBe('var(--effort-3)')
+    expect(effortColor(3)).toBe('var(--effort-4)')
+    expect(effortColor(4)).toBe('var(--effort-5)')
   })
 
   it('colours a typed in-between value by the band it falls in, never leaving it blank', () => {
