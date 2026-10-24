@@ -2470,4 +2470,5 @@ export default {
   "{0} muscles on target": "Mięśnie w celu: {0}",
   "Train a few sessions to see coverage": "Zrób kilka treningów, aby zobaczyć pokrycie",
   "Set coverage aims": "Ustaw cele pokrycia",
+  "Swap": "Zamień",
 }

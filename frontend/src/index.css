@@ -1948,7 +1948,8 @@ button.wl-summary{width:100%;padding:0 0 10px;text-align:start;border-radius:var
 .today-hero .ss,.today-meta{font-size:var(--fs-footnote);color:var(--label-2);margin-top:3px;line-height:1.3}
 .today-meta{display:flex;align-items:baseline;gap:4px;min-width:0}
 .today-meta .icn{flex:none;font-size:var(--fs-caption);align-self:center}
-.today-up{color:var(--acc-text)}
+.today-up{color:var(--label)}
+.today-up .icn{color:var(--acc-text)}
 .today-hero .tag{font-size:var(--fs-subhead);font-weight:600;padding:8px 14px;border-radius:999px;flex:none;gap:5px}
 /* Start and Resume are the card's action: full width under the text, a thumb-sized target */
 .today-hero .tag.today-cta{flex:1 0 100%;justify-content:center;min-height:44px;font-size:var(--fs-body)}
@@ -1956,6 +1957,24 @@ button.wl-summary{width:100%;padding:0 0 10px;text-align:start;border-radius:var
 .today-hero .tag .icn{font-size:var(--fs-caption)}
 .today-hero .tag.today-cta .icn{font-size:var(--fs-subhead)}
 .today-glance{margin-top:10px;padding-top:12px;border-top:.5px solid var(--sep)}
+/* One card, no card inside it: the session row sits straight on the card's --surface (20px in
+   from its edge) instead of on a --surface-2 plate of its own. */
+.card.today-card{padding:20px}
+.today-card .today-row.today-hero{background:none;padding:0;border-radius:0}
+.today-card .today-row.today-hero:active{background:none}
+.today-card .today-row.today-hero:active .today-cta{transform:scale(.97)}
+.today-hero .tag.today-cta{transition:transform var(--fast)}
+:root .today-card .today-row.today-hero:hover{background:none}
+/* The recovering line carries its own way out. */
+.today-recovering{align-items:center;flex-wrap:wrap}
+.today-recovering-t{flex:1 1 auto;min-width:0}
+.today-swap{min-height:44px;min-width:44px;padding:0 4px;margin-block:-12px;background:none;border:0;color:var(--acc-text);font:inherit;font-weight:600;cursor:pointer}
+/* "Choose a different workout": a quiet text button, full thumb height. */
+.today-card .btn.today-choose{min-height:44px;color:var(--label-2);background:none}
+/* The tab bar's Start steps aside while Home's own Start is on screen (lib/use-hide-fab.js). */
+#tabbar button.start{transition:opacity var(--fast),visibility 0s linear 0s}
+body.fab-aside #tabbar button.start{opacity:0;pointer-events:none;visibility:hidden;transition:opacity var(--fast),visibility 0s linear var(--fast)}
+@media (prefers-reduced-motion:reduce){#tabbar button.start,body.fab-aside #tabbar button.start{transition:none}}
 
 /* Only where a pointer really hovers — on a phone :hover sticks to the row after the tap.
    Lighter than :active, which goes all the way to --surface-3, so the two stay distinct. */

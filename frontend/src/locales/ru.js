@@ -2474,4 +2474,5 @@ export default {
   "{0} muscles on target": "Мышцы в норме: {0}",
   "Train a few sessions to see coverage": "Проведите несколько тренировок, чтобы увидеть охват",
   "Set coverage aims": "Задать цели охвата",
+  "Swap": "Заменить",
 }

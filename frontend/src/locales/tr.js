@@ -2470,4 +2470,5 @@ export default {
   "{0} muscles on target": "Hedefteki kaslar: {0}",
   "Train a few sessions to see coverage": "Kapsamı görmek için birkaç antrenman yap",
   "Set coverage aims": "Kapsam hedeflerini belirle",
+  "Swap": "Değiştir",
 }
