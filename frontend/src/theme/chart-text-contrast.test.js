@@ -21,7 +21,7 @@ const val = (body, name) => body.match(new RegExp('--' + name + ':\\s*(#[0-9a-fA
 const base = { dark: { label: '#ffffff', surface: '#1c1c1e' }, light: { label: '#000000', surface: '#ffffff' } }
 
 describe('chart text contrast', () => {
-  const pct = Number(css.match(/\.lc-text\{fill:color-mix\(in srgb,var\(--label\) (\d+)%,var\(--surface\)\)\}/)?.[1])
+  const pct = Number(css.match(/\.lc-text\{fill:color-mix\(in srgb,var\(--label\) (\d+)%,var\(--lc-bg,var\(--surface\)\)\)\}/)?.[1])
 
   it('draws every chart label with .lc-text, none with a raw label token', () => {
     expect(pct).toBeGreaterThan(0)
@@ -36,6 +36,27 @@ describe('chart text contrast', () => {
       const fb = /light/.test(b.sel) ? base.light : base.dark
       const label = hex(val(b.body, 'label') || fb.label), surface = hex(val(b.body, 'surface') || fb.surface)
       const r = ratio(mix(label, surface, pct / 100), surface)
+      expect(r, b.f + ' ' + b.sel).toBeGreaterThanOrEqual(4.5)
+    }
+  })
+
+  // A chart in a sheet (exercise history, weigh-ins) sits on the sheet's background: --bg-el in
+  // dark, --bg in light. --lc-bg follows it there, and the label mixed into it must still read.
+  it('reaches 4.5:1 on a sheet too, in every theme, light and dark', () => {
+    expect(css).toMatch(/\.sheet\{--lc-bg:var\(--bg-el\)\}/)
+    expect(css).toMatch(/:root\[data-theme="light"\] \.sheet\{--lc-bg:var\(--bg\)\}/)
+    expect(css).toMatch(/\.sheet \.card\{--lc-bg:var\(--surface\)\}/)
+    const rootOf = sel => blocks.find(b => b.f === 'index.css' && b.sel.endsWith(sel))
+    const baseOf = { dark: rootOf(':root') || rootOf('}\n:root'), light: rootOf(':root[data-theme="light"]') }
+    const themed = blocks.filter(b => val(b.body, 'label') || val(b.body, 'bg') || val(b.body, 'bg-el'))
+    expect(themed.length).toBeGreaterThan(5)
+    for (const b of themed) {
+      const mode = /light/.test(b.sel) ? 'light' : 'dark'
+      const name = mode === 'light' ? 'bg' : 'bg-el'
+      const pick = n => val(b.body, n) || (baseOf[mode] && val(baseOf[mode].body, n))
+      const label = pick('label') || base[mode].label, sheet = pick(name)
+      expect(sheet, b.f + ' ' + b.sel + ' --' + name).toBeTruthy()
+      const r = ratio(mix(hex(label), hex(sheet), pct / 100), hex(sheet))
       expect(r, b.f + ' ' + b.sel).toBeGreaterThanOrEqual(4.5)
     }
   })
