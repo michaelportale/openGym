@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 // The Nutrition screen: logging a day needs all five totals, supplements start empty and are the
-// profile's own, and targets stay empty until the profile sets them.
+// profile's own, and the week card averages the logged days against targets the profile set.
 import React, { act } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createRoot } from 'react-dom/client'
@@ -32,6 +32,7 @@ const type = (el, value) => {
   el.dispatchEvent(new Event('input', { bubbles: true }))
 }
 const field = (host, label) => host.querySelector(`input[aria-label="${label}"]`)
+const tile = (host, id) => host.querySelector(`[data-tile="${id}"]`)
 const day = (kcal, protein, fiber, dayType = 'training') => ({ kcal, protein, carbs: 200, fat: 70, fiber, dayType, _ts: 1 })
 
 function install(extra = {}) {
@@ -56,6 +57,7 @@ describe('Nutrition screen', () => {
     install()
     const el = screen()
     expect(el.textContent).toContain('Nothing logged today yet.')
+    expect(el.textContent).toContain("Your week's averages show here once you log a day.")
     expect(el.querySelectorAll('.nutri-check').length).toBe(0)
     expect(button(el, 'Add supplements')).toBeTruthy()
     expect(el.textContent).toContain('Days you log show here, newest first.')
@@ -117,6 +119,38 @@ describe('Nutrition screen', () => {
     act(() => type(protein, '140'))
     expect(useStore.getState().S.nutritionTargets).toMatchObject({ training: { protein: 140 } })
     expect(field(sheet, 'Rest day · Protein').value).toBe('')
+  })
+
+  it('says when a week has no target set', () => {
+    install({ nutritionDays: { '2026-10-19': day(2400, 150, 30) } })
+    const el = screen()
+    expect(tile(el, 'kcal').textContent).toContain('No target set')
+    expect(tile(el, 'protein-hit').textContent).toContain('Set a protein target to count this')
+  })
+
+  it('averages the week against targets and counts days that reached protein', () => {
+    install({
+      nutritionTargets: { training: { kcal: 2400, protein: 140, fiber: 30 }, rest: { kcal: 2000, protein: 140, fiber: 30 } },
+      nutritionDays: { '2026-10-19': day(2400, 150, 30), '2026-10-20': day(2000, 130, 20, 'rest'), '2026-10-12': day(1000, 50, 10) },
+      bodyweight: [
+        { d: '2026-10-13', t: 1, w: 81 }, { d: '2026-10-15', t: 2, w: 81 },
+        { d: '2026-10-19', t: 3, w: 80 }, { d: '2026-10-20', t: 4, w: 80 },
+      ],
+    })
+    const el = screen()
+    expect(tile(el, 'logged').textContent).toContain('2/7')
+    expect(tile(el, 'kcal').textContent).toContain('2,200 kcal')
+    expect(tile(el, 'kcal').textContent).toContain('Target 2,200 kcal')
+    expect(tile(el, 'protein').textContent).toContain('140 g')
+    expect(tile(el, 'protein-hit').textContent).toContain('1/2')
+    expect(tile(el, 'weight').textContent).toContain('80 kg')
+    expect(tile(el, 'weight').textContent).toContain('−1 kg vs last week')
+
+    act(() => el.querySelector('button[aria-label="Previous week"]').click())
+    expect(el.textContent).toContain('Week of')
+    expect(tile(el, 'logged').textContent).toContain('1/7')
+    expect(tile(el, 'kcal').textContent).toContain('1,000 kcal')
+    expect(tile(el, 'weight').textContent).toContain('No weigh-in last week to compare')
   })
 
   it('is reached from a card on Stats', () => {
