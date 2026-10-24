@@ -199,7 +199,6 @@ export default {
   'Freestyle workout. Add your first exercise and off you go.': 'Довільне тренування. Додай першу вправу, і вперед.',
   'Finish workout early · {0} exercises': 'Завершити раніше · вправ: {0}',
   'Rest’s over. Next set!': 'Відпочинок скінчився. Наступний підхід!',
-  'Hi {0}': 'Привіт, {0}',
   'This week': 'Цього тижня',
   '{0} (in progress)': '{0} (триває)',
   'Resume ▶': 'Продовжити ▶',

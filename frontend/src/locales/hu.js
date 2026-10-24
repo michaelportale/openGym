@@ -216,7 +216,6 @@ export default {
   'Finish workout early · {0} exercises': 'Edzés korai befejezése · {0} gyakorlat',
   'Rest’s over. Next set!': 'Vége a pihenőnek. Jöhet a következő sorozat!',
   // --- home ---
-  'Hi {0}': 'Szia {0}',
   'This week': 'Ezen a héten',
   '{0} (in progress)': '{0} (folyamatban)',
   'Resume ▶': 'Folytatás ▶',

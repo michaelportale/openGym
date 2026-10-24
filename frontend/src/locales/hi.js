@@ -217,7 +217,6 @@ export default {
   'Freestyle workout. Add your first exercise and off you go.': 'फ्रीस्टाइल वर्कआउट। पहला व्यायाम जोड़ें और शुरू हो जाइए।',
   'Finish workout early · {0} exercises': 'जल्दी समाप्त करें · {0} व्यायाम',
   'Rest’s over. Next set!': 'आराम खत्म। अगला सेट!',
-  'Hi {0}': 'नमस्ते {0}',
   'This week': 'इस हफ़्ते',
   '{0} (in progress)': '{0} (चल रहा है)',
   'Resume ▶': 'जारी रखें ▶',
