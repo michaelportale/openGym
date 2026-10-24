@@ -400,20 +400,21 @@ function weekHTML(S) {
   return `<div class="week">${rows}</div>`
 }
 
+// The print page is white whatever the app's theme, so its accent is the palette's, moved toward
+// black until it reads at 5.3:1 on white (text). The superset rule is that ink lifted a quarter
+// toward white, so it stays visible even when the palette's accent is itself near white (Chalk).
+export function printAccent(S) {
+  const acc = PALETTE_ACCENT[paletteKey(S)]
+  let ink = acc
+  for (let k = 1; contrast(ink, '#ffffff') < 5.3 && k <= 100; k++) ink = mix(acc, '#000000', k / 100)
+  return { ink, rule: mix(ink, '#ffffff', 0.25) }
+}
+
 /**
  * Full self-contained HTML for the print/PDF view. With `routineId` it is that one routine on
  * its own page (#282) — the session you take to the gym, not the week around it — so the week
  * schedule is left out and the routine's name is the page title.
  */
-// The print page is white whatever the app's theme, so its accent is the palette's, moved toward
-// black until it reads at 5.3:1 on white (text), and toward white for the superset rule.
-export function printAccent(S) {
-  const acc = PALETTE_ACCENT[paletteKey(S)]
-  let ink = acc
-  for (let k = 1; contrast(ink, '#ffffff') < 5.3 && k <= 100; k++) ink = mix(acc, '#000000', k / 100)
-  return { ink, rule: mix(acc, '#ffffff', 0.6) }
-}
-
 export function planPrintHTML(S, owner, { routineId } = {}) {
   const pa = printAccent(S)
   const unit = S.unit || 'kg'
