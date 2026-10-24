@@ -47,7 +47,7 @@ import { canMoveActiveWorkoutUnit, moveActiveWorkoutUnit, canMoveActiveWorkoutEn
 import { nextOpenSet, workoutKeyAction } from '../lib/workout-keys.js'
 import { MUSCLE_NAME } from '../lib/muscles.js'
 import { ghostFor, beatTarget, aheadOf } from '../lib/beat-it.js'
-import { holdRepeat } from '../lib/hold-repeat.js'
+import { holdRepeat, cancelHold } from '../lib/hold-repeat.js'
 import FocusView from './FocusView.jsx'
 import StrengthFeedback, { EquipmentIdentity } from '../components/StrengthFeedback.jsx'
 import { withMeaning, historyAs, dbLoadFor, entryDbLoad, bellsIn, ownedWeightsFor, stepOwned } from '../lib/dumbbells.js'
@@ -114,6 +114,10 @@ function ExerciseBlock({ entryIdx, compact, dense, editing, onToggle, onToggleSi
   const working = useUI(s => s.work)
   const restEnds = useUI(s => s.timer?.endsAt)
   const swipeHint = useUI(s => (s.swipeHint?.idx === entryIdx ? s.swipeHint : null))
+  // A hold on one of this block's steppers stops when the block leaves the screen.
+  const holdOwner = useRef(null)
+  if (!holdOwner.current) holdOwner.current = {}
+  useEffect(() => () => cancelHold(holdOwner.current), [])
   const setFlash = useUI(s => (s.setFlash?.idx === entryIdx ? s.setFlash : null))
   const optsId = useId()
   // The row "Beat it" last filled and what it held before, for four seconds of Undo.
@@ -332,10 +336,10 @@ function ExerciseBlock({ entryIdx, compact, dense, editing, onToggle, onToggleSi
   const wc = workoutControls(S)
   const cell = (s, i, col, cls) => (
     <div className={'stp ' + cls + (wc.steppers ? '' : ' plain')} data-label={col.hd}>
-      {wc.steppers && <button aria-label={t('Decrease')} {...holdRepeat(() => bump(s, i, col, -1))}><Icon name="minus" /></button>}
+      {wc.steppers && <button aria-label={t('Decrease')} {...holdRepeat(() => bump(s, i, col, -1), holdOwner.current)}><Icon name="minus" /></button>}
       <span className="val"><NumberField aria-label={col.hd} decimal={col.dec} nullable={col.opt} value={viewOf(col, s[col.f]) ?? ''}
         onChange={v => onField(i, col.f, col.store ? col.store(v) : v)} /></span>
-      {wc.steppers && <button aria-label={t('Increase')} {...holdRepeat(() => bump(s, i, col, 1))}><Icon name="plus" /></button>}
+      {wc.steppers && <button aria-label={t('Increase')} {...holdRepeat(() => bump(s, i, col, 1), holdOwner.current)}><Icon name="plus" /></button>}
     </div>
   )
   // Last time, per work row (lib/beat-it.js): what the same set was, under the row, and on the
