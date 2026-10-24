@@ -216,7 +216,6 @@ export default {
   'Finish workout early · {0} exercises': 'จบก่อนกำหนด · {0} ท่า',
   'Rest’s over. Next set!': 'หมดเวลาพักแล้ว เซ็ตถัดไป!',
   // --- home ---
-  'Hi {0}': 'สวัสดี {0}',
   'This week': 'สัปดาห์นี้',
   '{0} (in progress)': '{0} (กำลังทำอยู่)',
   'Resume ▶': 'เล่นต่อ ▶',
@@ -2531,4 +2530,5 @@ export default {
   "Add a measurement": "เพิ่มการวัด",
   "No match for “{0}”": "ไม่พบ “{0}”",
   "Create “{0}”": "สร้าง “{0}”",
+  "sessions": "เซสชัน",
 }

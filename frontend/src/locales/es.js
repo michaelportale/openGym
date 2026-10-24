@@ -217,7 +217,6 @@ export default {
   'Freestyle workout. Add your first exercise and off you go.': 'Entrenamiento libre. Añade tu primer ejercicio y a darle.',
   'Finish workout early · {0} exercises': 'Terminar antes · {0} ejercicios',
   'Rest’s over. Next set!': 'Se acabó el descanso. ¡Siguiente serie!',
-  'Hi {0}': 'Hola {0}',
   'This week': 'Esta semana',
   '{0} (in progress)': '{0} (en curso)',
   'Resume ▶': 'Seguir ▶',
@@ -2520,4 +2519,5 @@ export default {
   "Add a measurement": "Añadir una medida",
   "No match for “{0}”": "Sin resultados para «{0}»",
   "Create “{0}”": "Crear «{0}»",
+  "sessions": "sesiones",
 }

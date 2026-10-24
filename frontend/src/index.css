@@ -57,11 +57,9 @@
   /* motion */
   --ease:cubic-bezier(.32,.72,0,1);
   --fast:140ms; --med:220ms;
-  /* a press: quick in, the same scale everywhere. --ease-out for things arriving, --ease-spring
-     for a small overshoot (a tab, a toggle); linear() falls back to --ease-out where unsupported */
+  /* a press: quick in, the same scale everywhere; --ease-out for things arriving */
   --dur-press:90ms; --press-scale:.97;
   --ease-out:cubic-bezier(.2,.8,.2,1);
-  --ease-spring:cubic-bezier(.2,.8,.2,1);
 
   /* The system bars the page is drawn under. env() is all a browser and the iOS app give; the
      Android WebView reports only the camera cutout there, and on Android 15, which draws the app
@@ -401,7 +399,6 @@ h4.sec{
 }
 .btn .icn{font-size:19px}
 .btn:active{transform:scale(var(--press-scale));transition-duration:var(--dur-press)}
-.btn.primary:active{background:var(--acc-2)}
 /* rows and tappable cards answer a press the same way, by scale (transform only, no reflow) */
 .lrow:active,.card.tappable:active,.today-row:active{transform:scale(var(--press-scale))}
 .lrow,.card.tappable,.today-row{transition:transform var(--dur-press) var(--ease-out)}
@@ -2335,12 +2332,14 @@ body.fab-aside #tabbar button.start{opacity:0;pointer-events:none;visibility:hid
 .bw-trend-key{width:14px;height:3px;border-radius:2px;background:var(--acc);flex:none}
 .bw-trend-week{display:inline-flex;align-items:center;gap:2px;font-weight:600;color:var(--label)}
 
+/* Chart text (axis values, dates, the goal label) is text, so it gets text contrast, 4.5:1, not the
+   3:1 for graphics: 62% of the label colour over the card measures 4.96:1 or more in every theme,
+   light and dark (it was --label-3 at 1.73:1 and --label-2 at 3.44:1 in light mode). Mixed where
+   it is drawn, so it follows the surface it sits on. */
+.lc-text{fill:color-mix(in srgb,var(--label) 62%,var(--surface))}
+
 /* "Share your week" under the streak card, at its trailing edge like "All weigh-ins". */
 .week-recap-row{justify-content:flex-end;margin-top:-4px}
-@supports (transition-timing-function:linear(0, 1)){
-  :root{--ease-spring:linear(0, .009, .035 2.1%, .141 4.4%, .723 12.9%, .938 16.7%, 1.017 20.4%, 1.051 24.1%, 1.056 28.3%, 1.038 33.5%, 1.009 41.5%, .998 51.7%, 1)}
-}
-
 /* Rotation streak card (components/StreakCard.jsx): no flame and no accent; chalk dots for rounds,
    warning text only for "train by", and a frozen grey number while paused. 8pt spacing. */
 .streak-card{display:flex;flex-direction:column;gap:0;padding:16px}

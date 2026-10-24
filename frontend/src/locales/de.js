@@ -226,7 +226,6 @@ export default {
   'Finish workout early · {0} exercises': 'Training vorzeitig beenden · {0} Übungen',
   'Rest’s over. Next set!': 'Pause vorbei. Nächster Satz!',
   // --- home ---
-  'Hi {0}': 'Hi {0}',
   'This week': 'Diese Woche',
   '{0} (in progress)': '{0} (läuft)',
   'Resume ▶': 'Weiter ▶',
@@ -2540,4 +2539,5 @@ export default {
   "Add a measurement": "Messung hinzufügen",
   "No match for “{0}”": "Kein Treffer für „{0}“",
   "Create “{0}”": "„{0}“ anlegen",
+  "sessions": "Einheiten",
 }
