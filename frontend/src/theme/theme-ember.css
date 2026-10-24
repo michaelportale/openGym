@@ -12,7 +12,7 @@
   --surface-3: #302c28;
   --label: #f5f1eb;
   --label-2: #ada59c;
-  --label-3: #7a736b;
+  --label-3: #948c83;
   --label-4: color-mix(in srgb, #f5f1eb 18%, transparent);
   --sep: #3a3530;
   --sep-op: color-mix(in srgb, #3a3530 70%, transparent);
@@ -34,7 +34,7 @@
   --surface-3: #302c28;
   --label: #f5f1eb;
   --label-2: #ada59c;
-  --label-3: #7a736b;
+  --label-3: #948c83;
   --label-4: color-mix(in srgb, #f5f1eb 18%, transparent);
   --sep: #3a3530;
   --sep-op: color-mix(in srgb, #3a3530 70%, transparent);
@@ -47,6 +47,7 @@
   --on-acc: #000000;
   --on-acc-tile: #000000;
   --knob-ring: transparent;
+  --acc-text: var(--acc);
   --acc-soft: #3a1f14;
 }
 
@@ -59,6 +60,8 @@
   --on-success: #000000;
   --on-success-tile: #ffffff;
   --on-warning-tile: #000000;
+  --label-2: #636366;
+  --label-3: #6c6c70;
 }
 
 :root[data-theme="light"][data-palette="ember"][data-accent="theme"] {
@@ -67,6 +70,7 @@
   --on-acc: #000000;
   --on-acc-tile: #000000;
   --knob-ring: transparent;
+  --acc-text: #c43a00;
 }
 
 /* light workout screen: warm neutrals instead of the ledger's olive ones */

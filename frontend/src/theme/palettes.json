@@ -18,7 +18,7 @@
         "line": "#3A3530",
         "text1": "#F5F1EB",
         "text2": "#ADA59C",
-        "text3": "#7A736B",
+        "text3": "#948C83",
         "accent": "#FF6B35",
         "accentPressed": "#D9521F",
         "onAccent": "#000000",
@@ -28,11 +28,14 @@
         "warning": "#FFB020",
         "danger": "#FF4D6D"
       },
-      "contrastOnSurface": { "text1": 15.73, "text2": 7.28, "text3": 3.79, "accent": 6.24, "success": 13.64, "pr": 10.55, "warning": 9.68, "danger": 5.51, "onAccentBlack": 7.41 },
+      "contrastOnSurface": { "text1": 15.73, "text2": 7.28, "text3": 5.34, "accent": 6.24, "success": 13.64, "pr": 10.55, "warning": 9.68, "danger": 5.51, "onAccentBlack": 7.41 },
       "successTreatment": "Completed sets/days use chalk (success) with a check glyph on accentMuted fill; gold (pr) only for personal records.",
       "light": {
-        "notes": "Explicit light values where the derived ones fail: success apart from PR gold (graphite ink, 7.55:1 on white), and warm neutrals for the workout screen.",
+        "notes": "Explicit light values where the derived ones fail: success apart from PR gold (graphite ink, 7.55:1 on white), labels at 4.5:1 or more on white, accent-coloured text at 5.31:1, and warm neutrals for the workout screen.",
         "success": "#5C5346",
+        "text2": "#636366",
+        "text3": "#6C6C70",
+        "accentText": "#C43A00",
         "workout": { "bg0": "#F4F2EF", "bg1": "#FAF9F7", "surface": "#FFFFFF", "surface2": "#ECE8E3", "surface3": "#DDD7CF", "text1": "#1A1816", "text2": "#5E5750", "text3": "#6B645C", "line": "#8F877E" }
       }
     },
