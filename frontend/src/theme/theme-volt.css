@@ -21,6 +21,8 @@
   --warning: #ffc857;
   --danger: #ff5c7a;
   --pr: #ffc857;
+  --on-success-tile: #000000;
+  --on-warning-tile: #000000;
 }
 
 /* the workout screen tints its neutrals (views/WorkoutLedger.css); the palette's win here too */
@@ -55,6 +57,8 @@
   --danger: #ff3d61;
   --pr: #bd7f00;
   --on-success: #000000;
+  --on-success-tile: #000000;
+  --on-warning-tile: #000000;
 }
 
 :root[data-theme="light"][data-palette="volt"][data-accent="theme"] {

@@ -55,6 +55,23 @@ describe('generated palette CSS', () => {
       for (const m of css.matchAll(/^([^\n{]+)\{[^}]*--acc:/gm)) expect(m[1]).toContain('[data-accent="theme"]')
     }
   })
+  it('draws status-coloured tiles with a glyph that stands out', () => {
+    // Ember's success is chalk: a white glyph on it was 1.30:1. 3:1 is the bar for icons.
+    let n = 0
+    for (const { css } of outputs(data)) {
+      for (const [, body] of css.matchAll(/\{([^}]*)\}/g)) {
+        for (const k of ['success', 'warning']) {
+          const bg = body.match(new RegExp(`--${k}:\\s*(#[0-9a-f]{6});`, 'i'))
+          const ink = body.match(new RegExp(`--on-${k}-tile:\\s*(#[0-9a-f]{6});`, 'i'))
+          if (!bg) continue
+          expect(ink, `--on-${k}-tile next to --${k}`).toBeTruthy()
+          expect(contrast(ink[1], bg[1])).toBeGreaterThanOrEqual(3)
+          n++
+        }
+      }
+    }
+    expect(n).toBe(12)
+  })
 })
 
 describe('switching palettes on <html>', () => {

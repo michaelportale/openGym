@@ -331,6 +331,10 @@ h4.sec{
 .lrow-i:not([style*="--tint"]):not([style*="background"]),
 .lrow-i[style*="--tint: var(--acc)"],
 .lrow-i[style*="background: var(--acc)"]{color:var(--on-acc-tile)}
+/* Tiles filled with a status colour take that palette's ink for it: white upstream, black where
+   the palette's success (Ember's chalk) or warning (amber) is too light for a white glyph. */
+.lrow-i[style*="--tint: var(--success)"]{color:var(--on-success-tile)}
+.lrow-i[style*="--tint: var(--warning)"]{color:var(--on-warning-tile)}
 /* The title column never shrinks below its own longest word. With a basis of 0 and min-width:0 it
    only got what a capped value left over, and on a 320px phone "Progression" (96px) was painted over
    by "Linear progression" in a 37px box; min-width:auto — the flex default — is exactly the floor

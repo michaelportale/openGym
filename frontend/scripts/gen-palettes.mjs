@@ -39,6 +39,8 @@ export function paletteCss(p) {
   const status = {
     '--success': t.success, '--on-success': inkOn(mix(t.success, t.surface, 0.3)),
     '--warning': t.warning, '--danger': t.danger, '--pr': t.pr,
+    // the glyph on a tile filled with the status colour (.lrow-i)
+    '--on-success-tile': inkOn(t.success), '--on-warning-tile': inkOn(t.warning),
   }
   const accDark = {
     '--acc': t.accent, '--acc-2': t.accentPressed, '--on-acc': t.onAccent, '--on-acc-tile': t.onAccent,
@@ -49,6 +51,8 @@ export function paletteCss(p) {
   const statusLight = {}
   for (const k of ['success', 'warning', 'danger', 'pr']) statusLight['--' + k] = readableIn(t[k], 'light')
   statusLight['--on-success'] = inkOn(mix(statusLight['--success'], '#ffffff', 0.3))
+  statusLight['--on-success-tile'] = inkOn(statusLight['--success'])
+  statusLight['--on-warning-tile'] = inkOn(statusLight['--warning'])
   const accLight = {
     '--acc': accL, '--acc-2': accL2, '--on-acc': inkOnBoth(accL, accL2), '--on-acc-tile': inkOn(accL),
     '--knob-ring': contrast('#ffffff', accL) < 1.5 ? KNOB_RING : 'transparent',
