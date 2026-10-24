@@ -441,23 +441,28 @@ h4.sec{
   background:var(--warning);box-shadow:0 0 0 2px var(--bg-el);pointer-events:none;
 }
 .iconbtn .tab-dot{top:5px;right:5px;box-shadow:0 0 0 2px var(--bg)}
-#tabbar button.start{margin-top:-24px}
+/* Start: a 56px accent disc set into the bar by a 4px ring of the bar's own colour, with a short
+   shadow under it rather than a wide glow, and a solid play glyph nudged right to sit at the
+   triangle's optical centre. Its label is neutral, so the current tab stays the only coloured
+   label in the bar. */
+#tabbar button.start{margin-top:-28px}
 #tabbar button.start .cir{
-  width:52px;height:52px;border-radius:50%;background:var(--acc);color:var(--on-acc);
+  width:56px;height:56px;border-radius:50%;background:var(--acc);color:var(--on-acc);
   display:flex;align-items:center;justify-content:center;position:relative;
-  box-shadow:0 6px 18px -4px color-mix(in srgb,var(--acc) 55%,transparent);
+  box-shadow:0 0 0 4px var(--bg-el),0 10px 20px -10px color-mix(in srgb,var(--acc) 75%,transparent);
   transition:transform var(--fast) var(--ease);
 }
 #tabbar button.start:active .cir{transform:scale(.93)}
-#tabbar button.start .cir .icn{font-size:26px;--icon-stroke:2;color:inherit;opacity:1}
-#tabbar button.start span{color:var(--acc);font-weight:600}
+#tabbar button.start .cir .icn{font-size:24px;--icon-stroke:1.6;fill:currentColor;margin-left:2px;color:inherit;opacity:1}
+#tabbar button.start span{color:var(--label-2);font-weight:600}
+#tabbar button.start.on span:not(.cir){color:var(--acc)}
 #tabbar button.start .tab-time{font-variant-numeric:tabular-nums}
 /* `.cir` is itself a <span>, so the label rules above and below reach it too and
    outrank the `.cir` block — which is how the running state ended up painting an
    orange play glyph onto an orange disc. Both states restate their own colour.
    The disc is orange in either theme, so its glyph is black, not `--on-acc`. */
 #tabbar button.start .cir{color:var(--on-acc)}
-#tabbar button.start.rec .cir{background:var(--warning);color:#000;box-shadow:0 6px 18px -4px color-mix(in srgb,var(--warning) 55%,transparent)}
+#tabbar button.start.rec .cir{background:var(--warning);color:#000;box-shadow:0 0 0 4px var(--bg-el),0 10px 20px -10px color-mix(in srgb,var(--warning) 75%,transparent)}
 #tabbar button.start.rec span{color:var(--warning)}
 #tabbar button.start.rec .cir::after{
   content:'';position:absolute;inset:0;border-radius:50%;
@@ -1947,7 +1952,7 @@ button.wl-summary{width:100%;padding:0 0 10px;text-align:start;border-radius:var
     border:var(--hair) solid var(--sep-op);border-radius:var(--r-xl);
     padding:7px 10px 9px;box-shadow:0 12px 40px -10px rgba(0,0,0,.5);
   }
-  #tabbar button.start{margin-top:-26px}
+  #tabbar button.start{margin-top:-30px}
   .sheet{left:50%;right:auto;margin-left:-320px;width:640px;border-radius:var(--r-xl) var(--r-xl) 0 0}
   .center{width:340px}
   #timer{left:50%;right:auto;margin-left:-260px;width:520px;bottom:112px}
