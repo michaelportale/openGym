@@ -55,7 +55,7 @@
 
   /* effort (reps in reserve): 0 = failure … 5 = easy (lib/effort.js EFFORT_BANDS) */
   --effort-0: var(--purple);
-  --effort-1: var(--red);
+  --effort-1: var(--danger);
   --effort-2: var(--warning);
   --effort-3: var(--yellow);
   --effort-4: var(--success);
