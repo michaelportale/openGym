@@ -2446,4 +2446,7 @@ export default {
   "Strength trend": "Kuvvet eğilimi",
   "Last 8 weeks": "Son 8 hafta",
   "Still recovering: {0}": "Hâlâ toparlanıyor: {0}",
+  "Filters": "Filtreler",
+  "Filters: {0}": "Filtreler: {0}",
+  "Type": "Tür",
 }

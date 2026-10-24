@@ -2443,4 +2443,7 @@ export default {
   "Strength trend": "Динаміка сили",
   "Last 8 weeks": "Останні 8 тижнів",
   "Still recovering: {0}": "Ще відновлюється: {0}",
+  "Filters": "Фільтри",
+  "Filters: {0}": "Фільтри: {0}",
+  "Type": "Тип",
 }
