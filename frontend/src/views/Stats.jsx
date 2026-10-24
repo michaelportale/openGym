@@ -642,6 +642,8 @@ export default function Stats() {
   const chartPts = onSets ? perSetChart.anchors : onMax ? maxChartPts : onEff ? effPts : onE1 ? e1ChartPts : topPts
   // A line needs two workouts. A range that holds fewer says so, instead of a lone dot or an empty box.
   const rangeTooShort = exRange !== 0 && chartPts.length < 2
+  // The Nutrition card's "Last logged" line, read once per render (it scans the whole log).
+  const lastNutri = lastNutritionDay(S)
   const exOpts = [{ value: 'top', label: t('Top set') }]
   if (perSet) exOpts.push({ value: 'sets', label: t('Per set') })
   if (showE1) exOpts.push({ value: 'e1rm', label: t('Est. 1RM') })
@@ -712,8 +714,8 @@ export default function Stats() {
     </div>
     <div className="card row between nutri-card" style={{ alignItems: 'center', gap: 12 }}>
       <div style={{ minWidth: 0 }}><h2 style={{ margin: 0 }}>{t('Nutrition')}</h2>
-        <div className="muted small" style={{ marginTop: 4 }}>{lastNutritionDay(S)
-          ? t('Last logged {0}', fmtDate(lastNutritionDay(S), true))
+        <div className="muted small" style={{ marginTop: 4 }}>{lastNutri
+          ? t('Last logged {0}', fmtDate(lastNutri, true))
           : t('Daily calories, protein and fiber against targets you set.')}</div></div>
       <Button size="sm" variant="tinted" trailingIcon="chevronRight" style={{ flexShrink: 0 }} onClick={() => nav('/nutrition')}>{t('Open')}</Button>
     </div>
