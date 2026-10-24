@@ -2522,4 +2522,6 @@ export default {
   "Workout changed. Reopen the replacement sheet.": "Workout changed. Reopen the replacement sheet.",
   "Moving up today: {0}": "আজ বাড়ছে: {0}",
   "Deload today: {0}": "আজ ডিলোড: {0}",
+  "Strength trend": "শক্তির প্রবণতা",
+  "Last 8 weeks": "গত ৮ সপ্তাহ",
 }

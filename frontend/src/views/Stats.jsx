@@ -26,6 +26,7 @@ import {
 import { anchorsByWorkout, resolveSetRir } from '../lib/recovery.js'
 import { Button, Segmented, SelectRow } from '../components/ui.jsx'
 import { tappable } from '../lib/use-sheet-keyboard.js'
+import StrengthTrend from '../components/StrengthTrend.jsx'
 import { isWarmupRow } from '../lib/workout-model.js'
 
 // Set 1 to 5 on the per-set chart — system colours, so each line keeps its hue in dark mode.
@@ -636,6 +637,12 @@ export default function Stats() {
     <div className="hdr"><div><h1>{t('Stats')}</h1><div className="sub">{t('Progress & history')}</div></div>
       <button className="iconbtn" onClick={() => nav('/history')} aria-label={t('History')}><Icon name="history" /></button></div>
 
+    {/* The lead card opens a lift in Exercise progress on its estimated-1RM chart. */}
+    <StrengthTrend S={S} onPick={id => {
+      setExId(id); setExMetric('e1rm')
+      window.requestAnimationFrame(() => document.getElementById('exercise-progress')?.scrollIntoView?.({ block: 'start', behavior: 'smooth' }))
+    }} />
+
     <div className="tiles">
       <div className="tile"><div className="l"><Icon name="dumbbell" />{t('Workouts')}</div><div className="v">{workouts.length}</div></div>
       <div className="tile"><div className="l"><Icon name="calendar" />{t('This month')}</div><div className="v">{monthW}</div></div>
@@ -693,7 +700,7 @@ export default function Stats() {
         </div>}
       </div>
 
-      <div className="card">
+      <div className="card" id="exercise-progress">
         <h2>{t('Exercise progress')}</h2>
         {exHist.length ? <>
           <div className="sect-b" style={{ marginBottom: 10 }}>

@@ -2447,4 +2447,6 @@ export default {
   "Workout changed. Reopen the replacement sheet.": "Workout changed. Reopen the replacement sheet.",
   "Moving up today: {0}": "Сегодня растёт: {0}",
   "Deload today: {0}": "Сегодня разгрузка: {0}",
+  "Strength trend": "Динамика силы",
+  "Last 8 weeks": "Последние 8 недель",
 }
