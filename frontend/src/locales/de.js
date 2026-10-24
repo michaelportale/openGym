@@ -2471,4 +2471,8 @@ export default {
   "Type": "Art",
   "7-day average {0}": "7-Tage-Schnitt {0}",
   "{0} this week": "{0} diese Woche",
+  "Your week": "Deine Woche",
+  "Top muscle": "Top-Muskel",
+  "Share your week": "Deine Woche teilen",
+  "Show which muscles this week trained.": "Zeigen, welche Muskeln diese Woche trainiert wurden.",
 }

@@ -2530,4 +2530,8 @@ export default {
   "Type": "ধরন",
   "7-day average {0}": "৭ দিনের গড় {0}",
   "{0} this week": "এই সপ্তাহে {0}",
+  "Your week": "আপনার সপ্তাহ",
+  "Top muscle": "সবচেয়ে বেশি পেশি",
+  "Share your week": "আপনার সপ্তাহ শেয়ার করুন",
+  "Show which muscles this week trained.": "এই সপ্তাহে কোন পেশি ট্রেন হয়েছে দেখান।",
 }

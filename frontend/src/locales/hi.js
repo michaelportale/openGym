@@ -2451,4 +2451,8 @@ export default {
   "Type": "प्रकार",
   "7-day average {0}": "7 दिन का औसत {0}",
   "{0} this week": "इस सप्ताह {0}",
+  "Your week": "आपका सप्ताह",
+  "Top muscle": "सबसे ज़्यादा मांसपेशी",
+  "Share your week": "अपना सप्ताह शेयर करें",
+  "Show which muscles this week trained.": "दिखाएँ कि इस सप्ताह किन मांसपेशियों पर काम हुआ।",
 }

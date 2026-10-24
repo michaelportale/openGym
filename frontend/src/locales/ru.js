@@ -2455,4 +2455,8 @@ export default {
   "Type": "Тип",
   "7-day average {0}": "Среднее за 7 дней {0}",
   "{0} this week": "{0} за неделю",
+  "Your week": "Ваша неделя",
+  "Top muscle": "Главная мышца",
+  "Share your week": "Поделиться неделей",
+  "Show which muscles this week trained.": "Показать, какие мышцы работали на этой неделе.",
 }
