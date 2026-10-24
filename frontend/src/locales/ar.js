@@ -2575,4 +2575,5 @@ export default {
   "No match for “{0}”": "لا نتائج لـ “{0}”",
   "Create “{0}”": "أنشئ “{0}”",
   "sessions": "جلسات",
+  "Needs two weigh-ins within 30 days": "يلزم وزنان خلال 30 يومًا",
 }

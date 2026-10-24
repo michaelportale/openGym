@@ -2520,4 +2520,5 @@ export default {
   "No match for “{0}”": "“{0}”에 대한 결과 없음",
   "Create “{0}”": "“{0}” 만들기",
   "sessions": "세션",
+  "Needs two weigh-ins within 30 days": "30일 안에 체중 기록이 두 번 필요해요",
 }

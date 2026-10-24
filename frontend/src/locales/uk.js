@@ -2517,4 +2517,5 @@ export default {
   "No match for “{0}”": "Нічого не знайдено за «{0}»",
   "Create “{0}”": "Створити «{0}»",
   "sessions": {"one": "заняття", "few": "заняття", "many": "занять", "other": "заняття"},
+  "Needs two weigh-ins within 30 days": "Потрібно два зважування за 30 днів",
 }

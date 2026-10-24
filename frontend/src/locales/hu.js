@@ -2523,4 +2523,5 @@ export default {
   "No match for “{0}”": "Nincs találat: „{0}”",
   "Create “{0}”": "„{0}” létrehozása",
   "sessions": "edzés",
+  "Needs two weigh-ins within 30 days": "Két mérés kell 30 napon belül",
 }

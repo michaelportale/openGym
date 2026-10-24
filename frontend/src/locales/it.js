@@ -2520,4 +2520,5 @@ export default {
   "No match for “{0}”": "Nessun risultato per “{0}”",
   "Create “{0}”": "Crea “{0}”",
   "sessions": "sessioni",
+  "Needs two weigh-ins within 30 days": "Servono due pesate in 30 giorni",
 }

@@ -2599,4 +2599,5 @@ export default {
   "No match for “{0}”": "“{0}”-এর কোনো মিল নেই",
   "Create “{0}”": "“{0}” তৈরি করুন",
   "sessions": "সেশন",
+  "Needs two weigh-ins within 30 days": "30 দিনের মধ্যে দুবার ওজন লিখতে হবে",
 }

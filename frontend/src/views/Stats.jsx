@@ -674,7 +674,8 @@ export default function Stats() {
         ? <div className="tile"><div className="l"><Icon name="repeat" />{t('Streak')}</div><div className="v tnum">{rotStreak.count}</div><div className="streak-tile-s">{rotStreak.mode === 'rotation' ? tn('session on rotation', 'sessions on rotation', rotStreak.count) : tn('session', 'sessions', rotStreak.count)}</div></div>
         : <div className="tile"><div className="l"><Icon name="flame" />{t('Week streak')}</div><div className="v">{streakWeeks(S)}</div></div>}
       <div className="tile"><div className="l"><Icon name="scale" />{t('Weight 30d')}</div>{bwDelta30 === null
-        ? <><div className="v empty-tile">{t('No weigh-ins yet')}</div><Button size="sm" className="empty-cta-btn" onClick={() => bwSheet()}>{t('Log weight')}</Button></>
+        // One weigh-in (or none other within 30 days of the latest) is not "no weigh-ins yet".
+        ? <><div className="v empty-tile">{S.bodyweight.length ? t('Needs two weigh-ins within 30 days') : t('No weigh-ins yet')}</div><Button size="sm" className="empty-cta-btn" onClick={() => bwSheet()}>{t('Log weight')}</Button></>
         : <div className="v" style={{ fontSize: 22 }}>{bwSigned(bwDelta30)}</div>}</div>
 
     </div>}

@@ -2531,4 +2531,5 @@ export default {
   "No match for “{0}”": "ไม่พบ “{0}”",
   "Create “{0}”": "สร้าง “{0}”",
   "sessions": "เซสชัน",
+  "Needs two weigh-ins within 30 days": "ต้องชั่งน้ำหนักสองครั้งภายใน 30 วัน",
 }
