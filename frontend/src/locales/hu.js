@@ -2449,4 +2449,7 @@ export default {
   "Strength trend": "Erő alakulása",
   "Last 8 weeks": "Elmúlt 8 hét",
   "Still recovering: {0}": "Még regenerálódik: {0}",
+  "Filters": "Szűrők",
+  "Filters: {0}": "Szűrők: {0}",
+  "Type": "Típus",
 }

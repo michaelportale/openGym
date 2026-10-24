@@ -2457,4 +2457,7 @@ export default {
   "Strength trend": "แนวโน้มความแข็งแรง",
   "Last 8 weeks": "8 สัปดาห์ที่ผ่านมา",
   "Still recovering: {0}": "ยังฟื้นตัวอยู่: {0}",
+  "Filters": "ตัวกรอง",
+  "Filters: {0}": "ตัวกรอง: {0}",
+  "Type": "ประเภท",
 }

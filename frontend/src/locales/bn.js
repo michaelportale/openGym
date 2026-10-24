@@ -2525,4 +2525,7 @@ export default {
   "Strength trend": "শক্তির প্রবণতা",
   "Last 8 weeks": "গত ৮ সপ্তাহ",
   "Still recovering: {0}": "এখনও পুনরুদ্ধার হচ্ছে: {0}",
+  "Filters": "ফিল্টার",
+  "Filters: {0}": "ফিল্টার: {0}",
+  "Type": "ধরন",
 }
