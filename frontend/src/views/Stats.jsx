@@ -28,6 +28,7 @@ import { Button, Segmented, SelectRow } from '../components/ui.jsx'
 import { tappable } from '../lib/use-sheet-keyboard.js'
 import StrengthTrend from '../components/StrengthTrend.jsx'
 import { isWarmupRow } from '../lib/workout-model.js'
+import { reducedMotion } from '../lib/use-swipe-row.js'
 
 // Set 1 to 5 on the per-set chart — system colours, so each line keeps its hue in dark mode.
 const SET_COLORS = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)', 'var(--chart-5)']
@@ -113,9 +114,6 @@ function fatigueLabel(value) {
   return t(state === 'ready' ? 'Ready' : state === 'recovering' ? 'Recovering' : 'Fatigued')
 }
 
-// The user's own last registered bodyweight, in kg: the body-mass part of a bodyweight
-// exercise's load for fatigue and for estimated effort, so both read the same set the same way.
-
 function MuscleBalance({ S }) {
   const [view, setView] = useState('balance')
   const [win, setWin] = useState(7)
@@ -126,6 +124,8 @@ function MuscleBalance({ S }) {
   const now = useNow()
   const lang = getLang()
   const workouts = S.workouts
+  // The user's own last registered bodyweight, in kg: the body-mass part of a bodyweight
+  // exercise's load for fatigue and for estimated effort, so both read the same set the same way.
   const bodyweightKg = useMemo(() => profileBodyweightKg(S), [S.bodyweight, S.unit])
   const fatigue = useMemo(() => fatigueOf(workouts, now, { bodyweightKg, unit: S.unit }), [workouts, now, bodyweightKg, S.unit])
   const strength = useMemo(() => strengthOf(workouts, now, { bodyweightKg, unit: S.unit }), [workouts, now, bodyweightKg, S.unit])
@@ -407,7 +407,7 @@ export default function Stats() {
   // scroll-to-top on navigation to have happened first.
   useEffect(() => {
     if (!/[?&]focus=weekly-volume\b/.test(window.location.hash || '')) return
-    const frame = window.requestAnimationFrame(() => document.getElementById('weekly-volume')?.scrollIntoView?.({ block: 'start', behavior: 'smooth' }))
+    const frame = window.requestAnimationFrame(() => document.getElementById('weekly-volume')?.scrollIntoView?.({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' }))
     return () => window.cancelAnimationFrame(frame)
   }, [])
   const [exId, setExId] = useState(null)
@@ -633,7 +633,7 @@ export default function Stats() {
     {/* The lead card opens a lift in Exercise progress on its estimated-1RM chart. */}
     <StrengthTrend S={S} onPick={id => {
       setExId(id); setExMetric('e1rm')
-      window.requestAnimationFrame(() => document.getElementById('exercise-progress')?.scrollIntoView?.({ block: 'start', behavior: 'smooth' }))
+      window.requestAnimationFrame(() => document.getElementById('exercise-progress')?.scrollIntoView?.({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' }))
     }} />
 
     {/* Before the first workout, one card says what will appear here and leads to the Start
