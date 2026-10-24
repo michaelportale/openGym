@@ -145,6 +145,12 @@ export default function RestTimer() {
       </div>}
       <button type="button" className="tclock" onClick={adjustRestSheet}
         aria-label={(timer.ready ? t('Ready') : clock(timer.left)) + '. ' + t('Change the time left')}>
+        {/* The time left as a ring around nothing but itself: readable from the
+            bench at a glance, where the 3px bar along the top edge is not. Full when Ready. */}
+        <svg className="rest-ring" viewBox="0 0 36 36" aria-hidden="true">
+          <circle className="trk" cx="18" cy="18" r="15" />
+          <circle className="arc" cx="18" cy="18" r="15" pathLength="100" strokeDasharray="100" strokeDashoffset={timer.ready ? 0 : 100 - pct} />
+        </svg>
         <span className="t" role={timer.ready ? 'status' : undefined} data-alt={timer.ready ? '0:00' : t('Ready')}>{timer.ready ? t('Ready') : clock(timer.left)}</span>
         <span className="lbl">{label}<Icon name="chevronDown" /></span>
       </button>
