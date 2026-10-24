@@ -1893,7 +1893,6 @@ export default {
   'Your server': 'Il tuo server',
   'Your API key': 'La tua chiave API',
   'sec': 's',
-  'Not on iPhone': 'Non su iPhone',
   'iPhone only': 'Solo su iPhone',
   'Android app only': 'Solo nell’app Android',
   'Guest': 'Ospite',
@@ -1914,7 +1913,6 @@ export default {
   'Scroll to 0:00 to turn the rest timer off.': 'Scorri fino a 0:00 per spegnere il timer.',
   'The short break between the bursts of a rest-pause set.': 'La breve pausa tra i blocchi di una serie rest-pause.',
   'Each exercise can have its own rest too. Set it in the exercise settings of a routine.': 'Ogni esercizio può avere anche un suo recupero. Impostalo nelle impostazioni dell’esercizio di una routine.',
-  'iPhone doesn’t let openGym vibrate. A sound or a flash does the job.': 'L’iPhone non permette a openGym di vibrare. Un suono o un lampeggio fanno lo stesso.',
   'No account, no cloud. Back it up anytime in Data & backup.': 'Niente account, niente cloud. Fai un backup quando vuoi in Dati e backup.',
   'Effort per set is off. Turn it on in Settings → Workout to keep rating.': 'Lo sforzo per serie è disattivato. Attivalo in Impostazioni → Allenamento per continuare a valutare.',
   'Enter the code your other device shows under Settings → Account → Add another device. This device then gets a passkey of its own.': 'Inserisci il codice che il tuo altro dispositivo mostra in Impostazioni → Account → Aggiungi un altro dispositivo. Questo dispositivo avrà poi una passkey tutta sua.',
@@ -2521,4 +2519,6 @@ export default {
   "Create “{0}”": "Crea “{0}”",
   "sessions": "sessioni",
   "Needs two weigh-ins within 30 days": "Servono due pesate in 30 giorni",
+  "A light tap on iPhone": "Un tocco leggero su iPhone",
+  "On iPhone, Vibrate is a light tap when you tick a set (iOS 18 or later). The end of a rest still needs a sound or a flash.": "Su iPhone, Vibrazione è un tocco leggero quando spunti una serie (iOS 18 o successivo). Per la fine del recupero serve ancora un suono o un lampo.",
 }

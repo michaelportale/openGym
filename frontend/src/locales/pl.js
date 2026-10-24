@@ -1893,7 +1893,6 @@ export default {
   'Your server': 'Twój serwer',
   'Your API key': 'Twój klucz API',
   'sec': 's',
-  'Not on iPhone': 'Nie na iPhonie',
   'iPhone only': 'Tylko na iPhonie',
   'Android app only': 'Tylko w aplikacji na Androida',
   'Guest': 'Gość',
@@ -1914,7 +1913,6 @@ export default {
   'Scroll to 0:00 to turn the rest timer off.': 'Przewiń do 0:00, aby wyłączyć minutnik.',
   'The short break between the bursts of a rest-pause set.': 'Krótka przerwa między seriami cząstkowymi rest-pause.',
   'Each exercise can have its own rest too. Set it in the exercise settings of a routine.': 'Każde ćwiczenie może mieć też własną przerwę. Ustawisz ją w ustawieniach ćwiczenia w planie treningowym.',
-  'iPhone doesn’t let openGym vibrate. A sound or a flash does the job.': 'iPhone nie pozwala openGym wibrować. Dźwięk albo mignięcie wystarczą.',
   'No account, no cloud. Back it up anytime in Data & backup.': 'Bez konta, bez chmury. Zrób kopię w każdej chwili w Dane i kopie.',
   'Effort per set is off. Turn it on in Settings → Workout to keep rating.': 'Wysiłek na serię jest wyłączony. Włącz go w Ustawienia → Trening, aby dalej oceniać.',
   'Enter the code your other device shows under Settings → Account → Add another device. This device then gets a passkey of its own.': 'Wpisz kod, który twoje drugie urządzenie pokazuje w Ustawienia → Konto → Dodaj kolejne urządzenie. To urządzenie dostanie wtedy własny klucz dostępu.',
@@ -2521,4 +2519,6 @@ export default {
   "Create “{0}”": "Utwórz „{0}”",
   "sessions": {"one": "sesja", "few": "sesje", "many": "sesji", "other": "sesji"},
   "Needs two weigh-ins within 30 days": "Potrzebne dwa ważenia w ciągu 30 dni",
+  "A light tap on iPhone": "Lekkie stuknięcie na iPhonie",
+  "On iPhone, Vibrate is a light tap when you tick a set (iOS 18 or later). The end of a rest still needs a sound or a flash.": "Na iPhonie Wibracje to lekkie stuknięcie przy odhaczeniu serii (iOS 18 lub nowszy). Koniec przerwy nadal wymaga dźwięku lub błysku.",
 }

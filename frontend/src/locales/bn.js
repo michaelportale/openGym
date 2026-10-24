@@ -1935,7 +1935,6 @@ export default {
   'Your server': 'আপনার সার্ভার',
   'Your API key': 'আপনার API কী',
   'sec': 'সে.',
-  'Not on iPhone': 'iPhone-এ নয়',
   'iPhone only': 'শুধু iPhone',
   'Android app only': 'শুধু Android অ্যাপ',
   'Guest': 'গেস্ট',
@@ -1956,7 +1955,6 @@ export default {
   'Scroll to 0:00 to turn the rest timer off.': 'রেস্ট টাইমার বন্ধ করতে 0:00-এ স্ক্রল করুন।',
   'The short break between the bursts of a rest-pause set.': 'রেস্ট-পজ সেটের বার্স্টগুলোর মাঝের ছোট বিরতি।',
   'Each exercise can have its own rest too. Set it in the exercise settings of a routine.': 'প্রতিটি ব্যায়ামের নিজস্ব বিশ্রামও থাকতে পারে। রুটিনের ব্যায়াম সেটিংসে তা সেট করুন।',
-  'iPhone doesn’t let openGym vibrate. A sound or a flash does the job.': 'iPhone openGym-কে ভাইব্রেট করতে দেয় না। একটি শব্দ বা ঝলকেই কাজ হয়।',
   'No account, no cloud. Back it up anytime in Data & backup.': 'কোনো অ্যাকাউন্ট নেই, কোনো ক্লাউড নেই। “ডেটা ও ব্যাকআপ”-এ যেকোনো সময় ব্যাকআপ নিন।',
   'Effort per set is off. Turn it on in Settings → Workout to keep rating.': 'প্রতি সেটে পরিশ্রম বন্ধ আছে। রেটিং চালিয়ে যেতে সেটিংস → ওয়ার্কআউট-এ চালু করুন।',
   'Enter the code your other device shows under Settings → Account → Add another device. This device then gets a passkey of its own.': 'আপনার অন্য ডিভাইসে সেটিংস → অ্যাকাউন্ট → আরেকটি ডিভাইস যোগ করুন-এর নিচে যে কোড দেখায়, তা লিখুন। এরপর এই ডিভাইস নিজস্ব একটি পাসকি পাবে।',
@@ -2600,4 +2598,6 @@ export default {
   "Create “{0}”": "“{0}” তৈরি করুন",
   "sessions": "সেশন",
   "Needs two weigh-ins within 30 days": "30 দিনের মধ্যে দুবার ওজন লিখতে হবে",
+  "A light tap on iPhone": "iPhone-এ হালকা ট্যাপ",
+  "On iPhone, Vibrate is a light tap when you tick a set (iOS 18 or later). The end of a rest still needs a sound or a flash.": "iPhone-এ, সেট টিক দিলে Vibrate একটি হালকা ট্যাপ (iOS 18 বা পরে)। বিশ্রামের শেষে এখনও শব্দ বা ফ্ল্যাশ লাগবে।",
 }

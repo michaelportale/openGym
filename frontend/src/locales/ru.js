@@ -1897,7 +1897,6 @@ export default {
   'Your server': 'Ваш сервер',
   'Your API key': 'Ваш API-ключ',
   'sec': 'сек',
-  'Not on iPhone': 'Не на iPhone',
   'iPhone only': 'Только на iPhone',
   'Android app only': 'Только в приложении для Android',
   'Guest': 'Гость',
@@ -1918,7 +1917,6 @@ export default {
   'Scroll to 0:00 to turn the rest timer off.': 'Прокрутите до 0:00, чтобы выключить таймер.',
   'The short break between the bursts of a rest-pause set.': 'Короткая пауза между частями подхода рест-пауза.',
   'Each exercise can have its own rest too. Set it in the exercise settings of a routine.': 'У каждого упражнения может быть и свой отдых. Задайте его в настройках упражнения в программе.',
-  'iPhone doesn’t let openGym vibrate. A sound or a flash does the job.': 'iPhone не даёт openGym вибрировать. Хватит звука или вспышки.',
   'No account, no cloud. Back it up anytime in Data & backup.': 'Без аккаунта и облака. Сохраняйте копию когда угодно в разделе Данные и копии.',
   'Effort per set is off. Turn it on in Settings → Workout to keep rating.': 'Усилие в подходе выключено. Включите его в Настройки → Тренировка, чтобы продолжать оценивать.',
   'Enter the code your other device shows under Settings → Account → Add another device. This device then gets a passkey of its own.': 'Введите код, который другое устройство показывает в разделе Настройки → Аккаунт → Добавить другое устройство. Тогда у этого устройства будет свой ключ доступа.',
@@ -2525,4 +2523,6 @@ export default {
   "Create “{0}”": "Создать «{0}»",
   "sessions": {"one": "тренировка", "few": "тренировки", "many": "тренировок", "other": "тренировки"},
   "Needs two weigh-ins within 30 days": "Нужно два взвешивания за 30 дней",
+  "A light tap on iPhone": "Лёгкий отклик на iPhone",
+  "On iPhone, Vibrate is a light tap when you tick a set (iOS 18 or later). The end of a rest still needs a sound or a flash.": "На iPhone вибрация — это лёгкий отклик, когда вы отмечаете подход (iOS 18 и новее). Для конца отдыха по-прежнему нужен звук или вспышка.",
 }

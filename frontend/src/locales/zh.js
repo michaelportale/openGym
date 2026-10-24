@@ -1893,7 +1893,6 @@ export default {
   'Your server': '你的服务器',
   'Your API key': '你的 API 密钥',
   'sec': '秒',
-  'Not on iPhone': 'iPhone 不支持',
   'iPhone only': '仅限 iPhone',
   'Android app only': '仅限 Android 应用',
   'Guest': '访客',
@@ -1914,7 +1913,6 @@ export default {
   'Scroll to 0:00 to turn the rest timer off.': '滚动到 0:00 即可关闭休息计时。',
   'The short break between the bursts of a rest-pause set.': '歇息暂停组中各段之间的短暂休息。',
   'Each exercise can have its own rest too. Set it in the exercise settings of a routine.': '每个动作也可以有自己的休息时间。在计划的动作设置里修改。',
-  'iPhone doesn’t let openGym vibrate. A sound or a flash does the job.': 'iPhone 不允许 openGym 振动。用提示音或闪烁屏幕就够了。',
   'No account, no cloud. Back it up anytime in Data & backup.': '无需账号，也没有云端。随时在“数据与备份”里备份。',
   'Effort per set is off. Turn it on in Settings → Workout to keep rating.': '每组强度已关闭。在 设置 → 训练 中打开即可继续评分。',
   'Enter the code your other device shows under Settings → Account → Add another device. This device then gets a passkey of its own.': '输入你另一台设备在“设置 → 账号 → 添加其他设备”中显示的代码。之后此设备会有自己的通行密钥。',
@@ -2521,4 +2519,6 @@ export default {
   "Create “{0}”": "创建“{0}”",
   "sessions": "次训练",
   "Needs two weigh-ins within 30 days": "需要 30 天内两次体重记录",
+  "A light tap on iPhone": "iPhone 上为轻触反馈",
+  "On iPhone, Vibrate is a light tap when you tick a set (iOS 18 or later). The end of a rest still needs a sound or a flash.": "在 iPhone 上，勾选一组时“振动”是轻触反馈（iOS 18 或更高版本）。休息结束仍需要声音或闪光。",
 }
