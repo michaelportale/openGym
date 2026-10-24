@@ -504,7 +504,7 @@ function Insights({ S, window: win, compact }) {
       <div className="ins-h"><span>{t('Work sets by body part')}</span></div>
       {ins.bodyParts.slice(0, 6).map(b => <div key={b.bp} className="ins-bar">
         <span className="ins-bar-l">{bpLabel(b.bp)}</span>
-        <span className="ins-bar-t"><i style={{ width: Math.max(4, Math.round(b.sets / maxBp * 100)) + '%' }} /></span>
+        <span className="ins-bar-t"><i style={{ transform: `scaleX(${Math.max(4, Math.round(b.sets / maxBp * 100)) / 100})` }} /></span>
         <span className="ins-bar-v">{b.sets}</span>
       </div>)}
     </div>}

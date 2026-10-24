@@ -230,7 +230,8 @@
 .ins-bar{display:grid;grid-template-columns:76px 1fr 28px;align-items:center;gap:8px;padding:4px 0}
 .ins-bar-l{font-size:var(--fs-footnote);color:var(--label-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ins-bar-t{height:8px;border-radius:99px;background:var(--surface-3);overflow:hidden}
-.ins-bar-t i{display:block;height:100%;border-radius:99px;background:var(--acc);transition:width var(--med) var(--ease)}
+.ins-bar-t i{display:block;height:100%;width:100%;border-radius:99px;background:var(--acc);transform-origin:0 50%;transition:transform var(--med) var(--ease)}
+[dir="rtl"] .ins-bar-t i{transform-origin:100% 50%}
 .ins-bar-v{font-size:12px;font-weight:600;text-align:right;font-variant-numeric:tabular-nums}
 .ins-cmp{font-size:var(--fs-footnote);color:var(--label-2);line-height:1.5;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;padding:0 2px}
 .pcard-notes div{display:flex;gap:8px;align-items:flex-start}
