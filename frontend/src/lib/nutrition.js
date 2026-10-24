@@ -204,3 +204,8 @@ export function nutritionHistory(S) {
   const map = isMap(S?.nutritionDays) ? S.nutritionDays : {}
   return Object.keys(map).filter(d => ISO.test(d) && readNutritionDay(map[d])).sort().reverse()
 }
+
+/** The latest day with all five totals logged, or null: the Stats card's "Last logged" line. */
+export function lastNutritionDay(S) {
+  return nutritionHistory(S).find(d => isLoggedDay(nutritionDayOf(S, d))) || null
+}

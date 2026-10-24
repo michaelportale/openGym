@@ -31,6 +31,7 @@ import { tappable } from '../lib/use-sheet-keyboard.js'
 import StrengthTrend from '../components/StrengthTrend.jsx'
 import { isWarmupRow } from '../lib/workout-model.js'
 import { reducedMotion } from '../lib/use-swipe-row.js'
+import { lastNutritionDay } from '../lib/nutrition.js'
 
 // Set 1 to 5 on the per-set chart — system colours, so each line keeps its hue in dark mode.
 const SET_COLORS = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)', 'var(--chart-5)']
@@ -708,6 +709,13 @@ export default function Stats() {
           ? t('Last check-in {0}', fmtDate(S.measurements[S.measurements.length - 1].d, true))
           : t('Waist, arms, body fat and anything else you measure, each with its own curve.')}</div></div>
       <Button size="sm" variant="tinted" trailingIcon="chevronRight" style={{ flexShrink: 0 }} onClick={() => nav('/measurements')}>{t('Open')}</Button>
+    </div>
+    <div className="card row between nutri-card" style={{ alignItems: 'center', gap: 12 }}>
+      <div style={{ minWidth: 0 }}><h2 style={{ margin: 0 }}>{t('Nutrition')}</h2>
+        <div className="muted small" style={{ marginTop: 4 }}>{lastNutritionDay(S)
+          ? t('Last logged {0}', fmtDate(lastNutritionDay(S), true))
+          : t('Daily calories, protein and fiber against targets you set.')}</div></div>
+      <Button size="sm" variant="tinted" trailingIcon="chevronRight" style={{ flexShrink: 0 }} onClick={() => nav('/nutrition')}>{t('Open')}</Button>
     </div>
     {(hasEffort(S) || hasEstimableEffort(S)) && <EffortCard S={S} />}
 
