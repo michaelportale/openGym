@@ -2466,4 +2466,10 @@ export default {
   "Top muscle": "กล้ามเนื้อหลัก",
   "Share your week": "แชร์สัปดาห์ของคุณ",
   "Show which muscles this week trained.": "แสดงกล้ามเนื้อที่ฝึกในสัปดาห์นี้",
+  "{0} of {1} planned sets done": "ทำแล้ว {0} จาก {1} เซ็ตที่วางแผน",
+  "By movement": "ตามท่าทาง",
+  "Sets that could not be counted": "เซ็ตที่นับไม่ได้",
+  "A set where a muscle only helps counts as half a set.": "เซ็ตที่กล้ามเนื้อเป็นเพียงตัวช่วย นับเป็นครึ่งเซ็ต",
+  "No sets in these days yet.": "ยังไม่มีเซ็ตในช่วงวันนี้",
+  "Set your aims": "ตั้งเป้าหมาย",
 }

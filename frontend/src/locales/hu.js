@@ -2458,4 +2458,10 @@ export default {
   "Top muscle": "Fő izom",
   "Share your week": "A heted megosztása",
   "Show which muscles this week trained.": "Megmutatja, mely izmokat edzetted a héten.",
+  "{0} of {1} planned sets done": "{0} kész a {1} tervezett sorozatból",
+  "By movement": "Mozgás szerint",
+  "Sets that could not be counted": "Nem számolható sorozatok",
+  "A set where a muscle only helps counts as half a set.": "Az a sorozat, amelyben egy izom csak segít, fél sorozatnak számít.",
+  "No sets in these days yet.": "Ezeken a napokon még nincs sorozat.",
+  "Set your aims": "Céljaid beállítása",
 }

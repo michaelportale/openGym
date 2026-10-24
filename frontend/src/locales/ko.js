@@ -2455,4 +2455,10 @@ export default {
   "Top muscle": "가장 많이 쓴 근육",
   "Share your week": "이번 주 공유",
   "Show which muscles this week trained.": "이번 주에 단련한 근육을 보여줍니다.",
+  "{0} of {1} planned sets done": "계획한 {1}세트 중 {0}세트 완료",
+  "By movement": "동작별",
+  "Sets that could not be counted": "집계할 수 없는 세트",
+  "A set where a muscle only helps counts as half a set.": "근육이 보조로만 쓰인 세트는 반 세트로 셉니다.",
+  "No sets in these days yet.": "이 기간에는 아직 세트가 없습니다.",
+  "Set your aims": "목표 설정",
 }

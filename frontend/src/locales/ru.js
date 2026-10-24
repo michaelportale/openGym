@@ -2459,4 +2459,10 @@ export default {
   "Top muscle": "Главная мышца",
   "Share your week": "Поделиться неделей",
   "Show which muscles this week trained.": "Показать, какие мышцы работали на этой неделе.",
+  "{0} of {1} planned sets done": "Сделано {0} из {1} запланированных подходов",
+  "By movement": "По движениям",
+  "Sets that could not be counted": "Подходы, которые не удалось учесть",
+  "A set where a muscle only helps counts as half a set.": "Подход, где мышца только помогает, считается за половину.",
+  "No sets in these days yet.": "В эти дни подходов пока нет.",
+  "Set your aims": "Задать цели",
 }
