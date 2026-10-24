@@ -2512,4 +2512,6 @@ export default {
   "{0} sessions on rotation": "{0} sessões da rotação",
   "Add your 7-day average. Off unless you turn it on.": "Adiciona sua média de 7 dias. Fica desligado até você ligar.",
   "sessions": "sessões",
+  "{0} session in a row": "{0} sessão seguida",
+  "{0} sessions in a row": "{0} sessões seguidas",
 }

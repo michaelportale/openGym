@@ -2532,4 +2532,6 @@ export default {
   "{0} sessions on rotation": "{0} Einheiten in der Rotation",
   "Add your 7-day average. Off unless you turn it on.": "Fügt deinen 7-Tage-Schnitt hinzu. Aus, bis du es einschaltest.",
   "sessions": "Einheiten",
+  "{0} session in a row": "{0} Einheit in Folge",
+  "{0} sessions in a row": "{0} Einheiten in Folge",
 }

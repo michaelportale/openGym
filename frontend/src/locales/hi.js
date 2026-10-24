@@ -2512,4 +2512,6 @@ export default {
   "{0} sessions on rotation": "रोटेशन पर {0} सेशन",
   "Add your 7-day average. Off unless you turn it on.": "अपना 7 दिन का औसत जोड़ें। जब तक आप चालू न करें, बंद रहता है।",
   "sessions": "सत्र",
+  "{0} session in a row": "लगातार {0} सेशन",
+  "{0} sessions in a row": "लगातार {0} सेशन",
 }

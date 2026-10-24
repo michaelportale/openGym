@@ -2512,4 +2512,6 @@ export default {
   "{0} sessions on rotation": "로테이션 {0}회 연속",
   "Add your 7-day average. Off unless you turn it on.": "7일 평균을 추가해요. 켜기 전까지는 꺼져 있어요.",
   "sessions": "세션",
+  "{0} session in a row": "{0}회 연속",
+  "{0} sessions in a row": "{0}회 연속",
 }

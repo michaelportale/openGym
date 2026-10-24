@@ -2505,4 +2505,6 @@ export default {
   "{0} sessions on rotation": "輪替連續 {0} 次",
   "Add your 7-day average. Off unless you turn it on.": "加入你的 7 天平均。除非你開啟，否則保持關閉。",
   "sessions": "次訓練",
+  "{0} session in a row": "連續 {0} 次訓練",
+  "{0} sessions in a row": "連續 {0} 次訓練",
 }

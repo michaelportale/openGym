@@ -2591,4 +2591,6 @@ export default {
   "{0} sessions on rotation": "রোটেশনে {0}টি সেশন",
   "Add your 7-day average. Off unless you turn it on.": "আপনার ৭ দিনের গড় যোগ করুন। আপনি চালু না করলে বন্ধ থাকে।",
   "sessions": "সেশন",
+  "{0} session in a row": "টানা {0}টি সেশন",
+  "{0} sessions in a row": "টানা {0}টি সেশন",
 }

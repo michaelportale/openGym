@@ -2512,4 +2512,6 @@ export default {
   "{0} sessions on rotation": "{0} sessioni della rotazione",
   "Add your 7-day average. Off unless you turn it on.": "Aggiunge la tua media a 7 giorni. Disattivato finché non lo attivi.",
   "sessions": "sessioni",
+  "{0} session in a row": "{0} sessione di fila",
+  "{0} sessions in a row": "{0} sessioni di fila",
 }
