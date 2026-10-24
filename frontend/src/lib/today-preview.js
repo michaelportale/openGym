@@ -7,6 +7,12 @@ import { workoutAt } from './history.js'
 
 const routineIdsOf = w => (Array.isArray(w?.routineIds) ? w.routineIds : [w?.routineId]).filter(Boolean)
 
+// The parts of the state todayPreview reads (through buildPlannedEntry), so a caller can redo it
+// when one of them changes rather than on every state change. A test reads the state through a
+// Proxy and fails if the preview touches a key that is not listed here.
+export const PREVIEW_INPUTS = ['routines', 'workouts', 'unit', 'exWeights', 'startFrom', 'customEx', 'trainingMetadata',
+  'equipProfiles', 'activeEquipId', 'loadKind', 'dbLoad', 'dumbbells', 'plates', 'barWeights', 'bodyweight']
+
 /**
  * `ids`: the routines planned for `day` (effectiveRoutineIds). Returns
  * `{ exercises, last, up, lighter }`: `last` is the most recent saved workout before `day` that
