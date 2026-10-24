@@ -1965,10 +1965,8 @@ button.wl-summary{width:100%;padding:0 0 10px;text-align:start;border-radius:var
 .today-card .today-row.today-hero:active .today-cta{transform:scale(.97)}
 .today-hero .tag.today-cta{transition:transform var(--fast)}
 :root .today-card .today-row.today-hero:hover{background:none}
-/* The recovering line carries its own way out. */
 .today-recovering{align-items:center;flex-wrap:wrap}
 .today-recovering-t{flex:1 1 auto;min-width:0}
-.today-swap{min-height:44px;min-width:44px;padding:0 4px;margin-block:-12px;background:none;border:0;color:var(--acc-text);font:inherit;font-weight:600;cursor:pointer}
 /* "Choose a different workout": a quiet text button, full thumb height. */
 .today-card .btn.today-choose{min-height:44px;color:var(--label-2);background:none}
 /* The tab bar's Start steps aside while Home's own Start is on screen (lib/use-hide-fab.js). */

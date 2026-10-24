@@ -88,15 +88,20 @@ describe('Home — the Today card', () => {
     expect(tag.closest('button')).toBeNull()
   })
 
-  it('offers Swap on the recovering line, which picks another workout instead of starting this one', () => {
+  it('keeps every button out of the tappable today row, and offers one way to pick another workout', () => {
     const hard = session(daysAgo(1))
     hard.entries[0].sets = Array.from({ length: 12 }, () => ({ w: 60, r: 5, rir: 0, done: true }))
     setS({ workouts: [hard] }); mount()
+    const row = host.querySelector('.today-row')
+    expect(row.getAttribute('role')).toBe('button')
+    expect(host.querySelector('.today-recovering')).not.toBeNull()
+    expect(row.querySelectorAll('button, [role="button"], a[href]').length).toBe(0)
+    const choose = [...host.querySelectorAll('button')].filter(b => b.textContent === 'Choose a different workout')
+    expect(choose.length).toBe(1)
+    expect(choose[0].closest('[role="button"]')).toBeNull()
+    expect(host.querySelectorAll('[aria-label="Choose a different workout"]').length).toBe(0)
     startFlow.mockClear()
-    const swap = host.querySelector('.today-recovering .today-swap')
-    expect(swap.textContent).toBe('Swap')
-    expect(swap.getAttribute('aria-label')).toBe('Choose a different workout')
-    act(() => swap.click())
+    act(() => choose[0].click())
     expect(startFlow).not.toHaveBeenCalled()
   })
 
