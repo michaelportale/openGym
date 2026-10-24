@@ -68,3 +68,16 @@
   --on-acc-tile: #000000;
   --knob-ring: transparent;
 }
+
+/* light workout screen: warm neutrals instead of the ledger's olive ones */
+:root[data-theme="light"][data-palette="ember"] body.no-tabbar {
+  --bg: #f4f2ef;
+  --bg-el: #faf9f7;
+  --surface: #ffffff;
+  --surface-2: #ece8e3;
+  --surface-3: #ddd7cf;
+  --label: #1a1816;
+  --label-2: #5e5750;
+  --label-3: #6b645c;
+  --sep: #8f877e;
+}
