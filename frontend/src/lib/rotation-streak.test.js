@@ -205,3 +205,31 @@ describe('a pause after the streak broke does not revive it', () => {
     expect(s.count).toBe(4)
   })
 })
+
+describe('malformed pauses in a saved state', () => {
+  const log = [wo(0, 'a'), wo(2, 'b'), wo(4, 'c'), wo(9, 'd')] // gap limit 5: broken from day 15
+  it('a pause that ends before it starts covers nothing: the streak still breaks', () => {
+    const s = rotationStreak(rot(log, { pauses: [{ kind: 'sick', since: day(14), until: day(12) }] }), day(15))
+    expect(s.state).toBe('broken')
+    expect(s.count).toBe(0)
+  })
+  it('a pause that starts after today is ignored', () => {
+    const s = rotationStreak(rot(log, { pauses: [{ kind: 'sick', since: day(30), until: day(31) }] }), day(15))
+    expect(s.state).toBe('broken')
+  })
+  it('an end far in the future counts only up to today', () => {
+    const far = rotationStreak(rot(log, { pauses: [{ kind: 'injured', since: day(12), until: '2099-01-01' }] }), day(16))
+    const today = rotationStreak(rot(log, { pauses: [{ kind: 'injured', since: day(12), until: day(16) }] }), day(16))
+    expect(far).toEqual(today)
+    expect(far.state).toBe('active')
+  })
+  it('a running status dated after today does not read as paused', () => {
+    const s = rotationStreak(rot(log, { status: { kind: 'sick', since: day(20) } }), day(10))
+    expect(s.state).toBe('active')
+    expect(s.count).toBe(4)
+  })
+  it('a garbled date is dropped rather than read as day NaN', () => {
+    const s = rotationStreak(rot(log, { pauses: [{ kind: 'sick', since: '2026-ab-01', until: day(14) }] }), day(15))
+    expect(s.state).toBe('broken')
+  })
+})
