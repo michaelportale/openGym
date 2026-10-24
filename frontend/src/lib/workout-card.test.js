@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { workoutCardModel, layoutWorkoutCard, wrapText, parseColor, mixColor, mapColors, viewAspect, MAX_RECORDS, CARD_WIDTH } from './workout-card.js'
+import { workoutCardModel, layoutWorkoutCard, wrapText, parseColor, mixColor, mapColors, recordColor, viewAspect, MAX_RECORDS, CARD_WIDTH } from './workout-card.js'
 import { fmtDate } from './format.js'
 
 // #453: a finished workout shared as a picture. A fake measure stands in for the canvas — every
@@ -189,6 +189,13 @@ describe('card colours', () => {
     expect(parseColor('rgba(235,235,245,.6)')).toEqual([235, 235, 245, 0.6])
     expect(parseColor('rgb(10 20 30 / 50%)')).toEqual([10, 20, 30, 0.5])
     expect(parseColor('var(--acc)')).toBeNull()
+  })
+
+  it('paints new records in the theme gold, darkened on a light card, else in the accent', () => {
+    expect(recordColor('#f2c14e', '#ff5a1f')).toBe('#f2c14e')
+    expect(recordColor('#af7e0d', '#ff5a1f', true)).toBe('rgb(122, 88, 9)')
+    expect(recordColor('', '#ff5a1f')).toBe('#ff5a1f')
+    expect(recordColor('var(--yellow)', '#ff5a1f', true)).toBe('#ff5a1f')
   })
 
   it('mixes the way CSS color-mix(in srgb) does', () => {
