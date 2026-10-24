@@ -148,3 +148,13 @@ body.no-tabbar .workout-end-spacer { height: 20px; }
 :root[data-theme="light"] .finish-record-v,
 :root[data-theme="light"] .workout-finish-summary .pr-tile .v { color: color-mix(in srgb, var(--pr) 70%, black); }
 :root[data-theme="light"] .workout-finish-summary .tiles .tile { background: var(--bg); }
+
+/* The records arrive one after another, 80 ms apart, after the trophy; opacity and transform
+   only, and not at all under reduced motion. */
+.finish-records.gold .finish-record { animation: finish-record-in .32s cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(.3s + var(--i, 0) * 80ms); }
+.finish-records.gold .finish-record:nth-of-type(2) { --i: 1; }
+.finish-records.gold .finish-record:nth-of-type(3) { --i: 2; }
+.finish-records.gold .finish-record:nth-of-type(4) { --i: 3; }
+.finish-records.gold .finish-record:nth-of-type(n+5) { --i: 4; }
+@keyframes finish-record-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .finish-records.gold .finish-record { animation: none; } }

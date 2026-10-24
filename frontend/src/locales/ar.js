@@ -2523,4 +2523,12 @@ export default {
   "{0} muscles on target": "عضلات بلغت الهدف: {0}",
   "Train a few sessions to see coverage": "تمرّن بضع جلسات لترى التغطية",
   "Set coverage aims": "حدّد أهداف التغطية",
+  "Last: {0}": "آخر مرة: {0}",
+  "First time — set a baseline": "أول مرة — سجّل نقطة البداية",
+  "Ahead of last time": "أفضل من المرة الماضية",
+  "Beat it": "تفوّق عليه",
+  "Beat it: fill in {0}": "تفوّق عليه: املأ {0}",
+  "{0} rep": "{0} تكرار",
+  "{0} reps": "{0} تكرارات",
+  "New PR · {0}": "رقم قياسي جديد · {0}",
 }

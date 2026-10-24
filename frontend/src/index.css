@@ -823,6 +823,8 @@ body.chips-dragging *{cursor:inherit}
   display:flex;align-items:center;background:var(--surface-2);
   border-radius:10px;overflow:hidden;min-width:0;
 }
+/* + and − repeat while held (lib/hold-repeat.js): no text selection or callout on the hold */
+.stp button{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;touch-action:manipulation}
 .stp button{
   width:40px;height:44px;flex:none;color:var(--label);font-size:16px;
   display:flex;align-items:center;justify-content:center;
@@ -1092,6 +1094,16 @@ body::before{
   transition:background var(--fast),color var(--fast);
 }
 .setrow .stp.w{flex:1.4;min-width:0}
+/* last time, under a work row: secondary, starting under the steppers; "Beat it" is a soft-accent
+   chip with a full 44px target, and "ahead" is plain text with its arrow, no colour */
+.setghost{display:flex;align-items:center;gap:8px;min-height:24px;margin:-2px 0 4px;padding-inline-start:32px;font-size:13px;color:var(--label-2);font-variant-numeric:tabular-nums}
+.setghost-ahead{color:var(--label)}
+.setghost .set-record{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;background:var(--pr-soft);color:var(--label);font-weight:600;animation:set-record-in 420ms var(--ease-out,cubic-bezier(.2,.8,.2,1)) both}
+.setghost .set-record .icn{color:var(--pr)}
+@keyframes set-record-in{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.setghost .set-record{animation:none}}
+.setghost .chip.setghost-beat{position:relative;margin-inline-start:auto;min-height:28px;padding:0 12px;font-size:13px;font-weight:600;background:var(--acc-soft);color:var(--acc-text);border:0}
+.setghost .chip.setghost-beat::before{content:'';position:absolute;inset:-8px -4px}
 .setrow .stp.r{flex:1;min-width:0}
 /* The number outranks the buttons in every set row, not only the ones with an effort column
    that #235 covered: a 320 px phone left 0–6 px for the reps number and showed 102.5 as "102",
