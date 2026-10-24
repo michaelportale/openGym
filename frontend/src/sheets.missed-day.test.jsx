@@ -181,6 +181,6 @@ describe('badges on a workout logged into the past', () => {
     expect(byDay['2026-09-15']).not.toContain(BENCH)   // 52.5 no longer leads what came before it
     expect(byDay['2026-09-11']).toContain(BENCH)
     // The summary names it.
-    expect(mountTopSheet().textContent).toContain('New PR:')
+    expect(mountTopSheet().querySelector('.finish-records.gold').textContent).toMatch(/bench press/i)
   })
 })

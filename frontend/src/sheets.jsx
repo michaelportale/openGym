@@ -66,7 +66,7 @@ import { editCompletedSession, editLeftEmpty, editedRecord, editChangesNothing }
 import { stampWorkout } from './lib/sync-merge.js'
 import { weeklyWeights } from './lib/bodyweight.js'
 import { workoutText } from './lib/workout-text.js'
-import { workoutCardModel, layoutWorkoutCard, drawWorkoutCard, viewAspect, CARD_FONT } from './lib/workout-card.js'
+import { workoutCardModel, layoutWorkoutCard, drawWorkoutCard, viewAspect, recordColor, CARD_FONT } from './lib/workout-card.js'
 import { copyText } from './lib/clipboard.js'
 import { queueRemaining, pinState } from './lib/queue.js'
 import { DAY_NOTE_TAGS, DAY_NOTE_LABEL, DAY_NOTE_ICON, dayNoteOf, dayNoteLine, canNoteDay, withDayNote } from './lib/day-notes.js'
@@ -2844,6 +2844,7 @@ async function workoutCardImage(model, { map, body }) {
   const root = getComputedStyle(document.documentElement)
   const css = (name, fallback) => root.getPropertyValue(name).trim() || fallback
   const colors = { bg: css('--bg', '#000'), surface: css('--surface', '#1c1c1e'), tile: css('--surface-2', '#2c2c2e'), label: css('--label', '#fff'), label2: css('--label-2', '#999'), acc: css('--acc', PALETTE_ACCENT[DEFAULT_PALETTE]) }
+  colors.pr = recordColor(css('--pr', ''), colors.acc, document.documentElement.dataset.theme === 'light')
   // The body geometry is ~90 KB and lazy everywhere else too (components/BodyMap.jsx).
   const geometry = map && model.levels ? (await import('./lib/body-paths.js')).default : null
   const shape = geometry && (geometry[body] || geometry.male)
@@ -3504,21 +3505,39 @@ function CardioDone({ st, w }) {
   </div>
 }
 
-function FinishSummary({ w, prs, e1prs = [], close }) {
+// The finish summary leads with what was beaten. A load PR turns the check into a gold trophy
+// and lists each lift with its new top weight and the best it passed (`prBest`, read before the
+// workout was saved); gold is kept for these alone. A best estimated 1RM without a heavier top
+// set sits in the same card in neutral colours, so it is not read as a load PR. Share as image
+// is offered while the moment is fresh; it is the workout sheet's own card.
+function FinishSummary({ w, prs, e1prs = [], prBest = {}, close }) {
   const st = useStore(s => s.S)
-  return <div className="workout-finish-summary" style={{ textAlign: 'center', padding: '8px 0' }}>
-    <div className="finish-check"><Icon name="check" /></div>
+  const won = [...new Set(prs)]
+  const nameOf = e => (EXIDX[e.id] ? exerciseNameFor(EXIDX[e.id]) : (e.n || e.id))
+  const exName = id => <span className={'finish-record-n ' + exerciseNameClass(EXIDX[id])}>{EXIDX[id] ? exerciseNameFor(EXIDX[id]) : id}</span>
+  const kg = v => fmtNum(v) + ' ' + st.unit
+  return <div className={'workout-finish-summary' + (won.length ? ' has-pr' : '')} style={{ textAlign: 'center', padding: '8px 0' }}>
+    <div className={'finish-check' + (won.length ? ' finish-pr' : '')}><Icon name={won.length ? 'trophy' : 'check'} /></div>
     <h3 style={{ margin: '8px 0' }}>{t('Workout complete!')}</h3>
+    {(won.length > 0 || e1prs.length > 0) && <div className={'finish-records' + (won.length ? ' gold' : '')}>
+      {won.length > 0 && <div className="finish-records-h"><Icon name="trophy" />{t('New personal records')}</div>}
+      {won.map(id => {
+        const b = prBest[id]
+        return <div key={id} className="finish-record pr-row">
+          <div className="finish-record-l">{exName(id)}{b && b.was > 0 && <div className="finish-record-s">{t('Previous best:')} {kg(b.was)}</div>}</div>
+          {b && b.w > 0 && <div className="finish-record-v">{kg(b.w)}</div>}
+        </div>
+      })}
+      {e1prs.map(p => <div key={p.id} className="finish-record e1-row">
+        <div className="finish-record-l">{exName(p.id)}<div className="finish-record-s"><Icon name="chartLine" />{t('Best estimated 1RM:')} {kg(p.est)}</div></div>
+      </div>)}
+    </div>}
     <div className="tiles" style={{ textAlign: 'start' }}>
       <div className="tile"><div className="l">{t('Duration')}</div><div className="v" style={{ fontSize: '1.1rem' }}>{fmtDur(w.end - w.start)}</div></div>
       <div className="tile"><div className="l">{t('Volume')}</div><div className="v" style={{ fontSize: '1.1rem' }}>{fmtVol(w.vol, st.unit, w.volumePartial)}</div></div>
       <div className="tile"><div className="l">{t('Sets')}</div><div className="v" style={{ fontSize: '1.1rem' }}>{setsWorkCount(setsDone(w), workSetsDone(w))}</div></div>
-      <div className="tile"><div className="l">{t('PRs')}</div><div className="v" style={{ fontSize: 20 }}>{prs.length || '–'}</div></div>
+      <div className={'tile' + (won.length ? ' pr-tile' : '')}><div className="l">{t('PRs')}</div><div className="v" style={{ fontSize: 20 }}>{won.length || '–'}</div></div>
     </div>
-    {(prs.length > 0 || e1prs.length > 0) && <div style={{ textAlign: 'start', marginBottom: 12 }}>
-      {prs.map(id => <div key={id} className="small accent row" style={{ gap: 5 }}><Icon name="trophy" style={{ fontSize: 13 }} />{t('New PR:')} <span className={exerciseNameClass(EXIDX[id])}>{EXIDX[id] ? exerciseNameFor(EXIDX[id]) : id}</span></div>)}
-      {e1prs.map(p => <div key={p.id} className="small accent row" style={{ gap: 5 }}><Icon name="chartLine" style={{ fontSize: 13 }} />{t('Best estimated 1RM:')} <span className={exerciseNameClass(EXIDX[p.id])}>{EXIDX[p.id] ? exerciseNameFor(EXIDX[p.id]) : p.id}</span> · {fmtNum(p.est)} {st.unit}</div>)}
-    </div>}
     <h4 className="sec" style={{ textAlign: 'start' }}>{t('What you just trained')}</h4>
     <BodyMap load={loadOfWorkouts([w])} body={st.body} />
     <div style={{ height: 14 }} />
@@ -3527,6 +3546,7 @@ function FinishSummary({ w, prs, e1prs = [], close }) {
     {/* The moment for a progress photo or the clip of a set: the workout is already saved, so
         what is added here goes straight onto its record. */}
     <div style={{ textAlign: 'start' }}><WorkoutMediaSection w={w} hint /></div>
+    {won.length > 0 && <Button icon="share" className="finish-share" onClick={() => ui().openSheet(c2 => <ShareWorkoutImage w={S().workouts.find(x => sameWorkout(x, w)) || w} nameOf={nameOf} close={c2} />)}>{t('Share as image')}</Button>}
     <Button variant="primary" onClick={() => closeThenNav(close, '/home')}>{t('Nice!')}</Button>
   </div>
 }
@@ -3569,6 +3589,8 @@ function doFinishWorkout() {
   const past = !!A.backfill
   const prs = []
   const e1prs = []
+  // What each load PR beat, for the summary only: nothing here is stored.
+  const prBest = {}
   // A workout logged into the past is held against the history before it, the way an edit of a
   // saved one is (rebuildPrHistory, below): it gains a badge it leads with, and a later session
   // it outdoes loses its own. It used to report none at all while the editor's Save awarded them
@@ -3578,7 +3600,8 @@ function doFinishWorkout() {
     const loads = e.sets.filter(s => s.done && !isWarmupRow(s)).map(s => s.w).filter(w => w > 0)
     const mx = loads.length ? loads.reduce((a, b) => betterWeight(e.id, a, b)) : 0
     // Held against history read the way this session logged a dumbbell weight (lib/dumbbells.js).
-    if (beatsWeight(e.id, mx, bestWeightFor(st, e.id, entryDbLoad(e)))) prs.push(e.id)
+    const was = bestWeightFor(st, e.id, entryDbLoad(e))
+    if (beatsWeight(e.id, mx, was)) { prs.push(e.id); prBest[e.id] = { w: mx, was } }
     // A heavier estimate without a heavier top set is its own kind of progress —
     // same weight for more reps. Reported separately so it can't be read as a load PR.
     const rec = is1RMRecord(st, e.id, e)
@@ -3620,5 +3643,5 @@ function doFinishWorkout() {
   // into s.active, which is gone. What it held is not logged, like any set left unchecked.
   useUI.getState().stopWork()
   beep(snd(), 880, 0.15); beep(snd(), 1100, 0.15, 0.18); beep(snd(), 1320, 0.3, 0.36)
-  ui().openSheet(close => <FinishSummary w={shown} prs={prs} e1prs={e1prs} close={close} />, { kind: 'center', locked: true })
+  ui().openSheet(close => <FinishSummary w={shown} prs={prs} e1prs={e1prs} prBest={prBest} close={close} />, { kind: 'center', locked: true })
 }
