@@ -211,7 +211,7 @@ export function OwedSheet({ kind, count: count0, media: media0 = 0, exportBackup
       {count > 0 ? t('Not on your server yet: {0}', changeCount(count)) : t('Some changes on this device have not reached your server.')}
     </div>}
     {media > 0 && <div style={{ marginBottom: 6, fontWeight: 600 }}>{tn('{0} photo or video has not reached your server yet.', '{0} photos or videos have not reached your server yet.', media)}</div>}
-    {(tried || refused) && view && <div className="small" style={{ color: 'var(--red)', marginBottom: 6 }}>{view.line}</div>}
+    {(tried || refused) && view && <div className="small" style={{ color: 'var(--danger)', marginBottom: 6 }}>{view.line}</div>}
     {/* It names the button below it: Try again, or Pair again / Sign in where the server refuses. */}
     <div className="muted small" style={{ marginBottom: 18, lineHeight: 1.5 }}>
       {refused
@@ -234,7 +234,7 @@ export function OwedSheet({ kind, count: count0, media: media0 = 0, exportBackup
 }
 
 /* ---------------------------------------------------------------- Settings ------------------- */
-const TINT = { ok: 'var(--success)', wait: 'var(--warning)', off: 'var(--grey)', bad: 'var(--red)', quiet: 'var(--grey)' }
+const TINT = { ok: 'var(--success)', wait: 'var(--warning)', off: 'var(--grey)', bad: 'var(--danger)', quiet: 'var(--grey)' }
 
 // Settings → "Server & sync", for a device signed in or paired: which server, which account, how
 // things stand, since when, what is still waiting, and "Sync now". `children` are the account's

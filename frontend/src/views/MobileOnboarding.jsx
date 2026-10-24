@@ -112,7 +112,7 @@ export function ConnectSheet({ close, initialUrl = '', again = false }) {
     <div style={{ height: 10 }} />
     <input ref={codeRef} className="input" placeholder={t('Pairing code')} maxLength={8} value={code}
       onChange={e => setCode(e.target.value.toUpperCase())} style={{ letterSpacing: '.14em', fontWeight: 600, textAlign: 'center' }} />
-    {error && <div className="small" role="alert" style={{ color: 'var(--red)', marginTop: 10, lineHeight: 1.45, overflowWrap: 'anywhere' }}>{error}</div>}
+    {error && <div className="small" role="alert" style={{ color: 'var(--danger)', marginTop: 10, lineHeight: 1.45, overflowWrap: 'anywhere' }}>{error}</div>}
     <div style={{ height: 12 }} />
     <Button variant="primary" onClick={go} disabled={busy}>{busy ? t('Connecting…') : t('Connect')}</Button>
     <div style={{ height: 10 }} />

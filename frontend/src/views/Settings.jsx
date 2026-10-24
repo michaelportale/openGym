@@ -795,7 +795,7 @@ export default function Settings({ page = null, find = null, via = null }) {
       </Section>
       {hasMedia && <Section><MediaRow /></Section>}
       <Section>
-        <Row icon="trash" iconTint="var(--red)" title={t('Reset everything')} danger onClick={resetEverything} />
+        <Row icon="trash" iconTint="var(--danger)" title={t('Reset everything')} danger onClick={resetEverything} />
       </Section>
       <input ref={fileRef} type="file" accept=".json,.zip,application/json,application/zip" style={{ display: 'none' }} onChange={doImport} />
       {/* Reset after reading so picking the same file twice still fires onChange. */}
@@ -844,7 +844,7 @@ export default function Settings({ page = null, find = null, via = null }) {
         {MOBILE && <>
           {user.admin && <Row icon="crown" iconTint="var(--indigo)" title={t('Admin dashboard')} accessory="chevron" onClick={() => nav('/admin')} />}
           <AccountIdRow id={user.id} />
-          <Row icon="signOut" iconTint="var(--red)" title={t('Disconnect')} danger onClick={disconnect} />
+          <Row icon="signOut" iconTint="var(--danger)" title={t('Disconnect')} danger onClick={disconnect} />
         </>}
       </ServerSyncSection>}
 
@@ -868,8 +868,8 @@ export default function Settings({ page = null, find = null, via = null }) {
           <Row icon="qr" iconTint="var(--blue)" title={t('Pair the mobile app')} subtitle={t('Connect the openGym app on your phone to this account.')} accessory="chevron"
             onClick={() => useUI.getState().openSheet(close => <PairSheet close={close} />)} />
           {pwOn && <PasswordRow version={credsV} />}
-          <Row icon="signOut" iconTint="var(--red)" title={t('Sign out')} danger onClick={signOutHere} />
-          <Row icon="shield" iconTint="var(--red)" title={t('Sign out everywhere')} subtitle={t('Ends this profile’s sessions on all your devices.')} danger onClick={signOutEverywhere} />
+          <Row icon="signOut" iconTint="var(--danger)" title={t('Sign out')} danger onClick={signOutHere} />
+          <Row icon="shield" iconTint="var(--danger)" title={t('Sign out everywhere')} subtitle={t('Ends this profile’s sessions on all your devices.')} danger onClick={signOutEverywhere} />
           <AccountIdRow id={user.id} />
         </> : webauthnOK() ? <>
           <Row icon="plusCircle" iconTint="var(--acc)" title={t('Create passkey profile')} subtitle={t('Keeps your data safe and separate per person.')} accessory="chevron" onClick={registerHere} />
@@ -1102,7 +1102,7 @@ function MobileReminderCard({ S, update, toast }) {
 function NudgeRows({ S, setReminder }) {
   const r = S.reminder || {}
   return <>
-    <Row icon="bell" iconTint="var(--red)" title={t('Nudge me when I skip a planned workout')}>
+    <Row icon="bell" iconTint="var(--danger)" title={t('Nudge me when I skip a planned workout')}>
       <Switch checked={!!r.nudge} onChange={() => setReminder({ nudge: !r.nudge })} />
     </Row>
     {r.nudge && (
@@ -1163,7 +1163,7 @@ function PushCard({ S, update, toast }) {
           nudgeNote(S)
         : null}
     >
-      <Row icon="bell" iconTint="var(--red)" title={t('Push notifications')} subtitle={t('Rest-timer alerts, even if openGym is closed.')}>
+      <Row icon="bell" iconTint="var(--danger)" title={t('Push notifications')} subtitle={t('Rest-timer alerts, even if openGym is closed.')}>
         <Switch checked={on} disabled={busy} onChange={toggle} />
       </Row>
       {on && (
@@ -1446,7 +1446,7 @@ function HealthConnectCard({ S, toast }) {
 
   if (st.status !== 'available') return (
     <Section title={t('Health Connect')}>
-      <Row icon="heart" iconTint="var(--red)" title={t('Health Connect')}
+      <Row icon="heart" iconTint="var(--danger)" title={t('Health Connect')}
         subtitle={st.status === 'update'
           ? t('Update Health Connect to share workouts and weigh-ins with other apps.')
           : t('Install Health Connect to share workouts and weigh-ins with other apps.')}
@@ -1484,7 +1484,7 @@ function HealthConnectCard({ S, toast }) {
   return (
     <Section title={t('Health Connect')}
       footer={h.on ? t('Workouts and weigh-ins go to Health Connect when you finish or change them. openGym reads nothing back.') : null}>
-      <Row icon="heart" iconTint="var(--red)" title={t('Write to Health Connect')}
+      <Row icon="heart" iconTint="var(--danger)" title={t('Write to Health Connect')}
         subtitle={t('Finished workouts and weigh-ins, from this phone only.')}>
         <Switch checked={!!h.on} disabled={busy} onChange={v => (v ? turnOn() : askOff())} />
       </Row>

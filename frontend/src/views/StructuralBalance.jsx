@@ -13,7 +13,7 @@ import { TEMPLATES, TEMPLATE_LIST, DEFAULT_TEMPLATE_ID, EVALUATION_MODES } from 
 const STATUS_COLOR = {
   balanced: 'var(--success)',
   borderline: 'var(--yellow)',
-  weak: 'var(--red)',
+  weak: 'var(--danger)',
   'no-data': 'var(--label-3)',
 }
 

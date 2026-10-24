@@ -178,7 +178,7 @@ function InvitesCard({ invites, reload, inviteOnly }) {
         <button className="adm-code" onClick={() => copy(i.code)} aria-label={'copy ' + i.code}>{i.code}</button>
         <div className="row" style={{ gap: 4 }}>
           <button className="iconbtn adm-iconbtn" onClick={() => copy(i.code)} aria-label="copy"><Icon name="copy" /></button>
-          <button className="iconbtn adm-iconbtn" style={{ color: 'var(--red)' }} onClick={() => revoke(i.code)} aria-label="revoke"><Icon name="trash" /></button>
+          <button className="iconbtn adm-iconbtn" style={{ color: 'var(--danger)' }} onClick={() => revoke(i.code)} aria-label="revoke"><Icon name="trash" /></button>
         </div>
       </div>)}
     </> : null}
@@ -221,7 +221,7 @@ function AuditCard({ tick }) {
 
   return <div className="card">
     <div className="row between"><h2 style={{ margin: 0 }}>Activity log</h2>
-      <button className="iconbtn adm-iconbtn" style={{ color: 'var(--red)' }} onClick={clear} aria-label="clear log"><Icon name="trash" /></button></div>
+      <button className="iconbtn adm-iconbtn" style={{ color: 'var(--danger)' }} onClick={clear} aria-label="clear log"><Icon name="trash" /></button></div>
     <div className="adm-lead">
       Who signed in, what failed, and what an admin changed.
       {meta ? ' ' + fmtNum(meta.total) + ' events'
@@ -292,7 +292,7 @@ export default function Admin() {
       Everything about running this instance: who uses it, how they get in, the AI Coach, and what has happened on it. Nothing here shows anyone's training data beyond counts.
     </div>
 
-    {usersErr && <div className="card" role="alert" style={{ borderColor: 'var(--red)' }}>
+    {usersErr && <div className="card" role="alert" style={{ borderColor: 'var(--danger)' }}>
       <div className="row between"><h2 style={{ margin: 0 }}>{users ? 'The last update failed' : 'Could not load the users'}</h2>
         <Button size="sm" icon="reset" onClick={loadUsers}>Try again</Button></div>
       <div className="adm-lead" style={{ marginBottom: 0 }}>

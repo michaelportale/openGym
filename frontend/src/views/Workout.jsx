@@ -2109,7 +2109,7 @@ function ActiveWorkout() {
       </div>
       <div style={{ height: 6 }} />
       <div style={{ display: 'flex', justifyContent: 'center' }}>
-        <Button size="sm" icon="minus" style={{ color: 'var(--red)' }} disabled={!!work} onClick={removeExerciseSheet}>{t('Remove exercise')}</Button>
+        <Button size="sm" icon="minus" style={{ color: 'var(--danger)' }} disabled={!!work} onClick={removeExerciseSheet}>{t('Remove exercise')}</Button>
       </div>
     </>}
     <div style={{ height: 10 }} />

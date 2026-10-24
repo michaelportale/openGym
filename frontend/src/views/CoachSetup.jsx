@@ -162,7 +162,7 @@ export default function CoachSetup() {
       </Section>
 
       {meta.baseUrl && <Section title={t('Endpoint')}
-        footer={isCleartext(baseUrl) ? <span style={{ color: 'var(--red)' }}>{cleartextRefused()}</span> : null}>
+        footer={isCleartext(baseUrl) ? <span style={{ color: 'var(--danger)' }}>{cleartextRefused()}</span> : null}>
         <div style={{ padding: '8px 12px' }}>
           <TextField value={baseUrl} placeholder="https://ollama.example.com" inputMode="url" autoCapitalize="none" autoCorrect="off"
             onChange={e => setBaseUrl(e.target.value)} />
@@ -211,7 +211,7 @@ export default function CoachSetup() {
     </>}
 
     {coachLocal?.mode && coachLocal.mode !== 'off' && <Section title={t('Controls')}>
-      <Row icon="signOut" iconTint="var(--red)" title={t('Turn the Coach off on this phone')} danger onClick={turnOff} />
+      <Row icon="signOut" iconTint="var(--danger)" title={t('Turn the Coach off on this phone')} danger onClick={turnOff} />
     </Section>}
   </div>
 }
