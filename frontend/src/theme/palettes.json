@@ -29,7 +29,11 @@
         "danger": "#FF4D6D"
       },
       "contrastOnSurface": { "text1": 15.73, "text2": 7.28, "text3": 3.79, "accent": 6.24, "success": 13.64, "pr": 10.55, "warning": 9.68, "danger": 5.51, "onAccentBlack": 7.41 },
-      "successTreatment": "Completed sets/days use chalk (success) with a check glyph on accentMuted fill; gold (pr) only for personal records."
+      "successTreatment": "Completed sets/days use chalk (success) with a check glyph on accentMuted fill; gold (pr) only for personal records.",
+      "light": {
+        "notes": "Explicit light values where the derived ones fail: success apart from PR gold (graphite ink, 7.55:1 on white).",
+        "success": "#5C5346"
+      }
     },
     {
       "name": "volt",

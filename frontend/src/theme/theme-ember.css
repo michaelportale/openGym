@@ -52,12 +52,12 @@
 
 /* light: the app's light surfaces, with this palette's colours made readable on them */
 :root[data-theme="light"][data-palette="ember"] {
-  --success: #a08350;
+  --success: #5c5346;
   --warning: #b97700;
   --danger: #ff4365;
   --pr: #af7e0d;
   --on-success: #000000;
-  --on-success-tile: #000000;
+  --on-success-tile: #ffffff;
   --on-warning-tile: #000000;
 }
 
