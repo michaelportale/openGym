@@ -226,7 +226,6 @@ export default {
   'Finish workout early · {0} exercises': 'Training vorzeitig beenden · {0} Übungen',
   'Rest’s over. Next set!': 'Pause vorbei. Nächster Satz!',
   // --- home ---
-  'Hi {0}': 'Hi {0}',
   'This week': 'Diese Woche',
   '{0} (in progress)': '{0} (läuft)',
   'Resume ▶': 'Weiter ▶',
@@ -2528,4 +2527,5 @@ export default {
   "Body weight, {0}": "Körpergewicht, {0}",
   "Log {0} more weigh-ins to see your trend": "Noch {0}× wiegen, dann erscheint dein Trend",
   "Your goal is drawn as a dashed line through the weight charts.": "Dein Ziel erscheint als gestrichelte Linie in den Gewichtsdiagrammen.",
+  "sessions": "Einheiten",
 }

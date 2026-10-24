@@ -15,7 +15,8 @@ const weekdayLong = iso => new Date(iso + 'T12:00:00').toLocaleDateString(dateLo
 
 /** The lines the card shows, also joined into its accessible name. */
 export function streakLines(st) {
-  const unitLabel = tn('session on rotation', 'sessions on rotation', st.count)
+  // "on rotation" only in Rotation mode; a Fixed Week streak counts its planned sessions.
+  const unitLabel = st.mode === 'rotation' ? tn('session on rotation', 'sessions on rotation', st.count) : tn('session', 'sessions', st.count)
   const meta = [tn('{0} round', '{0} rounds', st.rounds), tn('{0} rest pass', '{0} rest passes', st.passes)].join(' · ')
   if (st.state === 'zero') return { lead: t('Your streak starts with your first session'), aria: t('Your streak starts with your first session') }
   if (st.state === 'broken') {

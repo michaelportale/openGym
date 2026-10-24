@@ -48,3 +48,11 @@ it('has first-run copy for zero', () => {
   expect(streakLines({ ...base, count: 0, state: 'zero' }).lead).toBe('Your streak starts with your first session')
   expect(streakLines({ ...base, count: 1, rounds: 1, passes: 1, state: 'active' }).aria).toBe('1 session on rotation, 1 round · 1 rest pass')
 })
+
+it('says "on rotation" only in Rotation mode; a Fixed Week streak counts plain sessions', () => {
+  const week = { ...base, mode: 'week', N: 3, P: 7 }
+  expect(streakLines({ ...week, count: 4, state: 'active' }).aria).toMatch(/^4 sessions, /)
+  expect(streakLines({ ...week, count: 1, state: 'active' }).aria).toMatch(/^1 session, /)
+  expect(streakLines({ ...week, count: 4, state: 'active' }).aria).not.toMatch(/rotation/)
+  expect(streakLines({ ...base, count: 4, state: 'active' }).aria).toMatch(/^4 sessions on rotation, /)
+})

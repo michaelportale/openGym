@@ -217,7 +217,6 @@ export default {
   'Freestyle workout. Add your first exercise and off you go.': 'Trening dowolny. Dodaj pierwsze ćwiczenie i jazda!',
   'Finish workout early · {0} exercises': { one: 'Zakończ wcześniej · {0} ćwiczenie', few: 'Zakończ wcześniej · {0} ćwiczenia', many: 'Zakończ wcześniej · {0} ćwiczeń', other: 'Zakończ wcześniej · {0} ćwiczeń' },
   'Rest’s over. Next set!': 'Koniec przerwy. Następna seria!',
-  'Hi {0}': 'Cześć, {0}',
   'This week': 'Ten tydzień',
   '{0} (in progress)': '{0} (w trakcie)',
   'Resume ▶': 'Wznów ▶',
@@ -2508,4 +2507,5 @@ export default {
   "Body weight, {0}": "Masa ciała, {0}",
   "Log {0} more weigh-ins to see your trend": {"one": "Zapisz jeszcze {0} pomiar, by zobaczyć trend", "few": "Zapisz jeszcze {0} pomiary, by zobaczyć trend", "many": "Zapisz jeszcze {0} pomiarów, by zobaczyć trend", "other": "Zapisz jeszcze {0} pomiaru, by zobaczyć trend"},
   "Your goal is drawn as a dashed line through the weight charts.": "Twój cel jest zaznaczony przerywaną linią na wykresach wagi.",
+  "sessions": {"one": "sesja", "few": "sesje", "many": "sesji", "other": "sesji"},
 }

@@ -217,7 +217,6 @@ export default {
   'Freestyle workout. Add your first exercise and off you go.': '自由训练。添加第一个动作，开练吧。',
   'Finish workout early · {0} exercises': '提前结束 · {0} 个动作',
   'Rest’s over. Next set!': '休息结束，下一组！',
-  'Hi {0}': '你好，{0}',
   'This week': '本周',
   '{0} (in progress)': '{0}（进行中）',
   'Resume ▶': '继续 ▶',
@@ -2508,4 +2507,5 @@ export default {
   "Body weight, {0}": "体重，{0}",
   "Log {0} more weigh-ins to see your trend": "再记录 {0} 次体重即可看到趋势",
   "Your goal is drawn as a dashed line through the weight charts.": "你的目标会以虚线显示在体重图表上。",
+  "sessions": "次训练",
 }
