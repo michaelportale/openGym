@@ -2213,3 +2213,21 @@ button.wl-summary{width:100%;padding:0 0 10px;text-align:start;border-radius:var
 /* The full report in a sheet: the sheet is the surface, so the card drops its own */
 .coverage-sheet .training-coverage{background:none;box-shadow:none;padding:0;margin:0}
 .adaptation-sheet>.card{background:none;box-shadow:none}
+
+/* --- Stats: strength trend (lead card) --- */
+.strength-trend .lbl2{font-size:11px;font-weight:500;letter-spacing:.03em;text-transform:uppercase;color:var(--label-3)}
+.strength-trend h2{margin:2px 0 6px}
+.st-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;grid-template-areas:"n s v" "n s d";align-items:center;column-gap:12px;padding:10px 0;cursor:pointer;position:relative;padding-inline-end:18px}
+.st-row + .st-row{border-top:.5px solid var(--sep)}
+.st-row .st-n{grid-area:n;font-weight:600;font-size:var(--fs-subhead);overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.st-row .st-spark{grid-area:s;color:var(--label-3)}
+.st-row.up .st-spark{color:var(--acc)}
+.st-row .st-v{grid-area:v;justify-self:end;font-weight:700;font-size:var(--fs-title-3);font-variant-numeric:tabular-nums;line-height:1.1}
+.st-row .st-v small{font-size:var(--fs-footnote);font-weight:500;color:var(--label-2)}
+.st-row .st-d{grid-area:d;justify-self:end;font-size:var(--fs-footnote);color:var(--label-2);font-variant-numeric:tabular-nums}
+.st-row.up .st-d{color:var(--acc)}
+.st-row>.icn{position:absolute;inset-inline-end:0;top:50%;transform:translateY(-50%);color:var(--label-3);font-size:14px}
+.st-row:active{opacity:.7}
+.stats-empty .empty{padding:28px 12px 8px;display:flex;flex-direction:column;align-items:center;gap:14px}
+.stats-empty .empty .ico{margin-bottom:0;color:var(--acc)}
+.stats-empty .empty .btn{min-width:200px}
