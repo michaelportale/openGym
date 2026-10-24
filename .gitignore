@@ -33,3 +33,11 @@ docs/superpowers/plans/
 
 # AI Coach provider credential cache (live refresh token)
 coach-auth/
+
+# Exports and backups saved from the app, and local databases
+/exports/
+/opengym-backup*.json
+/opengym-backup*.zip
+*.db
+*.sqlite
+*.sqlite3
