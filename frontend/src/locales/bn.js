@@ -2600,4 +2600,6 @@ export default {
   "Needs two weigh-ins within 30 days": "30 দিনের মধ্যে দুবার ওজন লিখতে হবে",
   "A light tap on iPhone": "iPhone-এ হালকা ট্যাপ",
   "On iPhone, Vibrate is a light tap when you tick a set (iOS 18 or later). The end of a rest still needs a sound or a flash.": "iPhone-এ, সেট টিক দিলে Vibrate একটি হালকা ট্যাপ (iOS 18 বা পরে)। বিশ্রামের শেষে এখনও শব্দ বা ফ্ল্যাশ লাগবে।",
+  "{0} session in a row": "টানা {0}টি সেশন",
+  "{0} sessions in a row": "টানা {0}টি সেশন",
 }

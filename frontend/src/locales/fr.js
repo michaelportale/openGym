@@ -2521,4 +2521,6 @@ export default {
   "Needs two weigh-ins within 30 days": "Il faut deux pesées sur 30 jours",
   "A light tap on iPhone": "Un léger tapotement sur iPhone",
   "On iPhone, Vibrate is a light tap when you tick a set (iOS 18 or later). The end of a rest still needs a sound or a flash.": "Sur iPhone, Vibration est un léger tapotement quand tu coches une série (iOS 18 ou ultérieur). La fin du repos demande toujours un son ou un flash.",
+  "{0} session in a row": "{0} séance d’affilée",
+  "{0} sessions in a row": "{0} séances d’affilée",
 }

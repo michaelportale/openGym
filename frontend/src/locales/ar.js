@@ -2576,4 +2576,6 @@ export default {
   "Needs two weigh-ins within 30 days": "يلزم وزنان خلال 30 يومًا",
   "A light tap on iPhone": "نقرة خفيفة على iPhone",
   "On iPhone, Vibrate is a light tap when you tick a set (iOS 18 or later). The end of a rest still needs a sound or a flash.": "على iPhone، الاهتزاز نقرة خفيفة عند تحديد مجموعة (iOS 18 أو أحدث). نهاية الراحة ما زالت تحتاج إلى صوت أو وميض.",
+  "{0} session in a row": "{0} جلسة متتالية",
+  "{0} sessions in a row": "{0} جلسات متتالية",
 }

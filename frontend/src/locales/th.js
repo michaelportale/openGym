@@ -2532,4 +2532,6 @@ export default {
   "Needs two weigh-ins within 30 days": "ต้องชั่งน้ำหนักสองครั้งภายใน 30 วัน",
   "A light tap on iPhone": "แตะเบาๆ บน iPhone",
   "On iPhone, Vibrate is a light tap when you tick a set (iOS 18 or later). The end of a rest still needs a sound or a flash.": "บน iPhone การสั่นคือการแตะเบาๆ เมื่อติ๊กเซต (iOS 18 ขึ้นไป) การจบช่วงพักยังต้องใช้เสียงหรือแสงกะพริบ",
+  "{0} session in a row": "{0} เซสชันติดต่อกัน",
+  "{0} sessions in a row": "{0} เซสชันติดต่อกัน",
 }
