@@ -1,5 +1,5 @@
-// The Exercises tab's filter pipeline, in one place so the tab and its filter sheet (record
-// 0038) narrow the catalogue the same way: body part and search first, then the kind of
+// The Exercises tab's filter pipeline, in one place so the tab and its filter sheet
+// narrow the catalogue the same way: body part and search first, then the kind of
 // exercise, then equipment. A type or equipment choice the earlier steps have narrowed away is
 // ignored for the current view (never a dead end) but kept, so it comes back when it applies.
 import { allExercises, equipmentOf, byCategory, searchExercises } from './exercises.js'
