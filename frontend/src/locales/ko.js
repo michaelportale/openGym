@@ -2476,4 +2476,6 @@ export default {
   "{0} rep": "{0}회",
   "{0} reps": "{0}회",
   "New PR · {0}": "새 기록 · {0}",
+  "Train anyway": "그래도 운동하기",
+  "Top set to beat: {0}": "넘어설 최고 세트: {0}",
 }

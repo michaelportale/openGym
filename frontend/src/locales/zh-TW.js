@@ -2469,4 +2469,6 @@ export default {
   "{0} rep": "{0} 次",
   "{0} reps": "{0} 次",
   "New PR · {0}": "新紀錄 · {0}",
+  "Train anyway": "仍然訓練",
+  "Top set to beat: {0}": "要超越的最佳組：{0}",
 }

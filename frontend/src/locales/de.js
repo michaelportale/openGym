@@ -2496,4 +2496,6 @@ export default {
   "{0} rep": "{0} Wdh.",
   "{0} reps": "{0} Wdh.",
   "New PR · {0}": "Neuer Rekord · {0}",
+  "Train anyway": "Trotzdem trainieren",
+  "Top set to beat: {0}": "Bester Satz zum Übertreffen: {0}",
 }

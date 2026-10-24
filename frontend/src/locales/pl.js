@@ -2476,4 +2476,6 @@ export default {
   "{0} rep": "{0} powt.",
   "{0} reps": {"one": "{0} powt.", "few": "{0} powt.", "many": "{0} powt.", "other": "{0} powt."},
   "New PR · {0}": "Nowy rekord · {0}",
+  "Train anyway": "Trenuj mimo to",
+  "Top set to beat: {0}": "Najlepsza seria do pobicia: {0}",
 }

@@ -35,7 +35,7 @@ describe("Home's Today preview", () => {
     expect(todayPreview(S, ['r1'], '2026-10-03')).toMatchObject({ exercises: 2, up: [], lighter: [] })
     expect(todayPreview({ routines: [{ id: 'r1', ex: [null, { id: 'x' }] }] }, ['r1', 'missing'], '2026-10-03'))
       .toMatchObject({ exercises: 1, last: null })
-    expect(todayPreview({}, [], '2026-10-03')).toEqual({ exercises: 0, last: null, up: [], lighter: [], recovering: [] })
+    expect(todayPreview({}, [], '2026-10-03')).toEqual({ exercises: 0, last: null, up: [], lighter: [], recovering: [], toBeat: null })
   })
 
   // Recovery: the same fatigue scoring as the Stats body map (lib/recovery.js).
@@ -56,6 +56,16 @@ describe("Home's Today preview", () => {
   it('says nothing once the muscle has had time to recover', () => {
     const S = { unit: 'kg', routines: [pushDay], workouts: [heavy(press, '2026-10-01')], exWeights: {} }
     expect(todayPreview(S, ['r1'], '2026-10-10', Date.parse('2026-10-10T09:00:00')).recovering).toEqual([])
+  })
+
+  it('reads the top set to beat from the first lift last time, warm-ups left out', () => {
+    const done = workout('w1', '2026-10-01', [entry(bench, [{ w: 40, r: 10, done: true, warmup: true }, set(60, 5), set(62.5, 3), set(62.5, 4)])])
+    const S = { unit: 'kg', routines: [routine()], workouts: [done], exWeights: {} }
+    expect(todayPreview(S, ['r1'], '2026-10-03').toBeat).toEqual({ id: 'bench', w: 62.5, r: 4 })
+  })
+  it('has no top set to beat without a loaded set logged', () => {
+    const S = { unit: 'kg', routines: [routine()], workouts: [], exWeights: {} }
+    expect(todayPreview(S, ['r1'], '2026-10-03').toBeat).toBeNull()
   })
 })
 
