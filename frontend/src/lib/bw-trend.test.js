@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bwTrend, bwWeekChange, DAY_MS } from './bw-trend.js'
+import { bwTrend, bwWeekChange, bwTrendChange, bwTowardGoal, DAY_MS } from './bw-trend.js'
 
 const T0 = Date.UTC(2026, 9, 1, 12)
 const p = (day, y) => ({ t: T0 + day * DAY_MS, y })
@@ -39,5 +39,23 @@ describe('bwWeekChange', () => {
   })
   it('is null when the earlier weigh-in is more than two weeks back', () => {
     expect(bwWeekChange(bwTrend([p(0, 82), p(20, 80)]))).toBeNull()
+  })
+})
+
+describe('trend change over a window and the goal direction', () => {
+  const pts = (ys, step = 5) => ys.map((y, i) => ({ t: i * step * DAY_MS, y }))
+  it('measures the trend from the first point inside the window to the last', () => {
+    expect(bwTrendChange(pts([80, 79.6, 79.2, 79]), 30)).toBe(-1)
+    expect(bwTrendChange(pts([82, 80, 79.5], 20), 30)).toBe(-0.5)
+    expect(bwTrendChange(pts([80]), 30)).toBeNull()
+    expect(bwTrendChange([], 30)).toBeNull()
+  })
+  it('says toward goal only when there is a goal not yet reached and a change', () => {
+    expect(bwTowardGoal(-0.3, 80, 77)).toBe(true)
+    expect(bwTowardGoal(0.3, 80, 77)).toBe(false)
+    expect(bwTowardGoal(0.3, 70, 75)).toBe(true)
+    expect(bwTowardGoal(0, 80, 77)).toBeNull()
+    expect(bwTowardGoal(-0.3, 80, null)).toBeNull()
+    expect(bwTowardGoal(-0.3, 77, 77)).toBeNull()
   })
 })

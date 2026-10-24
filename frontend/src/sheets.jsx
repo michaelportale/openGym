@@ -784,11 +784,11 @@ function HevyImportSheet({ close }) {
 }
 
 /* ============================ target weight ============================ */
-export function bwDeltaColor(delta, currentW) {
-  if (!delta) return 'var(--label-2)'
-  if (!S().targetW) return 'var(--label)'
-  const up = S().targetW > currentW
-  return (delta > 0) === up ? 'var(--acc)' : 'var(--danger)'
+// Body-weight changes are neutral: the number and its arrow in the label colour, never accent
+// or danger. Weight moves for reasons that are not failures, and cuts and bulks both happen.
+// Whether a change heads toward the goal is said in words where there is room (Stats).
+export function bwDeltaColor(delta) {
+  return delta ? 'var(--label)' : 'var(--label-2)'
 }
 function GoalSheet({ close }) {
   const st = S()
@@ -796,7 +796,7 @@ function GoalSheet({ close }) {
   const [v, setV] = useState(st.targetW || (bw ? bw.w : 70))
   return <>
     <h3>{t('Target weight')}</h3>
-    <div className="muted small">{t('Your goal is drawn as a line through the weight charts, and gains/losses are colored by whether they move toward it.')}</div>
+    <div className="muted small">{t('Your goal is drawn as a dashed line through the weight charts.')}</div>
     <WeightInput value={v} setValue={setV} unit={st.unit} />
     <div style={{ height: 14 }} />
     <Button variant="primary" onClick={() => {
