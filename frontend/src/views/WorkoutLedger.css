@@ -11,16 +11,17 @@ body.no-tabbar {
   --label-3: #9ba195;
   --sep: #454a42;
 }
+/* Light: plain neutral greys (a palette's generated theme file may set its own). */
 :root[data-theme="light"] body.no-tabbar {
-  --bg: #f2f3ee;
-  --bg-el: #fafbf7;
+  --bg: #f2f2f4;
+  --bg-el: #fafafa;
   --surface: #ffffff;
-  --surface-2: #e9ece4;
-  --surface-3: #d3d8cc;
-  --label: #1b2119;
-  --label-2: #515a4d;
-  --label-3: #606b5b;
-  --sep: #adb5a6;
+  --surface-2: #e9e9ec;
+  --surface-3: #d6d6da;
+  --label: #1c1c1e;
+  --label-2: #545458;
+  --label-3: #636366;
+  --sep: #8e8e93;
 }
 body.no-tabbar .whdr.stick { background: var(--bg); backdrop-filter: none; }
 body.no-tabbar .whdr { container-type: inline-size; }
