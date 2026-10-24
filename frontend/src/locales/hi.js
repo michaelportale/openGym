@@ -2520,4 +2520,5 @@ export default {
   "No match for “{0}”": "“{0}” के लिए कोई मेल नहीं",
   "Create “{0}”": "“{0}” बनाएँ",
   "sessions": "सत्र",
+  "Needs two weigh-ins within 30 days": "30 दिनों में दो बार वज़न दर्ज करना ज़रूरी है",
 }

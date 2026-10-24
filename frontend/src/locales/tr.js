@@ -2520,4 +2520,5 @@ export default {
   "No match for “{0}”": "“{0}” için sonuç yok",
   "Create “{0}”": "“{0}” oluştur",
   "sessions": "seans",
+  "Needs two weigh-ins within 30 days": "30 gün içinde iki tartım gerekir",
 }

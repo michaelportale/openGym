@@ -2513,4 +2513,5 @@ export default {
   "No match for “{0}”": "找不到「{0}」",
   "Create “{0}”": "建立「{0}」",
   "sessions": "次訓練",
+  "Needs two weigh-ins within 30 days": "需要 30 天內兩次體重紀錄",
 }
