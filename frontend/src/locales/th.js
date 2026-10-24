@@ -2481,4 +2481,5 @@ export default {
   "{0} muscles on target": "กล้ามเนื้อที่ถึงเป้า {0}",
   "Train a few sessions to see coverage": "ฝึกสักสองสามครั้งเพื่อดูความครอบคลุม",
   "Set coverage aims": "ตั้งเป้าความครอบคลุม",
+  "Swap": "สลับ",
 }

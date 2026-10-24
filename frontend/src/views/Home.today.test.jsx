@@ -7,6 +7,7 @@ import { createRoot } from 'react-dom/client'
 import { useStore } from '../store/useStore.js'
 import { todayISO } from '../lib/format.js'
 import Home from './Home.jsx'
+import { startFlow } from '../sheets.jsx'
 
 vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }))
 vi.mock('../sheets.jsx', () => ({
@@ -86,4 +87,41 @@ describe('Home — the Today card', () => {
     expect(host.querySelectorAll('.today-card button').length).toBeGreaterThan(0)
     expect(tag.closest('button')).toBeNull()
   })
+
+  it('offers Swap on the recovering line, which picks another workout instead of starting this one', () => {
+    const hard = session(daysAgo(1))
+    hard.entries[0].sets = Array.from({ length: 12 }, () => ({ w: 60, r: 5, rir: 0, done: true }))
+    setS({ workouts: [hard] }); mount()
+    startFlow.mockClear()
+    const swap = host.querySelector('.today-recovering .today-swap')
+    expect(swap.textContent).toBe('Swap')
+    expect(swap.getAttribute('aria-label')).toBe('Choose a different workout')
+    act(() => swap.click())
+    expect(startFlow).not.toHaveBeenCalled()
+  })
+
+  it('draws the progression line in the text colour with only its arrow in the accent', async () => {
+    const { readFileSync } = await import('node:fs')
+    const css = readFileSync('src/index.css', 'utf8')
+    expect(css).toContain('.today-up{color:var(--label)}')
+    expect(css).toContain('.today-up .icn{color:var(--acc-text)}')
+  })
+
+  it('moves the tab bar Start aside while the card Start is in view, and back when it leaves', () => {
+    let cb
+    const observe = vi.fn(), disconnect = vi.fn()
+    globalThis.IntersectionObserver = vi.fn(function (fn) { cb = fn; this.observe = observe; this.disconnect = disconnect })
+    setS(); mount()
+    expect(observe).toHaveBeenCalledWith(host.querySelector('.today-cta'))
+    act(() => cb([{ isIntersecting: true }]))
+    expect(document.body.classList.contains('fab-aside')).toBe(true)
+    act(() => cb([{ isIntersecting: false }]))
+    expect(document.body.classList.contains('fab-aside')).toBe(false)
+    act(() => cb([{ isIntersecting: true }]))
+    act(() => root.render(<div />))
+    expect(document.body.classList.contains('fab-aside')).toBe(false)
+    expect(disconnect).toHaveBeenCalled()
+    delete globalThis.IntersectionObserver
+  })
 })
+

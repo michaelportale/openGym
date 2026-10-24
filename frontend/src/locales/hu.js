@@ -2473,4 +2473,5 @@ export default {
   "{0} muscles on target": "Célban lévő izmok: {0}",
   "Train a few sessions to see coverage": "Edz néhány alkalmat, hogy lásd a lefedettséget",
   "Set coverage aims": "Lefedettségi célok beállítása",
+  "Swap": "Csere",
 }
