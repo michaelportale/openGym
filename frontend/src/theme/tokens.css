@@ -11,7 +11,7 @@
    Role                  Token(s)
    page / elevated       --bg, --bg-el                       (index.css)
    cards / nested / ctl  --surface, --surface-2, --surface-3 (index.css)
-   border / hairline     --sep, --sep-op, --hair             (index.css)
+   border / hairline     --sep, --sep-op, --hair (index.css); --line (below)
    text tiers            --label, --label-2, --label-3, --label-4
    accent                --acc, --acc-2 (pressed), --on-acc (text on accent),
                          --acc-soft (muted fill), --acc-line (index.css)
@@ -31,6 +31,13 @@
   --danger:       var(--red);
   --pr:           var(--yellow);
   --pr-soft:      color-mix(in srgb, var(--pr) 18%, transparent);
+
+  /* Names some components already use but nothing defined (they resolved to nothing: no
+     border, no track, full-strength text). Aliased to the closest existing role. */
+  --line:   var(--sep);       /* components/TrainingAdaptation.jsx borders */
+  --dim:    var(--label-2);   /* .setph, .plateline, CoachSetup pending step */
+  --text-2: var(--label-2);   /* sheets.jsx flat-trend icon */
+  --fill-3: var(--surface-3); /* Settings update-download progress track */
 
   /* chart series, in order (Stats set types) */
   --chart-1: var(--blue);
