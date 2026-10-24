@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import React, { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('react-router-dom', () => ({ useNavigate: () => () => {} }))
 vi.mock('../lib/api.js', async importOriginal => ({ ...await importOriginal(), api: vi.fn() }))
 import Home from '../views/Home.jsx'
@@ -26,10 +26,16 @@ it.each([['Plan', Plan]])('renders actual vs planned coverage in the real %s vie
   expect(chest.textContent).toContain('Planned: 4 estimated sets')
   expect(chest.textContent).toContain('Direct sets: 1')
   expect(chest.textContent).toContain('Direct-work days: 1')
-  expect(card().textContent).toContain('Secondary credit uses 0.5 per set.')
+  expect(card().textContent).toContain('A set where a muscle only helps counts as half a set.')
   expect(card().textContent).not.toContain('stimulus adequacy')
   // the rolling view carries no method note
   expect(card().textContent).not.toContain('dated prescriptions')
+  // plain words for the row and the sections, and no list of zero unknowns
+  expect(chest.querySelector('summary').textContent).toContain('1 of 4 planned sets done')
+  expect(card().textContent).toContain('By movement')
+  expect(card().textContent).not.toContain('Unknown / unclassified')
+  expect(card().textContent).not.toContain('Sets that could not be counted')
+  expect(card().textContent).toContain('Set your aims')
 })
 it('switches to accepted-cycle context without giving floating sessions an invented direct day', () => {
   const s = S(); s.queue = { ids: ['push'], since: Date.now() - 86400000, startsOn: todayISO(), label: 'PPL' }
@@ -93,7 +99,7 @@ it('Home shows one bar per muscle and opens the full report, aims editor include
   expect(sheets.length).toBe(1)
   act(() => root.render(<>{sheets[0].render(() => {})}</>))
   expect(card().textContent).toContain('Planned: 4 estimated sets')
-  expect(card().textContent).toContain('Secondary credit uses 0.5 per set.')
+  expect(card().textContent).toContain('A set where a muscle only helps counts as half a set.')
   expect(card().querySelector('.coverage-targets')).not.toBeNull()
   useUI.setState({ sheets: [] })
 })
@@ -101,4 +107,13 @@ it('Home leaves the glance out when nothing was done or planned in the last 7 da
   useStore.setState({ S: { ...freshState(), routines: [], week: {}, workouts: [] } })
   render(Home)
   expect(host.querySelector('.coverage-glance')).toBeNull()
+})
+
+describe('coverage unknowns', () => {
+  it('lists only the non-zero lines, and nothing when all are zero', async () => {
+    const { unknownLines, hasUnknowns } = await import('./TrainingCoverage.jsx')
+    expect(unknownLines({ targetSets: 0, roleSets: 2, dateSessions: 1 })).toEqual([['roleSets', 'Sets with unknown role: 2'], ['dateSessions', 'Sessions without known dates: 1']])
+    expect(hasUnknowns({ actual: { roleSets: 0 }, planned: {} })).toBe(false)
+    expect(hasUnknowns({ actual: {}, planned: { partialRows: 1 } })).toBe(true)
+  })
 })
