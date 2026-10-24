@@ -2442,4 +2442,5 @@ export default {
   "Deload today: {0}": "Сьогодні розвантаження: {0}",
   "Strength trend": "Динаміка сили",
   "Last 8 weeks": "Останні 8 тижнів",
+  "Still recovering: {0}": "Ще відновлюється: {0}",
 }

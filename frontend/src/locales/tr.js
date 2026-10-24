@@ -2445,4 +2445,5 @@ export default {
   "Deload today: {0}": "Bugün deload: {0}",
   "Strength trend": "Kuvvet eğilimi",
   "Last 8 weeks": "Son 8 hafta",
+  "Still recovering: {0}": "Hâlâ toparlanıyor: {0}",
 }

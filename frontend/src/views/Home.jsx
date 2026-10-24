@@ -18,6 +18,7 @@ import { glyphOf } from '../lib/glyphs.js'
 import { dayNoteOf } from '../lib/day-notes.js'
 import { todayPreview } from '../lib/today-preview.js'
 import { exOr } from '../lib/exercises.js'
+import { MUSCLE_NAME } from '../lib/muscles.js'
 
 // Home = what to do now + a quick glance. Deep charts & history live in Stats.
 export default function Home() {
@@ -139,6 +140,7 @@ export default function Home() {
               <div className="today-meta">{[tn('{0} exercise', '{0} exercises', preview.exercises), preview.last && t('Last time') + ' (' + fmtDaysAgo(preview.last.d) + ')'].filter(Boolean).join(' · ')}</div>
               {preview.up.length > 0 && <div className="today-meta today-up"><Icon name="arrowUp" />{t('Moving up today: {0}', namesOf(preview.up))}</div>}
               {preview.lighter.length > 0 && <div className="today-meta"><Icon name="arrowDown" />{t('Deload today: {0}', namesOf(preview.lighter))}</div>}
+              {preview.recovering.length > 0 && <div className="today-meta today-recovering"><Icon name="hourglass" />{t('Still recovering: {0}', preview.recovering.slice(0, 3).map(m => t(MUSCLE_NAME[m] || m)).join(', ') + (preview.recovering.length > 3 ? ' +' + (preview.recovering.length - 3) : ''))}</div>}
             </>}
             {next && !doneToday && <div className="ss">{t('Next session: {0}, {1}', t(DAYN[next.weekday]), next.routine.name)}</div>}
           </div>

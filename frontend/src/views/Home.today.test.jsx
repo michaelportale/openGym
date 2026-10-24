@@ -53,6 +53,19 @@ describe('Home — the Today card', () => {
     expect(meta().some(m => m.startsWith('Moving up today: '))).toBe(true)
   })
 
+  it('names a muscle the session works that is still fatigued', () => {
+    const hard = session(daysAgo(1))
+    hard.entries[0].sets = Array.from({ length: 12 }, () => ({ w: 60, r: 5, rir: 0, done: true }))
+    setS({ workouts: [hard] }); mount()
+    const line = host.querySelector('.today-row .today-recovering')
+    expect(line?.textContent).toMatch(/^Still recovering: .*Chest/)
+  })
+
+  it('has no recovery line when the muscles are fresh', () => {
+    setS({ workouts: [session(daysAgo(6))] }); mount()
+    expect(host.querySelector('.today-recovering')).toBeNull()
+  })
+
   it('has no last time before the first session, and nothing moving up', () => {
     setS(); mount()
     expect(meta()).toEqual(['2 exercises'])

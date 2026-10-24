@@ -2438,4 +2438,5 @@ export default {
   "Deload today: {0}": "今天減量：{0}",
   "Strength trend": "肌力趨勢",
   "Last 8 weeks": "最近 8 週",
+  "Still recovering: {0}": "仍在恢復：{0}",
 }
