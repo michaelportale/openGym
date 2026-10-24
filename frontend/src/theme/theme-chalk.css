@@ -21,6 +21,8 @@
   --warning: #ffb000;
   --danger: #ff453a;
   --pr: #ffb000;
+  --on-success-tile: #000000;
+  --on-warning-tile: #000000;
 }
 
 /* the workout screen tints its neutrals (views/WorkoutLedger.css); the palette's win here too */
@@ -55,6 +57,8 @@
   --danger: #ff453a;
   --pr: #b87f00;
   --on-success: #000000;
+  --on-success-tile: #ffffff;
+  --on-warning-tile: #000000;
 }
 
 :root[data-theme="light"][data-palette="chalk"][data-accent="theme"] {

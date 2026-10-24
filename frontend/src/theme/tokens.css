@@ -83,4 +83,7 @@
   /* The glyph on an accent-coloured icon tile (.lrow-i). White, as upstream draws it for every
      preset; a palette's accent sets it to its own text-on-accent (theme-<name>.css). */
   --on-acc-tile: #fff;
+  /* The same for tiles filled with --success or --warning. */
+  --on-success-tile: #fff;
+  --on-warning-tile: #fff;
 }

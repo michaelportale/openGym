@@ -21,6 +21,8 @@
   --warning: #ffb020;
   --danger: #ff4d6d;
   --pr: #f2c14e;
+  --on-success-tile: #000000;
+  --on-warning-tile: #000000;
 }
 
 /* the workout screen tints its neutrals (views/WorkoutLedger.css); the palette's win here too */
@@ -55,6 +57,8 @@
   --danger: #ff4365;
   --pr: #af7e0d;
   --on-success: #000000;
+  --on-success-tile: #000000;
+  --on-warning-tile: #000000;
 }
 
 :root[data-theme="light"][data-palette="ember"][data-accent="theme"] {
