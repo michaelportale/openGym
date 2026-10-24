@@ -2455,4 +2455,10 @@ export default {
   "Top muscle": "En çok çalışan kas",
   "Share your week": "Haftanı paylaş",
   "Show which muscles this week trained.": "Bu hafta hangi kasların çalıştığını göster.",
+  "{0} of {1} planned sets done": "Planlanan {1} setin {0} tanesi yapıldı",
+  "By movement": "Harekete göre",
+  "Sets that could not be counted": "Sayılamayan setler",
+  "A set where a muscle only helps counts as half a set.": "Bir kasın yalnızca yardım ettiği set yarım set sayılır.",
+  "No sets in these days yet.": "Bu günlerde henüz set yok.",
+  "Set your aims": "Hedeflerini belirle",
 }

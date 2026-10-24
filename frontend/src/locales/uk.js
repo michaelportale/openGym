@@ -2452,4 +2452,10 @@ export default {
   "Top muscle": "Головний м’яз",
   "Share your week": "Поділитися тижнем",
   "Show which muscles this week trained.": "Показати, які м’язи працювали цього тижня.",
+  "{0} of {1} planned sets done": "Зроблено {0} з {1} запланованих підходів",
+  "By movement": "За рухами",
+  "Sets that could not be counted": "Підходи, які не вдалося врахувати",
+  "A set where a muscle only helps counts as half a set.": "Підхід, де м’яз лише допомагає, рахується як половина.",
+  "No sets in these days yet.": "У ці дні підходів ще немає.",
+  "Set your aims": "Задати цілі",
 }

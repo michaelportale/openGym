@@ -2510,4 +2510,10 @@ export default {
   "Top muscle": "العضلة الأكثر تدريبًا",
   "Share your week": "شارك أسبوعك",
   "Show which muscles this week trained.": "اعرض العضلات التي دربتها هذا الأسبوع.",
+  "{0} of {1} planned sets done": "{0} من {1} مجموعات مخططة منجزة",
+  "By movement": "حسب الحركة",
+  "Sets that could not be counted": "مجموعات تعذّر احتسابها",
+  "A set where a muscle only helps counts as half a set.": "المجموعة التي تساعد فيها العضلة فقط تُحتسب نصف مجموعة.",
+  "No sets in these days yet.": "لا توجد مجموعات في هذه الأيام بعد.",
+  "Set your aims": "حدّد أهدافك",
 }

@@ -2455,4 +2455,10 @@ export default {
   "Top muscle": "Músculo principal",
   "Share your week": "Partilhar a tua semana",
   "Show which muscles this week trained.": "Mostrar que músculos treinaste esta semana.",
+  "{0} of {1} planned sets done": "{0} de {1} séries planeadas feitas",
+  "By movement": "Por movimento",
+  "Sets that could not be counted": "Séries que não foi possível contar",
+  "A set where a muscle only helps counts as half a set.": "Uma série em que um músculo só ajuda conta como meia série.",
+  "No sets in these days yet.": "Ainda não há séries nestes dias.",
+  "Set your aims": "Definir os teus objetivos",
 }

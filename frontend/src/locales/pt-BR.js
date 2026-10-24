@@ -1595,6 +1595,8 @@ export const PT_BR_OVERRIDES = {
   'Your week': 'Sua semana',
   'Share your week': 'Compartilhar sua semana',
   'Show which muscles this week trained.': 'Mostrar quais músculos você treinou nesta semana.',
+  '{0} of {1} planned sets done': '{0} de {1} séries planejadas feitas',
+  'Set your aims': 'Defina suas metas',
 }
 
 export default { ...pt, ...PT_BR_OVERRIDES }

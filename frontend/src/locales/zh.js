@@ -2455,4 +2455,10 @@ export default {
   "Top muscle": "主要肌群",
   "Share your week": "分享你的一周",
   "Show which muscles this week trained.": "显示本周训练了哪些肌群。",
+  "{0} of {1} planned sets done": "已完成 {0} / {1} 组计划",
+  "By movement": "按动作",
+  "Sets that could not be counted": "无法计入的组数",
+  "A set where a muscle only helps counts as half a set.": "肌群只是辅助的组数算半组。",
+  "No sets in these days yet.": "这几天还没有组数。",
+  "Set your aims": "设定目标",
 }

@@ -2448,4 +2448,10 @@ export default {
   "Top muscle": "主要肌群",
   "Share your week": "分享你的一週",
   "Show which muscles this week trained.": "顯示本週訓練了哪些肌群。",
+  "{0} of {1} planned sets done": "已完成 {0} / {1} 組計畫",
+  "By movement": "依動作",
+  "Sets that could not be counted": "無法計入的組數",
+  "A set where a muscle only helps counts as half a set.": "肌群只是輔助的組數算半組。",
+  "No sets in these days yet.": "這幾天還沒有組數。",
+  "Set your aims": "設定目標",
 }
