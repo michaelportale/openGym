@@ -137,7 +137,7 @@ describe('Plan — the loop', () => {
   it('lists the live pass in order with its state, and keeps the weekdays that hold a routine', () => {
     mount({ queue: live({ rotationId: 'r1' }), rotation: saved })
     expect(names()).toEqual(['A', 'B'])
-    expect(rows().map(r => r.querySelector('.ss').textContent)).toEqual(['Up next', 'Later'])
+    expect(rows().map(r => r.querySelector('.ss').textContent)).toEqual(['Up next', 'Not done yet'])
     expect(rows()[0].querySelector('.plan-order').className).toContain('next')
     expect(host.textContent).toContain('0 of 2 done this round.')
     // week[1] = ['c'] rides along beside the pass (effectiveRoutineIds), so it stays in sight
@@ -175,6 +175,28 @@ describe('Plan — the loop', () => {
     act(() => items[0].onClick())
     expect(mocks.S.queue.ids).toEqual(['a', 'b', 'c'])
     expect(mocks.S.rotation.sequence).toEqual(['a', 'b', 'c'])
+  })
+
+  it('with every routine in the loop, Add stays enabled and offers a new routine that joins the loop', () => {
+    const all = { id: 'r1', sequence: ['a', 'b', 'c'], label: 'My split' }
+    mount({ queue: live({ ids: ['a', 'b', 'c'], rotationId: 'r1' }), rotation: all })
+    const add = byLabel('Add routine to the rotation')
+    expect(add.disabled).toBe(false)
+    click(add)
+    const sheet = menuSheet.mock.calls[0][0]
+    expect(sheet.title).toBe('Every routine is already in the loop')
+    expect(sheet.items.map(i => i.label)).toEqual(['New routine'])
+    act(() => sheet.items[0].onClick())
+    const made = mocks.S.routines.at(-1)
+    expect(made.name).toBe('New routine')
+    expect(mocks.S.rotation.sequence).toEqual(['a', 'b', 'c', made.id])
+    expect(mocks.nav).toHaveBeenCalledWith('/plan/r/' + made.id)
+  })
+
+  it('a slot that is not next says when it was last done instead of "Later"', () => {
+    const d = isoOf(new Date(Date.now() - 3 * 86400000))
+    mount({ queue: live({ rotationId: 'r1' }), rotation: saved, workouts: [{ id: 'w0', d, start: Date.parse(d + 'T10:00:00'), routineId: 'b', entries: [] }] })
+    expect(rows().map(r => r.querySelector('.ss').textContent)).toEqual(['Up next', 'Last done ' + fmtDate(d, true)])
   })
 
   it('Edit reveals the handles; moving one reorders without restarting the pass', () => {

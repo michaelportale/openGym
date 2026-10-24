@@ -2512,4 +2512,12 @@ export default {
   "New bests": "Nowe rekordy",
   "{0} sessions on rotation": {"one": "{0} sesja z rotacji", "few": "{0} sesje z rotacji", "many": "{0} sesji z rotacji", "other": "{0} sesji z rotacji"},
   "Add your 7-day average. Off unless you turn it on.": "Dodaje Twoją średnią 7-dniową. Wyłączone, dopóki tego nie włączysz.",
+  "Every routine is already in the loop": "Wszystkie plany są już w pętli",
+  "Last done {0}": "Ostatnio {0}",
+  "Not done yet": "Jeszcze nie",
+  "pinned": "przypięte",
+  "Start your first workout": "Zacznij pierwszy trening",
+  "Add a measurement": "Dodaj pomiar",
+  "No match for “{0}”": "Brak wyników dla „{0}”",
+  "Create “{0}”": "Utwórz „{0}”",
 }

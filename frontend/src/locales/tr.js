@@ -2512,4 +2512,12 @@ export default {
   "New bests": "Yeni rekorlar",
   "{0} sessions on rotation": "Rotasyonda {0} seans",
   "Add your 7-day average. Off unless you turn it on.": "7 günlük ortalamanı ekler. Sen açmadıkça kapalı kalır.",
+  "Every routine is already in the loop": "Tüm rutinler zaten döngüde",
+  "Last done {0}": "Son: {0}",
+  "Not done yet": "Henüz yapılmadı",
+  "pinned": "sabitlendi",
+  "Start your first workout": "İlk antrenmanını başlat",
+  "Add a measurement": "Ölçüm ekle",
+  "No match for “{0}”": "“{0}” için sonuç yok",
+  "Create “{0}”": "“{0}” oluştur",
 }

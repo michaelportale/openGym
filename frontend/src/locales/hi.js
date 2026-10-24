@@ -2512,4 +2512,12 @@ export default {
   "New bests": "नए सर्वश्रेष्ठ",
   "{0} sessions on rotation": "रोटेशन पर {0} सेशन",
   "Add your 7-day average. Off unless you turn it on.": "अपना 7 दिन का औसत जोड़ें। जब तक आप चालू न करें, बंद रहता है।",
+  "Every routine is already in the loop": "हर रूटीन पहले से लूप में है",
+  "Last done {0}": "पिछली बार {0}",
+  "Not done yet": "अभी नहीं किया",
+  "pinned": "पिन किया",
+  "Start your first workout": "अपना पहला वर्कआउट शुरू करें",
+  "Add a measurement": "एक माप जोड़ें",
+  "No match for “{0}”": "“{0}” के लिए कोई मेल नहीं",
+  "Create “{0}”": "“{0}” बनाएँ",
 }

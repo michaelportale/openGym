@@ -2512,4 +2512,12 @@ export default {
   "New bests": "새 최고 기록",
   "{0} sessions on rotation": "로테이션 {0}회 연속",
   "Add your 7-day average. Off unless you turn it on.": "7일 평균을 추가해요. 켜기 전까지는 꺼져 있어요.",
+  "Every routine is already in the loop": "모든 루틴이 이미 루프에 있어요",
+  "Last done {0}": "마지막 {0}",
+  "Not done yet": "아직 안 함",
+  "pinned": "고정됨",
+  "Start your first workout": "첫 운동 시작",
+  "Add a measurement": "측정 추가",
+  "No match for “{0}”": "“{0}”에 대한 결과 없음",
+  "Create “{0}”": "“{0}” 만들기",
 }

@@ -2512,4 +2512,12 @@ export default {
   "New bests": "Nuovi record",
   "{0} sessions on rotation": "{0} sessioni della rotazione",
   "Add your 7-day average. Off unless you turn it on.": "Aggiunge la tua media a 7 giorni. Disattivato finché non lo attivi.",
+  "Every routine is already in the loop": "Tutte le routine sono già nel ciclo",
+  "Last done {0}": "Ultima volta {0}",
+  "Not done yet": "Non ancora fatto",
+  "pinned": "fissato",
+  "Start your first workout": "Inizia il primo allenamento",
+  "Add a measurement": "Aggiungi una misura",
+  "No match for “{0}”": "Nessun risultato per “{0}”",
+  "Create “{0}”": "Crea “{0}”",
 }

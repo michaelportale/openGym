@@ -2516,4 +2516,12 @@ export default {
   "New bests": "Новые рекорды",
   "{0} sessions on rotation": {"one": "{0} тренировка по ротации", "few": "{0} тренировки по ротации", "many": "{0} тренировок по ротации", "other": "{0} тренировки по ротации"},
   "Add your 7-day average. Off unless you turn it on.": "Добавляет среднее за 7 дней. Выключено, пока вы не включите.",
+  "Every routine is already in the loop": "Все программы уже в цикле",
+  "Last done {0}": "Последний раз {0}",
+  "Not done yet": "Ещё не было",
+  "pinned": "закреплено",
+  "Start your first workout": "Начать первую тренировку",
+  "Add a measurement": "Добавить замер",
+  "No match for “{0}”": "Ничего не найдено по «{0}»",
+  "Create “{0}”": "Создать «{0}»",
 }

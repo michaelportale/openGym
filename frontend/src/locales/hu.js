@@ -2515,4 +2515,12 @@ export default {
   "New bests": "Új csúcsok",
   "{0} sessions on rotation": "{0} edzés a körforgásban",
   "Add your 7-day average. Off unless you turn it on.": "Hozzáadja a 7 napos átlagodat. Kikapcsolva, amíg be nem kapcsolod.",
+  "Every routine is already in the loop": "Minden rutin már a körben van",
+  "Last done {0}": "Legutóbb: {0}",
+  "Not done yet": "Még nem volt",
+  "pinned": "rögzítve",
+  "Start your first workout": "Első edzés indítása",
+  "Add a measurement": "Mérés hozzáadása",
+  "No match for “{0}”": "Nincs találat: „{0}”",
+  "Create “{0}”": "„{0}” létrehozása",
 }

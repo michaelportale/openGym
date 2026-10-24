@@ -2505,4 +2505,12 @@ export default {
   "New bests": "新紀錄",
   "{0} sessions on rotation": "輪替連續 {0} 次",
   "Add your 7-day average. Off unless you turn it on.": "加入你的 7 天平均。除非你開啟，否則保持關閉。",
+  "Every routine is already in the loop": "所有訓練計畫都已在循環中",
+  "Last done {0}": "上次 {0}",
+  "Not done yet": "尚未完成",
+  "pinned": "已固定",
+  "Start your first workout": "開始第一次訓練",
+  "Add a measurement": "新增測量",
+  "No match for “{0}”": "找不到「{0}」",
+  "Create “{0}”": "建立「{0}」",
 }
