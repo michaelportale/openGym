@@ -217,7 +217,6 @@ export default {
   'Freestyle workout. Add your first exercise and off you go.': 'Entrenamiento libre. Añade tu primer ejercicio y a darle.',
   'Finish workout early · {0} exercises': 'Terminar antes · {0} ejercicios',
   'Rest’s over. Next set!': 'Se acabó el descanso. ¡Siguiente serie!',
-  'Hi {0}': 'Hola {0}',
   'This week': 'Esta semana',
   '{0} (in progress)': '{0} (en curso)',
   'Resume ▶': 'Seguir ▶',
@@ -2508,4 +2507,5 @@ export default {
   "Body weight, {0}": "Peso corporal, {0}",
   "Log {0} more weigh-ins to see your trend": "Registra {0} pesaje(s) más para ver tu tendencia",
   "Your goal is drawn as a dashed line through the weight charts.": "Tu objetivo aparece como una línea discontinua en las gráficas de peso.",
+  "sessions": "sesiones",
 }

@@ -248,7 +248,6 @@ export default {
   'Freestyle workout. Add your first exercise and off you go.': 'ফ্রিস্টাইল ওয়ার্কআউট। আপনার প্রথম ব্যায়াম যোগ করুন, তারপর শুরু।',
   'Finish workout early · {0} exercises': 'ওয়ার্কআউট আগেই শেষ করুন · {0}টি ব্যায়াম',
   'Rest’s over. Next set!': 'বিশ্রাম শেষ। পরের সেট!',
-  'Hi {0}': 'হাই {0}',
   'This week': 'এই সপ্তাহ',
   '{0} (in progress)': '{0} (চলছে)',
   'Resume ▶': 'আবার শুরু ▶',
@@ -2587,4 +2586,5 @@ export default {
   "Body weight, {0}": "শরীরের ওজন, {0}",
   "Log {0} more weigh-ins to see your trend": "আপনার ট্রেন্ড দেখতে আরও {0}টি ওজন লগ করুন",
   "Your goal is drawn as a dashed line through the weight charts.": "আপনার লক্ষ্য ওজনের চার্টে একটি ড্যাশ লাইন হিসেবে দেখানো হয়।",
+  "sessions": "সেশন",
 }

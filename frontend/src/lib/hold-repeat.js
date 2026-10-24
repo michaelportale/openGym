@@ -13,14 +13,36 @@ const stop = () => {
   if (!hold) return
   clearTimeout(hold.wait); clearInterval(hold.every)
   hold.wait = hold.every = null
+  if (hold.off) { hold.off(); hold.off = null }
 }
 
-export function holdRepeat(step) {
+// A lift anywhere ends the hold: the button's own pointerup is lost when the row re-renders
+// under the finger or the pointer is released outside the window's hit-test of the button.
+const listenForRelease = h => {
+  if (typeof document === 'undefined') return
+  const end = () => { if (hold === h) stop() }
+  document.addEventListener('pointerup', end, true)
+  document.addEventListener('pointercancel', end, true)
+  h.off = () => {
+    document.removeEventListener('pointerup', end, true)
+    document.removeEventListener('pointercancel', end, true)
+  }
+}
+
+// The view that rendered the buttons is leaving: a hold it started stops with it, so no timer
+// keeps stepping a set that is no longer on screen.
+export function cancelHold(owner) {
+  if (!hold || (owner !== undefined && hold.owner !== owner)) return
+  stop(); hold = null
+}
+
+export function holdRepeat(step, owner) {
   return {
     onPointerDown: e => {
       if (e.button != null && e.button !== 0) return
       stop()
-      const h = hold = { repeated: false, wait: null, every: null }
+      const h = hold = { repeated: false, wait: null, every: null, off: null, owner }
+      listenForRelease(h)
       h.wait = setTimeout(() => {
         h.repeated = true
         step()
@@ -28,7 +50,9 @@ export function holdRepeat(step) {
       }, HOLD_DELAY)
     },
     onPointerUp: stop,
-    onPointerLeave: stop,
+    // Sliding off the button ends the hold and forgets that it repeated, so the next tap on
+    // this button is not taken for a hold's closing click and swallowed.
+    onPointerLeave: () => { stop(); if (hold) hold.repeated = false },
     onPointerCancel: stop,
     onContextMenu: e => { if (hold?.repeated) e.preventDefault() },
     onClick: () => {

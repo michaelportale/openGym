@@ -199,7 +199,6 @@ export default {
   'Freestyle workout. Add your first exercise and off you go.': 'Довільне тренування. Додай першу вправу, і вперед.',
   'Finish workout early · {0} exercises': 'Завершити раніше · вправ: {0}',
   'Rest’s over. Next set!': 'Відпочинок скінчився. Наступний підхід!',
-  'Hi {0}': 'Привіт, {0}',
   'This week': 'Цього тижня',
   '{0} (in progress)': '{0} (триває)',
   'Resume ▶': 'Продовжити ▶',
@@ -2505,4 +2504,5 @@ export default {
   "Body weight, {0}": "Вага тіла, {0}",
   "Log {0} more weigh-ins to see your trend": {"one": "Запишіть ще {0} зважування, щоб побачити тренд", "few": "Запишіть ще {0} зважування, щоб побачити тренд", "many": "Запишіть ще {0} зважувань, щоб побачити тренд", "other": "Запишіть ще {0} зважування, щоб побачити тренд"},
   "Your goal is drawn as a dashed line through the weight charts.": "Ціль показано пунктирною лінією на графіках ваги.",
+  "sessions": {"one": "заняття", "few": "заняття", "many": "занять", "other": "заняття"},
 }

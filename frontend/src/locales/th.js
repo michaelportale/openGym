@@ -216,7 +216,6 @@ export default {
   'Finish workout early · {0} exercises': 'จบก่อนกำหนด · {0} ท่า',
   'Rest’s over. Next set!': 'หมดเวลาพักแล้ว เซ็ตถัดไป!',
   // --- home ---
-  'Hi {0}': 'สวัสดี {0}',
   'This week': 'สัปดาห์นี้',
   '{0} (in progress)': '{0} (กำลังทำอยู่)',
   'Resume ▶': 'เล่นต่อ ▶',
@@ -2519,4 +2518,5 @@ export default {
   "Body weight, {0}": "น้ำหนักตัว, {0}",
   "Log {0} more weigh-ins to see your trend": "บันทึกน้ำหนักอีก {0} ครั้งเพื่อดูแนวโน้ม",
   "Your goal is drawn as a dashed line through the weight charts.": "เป้าหมายของคุณแสดงเป็นเส้นประบนกราฟน้ำหนัก",
+  "sessions": "เซสชัน",
 }

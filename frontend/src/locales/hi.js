@@ -217,7 +217,6 @@ export default {
   'Freestyle workout. Add your first exercise and off you go.': 'फ्रीस्टाइल वर्कआउट। पहला व्यायाम जोड़ें और शुरू हो जाइए।',
   'Finish workout early · {0} exercises': 'जल्दी समाप्त करें · {0} व्यायाम',
   'Rest’s over. Next set!': 'आराम खत्म। अगला सेट!',
-  'Hi {0}': 'नमस्ते {0}',
   'This week': 'इस हफ़्ते',
   '{0} (in progress)': '{0} (चल रहा है)',
   'Resume ▶': 'जारी रखें ▶',
@@ -2508,4 +2507,5 @@ export default {
   "Body weight, {0}": "शरीर का वज़न, {0}",
   "Log {0} more weigh-ins to see your trend": "अपना ट्रेंड देखने के लिए {0} और वज़न दर्ज करें",
   "Your goal is drawn as a dashed line through the weight charts.": "आपका लक्ष्य वज़न चार्ट में एक डैश लाइन के रूप में दिखता है।",
+  "sessions": "सत्र",
 }
