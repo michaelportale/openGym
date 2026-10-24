@@ -248,7 +248,6 @@ export default {
   'Freestyle workout. Add your first exercise and off you go.': 'ফ্রিস্টাইল ওয়ার্কআউট। আপনার প্রথম ব্যায়াম যোগ করুন, তারপর শুরু।',
   'Finish workout early · {0} exercises': 'ওয়ার্কআউট আগেই শেষ করুন · {0}টি ব্যায়াম',
   'Rest’s over. Next set!': 'বিশ্রাম শেষ। পরের সেট!',
-  'Hi {0}': 'হাই {0}',
   'This week': 'এই সপ্তাহ',
   '{0} (in progress)': '{0} (চলছে)',
   'Resume ▶': 'আবার শুরু ▶',
@@ -2599,4 +2598,5 @@ export default {
   "Add a measurement": "একটি মাপ যোগ করুন",
   "No match for “{0}”": "“{0}”-এর কোনো মিল নেই",
   "Create “{0}”": "“{0}” তৈরি করুন",
+  "sessions": "সেশন",
 }

@@ -217,7 +217,6 @@ export default {
   'Freestyle workout. Add your first exercise and off you go.': '자유 운동. 첫 운동을 추가하고 바로 시작하세요.',
   'Finish workout early · {0} exercises': '일찍 마치기 · 운동 {0}개',
   'Rest’s over. Next set!': '휴식 끝. 다음 세트!',
-  'Hi {0}': '안녕하세요 {0}',
   'This week': '이번 주',
   '{0} (in progress)': '{0}(진행 중)',
   'Resume ▶': '이어하기 ▶',
@@ -2520,4 +2519,5 @@ export default {
   "Add a measurement": "측정 추가",
   "No match for “{0}”": "“{0}”에 대한 결과 없음",
   "Create “{0}”": "“{0}” 만들기",
+  "sessions": "세션",
 }
