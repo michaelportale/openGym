@@ -1592,6 +1592,9 @@ export const PT_BR_OVERRIDES = {
 
   "Setting": "Setting",
   "Choose the load for this copied exercise before logging it.": "Choose the load for this copied exercise before logging it.",
+  'Your week': 'Sua semana',
+  'Share your week': 'Compartilhar sua semana',
+  'Show which muscles this week trained.': 'Mostrar quais músculos você treinou nesta semana.',
 }
 
 export default { ...pt, ...PT_BR_OVERRIDES }

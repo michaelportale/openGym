@@ -2448,4 +2448,8 @@ export default {
   "Type": "Тип",
   "7-day average {0}": "Середнє за 7 днів {0}",
   "{0} this week": "{0} за тиждень",
+  "Your week": "Ваш тиждень",
+  "Top muscle": "Головний м’яз",
+  "Share your week": "Поділитися тижнем",
+  "Show which muscles this week trained.": "Показати, які м’язи працювали цього тижня.",
 }

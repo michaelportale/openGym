@@ -2451,4 +2451,8 @@ export default {
   "Type": "类型",
   "7-day average {0}": "7 天平均 {0}",
   "{0} this week": "本周 {0}",
+  "Your week": "你的一周",
+  "Top muscle": "主要肌群",
+  "Share your week": "分享你的一周",
+  "Show which muscles this week trained.": "显示本周训练了哪些肌群。",
 }

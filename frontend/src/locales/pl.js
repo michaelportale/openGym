@@ -2451,4 +2451,8 @@ export default {
   "Type": "Rodzaj",
   "7-day average {0}": "Średnia z 7 dni {0}",
   "{0} this week": "{0} w tym tygodniu",
+  "Your week": "Twój tydzień",
+  "Top muscle": "Najczęstszy mięsień",
+  "Share your week": "Udostępnij swój tydzień",
+  "Show which muscles this week trained.": "Pokaż, które mięśnie trenowały w tym tygodniu.",
 }

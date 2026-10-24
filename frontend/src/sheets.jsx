@@ -5,7 +5,7 @@ import { useUI } from './store/useUI.js'
 import { EXDB, EXIDX, BODYPARTS, isCardio, isBodyweightEq, allExercises, equipmentOf, byCategory, smOf, searchExercises, similarExercises, exOr, isAssisted, betterWeight, beatsWeight, isCustomEx } from './lib/exercises.js'
 import { trainingMetadataOf, trainingSnapshotFor, TRAINING_ROLES } from './lib/training-metadata.js'
 import { activeProfile, exAvailable, ALL_EQUIPMENT, newProfile, profileEquipment, ACC_V } from './lib/equipment.js'
-import { fmtDate, fmtDateRange, fmtNum, fmtPlate, exerciseNameText, fmtVol, fmtDur, durPart, todayISO, isoOf, uid, exCount, routineCount, setsWorkCount, DAYN, DAYS, weekOrder, weekStartOf, weekDayOffset, MONTHS_LONG, ACCENTS } from './lib/format.js'
+import { fmtDate, fmtDateRange, fmtNum, fmtPlate, exerciseNameText, fmtVol, fmtDur, durPart, todayISO, isoOf, uid, exCount, routineCount, setsWorkCount, DAYN, DAYS, weekOrder, weekStartOf, weekDayOffset, weekKey, MONTHS_LONG, ACCENTS } from './lib/format.js'
 import { lastEntryFor, bestWeightFor, bestWeightForEntry, buildSets, effectiveRoutineIds, workoutDay, workoutVolume, setsDone, setsDoneActive, setUnitsTotal, lastBW, sessionSections, setLabel, defaultConfig, cleanupSg, modeOf, effortOf, EFFORT, capEffort, stepEffort, isBw, isPerSide, sideReps, workSetsDone, applyIntensifierPlan, MAX_PLANNED_WARMUPS, NOTE_MAX } from './lib/history.js'
 import { usesBar, defaultBarWeight, hasBarOverride, isNoBar } from './lib/bar.js'
 import { PLATE_SIZES, pairsOf, ownsPlates, withPlatePairs, withStandardPlates, withLoadKind, loadKindFor, baseWeightFor, dropGrid } from './lib/plates.js'
@@ -67,6 +67,7 @@ import { stampWorkout } from './lib/sync-merge.js'
 import { weeklyWeights } from './lib/bodyweight.js'
 import { workoutText } from './lib/workout-text.js'
 import { workoutCardModel, layoutWorkoutCard, drawWorkoutCard, viewAspect, recordColor, CARD_FONT } from './lib/workout-card.js'
+import { weekRecapModel } from './lib/week-recap.js'
 import { copyText } from './lib/clipboard.js'
 import { queueRemaining, pinState } from './lib/queue.js'
 import { DAY_NOTE_TAGS, DAY_NOTE_LABEL, DAY_NOTE_ICON, dayNoteOf, dayNoteLine, canNoteDay, withDayNote } from './lib/day-notes.js'
@@ -2794,11 +2795,13 @@ function WorkoutDetail({ w, close }) {
 // "Share as image" (#453): the card lib/workout-card.js lays out, painted in the theme and accent
 // the app is showing right now, previewed before it goes anywhere. The muscle map is the finish
 // summary's, for this one session; whether the card carries it is remembered with the profile.
-function ShareWorkoutImage({ w, nameOf, close }) {
+// The week recap (weekRecapSheet) passes its own `card`: a model of the same shape, with its
+// heading, file name and the muscle-map switch's subtitle.
+function ShareWorkoutImage({ w, nameOf, close, card = null }) {
   const st = useStore(s => s.S)
   const update = useStore(s => s.update)
   const withMap = st.shareMap !== false
-  const model = useMemo(() => workoutCardModel(w, { unit: st.unit, nameOf }), [w, st.unit])
+  const model = useMemo(() => card ? card.model : workoutCardModel(w, { unit: st.unit, nameOf }), [card, w, st.unit])
   // The last picture stays up while the next one is drawn, so the toggle never blanks the sheet.
   const [img, setImg] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -2817,15 +2820,15 @@ function ShareWorkoutImage({ w, nameOf, close }) {
     return () => { alive = false }
   }, [model, withMap, st.body])
   useEffect(() => () => { if (shown.current) URL.revokeObjectURL(shown.current) }, [])
-  const name = 'opengym-workout-' + (workoutDay(w) || todayISO()) + '.png'
+  const name = card ? card.fileName : 'opengym-workout-' + (workoutDay(w) || todayISO()) + '.png'
   const share = async () => {
     setBusy(true)
-    await shareImage(img.blob, name, w.name || 'openGym')
+    await shareImage(img.blob, name, card ? card.model.title : w.name || 'openGym')
     setBusy(false)
     close()
   }
   return <>
-    <h3>{t('Share workout')}</h3>
+    <h3>{card ? card.heading : t('Share workout')}</h3>
     <div className="share-card">
       {img?.url
         ? <img src={img.url} alt={t('Preview of the image to share')} />
@@ -2833,12 +2836,22 @@ function ShareWorkoutImage({ w, nameOf, close }) {
           : <div className="share-card-ph" aria-hidden="true" />}
     </div>
     {model.levels && <div className="sect-b" style={{ marginBottom: 12 }}>
-      <Row icon="figureStrength" iconTint="var(--acc)" title={t('Muscle map')} subtitle={t('Show which muscles this workout trained.')}>
+      <Row icon="figureStrength" iconTint="var(--acc)" title={t('Muscle map')} subtitle={card ? card.mapSubtitle : t('Show which muscles this workout trained.')}>
         <Switch checked={withMap} aria-label={t('Muscle map')} onChange={v => update(s => { s.shareMap = v })} />
       </Row>
     </div>}
     <Button variant="primary" icon="share" disabled={!img?.blob || busy} onClick={share}>{t('Share')}</Button>
   </>
+}
+// "Your week" (lib/week-recap.js): the week so far as a card to share, drawn by the workout
+// card's layout and painter in the app's current theme.
+export function weekRecapSheet() {
+  const st = S()
+  const nameOf = e => (EXIDX[e.id] ? exerciseNameFor(EXIDX[e.id]) : (e.n || e.id))
+  const today = todayISO()
+  const model = weekRecapModel(st.workouts, { today, ws: weekStartOf(st), unit: st.unit, nameOf })
+  const card = { model, heading: t('Your week'), fileName: 'opengym-week-' + weekKey(today, weekStartOf(st)) + '.png', mapSubtitle: t('Show which muscles this week trained.') }
+  ui().openSheet(close => <ShareWorkoutImage card={card} close={close} />)
 }
 async function workoutCardImage(model, { map, body }) {
   const root = getComputedStyle(document.documentElement)
