@@ -139,7 +139,7 @@ it('the full report, with nothing counted yet, says what fills in and opens the 
 describe('coverage unknowns', () => {
   it('lists only the non-zero lines, and nothing when all are zero', async () => {
     const { unknownLines, hasUnknowns } = await import('./TrainingCoverage.jsx')
-    expect(unknownLines({ targetSets: 0, roleSets: 2, dateSessions: 1 })).toEqual([['Sets with unknown role: {0}', 2], ['Sessions without known dates: {0}', 1]])
+    expect(unknownLines({ targetSets: 0, roleSets: 2, dateSessions: 1 })).toEqual([['roleSets', 'Sets with unknown role: 2'], ['dateSessions', 'Sessions without known dates: 1']])
     expect(hasUnknowns({ actual: { roleSets: 0 }, planned: {} })).toBe(false)
     expect(hasUnknowns({ actual: {}, planned: { partialRows: 1 } })).toBe(true)
   })
