@@ -18,7 +18,7 @@
 .focus-badge{display:inline-flex;align-items:center;gap:4px;max-width:100%;min-height:24px;color:var(--label-2);font-size:.875rem;line-height:1.4;font-variant-numeric:tabular-nums;white-space:normal}
 .focus-badge .icn{font-size:1rem;flex:none}
 .focus-badge.plan{color:var(--label)}
-.focus-badge.warning,.focus-badge .short{color:var(--orange)}
+.focus-badge.warning,.focus-badge .short{color:var(--warning)}
 .focus-badge-action{min-height:44px;min-width:44px;color:inherit;font-size:.875rem;text-decoration:underline;text-underline-offset:3px}
 .focus-set-navigation{display:grid;gap:4px;padding-top:12px;margin-top:12px;border-top:var(--hair) solid var(--sep)}
 .focus-progress{color:var(--label);font-size:.875rem;font-weight:500;font-variant-numeric:tabular-nums}
