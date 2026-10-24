@@ -1,4 +1,4 @@
-import { FATIGUE_STATES } from './recovery.js'
+import { FATIGUE_STATES, LB_TO_KG } from './recovery.js'
 
 /**
  * Select the consumer-facing fatigue state for one numeric recovery value.
@@ -14,4 +14,16 @@ export function fatigueStateOf(value) {
     : value <= 0.5
       ? FATIGUE_STATES.RECOVERING
       : FATIGUE_STATES.FATIGUED
+}
+
+/**
+ * The profile's latest logged bodyweight in kg, or null. Fatigue and strength scoring use it to
+ * load bodyweight exercises; Stats and Home's Today card pass the same value so they agree.
+ */
+export function profileBodyweightKg(S) {
+  const entries = S?.bodyweight || []
+  if (!entries.length) return null
+  const last = entries.slice().sort((a, b) => String(a.d).localeCompare(String(b.d))).at(-1)
+  if (!last || !(last.w > 0)) return null
+  return S.unit === 'lb' ? last.w * LB_TO_KG : last.w
 }

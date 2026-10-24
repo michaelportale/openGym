@@ -2524,4 +2524,5 @@ export default {
   "Deload today: {0}": "আজ ডিলোড: {0}",
   "Strength trend": "শক্তির প্রবণতা",
   "Last 8 weeks": "গত ৮ সপ্তাহ",
+  "Still recovering: {0}": "এখনও পুনরুদ্ধার হচ্ছে: {0}",
 }

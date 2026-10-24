@@ -2445,4 +2445,5 @@ export default {
   "Deload today: {0}": "오늘 디로딩: {0}",
   "Strength trend": "근력 추세",
   "Last 8 weeks": "최근 8주",
+  "Still recovering: {0}": "아직 회복 중: {0}",
 }

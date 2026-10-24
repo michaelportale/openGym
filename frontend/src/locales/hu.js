@@ -2448,4 +2448,5 @@ export default {
   "Deload today: {0}": "Ma deload: {0}",
   "Strength trend": "Erő alakulása",
   "Last 8 weeks": "Elmúlt 8 hét",
+  "Still recovering: {0}": "Még regenerálódik: {0}",
 }
