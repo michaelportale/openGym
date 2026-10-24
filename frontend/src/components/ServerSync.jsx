@@ -234,7 +234,7 @@ export function OwedSheet({ kind, count: count0, media: media0 = 0, exportBackup
 }
 
 /* ---------------------------------------------------------------- Settings ------------------- */
-const TINT = { ok: 'var(--green)', wait: 'var(--orange)', off: 'var(--grey)', bad: 'var(--red)', quiet: 'var(--grey)' }
+const TINT = { ok: 'var(--success)', wait: 'var(--orange)', off: 'var(--grey)', bad: 'var(--red)', quiet: 'var(--grey)' }
 
 // Settings → "Server & sync", for a device signed in or paired: which server, which account, how
 // things stand, since when, what is still waiting, and "Sync now". `children` are the account's
