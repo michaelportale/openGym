@@ -2228,3 +2228,6 @@ button.wl-summary{width:100%;padding:0 0 10px;text-align:start;border-radius:var
 .st-row.up .st-d{color:var(--acc)}
 .st-row>.icn{position:absolute;inset-inline-end:0;top:50%;transform:translateY(-50%);color:var(--label-3);font-size:14px}
 .st-row:active{opacity:.7}
+.stats-empty .empty{padding:28px 12px 8px;display:flex;flex-direction:column;align-items:center;gap:14px}
+.stats-empty .empty .ico{margin-bottom:0;color:var(--acc)}
+.stats-empty .empty .btn{min-width:200px}
