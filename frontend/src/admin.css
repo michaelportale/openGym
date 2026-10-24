@@ -15,7 +15,7 @@
   background:var(--surface-2);color:var(--label-2)
 }
 .adm-pill::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}
-.adm-pill.ok{background:color-mix(in srgb,var(--green) 16%,transparent);color:var(--green)}
+.adm-pill.ok{background:color-mix(in srgb,var(--success) 16%,transparent);color:var(--success)}
 .adm-pill.warn{background:color-mix(in srgb,var(--yellow) 18%,transparent);color:var(--yellow)}
 .adm-pill.bad{background:color-mix(in srgb,var(--red) 16%,transparent);color:var(--red)}
 .adm-pill.acc{background:var(--acc-soft);color:var(--acc)}
@@ -82,7 +82,7 @@
   margin-top:10px;padding:10px 12px;border-radius:var(--r);font-size:13.5px;line-height:1.45;
   background:var(--surface-2);color:var(--label)
 }
-.adm-result.ok{background:color-mix(in srgb,var(--green) 14%,transparent)}
+.adm-result.ok{background:color-mix(in srgb,var(--success) 14%,transparent)}
 .adm-result.bad{background:color-mix(in srgb,var(--red) 14%,transparent)}
 .adm-result b{display:block;margin-bottom:2px}
 

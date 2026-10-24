@@ -218,7 +218,7 @@
 .ins-h .dim{font-weight:400;font-size:12px}
 .ins-block .chart{margin:2px -4px 0}
 .ins-delta{font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--label-2);white-space:nowrap;flex:none}
-.ins-delta.up{color:var(--green)}
+.ins-delta.up{color:var(--success)}
 .ins-delta.down{color:var(--red)}
 .ins-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-top:var(--hair) solid var(--sep)}
 .ins-row:first-of-type{border-top:none}
@@ -264,7 +264,7 @@
 .recap-top{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .recap-top .pcard-eyebrow{margin:0}
 .recap-state{font-size:11px;font-weight:600;padding:3px 9px;border-radius:99px;background:var(--surface-2);color:var(--label-2);white-space:nowrap;flex:none}
-.recap-state.yes{background:color-mix(in srgb,var(--green) 16%,transparent);color:var(--green)}
+.recap-state.yes{background:color-mix(in srgb,var(--success) 16%,transparent);color:var(--success)}
 .recap-state.no{background:color-mix(in srgb,var(--red) 14%,transparent);color:var(--red)}
 .recap-state.mix{background:var(--acc-soft);color:var(--acc)}
 .recap-t{font-size:17px;font-weight:600;letter-spacing:-.018em;margin-top:6px;line-height:1.2}
@@ -272,7 +272,7 @@
 .recap-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}
 .recap-chip{display:inline-flex;align-items:center;gap:4px;font-size:12px;padding:4px 9px;border-radius:99px;background:var(--surface-2);color:var(--label-2);max-width:100%}
 .recap-chip .icn{font-size:11px;flex:none}
-.recap-chip.yes .icn{color:var(--green)}
+.recap-chip.yes .icn{color:var(--success)}
 .recap-chip.no{text-decoration:line-through;opacity:.75}
 .recap-chip.no .icn{color:var(--red)}
 .recap-more{display:flex;align-items:center;gap:3px;font-size:13px;color:var(--acc);font-weight:500;margin-top:10px}

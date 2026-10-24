@@ -11,7 +11,7 @@ import { balanceStatusView } from '../lib/structuralBalance-view.js'
 import { TEMPLATES, TEMPLATE_LIST, DEFAULT_TEMPLATE_ID, EVALUATION_MODES } from '../lib/structuralBalanceTemplates.js'
 
 const STATUS_COLOR = {
-  balanced: 'var(--green)',
+  balanced: 'var(--success)',
   borderline: 'var(--yellow)',
   weak: 'var(--red)',
   'no-data': 'var(--label-3)',

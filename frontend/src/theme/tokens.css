@@ -26,6 +26,7 @@
   /* status. Done/complete uses --success with a check glyph; a personal record uses --pr. */
   --success:      var(--green);
   --success-soft: color-mix(in srgb, var(--success) 16%, transparent);
+  --on-success:   var(--label);   /* text on a solid --success fill (finished workout chip) */
   --warning:      var(--orange);
   --danger:       var(--red);
   --pr:           var(--yellow);
