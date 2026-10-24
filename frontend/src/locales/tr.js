@@ -217,7 +217,6 @@ export default {
   'Freestyle workout. Add your first exercise and off you go.': 'Serbest antrenman. İlk egzersizini ekle ve başla.',
   'Finish workout early · {0} exercises': 'Erken bitir · {0} egzersiz',
   'Rest’s over. Next set!': 'Dinlenme bitti. Sıradaki set!',
-  'Hi {0}': 'Selam {0}',
   'This week': 'Bu hafta',
   '{0} (in progress)': '{0} (devam ediyor)',
   'Resume ▶': 'Devam et ▶',
