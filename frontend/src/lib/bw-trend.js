@@ -31,3 +31,25 @@ export function bwWeekChange(trend) {
   }
   return null
 }
+
+// How far the trend moved within the last `days` days: the latest trend value against the first
+// trend value inside the window. null with fewer than two weigh-ins in it. Feeds the Stats
+// "Weight 30d" tile, so one heavy morning at either end does not decide the number.
+export function bwTrendChange(trend, days = 30) {
+  const last = trend.at(-1)
+  if (!last) return null
+  const inWindow = trend.filter(p => p.t > last.t - days * DAY_MS)
+  if (inWindow.length < 2) return null
+  return Math.round((last.y - inWindow[0].y) * 100) / 100
+}
+
+// Whether a change moves toward the goal: true or false, or null with no goal, no change, or
+// the goal already reached. Said in words next to a neutral number (body weight is not a score).
+export function bwTowardGoal(delta, current, goal) {
+  if (!delta || goal == null || !isFinite(goal) || current == null) return null
+  if (Math.abs(goal - current) < 0.05) return null
+  return (delta < 0) === (goal < current)
+}
+
+// Weigh-ins the trend needs before it is drawn; fewer show as dots with a nudge to log more.
+export const BW_TREND_MIN = 3
