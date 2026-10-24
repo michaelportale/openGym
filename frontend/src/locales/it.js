@@ -2445,4 +2445,5 @@ export default {
   "Deload today: {0}": "Oggi scarico: {0}",
   "Strength trend": "Andamento della forza",
   "Last 8 weeks": "Ultime 8 settimane",
+  "Still recovering: {0}": "Ancora in recupero: {0}",
 }
