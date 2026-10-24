@@ -2468,4 +2468,12 @@ export default {
   "{0} muscles on target": "Hedefteki kaslar: {0}",
   "Train a few sessions to see coverage": "Kapsamı görmek için birkaç antrenman yap",
   "Set coverage aims": "Kapsam hedeflerini belirle",
+  "Last: {0}": "Geçen sefer: {0}",
+  "First time — set a baseline": "İlk kez — bir başlangıç belirle",
+  "Ahead of last time": "Geçen seferin önünde",
+  "Beat it": "Geç",
+  "Beat it: fill in {0}": "Geç: {0} doldur",
+  "{0} rep": "{0} tekrar",
+  "{0} reps": "{0} tekrar",
+  "New PR · {0}": "Yeni rekor · {0}",
 }

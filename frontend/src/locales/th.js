@@ -2479,4 +2479,12 @@ export default {
   "{0} muscles on target": "กล้ามเนื้อที่ถึงเป้า {0}",
   "Train a few sessions to see coverage": "ฝึกสักสองสามครั้งเพื่อดูความครอบคลุม",
   "Set coverage aims": "ตั้งเป้าความครอบคลุม",
+  "Last: {0}": "ครั้งก่อน: {0}",
+  "First time — set a baseline": "ครั้งแรก — ตั้งค่าพื้นฐาน",
+  "Ahead of last time": "ดีกว่าครั้งก่อน",
+  "Beat it": "ทำให้ดีกว่า",
+  "Beat it: fill in {0}": "ทำให้ดีกว่า: กรอก {0}",
+  "{0} rep": "{0} ครั้ง",
+  "{0} reps": "{0} ครั้ง",
+  "New PR · {0}": "สถิติใหม่ · {0}",
 }
