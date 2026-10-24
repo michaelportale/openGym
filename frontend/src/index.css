@@ -706,6 +706,22 @@ body.chips-dragging *{cursor:inherit}
 .measure-home-grid b{display:block;font-size:16px;margin:3px 0;white-space:nowrap}
 .measure-empty{width:100%;display:flex;align-items:center;justify-content:space-between;text-align:left;color:var(--label-2);font-size:13px;gap:10px}
 .measure-empty .icn{flex:none}
+/* --- nutrition --- */
+.nutri-type{margin-bottom:14px}
+.nutri-targets{margin:0;padding:12px}
+.nutri-week-h{margin:-4px -4px 12px}
+.nutri-week-h h2{flex:1;text-align:center}
+.nutri-week-h .iconbtn:disabled{color:var(--label-3);cursor:default}
+.nutri-tiles{margin-bottom:0}
+.nutri-tile{background:var(--surface-2);min-width:0}
+.nutri-tile .v{font-size:22px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nutri-sub{color:var(--label-2);font-size:13px;margin-top:4px;line-height:1.3}
+.nutri-empty-line{color:var(--label-2);font-size:15px;margin-top:6px}
+.nutri-weigh{margin-top:10px;padding-top:6px;border-top:1px solid var(--sep)}
+.nutri-checks{display:grid;gap:2px}
+.nutri-check{display:flex;align-items:center;gap:12px;min-height:44px;color:var(--label);font-size:16px}
+.nutri-check span{min-width:0;overflow-wrap:anywhere}
+.nutri-note{color:var(--label-2);margin-top:8px;white-space:pre-wrap;overflow-wrap:anywhere}
 .exnote{
   background:var(--surface);border-radius:var(--r);padding:13px 15px;
   line-height:1.45;white-space:pre-wrap;font-size:15px;margin-bottom:10px;color:var(--label-2);

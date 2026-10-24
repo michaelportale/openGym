@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   canLogNutrition, clearNutritionDay, hasTargets, isLoggedDay, nutrientValue, nutritionDayOf,
-  nutritionHistory, nutritionInputError, readNutritionDay, readSupplements, readTargets, weekDays,
+  lastNutritionDay, nutritionHistory, nutritionInputError, readNutritionDay, readSupplements, readTargets, weekDays,
   weekSummary, withNutritionDay, withSupplement, withSupplementTick, withTarget, withoutSupplement,
 } from './nutrition.js'
 import { MONDAY, SUNDAY } from './format.js'
@@ -184,5 +184,11 @@ describe('nutritionHistory', () => {
   it('lists days with anything on them, newest first, skipping cleared ones', () => {
     const S = { nutritionDays: { '2026-10-19': full(), '2026-10-21': { supps: ['a'], _ts: 1 }, '2026-10-20': { _ts: 1 }, junk: full() } }
     expect(nutritionHistory(S)).toEqual(['2026-10-21', '2026-10-19'])
+  })
+
+  it('names the newest day with totals, not one with only supplement ticks', () => {
+    const S = { nutritionDays: { '2026-10-19': full(), '2026-10-21': { supps: ['a'], _ts: 1 } } }
+    expect(lastNutritionDay(S)).toBe('2026-10-19')
+    expect(lastNutritionDay({})).toBeNull()
   })
 })
