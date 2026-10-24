@@ -98,10 +98,13 @@ function TargetsAndSupplements({ close }) {
   const supplements = readSupplements(S.supplements)
   const [name, setName] = useState('')
   const setTarget = (type, key, v) => update(s => { s.nutritionTargets = withTarget(s.nutritionTargets, type, key, v) })
+  // The list is built inside update() from the stored copy, not from this render's, so a
+  // supplement that arrived from another device since the sheet opened is kept. The check runs on
+  // the same stored copy first, so a refused name doesn't write (and sync) anything.
   const add = () => {
-    const next = withSupplement(S.supplements, name, uid())
-    if (!next) { if (name.trim()) toast(t('That supplement is already on the list.')); return }
-    update(s => { s.supplements = next })
+    if (!withSupplement(useStore.getState().S.supplements, name, 'check')) { if (name.trim()) toast(t('That supplement is already on the list.')); return }
+    const id = uid()
+    update(s => { s.supplements = withSupplement(s.supplements, name, id) || s.supplements })
     setName('')
   }
   const remove = id => update(s => { s.supplements = withoutSupplement(s.supplements, id) })
@@ -182,7 +185,9 @@ export default function Nutrition() {
   const loggedToday = isLoggedDay(todayDay)
   const ticks = new Set(todayDay?.supps || [])
   const history = useMemo(() => nutritionHistory(S).slice(0, 14), [S])
-  const tick = (id, on) => update(s => { s.nutritionDays = withSupplementTick(s.nutritionDays, today, id, on) })
+  // Today is read when the box is ticked, not when the screen last rendered: a tick just after
+  // midnight lands on the new day.
+  const tick = (id, on) => update(s => { s.nutritionDays = withSupplementTick(s.nutritionDays, todayISO(), id, on) })
 
   return <div className="narrow">
     <div className="hdr">

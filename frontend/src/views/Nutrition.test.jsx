@@ -110,6 +110,39 @@ describe('Nutrition screen', () => {
     expect(el.querySelector('.nutri-check [role="checkbox"]').getAttribute('aria-checked')).toBe('true')
   })
 
+  it('adding a supplement keeps one that arrived from another device while the sheet was open', () => {
+    install({ supplements: [{ id: 'a', name: 'Creatine' }] })
+    act(() => { nutritionSettingsSheet() })
+    const sheet = topSheet()
+    act(() => type(sheet.querySelector('input[aria-label="Supplement name"]'), 'Vitamin D'))
+    // A sync lands between this render and the tap: the sheet has not re-rendered yet.
+    act(() => {
+      useStore.setState(st => ({ S: { ...st.S, supplements: [...st.S.supplements, { id: 'r', name: 'Magnesium' }] } }))
+      button(sheet, 'Add').click()
+    })
+    expect(useStore.getState().S.supplements.map(x => x.name)).toEqual(['Creatine', 'Magnesium', 'Vitamin D'])
+  })
+
+  it('a refused name writes nothing', () => {
+    install({ supplements: [{ id: 'a', name: 'Creatine' }] })
+    act(() => { nutritionSettingsSheet() })
+    const sheet = topSheet()
+    const before = useStore.getState().S
+    act(() => type(sheet.querySelector('input[aria-label="Supplement name"]'), 'creatine'))
+    act(() => button(sheet, 'Add').click())
+    expect(useStore.getState().S).toBe(before)
+  })
+
+  it('a tick just after midnight lands on the new day, even before the screen re-renders', () => {
+    install({ supplements: [{ id: 'a', name: 'Creatine' }] })
+    const el = screen()
+    vi.setSystemTime(new Date('2026-10-22T00:05:00'))
+    act(() => el.querySelector('.nutri-check [role="checkbox"]').click())
+    const days = useStore.getState().S.nutritionDays
+    expect(days['2026-10-22']?.supps).toEqual(['a'])
+    expect(days['2026-10-21']).toBeUndefined()
+  })
+
   it('sets targets per day type, empty until the profile fills them', () => {
     install()
     act(() => { nutritionSettingsSheet() })
