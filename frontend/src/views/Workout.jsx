@@ -46,6 +46,8 @@ import { hasCompletedWork, isWarmupRow, isFailureSet, toggleFailure, isDropSet, 
 import { canMoveActiveWorkoutUnit, moveActiveWorkoutUnit, canMoveActiveWorkoutEntry, moveActiveWorkoutEntry } from '../lib/active-workout-order.js'
 import { nextOpenSet, workoutKeyAction } from '../lib/workout-keys.js'
 import { MUSCLE_NAME } from '../lib/muscles.js'
+import { ghostFor, beatTarget, aheadOf } from '../lib/beat-it.js'
+import { holdRepeat } from '../lib/hold-repeat.js'
 import FocusView from './FocusView.jsx'
 import StrengthFeedback, { EquipmentIdentity } from '../components/StrengthFeedback.jsx'
 import { withMeaning, historyAs, dbLoadFor, entryDbLoad, bellsIn, ownedWeightsFor, stepOwned } from '../lib/dumbbells.js'
@@ -114,6 +116,9 @@ function ExerciseBlock({ entryIdx, compact, dense, editing, onToggle, onToggleSi
   const swipeHint = useUI(s => (s.swipeHint?.idx === entryIdx ? s.swipeHint : null))
   const setFlash = useUI(s => (s.setFlash?.idx === entryIdx ? s.setFlash : null))
   const optsId = useId()
+  // The row "Beat it" last filled and what it held before, for four seconds of Undo.
+  const [beatUndo, setBeatUndo] = useState(null)
+  useEffect(() => { if (!beatUndo) return; const id = setTimeout(() => setBeatUndo(null), 4000); return () => clearTimeout(id) }, [beatUndo])
   const entry = S.active.entries[entryIdx]
   // Drops/bursts mutate the row in place — same card, not a new set with its own long rest.
   // A planned exercise (see the exercise's "Intensifier" config) arrives with these already
@@ -327,12 +332,50 @@ function ExerciseBlock({ entryIdx, compact, dense, editing, onToggle, onToggleSi
   const wc = workoutControls(S)
   const cell = (s, i, col, cls) => (
     <div className={'stp ' + cls + (wc.steppers ? '' : ' plain')} data-label={col.hd}>
-      {wc.steppers && <button aria-label={t('Decrease')} onClick={() => bump(s, i, col, -1)}><Icon name="minus" /></button>}
+      {wc.steppers && <button aria-label={t('Decrease')} {...holdRepeat(() => bump(s, i, col, -1))}><Icon name="minus" /></button>}
       <span className="val"><NumberField aria-label={col.hd} decimal={col.dec} nullable={col.opt} value={viewOf(col, s[col.f]) ?? ''}
         onChange={v => onField(i, col.f, col.store ? col.store(v) : v)} /></span>
-      {wc.steppers && <button aria-label={t('Increase')} onClick={() => bump(s, i, col, 1)}><Icon name="plus" /></button>}
+      {wc.steppers && <button aria-label={t('Increase')} {...holdRepeat(() => bump(s, i, col, 1))}><Icon name="plus" /></button>}
     </div>
   )
+  // Last time, per work row (lib/beat-it.js): what the same set was, under the row, and on the
+  // next set to do a "Beat it" chip that fills the steppers with one step more. It never logs:
+  // the check still does. Reps and timed rows only; a unilateral L/R set keeps its own two rows.
+  const ghostOn = (mode === 'reps' || mode === 'time') && !editing
+  const workIndexOf = i => entry.sets.slice(0, i).filter(x => !isWarmupRow(x)).length
+  const activeWork = entry.sets.findIndex(x => !x.done && !isWarmupRow(x))
+  const ghostText = g => mode === 'time' ? tn('{0} second', '{0} seconds', g.sec)
+    : g.w > 0 ? `${fmtNum(g.w)} × ${fmtNum(g.r)}` : tn('{0} rep', '{0} reps', g.r)
+  const beatOf = g => beatTarget(g, { mode, reps: cfg.reps, repsMax: cfg.repsMax, step: w => stepLoad(w, loadStep, 1) })
+  const applyBeat = (i, target) => {
+    const row = entry.sets[i]
+    setBeatUndo({ i, prev: Object.fromEntries(Object.keys(target).map(k => [k, row[k]])) })
+    for (const [k, v] of Object.entries(target)) onField(i, k, v)
+  }
+  const undoBeat = () => {
+    if (!beatUndo) return
+    for (const [k, v] of Object.entries(beatUndo.prev)) onField(beatUndo.i, k, v)
+    setBeatUndo(null)
+  }
+  const ghostLine = (s, i) => {
+    if (!ghostOn || isWarmupRow(s) || isSideSet(s)) return null
+    const g = ghostFor(last, workIndexOf(i), mode)
+    const isActive = i === activeWork
+    if (!g) return isActive && !last ? <div className="setghost"><span>{t('First time — set a baseline')}</span></div> : null
+    const ahead = aheadOf(g, s, mode)
+    const target = isActive && !s.done ? beatOf(g) : null
+    // A logged set heavier than the best before this session is a record, said on the row as it
+    // happens; the finish summary lists it again. Gold for this alone.
+    const record = s.done && mode === 'reps' && !bw && best > 0 && s.w > best && s.r > 0
+    return <div className="setghost">
+      <span>{t('Last: {0}', ghostText(g))}</span>
+      {record ? <span className="set-record"><Icon name="trophy" />{t('New PR · {0}', '+' + fmtNum(Math.round((s.w - best) * 100) / 100) + ' ' + S.unit)}</span>
+        : ahead && <span className="setghost-ahead">{t('Ahead of last time')} <span aria-hidden="true">↑</span></span>}
+      {beatUndo?.i === i ? <button type="button" className="chip setghost-beat" onClick={undoBeat}>{t('Undo')}</button>
+        : target && !ahead && <button type="button" className="chip setghost-beat" onClick={() => applyBeat(i, target)}
+          aria-label={t('Beat it: fill in {0}', mode === 'time' ? tn('{0} second', '{0} seconds', target.sec) : target.w > 0 ? `${fmtNum(target.w)} × ${fmtNum(target.r)}` : tn('{0} rep', '{0} reps', target.r))}>{t('Beat it')}</button>}
+    </div>
+  }
   // Plate loading, per set row (lib/plates.js): which plates make THIS row's weight, from the
   // plates you own. 'pairs' splits what is beyond the bar per side, 'single' is one stack (a
   // belt, a sled), 'none' shows nothing. A unilateral row logs each side's own weight; a bar is
@@ -735,6 +778,7 @@ function ExerciseBlock({ entryIdx, compact, dense, editing, onToggle, onToggleSi
               <Icon name="swap" /><span>{t('Psst: swipe a set. Left deletes, right copies.')}</span><Icon name="xmark" />
             </button>
           </div>}
+          {!pairTail && ghostLine(s, i)}
           {loadLine(String(i))}
           {/* Drop-sets and rest-pause bursts extend this same row — no long rest, no new set.
               A planned exercise arrives with these already filled in (applyIntensifierPlan);

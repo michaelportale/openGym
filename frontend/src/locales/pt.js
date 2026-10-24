@@ -2468,4 +2468,12 @@ export default {
   "{0} muscles on target": "{0} músculos no objetivo",
   "Train a few sessions to see coverage": "Treine algumas sessões para ver a cobertura",
   "Set coverage aims": "Definir metas de cobertura",
+  "Last: {0}": "Última vez: {0}",
+  "First time — set a baseline": "Primeira vez — defina uma referência",
+  "Ahead of last time": "À frente da última vez",
+  "Beat it": "Superar",
+  "Beat it: fill in {0}": "Superar: preencher {0}",
+  "{0} rep": "{0} rep.",
+  "{0} reps": "{0} rep.",
+  "New PR · {0}": "Novo recorde · {0}",
 }

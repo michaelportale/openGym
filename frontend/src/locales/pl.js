@@ -2468,4 +2468,12 @@ export default {
   "{0} muscles on target": { one: '{0} mięsień w normie', few: '{0} mięśnie w normie', many: '{0} mięśni w normie', other: '{0} mięśnia w normie' },
   "Train a few sessions to see coverage": "Zrób kilka treningów, aby zobaczyć pokrycie",
   "Set coverage aims": "Ustaw cele pokrycia",
+  "Last: {0}": "Ostatnio: {0}",
+  "First time — set a baseline": "Pierwszy raz — ustal punkt wyjścia",
+  "Ahead of last time": "Lepiej niż ostatnio",
+  "Beat it": "Pobij",
+  "Beat it: fill in {0}": "Pobij: wpisz {0}",
+  "{0} rep": "{0} powt.",
+  "{0} reps": {"one": "{0} powt.", "few": "{0} powt.", "many": "{0} powt.", "other": "{0} powt."},
+  "New PR · {0}": "Nowy rekord · {0}",
 }
