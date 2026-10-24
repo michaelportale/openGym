@@ -875,6 +875,16 @@ body.chips-dragging *{cursor:inherit}
 .ck.on svg{stroke:var(--on-acc)}
 
 /* ------------------------------------------------------------- workout --- */
+/* Status-bar scrim: content scrolling up under the clock and battery passes under the page's own
+   ground instead of colliding with them. It is only as tall as the status bar (plus the connection
+   row when one shows) and never takes a tap. It sits just under the connection bar (45), so that
+   bar's sentence is never veiled, and under the tab bar, the timer and every sheet. */
+body::before{
+  content:"";position:fixed;inset-inline-start:0;inset-inline-end:0;top:0;z-index:44;
+  height:calc(var(--sat) + var(--conn));pointer-events:none;
+  background:color-mix(in srgb,var(--bg) 92%,transparent);
+  -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
+}
 /* Workout header. In list mode it is pinned: pulled up over #app's top padding so it sits flush
    with the screen edge from the first pixel, and given the page's own ground plus a light blur so
    the rows scrolling underneath read as underneath. The connection indicator, when there is
