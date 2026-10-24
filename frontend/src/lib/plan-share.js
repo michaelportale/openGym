@@ -418,6 +418,8 @@ export function planPrintHTML(S, owner, { routineId } = {}) {
   return `<!doctype html><html lang="${getLang()}" dir="${RTL_LANGS.has(getLang()) ? 'rtl' : 'ltr'}"><head><meta charset="utf-8">
 <title>${esc(title)}</title>
 <style>
+  /* Print colours are fixed (the page is white). The kicker and superset tag are the default
+     palette's accent darkened to 5.3:1 on white; the superset rule is it lightened. */
   @page { margin: 16mm 15mm; }
   * { box-sizing: border-box; }
   html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -428,7 +430,7 @@ export function planPrintHTML(S, owner, { routineId } = {}) {
   }
   .doc { max-width: 720px; margin: 0 auto; }
   header { border-bottom: 2px solid #16181d; padding-bottom: 12px; margin-bottom: 20px; }
-  header .kicker { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: #6a7a3a; font-weight: 700; }
+  header .kicker { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: #b34b25; font-weight: 700; }
   header h1 { font-size: 27px; letter-spacing: -.02em; margin: 3px 0 0; }
   header .sub { color: #6b7180; font-size: 13px; margin-top: 4px; }
 
@@ -458,8 +460,8 @@ export function planPrintHTML(S, owner, { routineId } = {}) {
   .ex-note { color: #6a7080; font-size: 12px; margin-top: 2px; }
   .ex.empty, .none { color: #a2a8b6; }
 
-  .ss { break-inside: avoid; page-break-inside: avoid; border-inline-start: 3px solid #cfe08a; padding-inline-start: 12px; margin: 4px 0; }
-  .ss-tag { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: #6a7a3a; font-weight: 700; padding-top: 4px; }
+  .ss { break-inside: avoid; page-break-inside: avoid; border-inline-start: 3px solid #ffbca4; padding-inline-start: 12px; margin: 4px 0; }
+  .ss-tag { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: #b34b25; font-weight: 700; padding-top: 4px; }
   .ss .ex:first-of-type { padding-top: 2px; }
 
   footer { margin-top: 26px; padding-top: 10px; border-top: 1px solid #eef0f4; color: #a2a8b6; font-size: 11px; text-align: center; }
