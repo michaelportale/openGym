@@ -80,10 +80,17 @@ function pausesOf(S, todayN) {
   return out
 }
 
-// The day the gap clock counts from: the last workout, or the end of a pause after it.
-const clockFrom = (anchor, upTo, pauses) => {
+// The day the gap clock counts from: the last workout, or the end of a pause after it (up to
+// `upTo`, the day being judged). Only a pause that began while the streak was still alive, no
+// more than `limit` days after the clock, freezes it: a pause tapped after the streak had already
+// broken does not bring it back. Back-to-back pauses chain, each judged from where the last left
+// the clock. A pause that ends on `upTo` counts, so the day you are back is still covered.
+const clockFrom = (anchor, upTo, pauses, limit) => {
   let from = anchor
-  for (const [a, b] of pauses) if (b >= anchor && a <= upTo && b < upTo) from = Math.max(from, b)
+  for (const [a, b] of [...pauses].sort((x, y) => x[0] - y[0])) {
+    if (a > upTo || a > from + limit) break
+    if (b >= from) from = Math.min(b, upTo)
+  }
   return from
 }
 
@@ -118,7 +125,7 @@ export function rotationStreak(S, today = todayISO()) {
   const end = () => { count = 0; rounds = 0; passes = 0; seen = new Set() }
   for (const n of [...days.keys()].sort((a, b) => a - b)) {
     if (anchor !== null) {
-      const gap = n - clockFrom(anchor, n, pauses)
+      const gap = n - clockFrom(anchor, n, pauses, passes > 0 ? 2 * maxGap : maxGap)
       if (gap > maxGap) {
         if (passes > 0 && gap <= 2 * maxGap) passes--
         else end()
@@ -136,12 +143,14 @@ export function rotationStreak(S, today = todayISO()) {
 
   const base = { mode, N, P, maxGap, rounds, passes, best, deadline: null, kind: null, since: null }
   if (anchor === null) return { ...base, count: 0, state: 'zero' }
-  if (S?.status && ISO.test(S.status.since || '')) {
+  // Broken is checked before paused: a pause running now only holds a streak that was alive when
+  // it began (clockFrom ignores a later one, so the gap still runs from the last workout).
+  const limit = passes > 0 ? 2 * maxGap : maxGap
+  const from = clockFrom(anchor, todayN, pauses, limit)
+  const gap = todayN - from
+  if (gap <= limit && S?.status && ISO.test(S.status.since || '')) {
     return { ...base, count, state: 'paused', kind: PAUSE_KINDS.includes(S.status.kind) ? S.status.kind : 'break', since: S.status.since }
   }
-  const from = clockFrom(anchor, todayN, pauses)
-  const limit = passes > 0 ? 2 * maxGap : maxGap
-  const gap = todayN - from
   if (count === 0 || gap > limit) return { ...base, count: 0, rounds: 0, passes: 0, state: best > 0 ? 'broken' : 'zero' }
   return { ...base, count, state: gap > limit - 2 ? 'atRisk' : 'active', deadline: isoOfNum(from + limit) }
 }

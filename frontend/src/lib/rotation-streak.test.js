@@ -137,3 +137,71 @@ describe('streak loop', () => {
     expect(maxGapOf(l.P, l.N)).toBe(14)
   })
 })
+
+describe('a pause after the streak broke does not revive it', () => {
+  const four = [wo(0, 'a'), wo(2, 'b'), wo(4, 'c'), wo(9, 'd')]
+  const today = 84 // the last workout was 75 days ago
+
+  it('last workout 75 days ago, Sick, then I\'m back: broken, not active at 4', () => {
+    // Sick and I'm back tapped 75 days after the last workout; the card is read the next day.
+    const s = rotationStreak(rot(four, { status: null, pauses: [{ kind: 'sick', since: day(today), until: day(today) }] }), day(today + 1))
+    expect(s.state).toBe('broken')
+    expect(s.count).toBe(0)
+    expect(s.best).toBe(4)
+  })
+
+  it('the same with a longer late pause, read the day after I\'m back', () => {
+    const s = rotationStreak(rot(four, { status: null, pauses: [{ kind: 'sick', since: day(today), until: day(today + 3) }] }), day(today + 4))
+    expect(s.state).toBe('broken')
+    expect(s.count).toBe(0)
+    expect(s.best).toBe(4)
+  })
+
+  it('while that late pause is still running it reads broken, not paused at 4', () => {
+    const s = rotationStreak(rot(four, { status: { kind: 'sick', since: day(today) } }), day(today))
+    expect(s.state).toBe('broken')
+    expect(s.count).toBe(0)
+  })
+
+  it('a workout after that late pause starts a new streak at 1', () => {
+    const s = rotationStreak(rot([...four, wo(today + 2, 'e')], { pauses: [{ kind: 'sick', since: day(today), until: day(today + 1) }] }), day(today + 2))
+    expect(s.count).toBe(1)
+    expect(s.state).toBe('active')
+  })
+
+  it('a pause that starts on the last day the streak survives still freezes it', () => {
+    // maxGap 5 with no pass banked: day 14 is the last safe day after day 9
+    const s = rotationStreak(rot(four, { pauses: [{ kind: 'sick', since: day(14), until: day(40) }] }), day(41))
+    expect(s.state).toBe('active')
+    expect(s.count).toBe(4)
+  })
+
+  it('a pause that starts the day after the streak broke does not', () => {
+    const s = rotationStreak(rot(four, { pauses: [{ kind: 'sick', since: day(15), until: day(40) }] }), day(41))
+    expect(s.state).toBe('broken')
+  })
+
+  it('a pause in time that ends today still covers today, the day you are back', () => {
+    const s = rotationStreak(rot(four, { pauses: [{ kind: 'sick', since: day(12), until: day(40) }] }), day(40))
+    expect(s.state).toBe('active')
+    expect(s.count).toBe(4)
+  })
+
+  it('a workout logged on the day you are back extends the streak', () => {
+    const s = rotationStreak(rot([...four, wo(40, 'e')], { pauses: [{ kind: 'sick', since: day(12), until: day(40) }] }), day(40))
+    expect(s.state).toBe('active')
+    expect(s.count).toBe(5)
+  })
+
+  it('back-to-back pauses chain while the streak is alive', () => {
+    const s = rotationStreak(rot(four, { pauses: [{ kind: 'sick', since: day(12), until: day(20) }, { kind: 'injured', since: day(23), until: day(50) }] }), day(51))
+    expect(s.state).toBe('active')
+    expect(s.count).toBe(4)
+  })
+
+  it('a pause that began in time and is still running reads paused with the count', () => {
+    const s = rotationStreak(rot(four, { status: { kind: 'injured', since: day(12) } }), day(today))
+    expect(s.state).toBe('paused')
+    expect(s.count).toBe(4)
+  })
+})
