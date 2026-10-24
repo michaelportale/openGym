@@ -51,6 +51,15 @@ export function sanitizeAccent(s) {
   return s
 }
 
+/** A copy (not mutated) with the old default green moved to the palette accent, as
+ *  sanitizeAccent does. The sync merge applies it to both copies before comparing them, so a
+ *  copy migrated on this device and an unmigrated one on the server agree instead of
+ *  merging to the server's 'lime' with this device's version stamp. */
+export function withAccentMigrated(s) {
+  return s && typeof s === 'object' && s.accent === 'lime' && !(s.accentV >= ACCENT_VERSION)
+    ? { ...s, accent: THEME, accentV: ACCENT_VERSION } : s
+}
+
 /** The choice to draw: a known preset key, 'custom' with a usable colour, or the default. */
 export function accentKey(S) {
   const k = S?.accent
