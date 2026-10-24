@@ -2637,6 +2637,8 @@ describe('exercise chips at the top of the workout (#323)', () => {
     expect(chip(2).getAttribute('aria-label')).toMatch(/^Superset 2: .+ \+ .+ \(Started\)$/)
     expect(chip(3).getAttribute('aria-label')).toMatch(/^Exercise 3: .+ \(Not started yet\)$/)
     expect(chip(2).querySelector('[data-icon="link"]')).toBeTruthy()
+    // a finished chip carries a check, not only a fill colour; the others don't
+    expect(chips().map(c => !!c.querySelector('[data-icon="check"]'))).toEqual([true, false, false])
     expect(container.querySelector('nav.wchips').getAttribute('aria-label')).toBe('Exercises in this workout')
     expect(container.textContent).not.toContain('Exercise 3 / 3')
   })
