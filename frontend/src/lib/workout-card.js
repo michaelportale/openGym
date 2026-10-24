@@ -31,7 +31,7 @@ const MAP_MAX_HEIGHT = 560
  * summary's muscle map for this one session (levelsOf over loadOfWorkouts), null when no set
  * reached a muscle the map can show — a card of only cardio has nothing to shade.
  */
-export function workoutCardModel(w, { unit, nameOf }) {
+export function workoutCardModel(w, { unit, nameOf, prBest = {} }) {
   const entries = w.entries || []
   const sets = entries.reduce((n, e) => n + (e.sets || []).reduce((m, s) => m + (isWarmupRow(s) ? 0 : doneUnits(s)), 0), 0)
   // New bests in the order the sheet lists the exercises, each named once — a combined session
@@ -43,6 +43,14 @@ export function workoutCardModel(w, { unit, nameOf }) {
     if (!entry || !prs.has(entry.id) || records.some(r => r.id === entry.id)) continue
     const name = nameOf(entry)
     records.push({ id: entry.id, name: exerciseNameClass(EXIDX[entry.id]) ? capWords(name) : name })
+  }
+  // Each record carries its number: the top weight of the lift today and, when the finish summary
+  // knows the best it passed, by how much ("92.5 kg · +5"). A record without load has no line.
+  const recordValue = id => {
+    const top = Math.max(0, ...entries.filter(e => e.id === id).flatMap(e => (e.sets || []).filter(s => !isWarmupRow(s) && doneUnits(s) > 0).map(s => Number(s.w) || 0)))
+    if (!(top > 0)) return ''
+    const was = prBest[id]?.was
+    return fmtNum(top) + ' ' + unit + (was > 0 && top > was ? ' · +' + fmtNum(Math.round((top - was) * 100) / 100) : '')
   }
   const day = workoutDay(w)
   const ms = workoutDuration(w)
@@ -57,6 +65,7 @@ export function workoutCardModel(w, { unit, nameOf }) {
       { label: t('Volume'), value: fmtVol(w.vol ?? workoutVolume(w), unit, workoutVolumeIsPartial(w)) },
     ],
     records: records.map(r => r.name),
+    recordValues: records.map(r => recordValue(r.id)),
     levels: MUSCLES.some(m => levels[m] > 0) ? levels : null,
   }
 }
@@ -177,12 +186,14 @@ export function layoutWorkoutCard(model, { measure, rtl = false, width = CARD_WI
     const icon = 44
     const indent = icon + 22
     const shown = model.records.length > MAX_RECORDS ? model.records.slice(0, MAX_RECORDS - 1) : model.records
-    for (const name of shown) {
+    shown.forEach((name, i) => {
       items.push({ kind: 'trophy', x: rtl ? start - icon : start, y: y + 4, size: icon })
       const [line] = wrapText(name, inner - indent, s => measure(s, 500, 42), 1)
       text(line, 42, 500, 'label', start + indent * dir)
+      const value = model.recordValues?.[i]
+      if (value) text(value, 34, 700, 'pr', start + indent * dir)
       y += 14
-    }
+    })
     if (shown.length < model.records.length) text(t('and {0} more', model.records.length - shown.length), 38, 400, 'label2', start + indent * dir)
   }
 

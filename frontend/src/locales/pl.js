@@ -2461,4 +2461,7 @@ export default {
   "A set where a muscle only helps counts as half a set.": "Seria, w której mięsień tylko pomaga, liczy się jako pół serii.",
   "No sets in these days yet.": "W tych dniach nie ma jeszcze serii.",
   "Set your aims": "Ustaw swoje cele",
+  "<1 min": "<1 min",
+  "all working": "wszystkie robocze",
+  "{0} working": "{0} roboczych",
 }

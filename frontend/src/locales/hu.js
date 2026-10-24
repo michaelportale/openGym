@@ -2464,4 +2464,7 @@ export default {
   "A set where a muscle only helps counts as half a set.": "Az a sorozat, amelyben egy izom csak segít, fél sorozatnak számít.",
   "No sets in these days yet.": "Ezeken a napokon még nincs sorozat.",
   "Set your aims": "Céljaid beállítása",
+  "<1 min": "<1 perc",
+  "all working": "mind munkasorozat",
+  "{0} working": "{0} munkasorozat",
 }

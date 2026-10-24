@@ -2461,4 +2461,7 @@ export default {
   "A set where a muscle only helps counts as half a set.": "Bir kasın yalnızca yardım ettiği set yarım set sayılır.",
   "No sets in these days yet.": "Bu günlerde henüz set yok.",
   "Set your aims": "Hedeflerini belirle",
+  "<1 min": "<1 dk",
+  "all working": "hepsi çalışma seti",
+  "{0} working": "{0} çalışma seti",
 }

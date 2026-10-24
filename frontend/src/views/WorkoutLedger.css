@@ -134,7 +134,10 @@ body.no-tabbar .workout-end-spacer { height: 20px; }
 .finish-record-s { display: flex; align-items: center; gap: 5px; color: var(--label-2); font-size: var(--fs-footnote); margin-top: 2px; }
 .finish-record-v { flex: none; color: var(--pr); font-weight: 700; font-size: var(--fs-title-3); font-variant-numeric: tabular-nums; }
 .workout-finish-summary .pr-tile .v { color: var(--pr); }
-.workout-finish-summary .btn.finish-share { width: 100%; margin-bottom: 10px; }
+.workout-finish-summary .finish-foot { position: sticky; bottom: 0; z-index: 2; display: flex; gap: 8px; margin: 16px calc(-1 * var(--pad, 16px)) 0; padding: 12px var(--pad, 16px) calc(12px + var(--sab, 0px)); background: color-mix(in srgb, var(--bg-el) 94%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); box-shadow: 0 -.5px 0 var(--sep); }
+.workout-finish-summary .finish-foot .btn { flex: 1; min-height: 52px; margin: 0; }
+.workout-finish-summary .finish-foot .btn.primary { background: var(--label); color: var(--bg); }
+.workout-finish-summary .tile-cap { color: var(--label-2); font-size: var(--fs-caption-1, 12px); margin-top: 2px; }
 /* On light surfaces the theme's --pr is a mid gold (about 2.8:1 on the tinted card); the text in
    gold is darkened to about 5:1. The trophy and the card's tint keep the plain --pr. */
 :root[data-theme="light"] .finish-records-h,

@@ -2472,4 +2472,7 @@ export default {
   "A set where a muscle only helps counts as half a set.": "เซ็ตที่กล้ามเนื้อเป็นเพียงตัวช่วย นับเป็นครึ่งเซ็ต",
   "No sets in these days yet.": "ยังไม่มีเซ็ตในช่วงวันนี้",
   "Set your aims": "ตั้งเป้าหมาย",
+  "<1 min": "<1 นาที",
+  "all working": "เซ็ตทำงานทั้งหมด",
+  "{0} working": "เซ็ตทำงาน {0}",
 }
