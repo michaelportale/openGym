@@ -2600,4 +2600,6 @@ export default {
   "Create “{0}”": "“{0}” তৈরি করুন",
   "sessions": "সেশন",
   "Needs two weigh-ins within 30 days": "30 দিনের মধ্যে দুবার ওজন লিখতে হবে",
+  "{0} session in a row": "টানা {0}টি সেশন",
+  "{0} sessions in a row": "টানা {0}টি সেশন",
 }

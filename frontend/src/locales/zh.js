@@ -2521,4 +2521,6 @@ export default {
   "Create “{0}”": "创建“{0}”",
   "sessions": "次训练",
   "Needs two weigh-ins within 30 days": "需要 30 天内两次体重记录",
+  "{0} session in a row": "连续 {0} 次训练",
+  "{0} sessions in a row": "连续 {0} 次训练",
 }

@@ -2521,4 +2521,6 @@ export default {
   "Create “{0}”": "Créer « {0} »",
   "sessions": "séances",
   "Needs two weigh-ins within 30 days": "Il faut deux pesées sur 30 jours",
+  "{0} session in a row": "{0} séance d’affilée",
+  "{0} sessions in a row": "{0} séances d’affilée",
 }

@@ -2521,4 +2521,6 @@ export default {
   "Create “{0}”": "“{0}” बनाएँ",
   "sessions": "सत्र",
   "Needs two weigh-ins within 30 days": "30 दिनों में दो बार वज़न दर्ज करना ज़रूरी है",
+  "{0} session in a row": "लगातार {0} सेशन",
+  "{0} sessions in a row": "लगातार {0} सेशन",
 }

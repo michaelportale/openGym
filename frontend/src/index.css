@@ -1594,6 +1594,10 @@ body.no-tabbar #timer.working{box-shadow:inset 0 var(--hair) 0 var(--acc),0 -10p
   padding-bottom:20px;scroll-padding-bottom:20px;
 }
 :root[data-theme="light"] .sheet{background:var(--bg)}
+/* What chart text is drawn on, for .lc-text to mix against: a sheet's own background, or a card. */
+.sheet{--lc-bg:var(--bg-el)}
+:root[data-theme="light"] .sheet{--lc-bg:var(--bg)}
+.sheet .card{--lc-bg:var(--surface)}
 @keyframes sheetup{from{transform:translateY(100%)}to{transform:none}}
 .sheet .grab{width:36px;height:5px;border-radius:99px;background:var(--label-4);margin:6px auto 14px}
 .sheet h3{font-size:20px;font-weight:600;letter-spacing:-.021em;margin-bottom:14px}
@@ -2335,8 +2339,9 @@ body.fab-aside #tabbar button.start{opacity:0;pointer-events:none;visibility:hid
 /* Chart text (axis values, dates, the goal label) is text, so it gets text contrast, 4.5:1, not the
    3:1 for graphics: 62% of the label colour over the card measures 4.96:1 or more in every theme,
    light and dark (it was --label-3 at 1.73:1 and --label-2 at 3.44:1 in light mode). Mixed where
-   it is drawn, so it follows the surface it sits on. */
-.lc-text{fill:color-mix(in srgb,var(--label) 62%,var(--surface))}
+   it is drawn, so it follows the surface it sits on: the card, or a sheet's background (--lc-bg),
+   where it measures 4.5:1 or more as well. */
+.lc-text{fill:color-mix(in srgb,var(--label) 62%,var(--lc-bg,var(--surface)))}
 
 /* "Share your week" under the streak card, at its trailing edge like "All weigh-ins". */
 .week-recap-row{justify-content:flex-end;margin-top:-4px}

@@ -2541,4 +2541,6 @@ export default {
   "Create “{0}”": "„{0}“ anlegen",
   "sessions": "Einheiten",
   "Needs two weigh-ins within 30 days": "Braucht zwei Wiegungen innerhalb von 30 Tagen",
+  "{0} session in a row": "{0} Einheit in Folge",
+  "{0} sessions in a row": "{0} Einheiten in Folge",
 }

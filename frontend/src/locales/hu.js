@@ -2524,4 +2524,6 @@ export default {
   "Create “{0}”": "„{0}” létrehozása",
   "sessions": "edzés",
   "Needs two weigh-ins within 30 days": "Két mérés kell 30 napon belül",
+  "{0} session in a row": "{0} edzés egymás után",
+  "{0} sessions in a row": "{0} edzés egymás után",
 }

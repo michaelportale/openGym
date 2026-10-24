@@ -90,6 +90,13 @@ describe('weekRecapModel v2: sessions, record values, streak and body weight', (
     expect(m.footer).toBe('Made with openGym')
   })
 
+  it('in Fixed Week mode the streak line counts sessions in a row, never "on rotation"', () => {
+    const SW = { ...S, scheduleMode: 'week', queue: null, rotation: null, week: { 1: ['A'], 2: ['B'], 3: ['C'], 4: ['D'], 5: ['E'] }, workouts: all }
+    const m = weekRecapModel(all, { ...opts, S: SW })
+    expect(m.lines.some(l => /^\d+ sessions in a row$/.test(l))).toBe(true)
+    expect(m.lines.some(l => l.includes('on rotation'))).toBe(false)
+  })
+
   it('adds the rotation streak line, and the body weight only when asked', () => {
     const bw = [{ d: '2026-10-15', t: Date.parse('2026-10-15T08:00:00'), w: 79 }, { d: '2026-10-22', t: Date.parse('2026-10-22T08:00:00'), w: 78.7 }]
     const S2 = { ...opts.S, bodyweight: bw }
