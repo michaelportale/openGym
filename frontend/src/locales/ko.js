@@ -2459,4 +2459,13 @@ export default {
   "A set where a muscle only helps counts as half a set.": "근육이 보조로만 쓰인 세트는 반 세트로 셉니다.",
   "No sets in these days yet.": "이 기간에는 아직 세트가 없습니다.",
   "Set your aims": "목표 설정",
+  "<1 min": "1분 미만",
+  "all working": "모두 본세트",
+  "{0} working": "본세트 {0}",
+  "Show all {0}": "{0}개 모두 보기",
+  "Show fewer": "간략히 보기",
+  "{0} muscle on target": "목표 달성 근육 {0}개",
+  "{0} muscles on target": "목표 달성 근육 {0}개",
+  "Train a few sessions to see coverage": "몇 번 운동하면 커버리지가 보여요",
+  "Set coverage aims": "커버리지 목표 설정",
 }

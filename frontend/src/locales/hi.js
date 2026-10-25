@@ -2459,4 +2459,13 @@ export default {
   "A set where a muscle only helps counts as half a set.": "जिस सेट में मांसपेशी सिर्फ़ मदद करती है, वह आधा सेट गिना जाता है।",
   "No sets in these days yet.": "इन दिनों में अभी कोई सेट नहीं।",
   "Set your aims": "अपने लक्ष्य तय करें",
+  "<1 min": "<1 मिनट",
+  "all working": "सभी वर्किंग सेट",
+  "{0} working": "{0} वर्किंग",
+  "Show all {0}": "सभी {0} दिखाएँ",
+  "Show fewer": "कम दिखाएँ",
+  "{0} muscle on target": "लक्ष्य पर मांसपेशियाँ: {0}",
+  "{0} muscles on target": "लक्ष्य पर मांसपेशियाँ: {0}",
+  "Train a few sessions to see coverage": "कवरेज देखने के लिए कुछ सेशन करें",
+  "Set coverage aims": "कवरेज लक्ष्य तय करें",
 }

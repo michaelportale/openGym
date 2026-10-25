@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 // The finish summary's PR moment: a load PR turns the check into a gold trophy and lists the lift
-// with its new top weight and the best it passed, and offers Share as image. Without one the
+// with its new top weight and the best it passed, and offers Share in the sheet's footer. Without one the
 // summary is as it was; a best estimated 1RM alone is listed without the gold.
 import React, { act } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -27,7 +27,7 @@ function mountTopSheet() {
 const button = (host, text) => [...host.querySelectorAll('button')].find(b => b.textContent.trim() === text)
 
 // One earlier bench session at 50 kg × 10, then today's session with the given sets, finished.
-function finishWith(sets) {
+function finishWith(sets, ago = 1800e3) {
   const st = clone(DEF)
   const before = new Date('2026-09-14T18:00:00').getTime()
   Object.assign(st, {
@@ -36,7 +36,7 @@ function finishWith(sets) {
     workouts: [{ id: 'w1', d: '2026-09-14', start: before, end: before + 3600e3, name: 'Push', routineIds: ['A'], prs: [BENCH],
       entries: [{ id: BENCH, rid: 'A', target: { sets: 1, reps: 10, weight: 50, mode: 'reps' }, sets: [{ w: 50, r: 10, done: true }] }] }],
     exWeights: { [BENCH]: { w: 50, d: '2026-09-14' } },
-    active: { d: day, start: Date.now() - 1800e3, name: 'Push', routineIds: ['A'],
+    active: { d: day, start: Date.now() - ago, name: 'Push', routineIds: ['A'],
       entries: [{ id: BENCH, rid: 'A', target: { sets: sets.length, reps: 10, weight: 50, mode: 'reps' }, sets: sets.map(x => ({ ...x, done: true })) }] },
   })
   useStore.setState({ S: st, user: null })
@@ -97,10 +97,10 @@ describe('the PR moment on the finish summary', () => {
     expect(host.querySelector('.pr-tile .v').textContent).toBe('1')
   })
 
-  it('offers Share as image, which opens the workout card over the summary', () => {
+  it('offers Share, which opens the workout card over the summary', () => {
     const host = finishWith([{ w: 60, r: 10 }])
     const n = useUI.getState().sheets.length
-    act(() => { button(host, 'Share as image').click() })
+    act(() => { button(host, 'Share').click() })
     expect(useUI.getState().sheets.length).toBe(n + 1)
     expect(mountTopSheet().textContent).toContain('Share workout')
   })
@@ -110,7 +110,7 @@ describe('the PR moment on the finish summary', () => {
     expect(host.querySelector('.finish-check [data-icon="check"]')).toBeTruthy()
     expect(host.querySelector('.finish-pr')).toBeNull()
     expect(host.querySelector('.finish-records')).toBeNull()
-    expect(button(host, 'Share as image')).toBeUndefined()
+    expect(button(host, 'Share')).toBeUndefined()
     expect(host.querySelector('.pr-tile')).toBeNull()
   })
 
@@ -122,6 +122,22 @@ describe('the PR moment on the finish summary', () => {
     expect(card.classList.contains('gold')).toBe(false)
     expect(card.textContent).not.toContain('New personal records')
     expect(card.querySelector('.e1-row').textContent).toContain('Best estimated 1RM:')
+  })
+
+  it('keeps Share and Done together in a footer that stays at the foot of the sheet', () => {
+    const host = finishWith([{ w: 60, r: 10 }])
+    const foot = host.querySelector('.finish-foot')
+    expect([...foot.querySelectorAll('button')].map(b => b.textContent.trim())).toEqual(['Share', 'Done'])
+    expect(foot.querySelector('.btn.primary').textContent.trim()).toBe('Done')
+  })
+
+  it('reads a session under a minute as <1 min and counts sets as a plain number', () => {
+    const host = finishWith([{ w: 50, r: 10 }, { w: 50, r: 10 }], 20e3)
+    const tiles = [...host.querySelectorAll('.tiles .tile')]
+    const tile = name => tiles.find(x => x.querySelector('.l').textContent === name)
+    expect(tile('Sets').querySelector('.v').textContent).toBe('2')
+    expect(tile('Sets').querySelector('.tile-cap').textContent).toBe('all working')
+    expect(tile('Duration').querySelector('.v').textContent).toBe('<1 min')
   })
 
   it('reports the best section of a combined session, in either order, against the previous best', () => {

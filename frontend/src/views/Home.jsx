@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { effectiveRoutines, effectiveRoutineIds, nextTrainingDay, streakWeeks, lastBW, setsDoneActive } from '../lib/history.js'
@@ -20,6 +20,7 @@ import { dayNoteOf } from '../lib/day-notes.js'
 import { todayPreview, PREVIEW_INPUTS } from '../lib/today-preview.js'
 import { exOr } from '../lib/exercises.js'
 import { MUSCLE_NAME } from '../lib/muscles.js'
+import { useFabAsideWhileVisible } from '../lib/use-hide-fab.js'
 
 // Home = what to do now + a quick glance. Deep charts & history live in Stats.
 export default function Home() {
@@ -115,6 +116,11 @@ export default function Home() {
   const preview = useMemo(() => showPreview ? todayPreview(S, previewKey.split(','), previewDay) : null, [showPreview, previewKey, previewDay, ...PREVIEW_INPUTS.map(k => S[k])])
   const namesOf = ids => ids.slice(0, 2).map(id => exerciseNameText(exOr(id))).join(', ') + (ids.length > 2 ? ' +' + (ids.length - 2) : '')
   const onQueueStart = id => { if (S.active) nav('/workout'); else startFlow([id]) }
+  // The card's Start is the screen's one accent action; while it is in view the tab bar's Start
+  // steps aside rather than repeat it.
+  const startRef = useRef(null)
+  const showStart = !S.active && !doneToday && !!routine
+  useFabAsideWhileVisible(startRef, showStart)
 
   return <div className="narrow">
     <div className="hdr">
@@ -145,14 +151,14 @@ export default function Home() {
               <div className="today-meta">{[tn('{0} exercise', '{0} exercises', preview.exercises), preview.last && t('Last time') + ' (' + fmtDaysAgo(preview.last.d) + ')'].filter(Boolean).join(' · ')}</div>
               {preview.up.length > 0 && <div className="today-meta today-up"><Icon name="arrowUp" />{t('Moving up today: {0}', namesOf(preview.up))}</div>}
               {preview.lighter.length > 0 && <div className="today-meta"><Icon name="arrowDown" />{t('Deload today: {0}', namesOf(preview.lighter))}</div>}
-              {preview.recovering.length > 0 && <div className="today-meta today-recovering"><Icon name="hourglass" />{t('Still recovering: {0}', preview.recovering.slice(0, 3).map(m => t(MUSCLE_NAME[m] || m)).join(', ') + (preview.recovering.length > 3 ? ' +' + (preview.recovering.length - 3) : ''))}</div>}
+              {preview.recovering.length > 0 && <div className="today-meta today-recovering"><Icon name="hourglass" /><span className="today-recovering-t">{t('Still recovering: {0}', preview.recovering.slice(0, 3).map(m => t(MUSCLE_NAME[m] || m)).join(', ') + (preview.recovering.length > 3 ? ' +' + (preview.recovering.length - 3) : ''))}</span></div>}
             </>}
             {next && !doneToday && <div className="ss">{t('Next session: {0}, {1}', t(DAYN[next.weekday]), next.routine.name)}</div>}
           </div>
         </div>
         {S.active ? <span className="tag today-cta" style={{ color: 'var(--warning)', background: 'color-mix(in srgb,var(--warning) 16%,transparent)' }}>{editingSaved ? t('Edit') : t('Resume')}</span>
           : doneToday ? <span className="tag" style={{ color: 'var(--success)', background: 'color-mix(in srgb,var(--success) 16%,transparent)' }}>{t('Done')}</span>
-          : routine ? <span className="tag acc today-cta"><Icon name="play" />{t('Start')}</span>
+          : routine ? <span className="tag acc today-cta" ref={startRef}><Icon name="play" />{t('Start')}</span>
           : <Icon name="plus" className="chev" />}
       </div>
       {/* The row above starts today's plan in one tap, and so does the Start button in the tab
@@ -162,7 +168,7 @@ export default function Home() {
           way in, "Choose a different workout" on the weigh-in sheet, does not exist when the
           weigh-in is switched off. This is that door, and it starts nothing on its own. */}
       {!S.active && <div style={{ display: 'flex', justifyContent: 'center', marginTop: 4 }}>
-        <Button size="sm" variant="ghost" className="dim" icon="swap" onClick={() => nav('/workout')}>
+        <Button size="sm" variant="ghost" className="today-choose" onClick={() => nav('/workout')}>
           {t('Choose a different workout')}
         </Button>
       </div>}
@@ -219,7 +225,7 @@ export default function Home() {
       <div className="row between bw-head" style={{ marginBottom: 6 }}>
         <h2 style={{ margin: 0 }}>{t('Body weight')}</h2>
         <div className="row" style={{ gap: 8 }}>
-          <Button size="sm" icon="target" style={S.targetW ? { color: 'var(--yellow)' } : undefined} onClick={goalSheet}>{S.targetW ? fmtNum(S.targetW) : t('Goal')}</Button>
+          <Button size="sm" icon="target" style={S.targetW ? { color: 'var(--goal)' } : undefined} onClick={goalSheet}>{S.targetW ? fmtNum(S.targetW) : t('Goal')}</Button>
           <Button size="sm" icon="plus" onClick={() => bwSheet()}>{t('Log')}</Button>
         </div>
       </div>
@@ -236,7 +242,7 @@ export default function Home() {
           <span className="dim small" style={{ marginInlineStart: 'auto' }}>{fmtDate(bw.d, true)}</span>
         </div>
         {S.targetW && (
-          <div className="small row" style={{ color: 'var(--yellow)', marginTop: 4, gap: 5 }}>
+          <div className="small row" style={{ color: 'var(--goal)', marginTop: 4, gap: 5 }}>
             <Icon name="target" style={{ fontSize: 13 }} />
             <span>{t('Goal')} {fmtNum(S.targetW)} {S.unit} · {Math.abs(S.targetW - bw.w) < 0.05 ? t('reached!') : t(S.targetW > bw.w ? '{0} to gain' : '{0} to lose', fmtNum(Math.abs(S.targetW - bw.w)) + ' ' + S.unit)}</span>
           </div>

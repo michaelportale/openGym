@@ -12,10 +12,11 @@
   --surface-3: #302c28;
   --label: #f5f1eb;
   --label-2: #ada59c;
-  --label-3: #7a736b;
+  --label-3: #948c83;
   --label-4: color-mix(in srgb, #f5f1eb 18%, transparent);
   --sep: #3a3530;
   --sep-op: color-mix(in srgb, #3a3530 70%, transparent);
+  --track: #4a443d;
   --success: #e9e1d3;
   --on-success: #000000;
   --warning: #ffb020;
@@ -34,10 +35,11 @@
   --surface-3: #302c28;
   --label: #f5f1eb;
   --label-2: #ada59c;
-  --label-3: #7a736b;
+  --label-3: #948c83;
   --label-4: color-mix(in srgb, #f5f1eb 18%, transparent);
   --sep: #3a3530;
   --sep-op: color-mix(in srgb, #3a3530 70%, transparent);
+  --track: #4a443d;
 }
 
 /* accent, only while the accent setting is "palette" (a preset or own colour still wins) */
@@ -47,18 +49,21 @@
   --on-acc: #000000;
   --on-acc-tile: #000000;
   --knob-ring: transparent;
+  --acc-text: var(--acc);
   --acc-soft: #3a1f14;
 }
 
 /* light: the app's light surfaces, with this palette's colours made readable on them */
 :root[data-theme="light"][data-palette="ember"] {
-  --success: #a08350;
+  --success: #5c5346;
   --warning: #b97700;
   --danger: #ff4365;
   --pr: #af7e0d;
   --on-success: #000000;
-  --on-success-tile: #000000;
+  --on-success-tile: #ffffff;
   --on-warning-tile: #000000;
+  --label-2: #636366;
+  --label-3: #6c6c70;
 }
 
 :root[data-theme="light"][data-palette="ember"][data-accent="theme"] {
@@ -67,4 +72,18 @@
   --on-acc: #000000;
   --on-acc-tile: #000000;
   --knob-ring: transparent;
+  --acc-text: #c43a00;
+}
+
+/* light workout screen: warm neutrals instead of the ledger's olive ones */
+:root[data-theme="light"][data-palette="ember"] body.no-tabbar {
+  --bg: #f4f2ef;
+  --bg-el: #faf9f7;
+  --surface: #ffffff;
+  --surface-2: #ece8e3;
+  --surface-3: #ddd7cf;
+  --label: #1a1816;
+  --label-2: #5e5750;
+  --label-3: #6b645c;
+  --sep: #8f877e;
 }

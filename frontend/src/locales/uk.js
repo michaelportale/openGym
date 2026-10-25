@@ -2456,4 +2456,13 @@ export default {
   "A set where a muscle only helps counts as half a set.": "Підхід, де м’яз лише допомагає, рахується як половина.",
   "No sets in these days yet.": "У ці дні підходів ще немає.",
   "Set your aims": "Задати цілі",
+  "<1 min": "<1 хв",
+  "all working": "усі робочі",
+  "{0} working": "{0} робочих",
+  "Show all {0}": "Показати всі ({0})",
+  "Show fewer": "Згорнути",
+  "{0} muscle on target": "{0} м’яз у нормі",
+  "{0} muscles on target": { one: '{0} м’яз у нормі', few: '{0} м’язи в нормі', many: '{0} м’язів у нормі', other: '{0} м’яза в нормі' },
+  "Train a few sessions to see coverage": "Проведіть кілька тренувань, щоб побачити охоплення",
+  "Set coverage aims": "Задати цілі охоплення",
 }
