@@ -2466,4 +2466,7 @@ export default {
   "Strength trend": "Kraftverlauf",
   "Last 8 weeks": "Letzte 8 Wochen",
   "Still recovering: {0}": "Noch in Erholung: {0}",
+  "Filters": "Filter",
+  "Filters: {0}": "Filter: {0}",
+  "Type": "Art",
 }
