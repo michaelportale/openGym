@@ -1191,7 +1191,6 @@ export const PT_BR_OVERRIDES = {
   'No setting matches “{0}”.': 'Nenhuma configuração corresponde a “{0}”.',
   'Scroll to 0:00 to turn the rest timer off.': 'Role até 0:00 para desligar o temporizador.',
   'Each exercise can have its own rest too. Set it in the exercise settings of a routine.': 'Cada exercício também pode ter seu próprio descanso. Defina nas configurações do exercício de uma rotina.',
-  'iPhone doesn’t let openGym vibrate. A sound or a flash does the job.': 'O iPhone não deixa o openGym vibrar. Um som ou uma piscada resolvem.',
   'No account, no cloud. Back it up anytime in Data & backup.': 'Sem conta, sem nuvem. Faça backup quando quiser em Dados e backup.',
   'Effort per set is off. Turn it on in Settings → Workout to keep rating.': 'O esforço por série está desativado. Ative em Configurações → Treino para continuar avaliando.',
   'Enter the code your other device shows under Settings → Account → Add another device. This device then gets a passkey of its own.': 'Digite o código que seu outro dispositivo mostra em Configurações → Conta → Adicionar outro dispositivo. Este dispositivo passa a ter uma chave de acesso própria.',
