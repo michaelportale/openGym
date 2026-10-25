@@ -63,3 +63,20 @@ describe('aheadOf', () => {
     expect(aheadOf({ sec: 30 }, { sec: 35 }, 'time')).toBe(true)
   })
 })
+
+// On an assistance machine the weight is help: less of it is the better set (betterWeight).
+describe('assisted exercises', () => {
+  const down = (w, dir) => w + dir * 2.5
+  it('Beat it steps toward less assistance, inside a range and past its top', () => {
+    expect(beatTarget({ w: 30, r: 10 }, { mode: 'reps', reps: 10, step: down, assisted: true })).toEqual({ w: 27.5, r: 10 })
+    expect(beatTarget({ w: 30, r: 12 }, { mode: 'reps', reps: 12, repsMin: 8, step: down, assisted: true })).toEqual({ w: 27.5, r: 8 })
+    expect(beatTarget({ w: 30, r: 9 }, { mode: 'reps', reps: 12, repsMin: 8, step: down, assisted: true })).toEqual({ w: 30, r: 10 })
+  })
+  it('more assistance is not ahead; less, or more reps with the same, is', () => {
+    expect(aheadOf({ w: 30, r: 10 }, { w: 40, r: 10 }, 'reps', true)).toBe(false)
+    expect(aheadOf({ w: 30, r: 10 }, { w: 40, r: 12 }, 'reps', true)).toBe(false)
+    expect(aheadOf({ w: 30, r: 10 }, { w: 20, r: 8 }, 'reps', true)).toBe(true)
+    expect(aheadOf({ w: 30, r: 10 }, { w: 30, r: 11 }, 'reps', true)).toBe(true)
+  })
+})
+

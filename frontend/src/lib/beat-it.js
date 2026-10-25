@@ -29,22 +29,27 @@ export function ghostFor(last, workIndex, mode) {
  *      last time: one more rep (`repStep`, two for a per-side total) at the same weight;
  *   4. otherwise: the next weight step, at the bottom of the range, or at the plan's reps (last
  *      time's when the plan has none) without one.
- * `step(w)` returns the next weight up (the plate or dumbbell step the row's + uses).
+ * `step(w, dir)` returns the next weight in direction `dir` (the plate or dumbbell step the row's
+ * + and − use). On an assistance machine the next step is less help, so it steps down.
  * `repsMax` is the bodyweight ceiling (it adds sets, not reps) and plays no part here.
  */
-export function beatTarget(ghost, { mode, reps, repsMin, step, repStep = 1 }) {
+export function beatTarget(ghost, { mode, reps, repsMin, step, repStep = 1, assisted = false }) {
   if (!ghost) return null
   if (mode === 'time') return { sec: ghost.sec + 5 }
   if (!(ghost.w > 0)) return { r: ghost.r + 1 }
   const range = repsMin > 0 && repsMin < reps
   if (range && ghost.r < reps) return { w: ghost.w, r: Math.min(reps, ghost.r + repStep) }
-  return { w: step(ghost.w), r: range ? repsMin : reps > 0 ? reps : ghost.r }
+  return { w: step(ghost.w, assisted ? -1 : 1), r: range ? repsMin : reps > 0 ? reps : ghost.r }
 }
 
-/** Whether a row's values already beat its ghost: more reps at the same or more weight, or more weight. */
-export function aheadOf(ghost, s, mode) {
+/**
+ * Whether a row's values already beat its ghost: more reps at the same or a better weight, or a
+ * better weight. Better is more weight, or less help on an assistance machine (`assisted`).
+ */
+export function aheadOf(ghost, s, mode, assisted = false) {
   if (!ghost || !s) return false
   if (mode === 'time') return (s.sec || 0) > ghost.sec
   const w = s.w || 0, r = s.r || 0
-  return (w > ghost.w && r > 0) || (w >= ghost.w && r > ghost.r)
+  const better = assisted ? w < ghost.w : w > ghost.w
+  return (better && r > 0) || ((better || w === ghost.w) && r > ghost.r)
 }
