@@ -64,6 +64,12 @@ describe('Stats body-weight trend', () => {
     expect(tile.querySelector('.v').getAttribute('style') || '').not.toMatch(/acc|danger/)
   })
 
+  it('leaves Weight 30d empty when the only weigh-ins are years old', () => {
+    const el = mount([{ d: '2020-01-10', t: Date.parse('2020-01-10T12:00:00'), w: 80 }, { d: '2020-01-15', t: Date.parse('2020-01-15T12:00:00'), w: 79 }])
+    const tile = [...el.querySelectorAll('.tile')].find(n => n.textContent.includes('Weight 30d'))
+    expect(tile?.querySelector('.v').textContent ?? '–').toBe('–')
+  })
+
   it('does not say toward goal when the change heads away from it', () => {
     const el = mount([wi(10, 78), wi(8, 78), wi(3, 79), wi(1, 80)], { targetW: 77 })
     expect(el.querySelector('.bw-trend-week').textContent).not.toContain('toward goal')
