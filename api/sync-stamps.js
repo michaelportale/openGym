@@ -64,12 +64,12 @@ const capStamps = m => {
 const OWN_MERGE = new Set([
   '_ts', '_rev', '_wid', '_wids', '_unstamped', '_prior', 'active', 'unit', 'unitSet', 'resetAt', 'resetIds', 'deleted', 'edited', 'undone', 'routineOrder',
   'workouts', 'routines', 'customEx', 'equipProfiles', 'gymCards', 'bodyweight', 'measurements', 'favEx',
-  'exWeights', 'balanceOverrides', 'loadKind', 'plates', 'dbLoad', 'dumbbells', 'dayNotes', 'trainingMetadata', 'coverageTargets', 'dayDispositions',
+  'exWeights', 'balanceOverrides', 'loadKind', 'plates', 'dbLoad', 'dumbbells', 'dayNotes', 'trainingMetadata', 'coverageTargets', 'dayDispositions', 'nutritionDays',
 ]);
 const PER_KEY = new Set(['week', 'dayPlan', 'exNotes', 'barWeights']);
 // The maps whose every entry carries its own edit time (sync-merge.js STAMPED_MAPS): merged per
 // key by the app, so never stamped here as a whole setting. dayNotes is a note per day off.
-export const STAMPED_MAPS = ['balanceOverrides', 'loadKind', 'plates', 'dbLoad', 'dumbbells', 'dayNotes', 'trainingMetadata', 'coverageTargets', 'dayDispositions'];
+export const STAMPED_MAPS = ['balanceOverrides', 'loadKind', 'plates', 'dbLoad', 'dumbbells', 'dayNotes', 'trainingMetadata', 'coverageTargets', 'dayDispositions', 'nutritionDays'];
 const ENTRY_META = new Set(['id', '_ts', '_f', '_u']);
 const ENTRY_LISTS = ['routines', 'customEx', 'equipProfiles', 'gymCards', 'workouts'];
 
@@ -511,6 +511,13 @@ export function stampPut(cur, next, { overRead = false, stamped = false, now = D
   if (!stamped && isMap(next.dayDispositions)) {
     for (const [day, entry] of Object.entries(next.dayDispositions)) {
       if (isMap(entry) && !sameEntry(cur?.dayDispositions?.[day], entry)) entry._ts = t;
+    }
+  }
+  // The nutrition log (one entry per day) is a ledger of the same kind: a day an unstamped
+  // writer changed gets the server's time, so it is not undone by an older copy of that day.
+  if (!stamped && isMap(next.nutritionDays)) {
+    for (const [day, entry] of Object.entries(next.nutritionDays)) {
+      if (isMap(entry) && !sameEntry(cur?.nutritionDays?.[day], entry)) entry._ts = t;
     }
   }
   keepHeld(next, t);
