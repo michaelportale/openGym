@@ -33,7 +33,7 @@ export function WorkoutSettings({ close }) {
     </div>
     <div className="muted small" style={{ marginBottom: 12 }}>{t('Changes stick for your next workouts too.')}</div>
     <Section>
-      <Row icon="timer" iconTint="var(--orange)" title={t('Rest timer')} value={fmtRest(S.restSec)} accessory="chevron"
+      <Row icon="timer" iconTint="var(--warning)" title={t('Rest timer')} value={fmtRest(S.restSec)} accessory="chevron"
         onClick={() => durationSheet({
           title: t('Rest timer'), value: S.restSec, max: REST_MAX, off: t('Off'),
           footer: t('Scroll to 0:00 to turn the rest timer off.'),

@@ -40,6 +40,8 @@ export default function WorkoutChips({ entries, cur, onPick }) {
         data-unit-key={c.key} aria-current={c.current ? 'step' : undefined} aria-label={label} title={names}
         onClick={() => onPick(c)}>
         <span>{c.n}</span>{c.unit.length > 1 && <Icon name="link" />}
+        {/* finished reads from the mark as well as the fill, not from a colour alone */}
+        {c.state === 'done' && <Icon name="check" />}
       </button>
     })}
   </nav>

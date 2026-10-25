@@ -6,6 +6,8 @@ import { useStore } from './store/useStore.js'
 import { startMediaSync } from './lib/media-sync.js'
 import { startNativeKeyboard } from './lib/native-keyboard.js'
 import './index.css'
+// Semantic tokens (success, warning, chart scales…) on top of the raw ones in index.css.
+import './theme/tokens.css'
 // Scoped workout refinements follow the shared control foundation.
 import './views/FocusView.css'
 import './components/StrengthFeedback.css'
@@ -13,6 +15,10 @@ import './views/WorkoutLedger.css'
 import './components/RestTimer.css'
 import './components/Modals.css'
 import './components/WorkoutReplacementSheet.css'
+// Palettes last, so their values win over every stylesheet above (scripts/gen-palettes.mjs).
+import './theme/theme-ember.css'
+import './theme/theme-volt.css'
+import './theme/theme-chalk.css'
 
 // App.jsx restores per-route scroll itself; the browser's own attempt races it.
 if ('scrollRestoration' in history) history.scrollRestoration = 'manual'

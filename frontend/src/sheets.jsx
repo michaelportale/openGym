@@ -70,6 +70,7 @@ import { workoutCardModel, layoutWorkoutCard, drawWorkoutCard, viewAspect, CARD_
 import { copyText } from './lib/clipboard.js'
 import { queueRemaining, pinState } from './lib/queue.js'
 import { DAY_NOTE_TAGS, DAY_NOTE_LABEL, DAY_NOTE_ICON, dayNoteOf, dayNoteLine, canNoteDay, withDayNote } from './lib/day-notes.js'
+import { PALETTE_ACCENT, DEFAULT_PALETTE } from './theme/palettes.js'
 
 const S = () => useStore.getState().S
 const update = (...a) => useStore.getState().update(...a)
@@ -366,7 +367,7 @@ function WeighInRow({ b, unit, confirm = false }) {
   return <div className="row between" style={{ padding: '9px 2px', borderBottom: '1px solid var(--sep)' }}>
     <span className="small muted">{fmtDate(b.d, true)}</span>
     <span className="row" style={{ gap: 12 }}><b>{fmtNum(b.w)} {unit}</b>
-      <button className="iconbtn" style={{ width: 32, height: 30, borderRadius: 8, fontSize: 15, color: 'var(--red)' }} onClick={confirm ? ask : delEntry} aria-label={t('Delete weigh-in')}><Icon name="trash" /></button></span>
+      <button className="iconbtn" style={{ width: 32, height: 30, borderRadius: 8, fontSize: 15, color: 'var(--danger)' }} onClick={confirm ? ask : delEntry} aria-label={t('Delete weigh-in')}><Icon name="trash" /></button></span>
   </div>
 }
 
@@ -786,7 +787,7 @@ export function bwDeltaColor(delta, currentW) {
   if (!delta) return 'var(--label-2)'
   if (!S().targetW) return 'var(--label)'
   const up = S().targetW > currentW
-  return (delta > 0) === up ? 'var(--acc)' : 'var(--red)'
+  return (delta > 0) === up ? 'var(--acc)' : 'var(--danger)'
 }
 function GoalSheet({ close }) {
   const st = S()
@@ -1072,7 +1073,7 @@ function ExerciseDetail({ ex, close }) {
       {detailTags(ex).map(tg => <span key={tg.key} className={'tag' + (tg.acc ? ' acc' : '')}>{tg.icon && <Icon name={tg.icon} />}{tg.label}</span>)}
     </div>
     {descFor(ex) && <div className="exnote">{descFor(ex)}</div>}
-    {best > 0 && <div className="small row" style={{ marginBottom: 6, gap: 5 }}><Icon name="trophy" style={{ fontSize: 14, color: 'var(--yellow)' }} />{t('Best:')} <b className="accent" style={{ whiteSpace: 'nowrap' }}>{fmtNum(best)} {st.unit}</b>{last ? ` · ${t('last')} ${fmtDate(last.d)}: ${last.sets.map(s => setLabel(ex.id, s, last.target, speedUnitOf(st))).join(', ')}` : ''}</div>}
+    {best > 0 && <div className="small row" style={{ marginBottom: 6, gap: 5 }}><Icon name="trophy" style={{ fontSize: 14, color: 'var(--pr)' }} />{t('Best:')} <b className="accent" style={{ whiteSpace: 'nowrap' }}>{fmtNum(best)} {st.unit}</b>{last ? ` · ${t('last')} ${fmtDate(last.d)}: ${last.sets.map(s => setLabel(ex.id, s, last.target, speedUnitOf(st))).join(', ')}` : ''}</div>}
     <Button variant="primary" icon="plus" style={{ margin: '10px 0 4px' }} onClick={() => addToRoutineSheet(ex)}>{t('Add to my plan')}</Button>
     {last && <Button icon="history" style={{ marginTop: 4 }} onClick={() => exerciseHistorySheet(ex.id)}>{t('History')}</Button>}
     {isCustomEx(ex) && <div className="row" style={{ gap: 8, marginTop: 8 }}>
@@ -1137,7 +1138,7 @@ function ExerciseHistory({ exId }) {
       <LineChart points={onE1 ? h.e1rmPoints : h.points} h={140} unit={onE1 ? st.unit : unit} color="var(--blue)" />
     </div>
     <div className="small row" style={{ margin: '6px 0 4px', gap: 5 }}>
-      <Icon name="trophy" style={{ fontSize: 14, color: 'var(--yellow)' }} />
+      <Icon name="trophy" style={{ fontSize: 14, color: 'var(--pr)' }} />
       {t('Best:')} <b className="accent">{fmtNum(onE1 ? e1Best : h.best)} {onE1 ? st.unit : unit}</b>
     </div>
     <h4 className="sec">{h.sessions.length < h.total ? t('Last {0} sessions', h.sessions.length) : t('Sessions')}</h4>
@@ -1802,7 +1803,7 @@ function ProgressionFields({ ex, mode, c, setC, routine, unit, setting, perSide,
       {epleyEligible && <Stepper label={t('Deload 1RM (%)')} value={deloadPercent} step={5} min={50} max={95} decimal={false}
         onChange={v => setC(x => ({ ...x, deloadFactor: Number(v) / 100 }))} />}
     </div>}
-    {invalid && <div className="small" role="alert" style={{ color: 'var(--red)', marginTop: -10, marginBottom: 18 }}>
+    {invalid && <div className="small" role="alert" style={{ color: 'var(--danger)', marginTop: -10, marginBottom: 18 }}>
       {t('Enter a positive step to use this progression rule.')}
     </div>}
     {/* Off by default and only written when on, so every plan saved before it stays the shape
@@ -2068,7 +2069,7 @@ function ExConfig({ ex, existing, onSave, onDelete, onReplace, close, routine, i
     {/* On the same wheel as the default rest timer (v1.3.11): 0:00 is "no rest of its own", so
         the default applies, and the row says which default that is. */}
     <div className="sect-b cfg-rest" style={{ marginBottom: 6 }}>
-      <Row icon="timer" iconTint="var(--orange)" title={t('Rest for this exercise')} accessory="chevron"
+      <Row icon="timer" iconTint="var(--warning)" title={t('Rest for this exercise')} accessory="chevron"
         value={c.restSec > 0 ? fmtRest(c.restSec) : t('Default ({0})', fmtRest(st.restSec))}
         onClick={() => durationSheet({
           title: t('Rest for this exercise'), value: c.restSec > 0 ? c.restSec : 0, max: REST_MAX,
@@ -2460,7 +2461,7 @@ function DayOverride({ iso, close }) {
     {effIds.includes(r.id) && <Icon name="check" className="accent" />}</div>
   return <>
     <h3>{fmtDate(iso, true)}</h3>
-    <div className="muted small" style={{ marginBottom: 12 }}>{t('Weekly plan:')} {weeklyNames.length ? deriveSessionName(weeklyNames) : t('Rest')}{changed && <span style={{ color: 'var(--orange)' }}> · {t('changed for this day')}</span>}<br />{t('Sick, missed a day or want a different session? Pick what to train instead.')}</div>
+    <div className="muted small" style={{ marginBottom: 12 }}>{t('Weekly plan:')} {weeklyNames.length ? deriveSessionName(weeklyNames) : t('Rest')}{changed && <span style={{ color: 'var(--warning)' }}> · {t('changed for this day')}</span>}<br />{t('Sick, missed a day or want a different session? Pick what to train instead.')}</div>
     {missed && <div style={{ marginBottom: 14 }}><Button variant="primary" icon="checkCircle" onClick={logIt}>{t('Log this workout')}</Button></div>}
     {canNote && <div className="day-note" style={{ marginBottom: 14 }}>
       <div className="item day-note-row" {...tappable(() => dayNoteSheet(iso))}>
@@ -2620,8 +2621,8 @@ function WorkoutDurationEdit({ w, onDone, close }) {
     {/* min 0, not 1: the stepper would put a cleared field back to 1 as it lost focus to Save. */}
     {/* No max either: one would cut a typo down to a day on blur and save that without a word. */}
     <Stepper label={t('Duration')} unit={t('min')} value={dur} step={5} min={0} decimal={false} invalid={durInvalid || durTooLong} onChange={v => setDur(Math.round(v))} />
-    {durInvalid && <div className="small" style={{ color: 'var(--red)', marginTop: 6 }}>{t('Enter how long it took (at least 1 minute).')}</div>}
-    {durTooLong && <div className="small" style={{ color: 'var(--red)', marginTop: 6 }}>{t('That’s more than a day. Keep it to 24 hours or less.')}</div>}
+    {durInvalid && <div className="small" style={{ color: 'var(--danger)', marginTop: 6 }}>{t('Enter how long it took (at least 1 minute).')}</div>}
+    {durTooLong && <div className="small" style={{ color: 'var(--danger)', marginTop: 6 }}>{t('That’s more than a day. Keep it to 24 hours or less.')}</div>}
     <div style={{ height: 18 }} />
     <Button variant="primary" onClick={save}>{t('Save')}</Button>
   </>
@@ -2842,7 +2843,7 @@ function ShareWorkoutImage({ w, nameOf, close }) {
 async function workoutCardImage(model, { map, body }) {
   const root = getComputedStyle(document.documentElement)
   const css = (name, fallback) => root.getPropertyValue(name).trim() || fallback
-  const colors = { bg: css('--bg', '#000'), surface: css('--surface', '#1c1c1e'), tile: css('--surface-2', '#2c2c2e'), label: css('--label', '#fff'), label2: css('--label-2', '#999'), acc: css('--acc', '#30d158') }
+  const colors = { bg: css('--bg', '#000'), surface: css('--surface', '#1c1c1e'), tile: css('--surface-2', '#2c2c2e'), label: css('--label', '#fff'), label2: css('--label-2', '#999'), acc: css('--acc', PALETTE_ACCENT[DEFAULT_PALETTE]) }
   // The body geometry is ~90 KB and lazy everywhere else too (components/BodyMap.jsx).
   const geometry = map && model.levels ? (await import('./lib/body-paths.js')).default : null
   const shape = geometry && (geometry[body] || geometry.male)
@@ -2928,7 +2929,7 @@ function Calendar({ start, close }) {
     <div className="cal-legend">
       <span><i style={{ background: 'var(--acc)' }} />{t('Trained')}</span>
       <span><i style={{ background: 'var(--label-3)' }} />{t('Planned')}</span>
-      <span><i style={{ background: 'var(--orange)' }} />{t('Rescheduled')}</span>
+      <span><i style={{ background: 'var(--warning)' }} />{t('Rescheduled')}</span>
       {Object.keys(st.dayNotes || {}).some(k => k.startsWith(y + '-' + String(mo + 1).padStart(2, '0')) && dayNoteOf(st, k)) &&
         <span><i style={{ background: 'var(--indigo)' }} />{t('Day note')}</span>}
     </div>
@@ -3063,8 +3064,8 @@ function LogPastWorkout({ initial, close }) {
     <Row icon="clock" title={t('Start time')}>
       <input type="time" className="timef" value={time} onChange={e => setTime(e.target.value)} /></Row>
     <Stepper label={t('Duration')} unit={t('min')} value={dur} step={5} min={0} decimal={false} invalid={!(dur >= 1) || dur > MAX_DURATION_MIN} onChange={v => setDur(Math.round(v))} />
-    {!(dur >= 1) && <div className="small" style={{ color: 'var(--red)', marginTop: 6 }}>{t('Enter how long it took (at least 1 minute).')}</div>}
-    {dur > MAX_DURATION_MIN && <div className="small" style={{ color: 'var(--red)', marginTop: 6 }}>{t('That’s more than a day. Keep it to 24 hours or less.')}</div>}
+    {!(dur >= 1) && <div className="small" style={{ color: 'var(--danger)', marginTop: 6 }}>{t('Enter how long it took (at least 1 minute).')}</div>}
+    {dur > MAX_DURATION_MIN && <div className="small" style={{ color: 'var(--danger)', marginTop: 6 }}>{t('That’s more than a day. Keep it to 24 hours or less.')}</div>}
     <div style={{ height: 8 }} />
     <SelectRow icon="dumbbell" title={t('Routine')} value={routineId} options={options} onChange={setRoutineId} />
     <div style={{ height: 18 }} />
@@ -3355,7 +3356,7 @@ function SupersetSettings({ meta, onSave, close }) {
       onKeyDown={e => { if (e.key === 'Enter') save() }} />
     <div style={{ height: 12 }} />
     <div className="list">
-      <Row icon="timer" iconTint="var(--orange)" title={t('Rest after each round')}
+      <Row icon="timer" iconTint="var(--warning)" title={t('Rest after each round')}
         value={rest > 0 ? fmtRest(rest) : t('Longest exercise rest')} accessory="chevron"
         onClick={() => durationSheet({ title: t('Rest after each round'), value: rest, max: REST_MAX, off: t('Longest exercise rest'),
           footer: t('Without one, the superset rests as long as its longest exercise rest.'), onDone: setRest })} />
@@ -3462,7 +3463,7 @@ export function setsLine(sets, unit) {
   }
   return sets.map(s => (s.w > 0 ? fmtNum(s.w) + '×' : '') + reps(s)).join(' · ')
 }
-const TREND = { 1: ['arrowUp', 'var(--green)'], 0: ['minus', 'var(--text-2)'], [-1]: ['arrowDown', 'var(--orange)'] }
+const TREND = { 1: ['arrowUp', 'var(--success)'], 0: ['minus', 'var(--text-2)'], [-1]: ['arrowDown', 'var(--warning)'] }
 function LastAndNext({ st, w }) {
   const rows = finishCompare(st, w)
   if (!rows.length) return null
