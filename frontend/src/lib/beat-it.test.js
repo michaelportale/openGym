@@ -80,3 +80,18 @@ describe('assisted exercises', () => {
   })
 })
 
+
+describe('beatTarget when the weight cannot step', () => {
+  const range = { mode: 'reps', reps: 12, repsMin: 8 }
+  it('adds a rep at the top of the range instead of offering the bottom again', () => {
+    expect(beatTarget({ w: 30, r: 12 }, { ...range, step: w => w })).toEqual({ w: 30, r: 13 })
+    expect(beatTarget({ w: 30, r: 12 }, { ...range, step: w => w, repStep: 2 })).toEqual({ w: 30, r: 14 })
+  })
+  it('adds a rep without a rep range too, and on an assisted lift with no lighter step', () => {
+    expect(beatTarget({ w: 30, r: 5 }, { mode: 'reps', reps: 5, repsMin: 0, step: w => w })).toEqual({ w: 30, r: 6 })
+    expect(beatTarget({ w: 10, r: 12 }, { ...range, assisted: true, step: w => w })).toEqual({ w: 10, r: 13 })
+  })
+  it('still steps the weight when it can', () => {
+    expect(beatTarget({ w: 30, r: 12 }, { ...range, step: w => w + 2.5 })).toEqual({ w: 32.5, r: 8 })
+  })
+})

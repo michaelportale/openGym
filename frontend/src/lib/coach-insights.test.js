@@ -86,6 +86,11 @@ describe('sessionInsights', () => {
     expect(chestLift.prev).not.toBeNull()
     expect(chestLift.est).toBeGreaterThan(chestLift.prev)
   })
+  it('counts a lift recorded in two sections as one record', () => {
+    const s = S()
+    s.workouts[3].prs = [chest, chest]
+    expect(sessionInsights(s, s.workouts[3]).now.prs).toBe(1)
+  })
   it('has no comparison when the name was never trained before', () => {
     const s = S()
     const r = sessionInsights(s, s.workouts[2])   // the only 'Pull'

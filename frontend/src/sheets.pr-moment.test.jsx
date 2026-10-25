@@ -8,6 +8,7 @@ import { createRoot } from 'react-dom/client'
 import { DEF, useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
 import { finishWorkout } from './sheets.jsx'
+import { sessionInsights } from './lib/coach-insights.js'
 import { workoutCardModel } from './lib/workout-card.js'
 
 const BENCH = '0025'
@@ -60,7 +61,7 @@ function finishCombined(id, was, sections, wasLoad) {
       entries: [{ id, rid: 'A', target: target(was, wasLoad), sets: [{ w: was, r: 10, done: true }] }] }],
     exWeights: { [id]: { w: was, d: '2026-09-14' } },
     active: { d: day, start: Date.now() - 1800e3, name: 'Push + More', routineIds: ['A', 'B'],
-      entries: sections.map((x, i) => ({ id, rid: i ? 'B' : 'A', target: target(x.w, x.dbLoad), sets: [{ w: x.w, r: 10, done: true }] })) },
+      entries: sections.map((x, i) => ({ id, rid: i ? 'B' : 'A', target: target(x.w, x.dbLoad), sets: [{ w: x.w, r: x.r ?? 10, done: true }] })) },
   })
   useStore.setState({ S: st, user: null })
   act(() => finishWorkout())
@@ -145,12 +146,32 @@ describe('the PR moment on the finish summary', () => {
       const host = finishCombined(BENCH, 70, order.map(w => ({ w })))
       expect(recordOf(host)).toEqual({ rows: 1, v: '100 kg', was: 'Previous best: 70 kg' })
       const saved = useStore.getState().S.workouts.at(-1)
-      expect(saved.prs).toContain(BENCH)
+      expect(saved.prs).toEqual([BENCH])
+      expect(sessionInsights(useStore.getState().S, saved).now.prs).toBe(1)
       const model = workoutCardModel(saved, { unit: 'kg', nameOf: e => e.id })
       expect(model.records).toEqual([BENCH])
       act(() => { mounted.splice(0).forEach(root => root.unmount()) })
       useUI.setState({ sheets: [] })
     }
+  })
+
+  it('lists a lift once when one section beats its estimate and another its load', () => {
+    // 70 x 12 is an estimate record only; 80 x 10 is the load record that replaces it.
+    const host = finishCombined(BENCH, 70, [{ w: 70, r: 12 }, { w: 80 }])
+    expect(recordOf(host)).toEqual({ rows: 1, v: '80 kg', was: 'Previous best: 70 kg' })
+    expect(host.querySelectorAll('.e1-row').length).toBe(0)
+  })
+
+  it('keeps the higher estimate when a lift in two sections beats its estimate in both, in either order', () => {
+    const shown = []
+    for (const order of [[11, 12], [12, 11]]) {
+      const host = finishCombined(BENCH, 70, order.map(r => ({ w: 70, r })))
+      const rows = [...host.querySelectorAll('.e1-row')]
+      expect(rows.length).toBe(1)
+      shown.push(rows[0].textContent)
+    }
+    expect(shown[0]).toBe(shown[1])
+    expect(shown[0]).toContain('98')
   })
 
   it('keeps the least assistance as the record when an assisted lift is in two sections', () => {
