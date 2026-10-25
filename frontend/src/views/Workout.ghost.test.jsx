@@ -119,3 +119,29 @@ describe('Beat it follows double progression', () => {
     expect(row(0)).toMatchObject({ sec: 35 })
   })
 })
+
+// An assisted pull-up's weight is the machine's help: more of it is an easier set.
+describe('assisted exercises on the row', () => {
+  const ASSIST = '0017'
+  const plan = { sets: 2, reps: 10 }
+  const assisted = (sets, last = [{ w: 30, r: 10, done: true }]) => mount({ id: ASSIST, target: plan, planned: plan, last, sets })
+
+  it('does not read more assistance as ahead of last time, or as a record', () => {
+    assisted([{ w: 40, r: 10, done: true }, { w: 40, r: 10, done: false }])
+    expect(container.textContent).not.toContain('Ahead of last time')
+    expect(container.querySelector('.set-record')).toBeNull()
+  })
+
+  it('calls less assistance a record, by how much less', () => {
+    assisted([{ w: 20, r: 10, done: true }, { w: 30, r: 10, done: false }])
+    expect(container.querySelector('.set-record').textContent).toBe('New PR · −10 kg')
+  })
+
+  it('Beat it takes assistance away', () => {
+    assisted([{ w: 30, r: 10, done: false }, { w: 30, r: 10, done: false }])
+    act(() => beat().click())
+    expect(row(0).w).toBeLessThan(30)
+    expect(row(0).r).toBe(10)
+  })
+})
+

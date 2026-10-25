@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { workoutControls } from '../lib/workout-controls.js'
 import { useUI } from '../store/useUI.js'
-import { exOr, betterWeight } from '../lib/exercises.js'
+import { exOr, betterWeight, beatsWeight, isAssisted } from '../lib/exercises.js'
 import { usesBar } from '../lib/bar.js'
 import { loadKindFor, baseWeightFor, inventoryFor, rowLoad, sameLoad, plateDelta, dropGrid } from '../lib/plates.js'
 import { effectiveRoutines, effectiveRoutineIds, lastEntryFor, bestWeightFor, bestWeightForEntry, buildSets, freestyleConfig, defaultConfig, setsDoneActive, setUnitsTotal, supersetUnits, unitOf, setLabel, modeOf, isBw, isPerSide, repStep, EFFORT, effortOf, stepEffort, capEffort, cascadeWeight, insertWarmupRow, barFloor, makeWarmupAt, canBeWarmup, makeWorkAt, removeRowAt, removeLastSet, setSpanAt, copyRowAt, copySpanAt, insertRowAt, pairAdjacent, unpairSuperset, cleanupSg, applyIntensifierPlan, pinnedNoteFor, exNoteFor, setsRepsOf } from '../lib/history.js'
@@ -354,7 +354,9 @@ function ExerciseBlock({ entryIdx, compact, dense, editing, onToggle, onToggleSi
   // (`entry.planned`): the session's target reps are only this session's aim inside it.
   const rangeOf = entry.planned?.reps > 0 ? entry.planned : cfg
   const ranged = rangeOf.repsMin > 0 && rangeOf.repsMin < rangeOf.reps
-  const beatOf = g => beatTarget(g, { mode, reps: ranged ? rangeOf.reps : cfg.reps, repsMin: ranged ? rangeOf.repsMin : 0, repStep: repStep(cfg), step: w => stepLoad(w, loadStep, 1) })
+  // On an assistance machine a better set is one with less help (lib/exercises.js betterWeight).
+  const assisted = isAssisted(cfg)
+  const beatOf = g => beatTarget(g, { mode, reps: ranged ? rangeOf.reps : cfg.reps, repsMin: ranged ? rangeOf.repsMin : 0, repStep: repStep(cfg), assisted, step: (w, dir) => stepLoad(w, loadStep, dir) })
   const applyBeat = (i, target) => {
     const row = entry.sets[i]
     setBeatUndo({ i, prev: Object.fromEntries(Object.keys(target).map(k => [k, row[k]])) })
@@ -370,14 +372,14 @@ function ExerciseBlock({ entryIdx, compact, dense, editing, onToggle, onToggleSi
     const g = ghostFor(last, workIndexOf(i), mode)
     const isActive = i === activeWork
     if (!g) return isActive && !last ? <div className="setghost"><span>{t('First time — set a baseline')}</span></div> : null
-    const ahead = aheadOf(g, s, mode)
+    const ahead = aheadOf(g, s, mode, assisted)
     const target = isActive && !s.done ? beatOf(g) : null
     // A logged set heavier than the best before this session is a record, said on the row as it
     // happens; the finish summary lists it again. Gold for this alone.
-    const record = s.done && mode === 'reps' && !bw && best > 0 && s.w > best && s.r > 0
+    const record = s.done && mode === 'reps' && !bw && best > 0 && beatsWeight(cfg, s.w, best) && s.r > 0
     return <div className="setghost">
       <span>{t('Last: {0}', ghostText(g))}</span>
-      {record ? <span className="set-record"><Icon name="trophy" />{t('New PR · {0}', '+' + fmtNum(Math.round((s.w - best) * 100) / 100) + ' ' + S.unit)}</span>
+      {record ? <span className="set-record"><Icon name="trophy" />{t('New PR · {0}', (assisted ? '−' : '+') + fmtNum(Math.round(Math.abs(s.w - best) * 100) / 100) + ' ' + S.unit)}</span>
         : ahead && <span className="setghost-ahead">{t('Ahead of last time')} <span aria-hidden="true">↑</span></span>}
       {beatUndo?.i === i ? <button type="button" className="chip setghost-beat" onClick={undoBeat}>{t('Undo')}</button>
         : target && !ahead && <button type="button" className="chip setghost-beat" onClick={() => applyBeat(i, target)}
