@@ -1,7 +1,7 @@
 // The palettes in palettes.json and the CSS generated from them (scripts/gen-palettes.mjs).
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { outputs, loadPalettes } from '../../scripts/gen-palettes.mjs'
+import { outputs, loadPalettes, paletteCss } from '../../scripts/gen-palettes.mjs'
 import { isGreenRgb } from '../../scripts/color-audit.mjs'
 import { contrast, readableIn } from '../lib/accent.js'
 import { CLASSIC, DEFAULT_PALETTE, PALETTES, PALETTE_NAMES, PALETTE_BG, paletteKey, themeAttr, darkAttrOf } from './palettes.js'
@@ -39,6 +39,17 @@ describe('palettes.json', () => {
     for (const { tokens: t } of data.palettes) {
       expect(isGreenRgb(rgb(t.success))).toBe(false)
       expect(isGreenRgb(rgb(readableIn(t.success, 'light')))).toBe(false)
+    }
+  })
+  it('uses an explicit light success that is apart from PR gold and readable on white', () => {
+    const own = data.palettes.filter(p => p.light?.success)
+    expect(own.map(p => p.name)).toContain('ember')
+    for (const p of own) {
+      const css = paletteCss(p)
+      const light = css.slice(css.indexOf(`:root[data-theme="light"][data-palette="${p.name}"] {`))
+      const val = k => light.match(new RegExp(`--${k}: (#[0-9a-f]{6})`))[1]
+      expect(contrast(val('success'), val('pr'))).toBeGreaterThan(1.5)
+      expect(contrast(val('success'), '#ffffff')).toBeGreaterThanOrEqual(4.5)
     }
   })
   it('keeps the personal-record gold apart from success', () => {

@@ -2479,4 +2479,13 @@ export default {
   "A set where a muscle only helps counts as half a set.": "Ein Satz, bei dem ein Muskel nur mithilft, zählt als halber Satz.",
   "No sets in these days yet.": "In diesen Tagen noch keine Sätze.",
   "Set your aims": "Ziele festlegen",
+  "<1 min": "<1 Min.",
+  "all working": "alle Arbeitssätze",
+  "{0} working": "{0} Arbeitssätze",
+  "Show all {0}": "Alle {0} anzeigen",
+  "Show fewer": "Weniger anzeigen",
+  "{0} muscle on target": "{0} Muskel im Ziel",
+  "{0} muscles on target": "{0} Muskeln im Ziel",
+  "Train a few sessions to see coverage": "Trainiere ein paar Einheiten, um die Abdeckung zu sehen",
+  "Set coverage aims": "Abdeckungsziele festlegen",
 }

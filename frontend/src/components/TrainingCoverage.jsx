@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useStore } from '../store/useStore.js'
 import { coverageForState } from '../lib/training-coverage.js'
 import { MUSCLES, MUSCLE_NAME } from '../lib/muscles.js'
@@ -31,7 +31,7 @@ function Counts({ value, planned, cycle }) {
     {!cycle && value.gap.sets != null && <div className="muted">{t('Estimated-set gap to aim: {0}', fmtNum(value.gap.sets))}</div>}
   </div>
 }
-function TargetEditor({ S }) {
+function TargetEditor({ S, detailsRef }) {
   const update = useStore(s => s.update)
   const [muscle, setMuscle] = useState('chest')
   const target = S.coverageTargets?.[muscle]
@@ -39,7 +39,7 @@ function TargetEditor({ S }) {
   const [sets, setSets] = useState(target?.sets ?? null)
   const choose = m => { setMuscle(m); setDays(S.coverageTargets?.[m]?.directDays ?? 2); setSets(S.coverageTargets?.[m]?.sets ?? null) }
   const valid = Number.isInteger(days) && days >= 0 && days <= 7 && (sets == null || (Number.isFinite(sets) && sets >= 0))
-  return <details className="coverage-targets">
+  return <details className="coverage-targets" ref={detailsRef}>
     <summary>{t('Set your aims')}</summary>
       <SelectRow title={t('Muscle group')} value={muscle} options={MUSCLES.map(m => ({ value: m, label: t(MUSCLE_NAME[m]) }))} onChange={choose} />
     <form onSubmit={e => { e.preventDefault(); if (valid) update(s => { s.coverageTargets ||= {}; s.coverageTargets[muscle] = { directDays: days, sets, _ts: Date.now() } }) }}>
@@ -55,12 +55,18 @@ export default function TrainingCoverage({ S }) {
   const cycle = view === 'cycle' && result.cycle
   const data = cycle || result.rolling
   const muscles = Object.entries(data.byMuscle)
+  const aims = useRef(null)
+  const openAims = () => { if (!aims.current) return; aims.current.open = true; aims.current.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }) }
   return <section className="card training-coverage" aria-label={t('Training coverage')}>
     <h2>{t('Training coverage')}</h2>
     {result.cycle && <Segmented value={cycle ? 'cycle' : 'rolling'} onChange={setView} options={[{ value: 'rolling', label: t('Last 7 days') }, { value: 'cycle', label: t('Accepted cycle') }]} />}
     <p className="small muted">{!cycle && t('Last 7 days') + ' · '}{fmtDate(data.window.startDate, true)} – {fmtDate(data.window.endDate, true)}{cycle && data.label ? ' · ' + data.label : ''}</p>
     {cycle && <p className="small muted">{t('Cycle totals include off-program work since acceptance. Floating plans have no assumed training dates.')}</p>}
-    {muscles.length === 0 && <p className="small muted">{t('No sets in these days yet.')}</p>}
+    {/* Nothing counted yet: say what fills in here and offer the one thing to do now. */}
+    {muscles.length === 0 && <div className="empty-cta">
+      <p>{t('Train a few sessions to see coverage')}</p>
+      <Button className="empty-cta-btn" onClick={openAims}>{t('Set coverage aims')}</Button>
+    </div>}
     {muscles.map(([m, value]) => <details className="coverage-muscle" key={m}>
       <summary><span>{t(MUSCLE_NAME[m] || m)}</span><span className="small muted">{t('{0} of {1} planned sets done', fmtNum(value.actual.combinedEstimate), fmtNum(value.planned.combinedEstimate))}</span></summary>
       <div className="coverage-pair"><Counts value={value.actual} cycle={!!cycle} /><Counts value={value.planned} planned cycle={!!cycle} /></div>
@@ -78,6 +84,6 @@ export default function TrainingCoverage({ S }) {
       </div>)}
     </details>}
     <p className="sect-f">{t('A set where a muscle only helps counts as half a set.')}</p>
-    <TargetEditor S={S} />
+    <TargetEditor S={S} detailsRef={aims} />
   </section>
 }

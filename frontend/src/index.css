@@ -41,9 +41,10 @@
   --yellow:#ffd60a; --teal:#40c8e0; --indigo:#5e5ce6; --pink:#ff375f;
   --purple:#bf5af2; --mint:#63e6e2; --brown:#ac8e68; --grey:#8e8e93;
 
-  /* accent (per-account, synced) */
-  --acc:  var(--green);
-  --acc-2:#248a3d;
+  /* accent (per-account, synced). The fallback is Ember's, so nothing turns green when no
+     accent attribute is set; "lime" stays an explicit choice below. */
+  --acc:  #ff6b35;
+  --acc-2:#d9521f;
   --on-acc:#000000;
   --acc-soft: color-mix(in srgb, var(--acc) 16%, transparent);
   --acc-line: color-mix(in srgb, var(--acc) 38%, transparent);
@@ -71,6 +72,7 @@
 
 :root[data-theme="light"] {
   --bg:        #f2f2f7;
+  --track:     #c7c7cc;   /* a progress bar's backplate on white: 1.73:1 */
   --bg-el:     #f7f7fa;
   --surface:   #ffffff;
   --surface-2: #ececef;
@@ -87,8 +89,8 @@
   --blue:#007aff; --green:#34c759; --red:#ff3b30; --orange:#ff9500;
   --yellow:#ffcc00; --teal:#30b0c7; --indigo:#5856d6; --pink:#ff2d55;
   --purple:#af52de; --mint:#00c7be; --brown:#a2845e; --grey:#8e8e93;
-  --acc-2:#248a3d;
-  --on-acc:#ffffff;
+  --acc-2:#bf3502;
+  --on-acc:#000000;
 }
 
 /* accents — Apple's system colours, so a recolour never looks off-system */
@@ -131,7 +133,7 @@ body{
 button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;letter-spacing:inherit}
 input,select,textarea{font:inherit;color:var(--label);letter-spacing:inherit}
 img{max-width:100%}
-a{color:var(--acc);text-decoration:none}
+a{color:var(--acc-text);text-decoration:none}
 :focus{outline:none}
 :focus-visible{outline:2.5px solid var(--acc);outline-offset:2px;border-radius:6px}
 button,.chip,.tile,.item,.wday,.cal-d,.swatch,.hm-c,.lrow,.seg button,.stp button,.sld
@@ -168,7 +170,7 @@ details[open]>summary:not(:has(.chev))::before,[dir="rtl"] details[open]>summary
 
 .muted{color:var(--label-2)} .dim{color:var(--label-3)}
 .small{font-size:13px;line-height:1.38}
-.accent{color:var(--acc)}
+.accent{color:var(--acc-text)}
 .capitalize{text-transform:capitalize}
 /* exercise names and body-part/equipment terms arrive lowercase from the dataset,
    so tags and chips capitalise by default. Anything that is a unit or a sentence opts
@@ -211,7 +213,7 @@ body.no-tabbar.resting #app{padding-bottom:calc(96px + var(--sab))}
 .conn{
   display:flex;align-items:center;gap:9px;width:100%;text-align:start;min-height:34px;
   padding-block:6px;padding-inline:12px 8px;border-radius:var(--r);
-  background:color-mix(in srgb,var(--yellow) 16%,var(--surface));color:var(--label);font-size:13px;line-height:1.3;
+  background:color-mix(in srgb,var(--warning) 16%,var(--surface));color:var(--label);font-size:13px;line-height:1.3;
 }
 .conn .icn{flex:none;font-size:16px;color:var(--label-2)}
 .conn-t{flex:1;min-width:0;overflow-wrap:break-word}
@@ -224,7 +226,7 @@ button.conn:active{filter:brightness(1.12)}
 .conn-bar.quiet .conn-row{padding:2px 0 4px}
 .conn-bar.quiet .conn{min-height:26px;padding-block:2px;padding-inline:4px 2px;background:none;color:var(--label-2);font-size:12px;gap:6px}
 .conn-bar.quiet .conn .icn{font-size:13px;color:var(--label-3)}
-.conn-bar.quiet .conn-a{padding:2px 9px;font-size:12px;color:var(--acc);background:var(--acc-soft)}
+.conn-bar.quiet .conn-a{padding:2px 9px;font-size:12px;color:var(--acc-text);background:var(--acc-soft)}
 /* its × (#454): beside the line, not inside its button, so hiding it never also connects */
 .conn-bar.quiet .conn-row{display:flex;align-items:center;gap:2px}
 .conn-x{flex:none;display:grid;place-items:center;width:26px;height:26px;border-radius:99px;color:var(--label-3);font-size:12px}
@@ -274,7 +276,7 @@ button.conn:active{filter:brightness(1.12)}
 .iconbtn,.chip,.seg button,.helpbtn{position:relative}
 .iconbtn::before,.chip::before,.seg button::before,.helpbtn::before{content:'';position:absolute;inset:-6px}
 .seg button::before{inset:-6px 0}
-.iconbtn.on-ss{background:var(--acc-soft);color:var(--acc)}
+.iconbtn.on-ss{background:var(--acc-soft);color:var(--acc-text)}
 .iconbtn:disabled{opacity:.32}
 
 h4.sec{
@@ -360,7 +362,7 @@ h4.sec{
 .lrow-v{color:var(--label-2);font-size:17px;letter-spacing:-.012em;flex:0 1 auto;max-width:55%;min-width:0;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align: end}
 .lrow-c{color:var(--label);font-size:15px;flex:none;--icon-stroke:2.4}
-.lrow-k{color:var(--acc);font-size:17px;flex:none;--icon-stroke:2.4}
+.lrow-k{color:var(--acc-text);font-size:17px;flex:none;--icon-stroke:2.4}
 .lrow.danger,.lrow.danger .lrow-t{color:var(--danger)}
 /* A warning under a settings row reads at subtitle size: a sentence, not a row title. */
 .lrow.backup-lost .lrow-t{font-size:13px;line-height:1.3;color:var(--label-2);letter-spacing:0}
@@ -396,9 +398,9 @@ h4.sec{
 .btn:active{transform:scale(.975)}
 .btn.primary{background:var(--acc);color:var(--on-acc)}
 .btn.primary:active{background:var(--acc-2)}
-.btn.tinted{background:var(--acc-soft);color:var(--acc)}
+.btn.tinted{background:var(--acc-soft);color:var(--acc-text)}
 .btn.danger{background:color-mix(in srgb,var(--danger) 15%,transparent);color:var(--danger)}
-.btn.ghost,.btn.plain{background:none;color:var(--acc);font-weight:400}
+.btn.ghost,.btn.plain{background:none;color:var(--acc-text);font-weight:400}
 .btn.ghost:active,.btn.plain:active{background:var(--surface-2)}
 .btn.sm{padding:8px 14px;width:auto;font-size:15px;border-radius:var(--r-sm);gap:5px}
 .btn.sm .icn{font-size:16px}
@@ -435,7 +437,7 @@ h4.sec{
    fade on the <svg> instead of in the stroke colour flattens the icon first and
    fades it as one shape — and it does that for every icon, not just this one. */
 #tabbar button .icn{font-size:25px;--icon-stroke:1.65;color:var(--label)}
-#tabbar button.on{color:var(--acc)}
+#tabbar button.on{color:var(--acc-text)}
 #tabbar button.on .icn{--icon-stroke:2;color:inherit;opacity:1}
 /* A connection problem while the banner is switched off (Settings → Show connection status):
    a dot on the Home tab and on the Settings gear. */
@@ -459,7 +461,7 @@ h4.sec{
 #tabbar button.start:active .cir{transform:scale(.93)}
 #tabbar button.start .cir .icn{font-size:24px;--icon-stroke:1.6;fill:currentColor;margin-left:2px;color:inherit;opacity:1}
 #tabbar button.start span{color:var(--label-2);font-weight:600}
-#tabbar button.start.on span:not(.cir){color:var(--acc)}
+#tabbar button.start.on span:not(.cir){color:var(--acc-text)}
 #tabbar button.start .tab-time{font-variant-numeric:tabular-nums}
 /* `.cir` is itself a <span>, so the label rules above and below reach it too and
    outrank the `.cir` block — which is how the running state ended up painting an
@@ -568,7 +570,7 @@ h4.sec{
   color:var(--label-2);border-radius:6px;padding:3px 7px;font-size:12px;
   font-weight:500;text-transform:capitalize;
 }
-.tag.acc{background:var(--acc-soft);color:var(--acc)}
+.tag.acc{background:var(--acc-soft);color:var(--acc-text)}
 /* Left / Right on a per-side row: one width for both (#322). The two hidden words share the
    visible one's grid cell, so the pill is as wide as the longer word. */
 .tag.sidepill{display:inline-grid;justify-items:center;flex:none}
@@ -577,11 +579,11 @@ h4.sec{
 .tag.sidepill::after{content:attr(data-r);visibility:hidden}
 /* favourite marker (issue #6): a small yellow star glued to the exercise name — distinct from
    the accent "chosen" tag at the row's end, which means "already in a routine or the log" */
-.fav-star{color:var(--yellow);font-size:12px;display:inline-block;margin-inline-end:5px;vertical-align:-1px}
+.fav-star{color:var(--acc-text);font-size:12px;display:inline-block;margin-inline-end:5px;vertical-align:-1px}
 .fav-btn{margin-top:-4px;flex:none}
 /* One long word (a German custom name) wraps instead of pushing the star off the screen. */
 .exdetail-name{min-width:0;overflow-wrap:anywhere}
-.fav-btn.on{color:var(--yellow)}
+.fav-btn.on{color:var(--acc-text)}
 /* Exercise cards (S.exerciseView 'cards', ExerciseViewToggle): the Library, the picker and the
    muscle explorer as a grid of pictures with the name underneath — two across on a phone, more
    as the page or sheet widens. The id-prefixed selectors outrank the desktop rules further down
@@ -608,7 +610,7 @@ h4.sec{
 .search-row>.search{flex:1;min-width:0}
 .search-row>.ex-view-btn{width:46px;height:auto;border-radius:10px;background:var(--surface-2);font-size:20px}
 :root[data-theme="light"] .search-row>.ex-view-btn{background:rgba(118,118,128,.12)}
-.search-row>.ex-view-btn.on,:root[data-theme="light"] .search-row>.ex-view-btn.on{background:var(--acc-soft);color:var(--acc)}
+.search-row>.ex-view-btn.on,:root[data-theme="light"] .search-row>.ex-view-btn.on{background:var(--acc-soft);color:var(--acc-text)}
 
 /* ---------------------------------------------------------------- chips -- */
 .chips{
@@ -874,6 +876,16 @@ body.chips-dragging *{cursor:inherit}
 .ck.on svg{stroke:var(--on-acc)}
 
 /* ------------------------------------------------------------- workout --- */
+/* Status-bar scrim: content scrolling up under the clock and battery passes under the page's own
+   ground instead of colliding with them. It is only as tall as the status bar (plus the connection
+   row when one shows) and never takes a tap. It sits just under the connection bar (45), so that
+   bar's sentence is never veiled, and under the tab bar, the timer and every sheet. */
+body::before{
+  content:"";position:fixed;inset-inline-start:0;inset-inline-end:0;top:0;z-index:44;
+  height:calc(var(--sat) + var(--conn));pointer-events:none;
+  background:color-mix(in srgb,var(--bg) 92%,transparent);
+  -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
+}
 /* Workout header. In list mode it is pinned: pulled up over #app's top padding so it sits flush
    with the screen edge from the first pixel, and given the page's own ground plus a light blur so
    the rows scrolling underneath read as underneath. The connection indicator, when there is
@@ -1000,7 +1012,7 @@ body.chips-dragging *{cursor:inherit}
   display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);color:#fff;font-size:12px;
 }
 .wmedia-add{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
-  color:var(--acc);font-size:11px;line-height:1.2;text-align:center;padding:6px;
+  color:var(--acc-text);font-size:11px;line-height:1.2;text-align:center;padding:6px;
   border:1.5px dashed var(--sep)}
 .wmedia-add .icn{font-size:20px}
 .wmedia-add:disabled{opacity:.5;cursor:default}
@@ -1210,7 +1222,7 @@ body.chips-dragging *{cursor:inherit}
 @keyframes swflashr{0%,35%{background:color-mix(in srgb,var(--danger) 22%,var(--surface))}100%{background:var(--surface)}}
 /* The first-use hint under the row it nudged. */
 .swhint{display:flex;justify-content:center;padding:4px 0 6px}
-.swhint button{display:inline-flex;align-items:center;gap:8px;background:var(--acc-soft);color:var(--acc);border-radius:99px;padding:7px 12px;font-size:13px;font-weight:600;animation:swhintin .3s var(--ease);text-align:start}
+.swhint button{display:inline-flex;align-items:center;gap:8px;background:var(--acc-soft);color:var(--acc-text);border-radius:99px;padding:7px 12px;font-size:13px;font-weight:600;animation:swhintin .3s var(--ease);text-align:start}
 .swhint .icn{font-size:15px;flex:none}
 .swhint .icn:last-child{opacity:.7}
 @keyframes swhintin{from{opacity:0;transform:translateY(-4px)}}
@@ -1371,7 +1383,7 @@ body.chips-dragging *{cursor:inherit}
 .menu-list .menu-item.danger .tt,.menu-list .menu-item.danger .lrow-i{color:var(--danger)}
 .menu-list .menu-item.disabled{opacity:.4;pointer-events:none}
 .menu-on{color:transparent;font-size:16px;flex:none}
-.menu-on.is-on{color:var(--acc)}
+.menu-on.is-on{color:var(--acc-text)}
 /* A grouped menu (menuSheet's `sections`): groups sit apart, each with a small header, so a long
    list reads as four short ones. */
 .menu-group.grouped+.menu-group.grouped{margin-top:14px}
@@ -1385,15 +1397,15 @@ body.chips-dragging *{cursor:inherit}
 .menu-chev{color:var(--label-3);font-size:14px;flex:none}
 [dir="rtl"] .menu-chev{transform:scaleX(-1)}
 .setextra{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 8px 32px}
-.setextra .chip.add{display:inline-flex;align-items:center;gap:4px;color:var(--acc)}
+.setextra .chip.add{display:inline-flex;align-items:center;gap:4px;color:var(--acc-text)}
 .setextra .chip.add svg{width:13px;height:13px}
 .setextra .chip.add:disabled{opacity:.35}
 /* why the next target is what it is (issue #17) */
 .progline{
   width:100%;display:flex;align-items:flex-start;gap:7px;margin:6px 0 2px;padding:0;
-  text-align: start;font-size:13px;line-height:1.38;color:var(--acc);
+  text-align: start;font-size:13px;line-height:1.38;color:var(--acc-text);
 }
-.progline.warn{color:var(--yellow)}
+.progline.warn{color:var(--warning)}
 .progline svg{flex:none;margin-top:2px}
 /* "Last time" / "Best set" under the plan line (#173): a button that switches between the two,
    looking like the plain line it replaced, with a small icon to say it can be tapped. */
@@ -1408,7 +1420,7 @@ body.chips-dragging *{cursor:inherit}
 .setrow .setgo{
   width:30px;height:30px;border-radius:50%;flex:none;
   display:flex;align-items:center;justify-content:center;
-  background:var(--surface-2);color:var(--acc);font-size:14px;
+  background:var(--surface-2);color:var(--acc-text);font-size:14px;
   transition:background var(--fast),opacity var(--fast);
 }
 .setrow .setgo:disabled{opacity:.3;cursor:default}
@@ -1485,7 +1497,7 @@ body.chips-dragging *{cursor:inherit}
 /* work timer (issue #16): the same bar doing the opposite job — outlined and tinted so a
    glance tells "you are holding this" apart from "you are recovering". */
 #timer.working{box-shadow:inset 0 0 0 var(--hair) var(--acc),0 12px 34px -8px rgba(0,0,0,.55)}
-#timer.working .t{color:var(--acc)}
+#timer.working .t{color:var(--acc-text)}
 /* The label is the exercise name, handed in already cased (exerciseNameText): a capitalize here
    would title-case German's own casing too. */
 #timer.working .lbl{display:block}
@@ -1593,7 +1605,7 @@ body.no-tabbar #timer.working{box-shadow:inset 0 var(--hair) 0 var(--acc),0 -10p
 }
 /* the row a working set usually lands on — the anchor the others are read against */
 .efftbl .r.on{background:var(--acc-soft)}
-.efftbl .r.on .n{color:var(--acc)}
+.efftbl .r.on .n{color:var(--acc-text)}
 .efftbl .r.on .f{color:var(--label)}
 
 /* --- glyph picker (replaces the emoji grid) --- */
@@ -1688,14 +1700,14 @@ body.no-tabbar #timer.working{box-shadow:inset 0 var(--hair) 0 var(--acc),0 -10p
 /* Fatigue view: attention ramp - fatigued muscles highlighted (owner tweak 2026-08-06) */
 .hm-fatigue .bm-m.l4{fill:var(--danger)}
 .hm-fatigue .bm-m.l3{fill:var(--warning)}
-.hm-fatigue .bm-m.l2{fill:var(--yellow)}
-.hm-fatigue .bm-m.l1{fill:color-mix(in srgb,var(--yellow) 32%,var(--bm-base))}
+.hm-fatigue .bm-m.l2{fill:var(--heat-2)}
+.hm-fatigue .bm-m.l1{fill:color-mix(in srgb,var(--heat-2) 32%,var(--bm-base))}
 .hm-fatigue .hm-c.l4{background:var(--danger)}
 .hm-fatigue .hm-c.l3{background:var(--warning)}
-.hm-fatigue .hm-c.l2{background:var(--yellow)}
-/* Strength view: top band pops gold (owner tweak 2026-08-06) */
-.hm-strength .bm-m.l4{fill:var(--pr);filter:drop-shadow(0 0 1.5px var(--pr))}
-.hm-strength .hm-c.l4{background:var(--pr)}
+.hm-fatigue .hm-c.l2{background:var(--heat-2)}
+/* Strength view: the top band is the accent (gold is kept for personal records) */
+.hm-strength .bm-m.l4{fill:var(--acc)}
+.hm-strength .hm-c.l4{background:var(--acc)}
 
 .bm-m.sel{stroke:var(--label);stroke-width:7}
 .bodymap.tappable .bm-m{cursor:pointer}
@@ -1754,7 +1766,7 @@ body.no-tabbar #timer.working{box-shadow:inset 0 var(--hair) 0 var(--acc),0 -10p
 /* With an action (Undo): the message, then the button at the end, and the toast takes taps. */
 #toast.has-action{pointer-events:auto;display:flex;align-items:center;gap:6px;padding:4px 6px 4px 18px;text-align:start}
 #toast.has-action .toast-msg{flex:1;min-width:0;padding:7px 0}
-#toast .toast-act{flex:none;display:inline-flex;align-items:center;gap:5px;color:var(--acc);font-weight:700;padding:8px 12px;border-radius:14px;min-height:36px}
+#toast .toast-act{flex:none;display:inline-flex;align-items:center;gap:5px;color:var(--acc-text);font-weight:700;padding:8px 12px;border-radius:14px;min-height:36px}
 #toast .toast-act:active{background:color-mix(in srgb,var(--label) 10%,transparent)}
 #toast .toast-act .icn{font-size:16px}
 body.no-tabbar #toast{bottom:calc(24px + var(--sab))}
@@ -1778,7 +1790,7 @@ body.no-tabbar.resting #toast{bottom:calc(100px + var(--sab))}
   font-weight:400;font-size:15px;color:var(--label);transition:background var(--fast);
 }
 .cal-d:active{background:var(--surface-2)}
-.cal-d.has{background:var(--acc-soft);color:var(--acc)}
+.cal-d.has{background:var(--acc-soft);color:var(--acc-text)}
 .cal-d.today{box-shadow:inset 0 0 0 1.8px var(--acc)}
 .cal-d i{width:5px;height:5px;border-radius:50%;background:transparent}
 .cal-d i.done{background:var(--acc)}
@@ -1808,7 +1820,7 @@ body.no-tabbar.resting #toast{bottom:calc(100px + var(--sab))}
 /* --- supersets --- */
 .ss-label{
   font-size:12px;font-weight:600;letter-spacing:-.004em;text-transform:none;
-  color:var(--acc);margin-block:8px 5px;margin-inline-start:4px;display:flex;align-items:center;gap:5px;
+  color:var(--acc-text);margin-block:8px 5px;margin-inline-start:4px;display:flex;align-items:center;gap:5px;
 }
 .ss-label .icn{font-size:13px}
 /* The routine editor's label opens the superset's name and rest (#292). */
@@ -1817,7 +1829,7 @@ body.no-tabbar.resting #toast{bottom:calc(100px + var(--sab))}
 .ss-label-btn .ss-label-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ss-label-btn .dim{font-weight:500;white-space:nowrap}
 /* A1, A2…: a member's place in the round (#293). */
-.ss-pos{flex:none;min-width:26px;height:22px;padding:0 5px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;font-size:var(--fs-caption);font-weight:700;color:var(--acc);background:var(--acc-soft, var(--surface-2))}
+.ss-pos{flex:none;min-width:26px;height:22px;padding:0 5px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;font-size:var(--fs-caption);font-weight:700;color:var(--acc-text);background:var(--acc-soft, var(--surface-2))}
 .item.in-ss{box-shadow:inset 3px 0 0 var(--acc)}
 /* A past workout's detail: each exercise opens its history, and a superset's exercises share the
    routine editor's label and bar. */
@@ -1863,11 +1875,11 @@ body.no-tabbar.resting #toast{bottom:calc(100px + var(--sab))}
   .wl-unit .ss-card{padding-inline:0}
 }
 .ss-hd{
-  font-size:12px;font-weight:600;color:var(--acc);margin-bottom:12px;
+  font-size:12px;font-weight:600;color:var(--acc-text);margin-bottom:12px;
   text-align:center;display:flex;align-items:center;justify-content:center;gap:5px;
 }
 .ss-ex{position:relative}
-.ss-amp{text-align:center;font-size:15px;font-weight:600;color:var(--acc);margin:14px 0 8px}
+.ss-amp{text-align:center;font-size:15px;font-weight:600;color:var(--acc-text);margin:14px 0 8px}
 
 /* --- workout list view: every unit stacked, the current one outlined --- */
 /* minmax(0, …): a grid's default `auto` track is at least as wide as its widest content, so a set
@@ -1936,7 +1948,8 @@ button.wl-summary{width:100%;padding:0 0 10px;text-align:start;border-radius:var
 .today-hero .ss,.today-meta{font-size:var(--fs-footnote);color:var(--label-2);margin-top:3px;line-height:1.3}
 .today-meta{display:flex;align-items:baseline;gap:4px;min-width:0}
 .today-meta .icn{flex:none;font-size:var(--fs-caption);align-self:center}
-.today-up{color:var(--acc)}
+.today-up{color:var(--label)}
+.today-up .icn{color:var(--acc-text)}
 .today-hero .tag{font-size:var(--fs-subhead);font-weight:600;padding:8px 14px;border-radius:999px;flex:none;gap:5px}
 /* Start and Resume are the card's action: full width under the text, a thumb-sized target */
 .today-hero .tag.today-cta{flex:1 0 100%;justify-content:center;min-height:44px;font-size:var(--fs-body)}
@@ -1944,6 +1957,22 @@ button.wl-summary{width:100%;padding:0 0 10px;text-align:start;border-radius:var
 .today-hero .tag .icn{font-size:var(--fs-caption)}
 .today-hero .tag.today-cta .icn{font-size:var(--fs-subhead)}
 .today-glance{margin-top:10px;padding-top:12px;border-top:.5px solid var(--sep)}
+/* One card, no card inside it: the session row sits straight on the card's --surface (20px in
+   from its edge) instead of on a --surface-2 plate of its own. */
+.card.today-card{padding:20px}
+.today-card .today-row.today-hero{background:none;padding:0;border-radius:0}
+.today-card .today-row.today-hero:active{background:none}
+.today-card .today-row.today-hero:active .today-cta{transform:scale(.97)}
+.today-hero .tag.today-cta{transition:transform var(--fast)}
+:root .today-card .today-row.today-hero:hover{background:none}
+.today-recovering{align-items:center;flex-wrap:wrap}
+.today-recovering-t{flex:1 1 auto;min-width:0}
+/* "Choose a different workout": a quiet text button, full thumb height. */
+.today-card .btn.today-choose{min-height:44px;color:var(--label-2);background:none}
+/* The tab bar's Start steps aside while Home's own Start is on screen (lib/use-hide-fab.js). */
+#tabbar button.start{transition:opacity var(--fast),visibility 0s linear 0s}
+body.fab-aside #tabbar button.start{opacity:0;pointer-events:none;visibility:hidden;transition:opacity var(--fast),visibility 0s linear var(--fast)}
+@media (prefers-reduced-motion:reduce){#tabbar button.start,body.fab-aside #tabbar button.start{transition:none}}
 
 /* Only where a pointer really hovers — on a phone :hover sticks to the row after the tap.
    Lighter than :active, which goes all the way to --surface-3, so the two stay distinct. */
@@ -2054,13 +2083,13 @@ button.wl-summary{width:100%;padding:0 0 10px;text-align:start;border-radius:var
 .plan-sec-h>.plan-sec-acts{margin-inline-start:auto}
 .plan-sec-h h4.sec{margin:0}
 .plan-routines-bar{margin-top:0}
-.plan-textbtn{color:var(--acc);font-size:16px;padding:6px 4px;position:relative}
+.plan-textbtn{color:var(--acc-text);font-size:16px;padding:6px 4px;position:relative}
 .plan-textbtn::before{content:'';position:absolute;inset:-6px}
 .plan .sect-f{margin:0 0 4px}
 .plan .list+.sect-f{padding-top:8px}
 /* a weekday: short day name, the routine's glyph (a moon on a rest day), what is on it */
 .plan-day-n{min-width:30px;flex:none;white-space:nowrap;font-size:15px;font-weight:600;color:var(--label-2)}
-.plan-day-n.today{color:var(--acc)}
+.plan-day-n.today{color:var(--acc-text)}
 /* Arabic names the whole day: one column wide enough for the longest keeps the glyphs aligned */
 [dir="rtl"] .plan-day-n{min-width:88px}
 .item .lrow-i.rest{background:var(--surface-3);color:var(--label-2)}
@@ -2123,7 +2152,7 @@ button.wl-summary{width:100%;padding:0 0 10px;text-align:start;border-radius:var
    over when the label needs the room. Only a label past half the screen is cut. */
 .sp-nav{display:grid;grid-template-columns:minmax(max-content,1fr) minmax(0,max-content) minmax(0,1fr);align-items:center;column-gap:6px;
   min-height:44px;margin:4px -6px 10px}
-.sp-back{display:inline-flex;align-items:center;gap:2px;color:var(--acc);font-size:17px;padding:6px;border-radius:10px;
+.sp-back{display:inline-flex;align-items:center;gap:2px;color:var(--acc-text);font-size:17px;padding:6px;border-radius:10px;
   min-width:0;max-width:50vw;justify-self:start}
 .sp-back span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sp-back .icn{font-size:22px;--icon-stroke:2.2;flex:none}
@@ -2139,7 +2168,7 @@ button.wl-summary{width:100%;padding:0 0 10px;text-align:start;border-radius:var
 .sp-avatar{width:56px;height:56px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:30px;
   background:linear-gradient(160deg,var(--surface-3),var(--surface-2));color:var(--label-2)}
 .sp-acct .lrow-t{font-size:19px;font-weight:600}
-.sp-avatar.on{background:var(--acc-soft);color:var(--acc);font-size:24px;font-weight:700}
+.sp-avatar.on{background:var(--acc-soft);color:var(--acc-text);font-size:24px;font-weight:700}
 .sp-version{text-align:center;margin-top:4px;line-height:1.6}
 /* The root rows' previews ("2:00 de descanso · Tarjetas", "Som · Vibração") are two or three facts, and a
    one-line ellipsis cut all but the first. They wrap instead, up to three lines, and never below
@@ -2196,9 +2225,18 @@ button.wl-summary{width:100%;padding:0 0 10px;text-align:start;border-radius:var
 .coverage-targets form{display:grid;gap:12px;padding-top:8px}
 .coverage-targets .num{background:var(--surface-2);width:100%;min-height:44px;border-radius:var(--r);padding:10px}
 @media(max-width:360px){.coverage-pair{grid-template-columns:1fr}}
-/* Home's glance: a bar per muscle, two columns; met aims go chalk with a check */
-.coverage-glance{cursor:pointer}
-.coverage-glance-h{margin-bottom:10px}
+/* Home's glance: a bar per muscle, two columns, most behind first; muscles on
+   target fold into one line with the done check. The track is quiet but visible (--track). */
+.coverage-glance-h{margin-bottom:10px;width:100%;min-height:44px;padding:0;background:none;border:0;color:inherit;font:inherit;text-align:start;cursor:pointer;align-items:center}
+.coverage-glance-h .chev{color:var(--label-3)}
+.coverage-more{display:block;min-height:44px;margin-top:6px;padding:0;background:none;border:0;color:var(--acc-text);font:inherit;font-size:var(--fs-subhead);font-weight:600;cursor:pointer}
+.coverage-met{display:flex;align-items:center;gap:6px;min-height:32px;margin-top:8px;color:var(--label-2);font-size:var(--fs-footnote)}
+.coverage-met .icn{color:var(--success)}
+.coverage-more + .coverage-met{margin-top:0}
+/* An empty state says what fills in here and offers one secondary action (not the accent). */
+.empty-cta{display:grid;justify-items:start;gap:10px;padding:8px 0 4px}
+.empty-cta p{margin:0;color:var(--label-2);font-size:var(--fs-subhead)}
+.empty-cta .btn.empty-cta-btn{min-height:44px;background:var(--surface-2);color:var(--label)}
 .coverage-glance-h h2{margin:0}
 .coverage-glance .lbl2{font-size:11px;font-weight:500;letter-spacing:.03em;text-transform:uppercase;color:var(--label-3)}
 .coverage-bars{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 16px}
@@ -2206,7 +2244,7 @@ button.wl-summary{width:100%;padding:0 0 10px;text-align:start;border-radius:var
 .coverage-bar-n{color:var(--label);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-width:0}
 .coverage-bar-v{color:var(--label-2);font-variant-numeric:tabular-nums;white-space:nowrap;display:inline-flex;align-items:center;gap:2px}
 .coverage-bar-v .icn{font-size:var(--fs-caption);color:var(--success)}
-.coverage-bar-track{height:6px;border-radius:3px;background:var(--surface-3);margin-top:4px;overflow:hidden}
+.coverage-bar-track{height:6px;border-radius:3px;background:var(--track);margin-top:4px;overflow:hidden}
 .coverage-bar-fill{height:100%;border-radius:3px;background:var(--acc)}
 .coverage-bar.met .coverage-bar-fill{background:var(--success)}
 @media(max-width:340px){.coverage-bars{grid-template-columns:1fr}}
@@ -2221,15 +2259,15 @@ button.wl-summary{width:100%;padding:0 0 10px;text-align:start;border-radius:var
 .st-row + .st-row{border-top:.5px solid var(--sep)}
 .st-row .st-n{grid-area:n;font-weight:600;font-size:var(--fs-subhead);overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .st-row .st-spark{grid-area:s;color:var(--label-3)}
-.st-row.up .st-spark{color:var(--acc)}
+.st-row.up .st-spark{color:var(--acc-text)}
 .st-row .st-v{grid-area:v;justify-self:end;font-weight:700;font-size:var(--fs-title-3);font-variant-numeric:tabular-nums;line-height:1.1}
 .st-row .st-v small{font-size:var(--fs-footnote);font-weight:500;color:var(--label-2)}
 .st-row .st-d{grid-area:d;justify-self:end;font-size:var(--fs-footnote);color:var(--label-2);font-variant-numeric:tabular-nums}
-.st-row.up .st-d{color:var(--acc)}
+.st-row.up .st-d{color:var(--acc-text)}
 .st-row>.icn{position:absolute;inset-inline-end:0;top:50%;transform:translateY(-50%);color:var(--label-3);font-size:14px}
 .st-row:active{opacity:.7}
 .stats-empty .empty{padding:28px 12px 8px;display:flex;flex-direction:column;align-items:center;gap:14px}
-.stats-empty .empty .ico{margin-bottom:0;color:var(--acc)}
+.stats-empty .empty .ico{margin-bottom:0;color:var(--acc-text)}
 .stats-empty .empty .btn{min-width:200px}
 
 /* Exercises filter sheet: the chips wrap instead of scrolling sideways. */

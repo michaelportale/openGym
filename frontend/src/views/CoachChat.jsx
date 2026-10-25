@@ -413,7 +413,7 @@ function ReviewCard({ p, S, update, toast, refresh }) {
         {!!marked.evidence?.sessions && <p className="pcard-sum" style={{ fontSize: 13 }}>
           {t('Based on your last {0} sessions', marked.evidence.sessions)}{marked.evidence.from ? ` · ${fmtDate(marked.evidence.from)} – ${fmtDate(marked.evidence.to)}` : ''}
         </p>}
-        {marked.planMoved && <p className="pcard-sum" style={{ fontSize: 13, color: 'var(--yellow)' }}>
+        {marked.planMoved && <p className="pcard-sum" style={{ fontSize: 13, color: 'var(--warning)' }}>
           {t('Your plan changed since the Coach looked at it. Suggestions that no longer match are greyed out. Ask for a fresh review to see them again.')}
         </p>}
       </div>
@@ -546,7 +546,7 @@ function DebriefBody({ p, S }) {
       </div>}
     </div>}
     <DebriefList icon="checkCircle" tint="var(--success)" title={t('What went well')} items={p.highlights} />
-    <DebriefList icon="warning" tint="var(--yellow)" title={t('Worth watching')} items={p.watch} />
+    <DebriefList icon="warning" tint="var(--warning)" title={t('Worth watching')} items={p.watch} />
     <DebriefList icon="arrowUp" tint="var(--acc)" title={t('Next time')} items={p.nextTime} />
   </>
 }
