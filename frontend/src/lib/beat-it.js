@@ -25,16 +25,20 @@ export function ghostFor(last, workIndex, mode) {
  * What "Beat it" fills in, from the ghost and the plan, in this order:
  *   1. a timed hold: five seconds longer;
  *   2. a bodyweight set (no added weight): one more rep;
- *   3. a rep range whose top was not reached last time: one more rep at the same weight;
- *   4. otherwise: the next weight step, at the plan's reps (or last time's when the plan has none).
+ *   3. a weighted rep range (`repsMin`..`reps`, double progression's) whose top was not reached
+ *      last time: one more rep (`repStep`, two for a per-side total) at the same weight;
+ *   4. otherwise: the next weight step, at the bottom of the range, or at the plan's reps (last
+ *      time's when the plan has none) without one.
  * `step(w)` returns the next weight up (the plate or dumbbell step the row's + uses).
+ * `repsMax` is the bodyweight ceiling (it adds sets, not reps) and plays no part here.
  */
-export function beatTarget(ghost, { mode, reps, repsMax, step }) {
+export function beatTarget(ghost, { mode, reps, repsMin, step, repStep = 1 }) {
   if (!ghost) return null
   if (mode === 'time') return { sec: ghost.sec + 5 }
   if (!(ghost.w > 0)) return { r: ghost.r + 1 }
-  if (repsMax > 0 && ghost.r < repsMax) return { w: ghost.w, r: ghost.r + 1 }
-  return { w: step(ghost.w), r: reps > 0 ? reps : ghost.r }
+  const range = repsMin > 0 && repsMin < reps
+  if (range && ghost.r < reps) return { w: ghost.w, r: Math.min(reps, ghost.r + repStep) }
+  return { w: step(ghost.w), r: range ? repsMin : reps > 0 ? reps : ghost.r }
 }
 
 /** Whether a row's values already beat its ghost: more reps at the same or more weight, or more weight. */

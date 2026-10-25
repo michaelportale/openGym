@@ -350,7 +350,11 @@ function ExerciseBlock({ entryIdx, compact, dense, editing, onToggle, onToggleSi
   const activeWork = entry.sets.findIndex(x => !x.done && !isWarmupRow(x))
   const ghostText = g => mode === 'time' ? tn('{0} second', '{0} seconds', g.sec)
     : g.w > 0 ? `${fmtNum(g.w)} × ${fmtNum(g.r)}` : tn('{0} rep', '{0} reps', g.r)
-  const beatOf = g => beatTarget(g, { mode, reps: cfg.reps, repsMax: cfg.repsMax, step: w => stepLoad(w, loadStep, 1) })
+  // A weighted rep range is double progression's, repsMin..reps, as the routine asked for it
+  // (`entry.planned`): the session's target reps are only this session's aim inside it.
+  const rangeOf = entry.planned?.reps > 0 ? entry.planned : cfg
+  const ranged = rangeOf.repsMin > 0 && rangeOf.repsMin < rangeOf.reps
+  const beatOf = g => beatTarget(g, { mode, reps: ranged ? rangeOf.reps : cfg.reps, repsMin: ranged ? rangeOf.repsMin : 0, repStep: repStep(cfg), step: w => stepLoad(w, loadStep, 1) })
   const applyBeat = (i, target) => {
     const row = entry.sets[i]
     setBeatUndo({ i, prev: Object.fromEntries(Object.keys(target).map(k => [k, row[k]])) })
