@@ -16,7 +16,8 @@ import { workoutVolume, workoutVolumeIsPartial, workoutDay, doneUnits } from './
 import { isWarmupRow } from './workout-model.js'
 import { streakLoop, rotationStreak } from './rotation-streak.js'
 import { bwTrend, bwWeekChange } from './bw-trend.js'
-import { EXIDX } from './exercises.js'
+import { EXIDX, betterWeight, beatsWeight, isAssisted } from './exercises.js'
+import { entryDbLoad, meaningFactor } from './dumbbells.js'
 import { MUSCLES, MUSCLE_NAME, levelsOf, loadOfWorkouts } from './muscles.js'
 import { fmtDateRange, fmtNum, fmtVol, capWords, weekKey, startOfWeek, isoOf, MONDAY } from './format.js'
 import { t, tn, exerciseNameClass } from './i18n-core.js'
@@ -66,8 +67,18 @@ export function weekSessions(S, week, first) {
   return out.length ? out : null
 }
 
-const topWeight = (entries, id) => Math.max(0, ...entries.filter(e => e.id === id)
-  .flatMap(e => (e.sets || []).filter(s => !isWarmupRow(s) && doneUnits(s) > 0).map(s => Number(s.w) || 0)))
+// The best working weight of a lift in these entries, 0 with none: the lowest for an assisted
+// lift (less help is the record), and every dumbbell weight read in the meaning `as`, so a
+// week logged per bell is not compared with a best logged as the total.
+const topWeight = (entries, ex, as) => {
+  const loads = entries.filter(e => e.id === ex.id).flatMap(e => {
+    const f = meaningFactor(entryDbLoad(e), as, { ...e.target, id: e.id })
+    return (e.sets || []).filter(s => !isWarmupRow(s) && doneUnits(s) > 0)
+      .map(s => Math.round((Number(s.w) || 0) * f * 100) / 100).filter(w => w > 0)
+  })
+  return loads.length ? loads.reduce((a, b) => betterWeight(ex, a, b)) : 0
+}
+const bestOf = (ex, ws) => ws.filter(w => w > 0).reduce((a, b) => betterWeight(ex, a, b), ws.find(w => w > 0) || 0)
 
 // opts.S (the whole state) turns on the v2 rows; opts.bw adds the body-weight line.
 export function weekRecapModel(workouts, { today, ws = MONDAY, unit, nameOf, S = null, bw = false }) {
@@ -92,10 +103,15 @@ export function weekRecapModel(workouts, { today, ws = MONDAY, unit, nameOf, S =
   // the week, by how much it passed it ("82.5 kg · +2.5"). A record without load has no number.
   const before = (workouts || []).filter(w => { const d = workoutDay(w); return d && d < isoOf(first) })
   const recordValues = records.map(r => {
-    const top = Math.max(0, ...week.map(w => topWeight(w.entries || [], r.id)))
+    // The lift as logged this week: its assisted flag and its dumbbell meaning set the terms.
+    const own = week.flatMap(w => w.entries || []).filter(e => e.id === r.id).at(-1)
+    const ex = { ...own?.target, id: r.id }
+    const as = entryDbLoad(own)
+    const top = bestOf(ex, week.map(w => topWeight(w.entries || [], ex, as)))
     if (!(top > 0)) return ''
-    const was = Math.max(0, ...before.map(w => topWeight(w.entries || [], r.id)))
-    return fmtNum(top) + ' ' + unit + (was > 0 && top > was ? ' · +' + fmtNum(Math.round((top - was) * 100) / 100) : '')
+    const was = bestOf(ex, before.map(w => topWeight(w.entries || [], ex, as)))
+    const by = Math.round(Math.abs(top - was) * 100) / 100
+    return fmtNum(top) + ' ' + unit + (was > 0 && beatsWeight(ex, top, was) ? ' · ' + (isAssisted(ex) ? '−' : '+') + fmtNum(by) : '')
   })
   const v2 = {}
   if (S) {

@@ -8,6 +8,8 @@ import { buildPlannedEntry } from './session-start.js'
 import { workoutAt, lastEntryFor } from './history.js'
 import { isWarmupRow } from './workout-model.js'
 import { exOr } from './exercises.js'
+import { dbLoadFor, historyAs } from './dumbbells.js'
+import { historyForLoad } from './load-identity.js'
 import { MUSCLES, musclesOf } from './muscles.js'
 import { fatigueOf } from './recovery.js'
 import { fatigueStateOf, profileBodyweightKg } from './recovery-view.js'
@@ -70,8 +72,10 @@ function topSetToBeat(S, routines) {
   const routine = routines[0]
   const cfg = (Array.isArray(routine?.ex) ? routine.ex : []).find(c => c?.id)
   if (!cfg) return null
+  // The history Start builds the session from (buildPlannedEntry, buildSets): dumbbell weights
+  // read in today's meaning, and nothing from across a station or load-convention boundary.
   let entry = null
-  try { entry = lastEntryFor(S, cfg.id, routine.id) } catch { entry = null }
+  try { entry = lastEntryFor(historyForLoad(historyAs(S, cfg.id, dbLoadFor(S, cfg)), cfg), cfg.id, routine.id) } catch { entry = null }
   let top = null
   for (const s of entry?.sets || []) {
     if (isWarmupRow(s) || !(s.w > 0) || !(s.r > 0)) continue
