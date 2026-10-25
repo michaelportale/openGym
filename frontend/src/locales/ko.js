@@ -2443,4 +2443,6 @@ export default {
   "Workout changed. Reopen the replacement sheet.": "Workout changed. Reopen the replacement sheet.",
   "Moving up today: {0}": "오늘 증량: {0}",
   "Deload today: {0}": "오늘 디로딩: {0}",
+  "Strength trend": "근력 추세",
+  "Last 8 weeks": "최근 8주",
 }

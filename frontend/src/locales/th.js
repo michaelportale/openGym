@@ -2454,4 +2454,6 @@ export default {
   "Workout changed. Reopen the replacement sheet.": "Workout changed. Reopen the replacement sheet.",
   "Moving up today: {0}": "วันนี้เพิ่มขึ้น: {0}",
   "Deload today: {0}": "วันนี้ดีโหลด: {0}",
+  "Strength trend": "แนวโน้มความแข็งแรง",
+  "Last 8 weeks": "8 สัปดาห์ที่ผ่านมา",
 }

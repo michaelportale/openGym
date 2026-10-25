@@ -2443,4 +2443,6 @@ export default {
   "Workout changed. Reopen the replacement sheet.": "Workout changed. Reopen the replacement sheet.",
   "Moving up today: {0}": "今天加量：{0}",
   "Deload today: {0}": "今天减载：{0}",
+  "Strength trend": "力量趋势",
+  "Last 8 weeks": "最近 8 周",
 }

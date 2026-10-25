@@ -2446,4 +2446,6 @@ export default {
   "Workout changed. Reopen the replacement sheet.": "Workout changed. Reopen the replacement sheet.",
   "Moving up today: {0}": "Ma emelkedik: {0}",
   "Deload today: {0}": "Ma deload: {0}",
+  "Strength trend": "Erő alakulása",
+  "Last 8 weeks": "Elmúlt 8 hét",
 }
