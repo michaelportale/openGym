@@ -2453,4 +2453,6 @@ export default {
   "Filters": "Фильтры",
   "Filters: {0}": "Фильтры: {0}",
   "Type": "Тип",
+  "7-day average {0}": "Среднее за 7 дней {0}",
+  "{0} this week": "{0} за неделю",
 }

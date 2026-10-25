@@ -2245,3 +2245,9 @@ button.wl-summary{width:100%;padding:0 0 10px;text-align:start;border-radius:var
    on the finish summary. Body text and small inline numbers keep the text face. */
 .stp .num,#timer .t,#tabbar button.start .tab-time,.tile .v,.stat-v,.st-row .st-v,
 .dw-read,.bw-read .num,.finish-record-v,.focus-set .stp .num,.focus-timed strong{font-family:var(--font-num)}
+
+/* Body-weight trend: the line under the chart naming the 7-day average, keyed by a short bar in
+   the chart's colour, then the week's change. */
+.bw-trend-line{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin-top:6px;color:var(--label-2)}
+.bw-trend-key{width:14px;height:3px;border-radius:2px;background:var(--acc);flex:none}
+.bw-trend-week{font-weight:600}

@@ -2528,4 +2528,6 @@ export default {
   "Filters": "ফিল্টার",
   "Filters: {0}": "ফিল্টার: {0}",
   "Type": "ধরন",
+  "7-day average {0}": "৭ দিনের গড় {0}",
+  "{0} this week": "এই সপ্তাহে {0}",
 }

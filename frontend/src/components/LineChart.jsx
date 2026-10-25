@@ -9,13 +9,15 @@ const W = 340   // viewBox width; the svg stretches to its container, height com
 //        more of it). Used for effort on the weight curve, where the two belong on one line:
 //        the same weight with less left in the tank is not the same session.
 //   note extra text for that point's tooltip.
-// opts: { h, unit, color, axes, goal, invert, series }
+// opts: { h, unit, color, axes, goal, invert, series, trend }
+//   trend draws a smoothed line ([{ t, y }], same times as `points`) in the colour on top, and
+//   the readings themselves faded underneath as a thin line with dots (body weight).
 //   invert flips the y axis, for a scale that counts down as it gets harder (RIR). Without it
 //   a curve of reps-in-reserve reads upside down, with the hardest sets at the floor.
 //   series draws several lines instead of one: [{ points, color }] (issue #145, one per set
 //   number). `points` then only anchors the hover — one per date, its `note` the tooltip — and
 //   the y axis spans every series.
-export default function LineChart({ points, h = 150, unit = '', color = 'var(--acc)', axes = true, goal = null, invert = false, series = null }) {
+export default function LineChart({ points, h = 150, unit = '', color = 'var(--acc)', axes = true, goal = null, invert = false, series = null, trend = null }) {
   const svgRef = useRef(null)
   const wrapRef = useRef(null)
   const tipRef = useRef(null)
@@ -52,7 +54,10 @@ export default function LineChart({ points, h = 150, unit = '', color = 'var(--a
   const single = points.length === 1
   const pts = single ? [points[0], points[0]] : points
   const multi = Array.isArray(series) && series.length > 0
-  const ys = multi ? series.flatMap(s => s.points.map(p => p.y)) : pts.map(p => p.y)
+  const smooth = !multi && !single && Array.isArray(trend) && trend.length === points.length
+  // The axis spans the trend as well as the readings: an average carried over from readings
+  // before the range can sit outside every reading the range shows.
+  const ys = multi ? series.flatMap(s => s.points.map(p => p.y)) : [...pts.map(p => p.y), ...(smooth ? trend.map(p => p.y) : [])]
   let ymin = Math.min(...ys), ymax = Math.max(...ys)
   if (goal != null && isFinite(goal)) { ymin = Math.min(ymin, goal); ymax = Math.max(ymax, goal) }
   if (ymin === ymax) { ymin -= 1; ymax += 1 }
@@ -103,6 +108,8 @@ export default function LineChart({ points, h = 150, unit = '', color = 'var(--a
 
   const poly = pts.map(p => X(p.t).toFixed(1) + ',' + Y(p.y).toFixed(1)).join(' ')
   const last = pts[pts.length - 1]
+  const tpoly = smooth ? trend.map(p => X(p.t).toFixed(1) + ',' + Y(p.y).toFixed(1)).join(' ') : ''
+  const tlast = smooth ? trend[trend.length - 1] : null
   const gid = 'g' + Math.round(t0 % 1e7) + '_' + H
   const hoverSource = single ? [points[0]] : points
   const hoverDates = hoverSource.map(p => p.d || isoOf(new Date(p.t)))
@@ -146,11 +153,18 @@ export default function LineChart({ points, h = 150, unit = '', color = 'var(--a
             {s.points.map((p, i) => <circle key={i} cx={X(p.t)} cy={Y(p.y)} r={sw / 2 + 1.2} fill={s.color} />)}
           </g>
         }) : <>
+          {smooth ? <>
+            <polyline className="raw" points={poly} fill="none" stroke={color} strokeWidth="1.2" strokeOpacity=".35" strokeLinejoin="round" />
+            {pts.map((p, i) => <circle key={'r' + i} className="raw" cx={X(p.t)} cy={Y(p.y)} r="2" fill={color} opacity=".4" />)}
+            <polygon points={`${P.l},${H - P.b} ${tpoly} ${X(tlast.t).toFixed(1)},${H - P.b}`} fill={`url(#${gid})`} />
+            <polyline className="trend" points={tpoly} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+          </> : <>
           <polygon points={`${P.l},${H - P.b} ${poly} ${X(last.t).toFixed(1)},${H - P.b}`} fill={`url(#${gid})`} />
           <polyline points={poly} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+          </>}
           {marked && pts.map((p, i) => (p.m == null ? null :
             <circle key={'m' + i} cx={X(p.t)} cy={Y(p.y)} r={2.4 + p.m * 3} fill={color} opacity={0.3 + p.m * 0.7} />))}
-          <circle cx={X(last.t)} cy={Y(last.y)} r="4" fill={color} />
+          <circle cx={X((smooth ? tlast : last).t)} cy={Y((smooth ? tlast : last).y)} r="4" fill={color} />
         </>}
         {hover && <g>
           <line className="cvl" x1={hover.x} y1={P.t} x2={hover.x} y2={H - P.b} stroke="var(--label-3)" strokeWidth="1" strokeDasharray="3 3" />
