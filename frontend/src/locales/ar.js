@@ -2500,4 +2500,5 @@ export default {
   "Deload today: {0}": "تفريغ اليوم: {0}",
   "Strength trend": "اتجاه القوة",
   "Last 8 weeks": "آخر 8 أسابيع",
+  "Still recovering: {0}": "لا يزال يتعافى: {0}",
 }

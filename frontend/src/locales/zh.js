@@ -2445,4 +2445,5 @@ export default {
   "Deload today: {0}": "今天减载：{0}",
   "Strength trend": "力量趋势",
   "Last 8 weeks": "最近 8 周",
+  "Still recovering: {0}": "仍在恢复：{0}",
 }
