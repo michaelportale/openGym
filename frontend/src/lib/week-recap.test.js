@@ -121,3 +121,18 @@ describe('weekRecapModel v2: sessions, record values, streak and body weight', (
     expect(m.sessions.map(s => [s.label, s.done])).toEqual([['Day A', true], ['Day B', false], ['Day C', false]])
   })
 })
+
+describe('record values for assisted and dumbbell lifts', () => {
+  const opts = { today: '2026-10-23', unit: 'kg', nameOf: e => e.id }
+  it('names the least assistance as the best of an assisted lift', () => {
+    // 0017 is assisted: 20 kg of help this week passes the 30 kg before it.
+    const W = [wk('2026-10-12', [{ id: '0017', sets: sets(3, 30, 8) }]),
+      wk('2026-10-20', [{ id: '0017', sets: [...sets(1, 30, 8), ...sets(2, 20, 8)] }], ['0017'])]
+    expect(weekRecapModel(W, opts).recordValues).toEqual(['20 kg · −10'])
+  })
+  it('reads an earlier best logged as a total in the week\'s per-bell meaning', () => {
+    const W = [wk('2026-10-12', [{ id: '0289', target: { dbLoad: 'total' }, sets: sets(3, 50, 8) }]),
+      wk('2026-10-20', [{ id: '0289', target: { dbLoad: 'each' }, sets: sets(3, 30, 8) }], ['0289'])]
+    expect(weekRecapModel(W, opts).recordValues).toEqual(['30 kg · +5'])
+  })
+})
