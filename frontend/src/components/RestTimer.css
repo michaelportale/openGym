@@ -18,3 +18,26 @@ body.no-tabbar #timer { border-radius: 0; box-shadow: none; border-top: 1px soli
   #timer.rest .acts { justify-content: space-between; }
 }
 @media (prefers-reduced-motion: reduce) { #timer { animation: none; } }
+
+/* Rest ring: the countdown drawn as a ring beside the clock, in the accent. It
+   empties as the rest runs down; at Ready it is full and pulses a few times, so the end is
+   visible from across the room even with the flash alert off. Only transform and opacity animate; the arc steps once a second. Reduced motion: no pulse
+   (the global rule in index.css stops the animation), the ring still fills. */
+#timer.rest .tclock { display: grid; grid-template-columns: auto auto; grid-template-rows: auto auto; column-gap: 8px; align-items: center; justify-items: start; }
+#timer.rest .tclock .rest-ring { grid-row: 1 / span 2; }
+.rest-ring { width: 32px; height: 32px; transform: rotate(-90deg); overflow: visible; flex: none; }
+.rest-ring circle { fill: none; stroke-width: 4; }
+.rest-ring .trk { stroke: var(--surface-3); }
+.rest-ring .arc { stroke: var(--acc); stroke-linecap: round; }
+#timer.rest.paused .rest-ring { opacity: .5; }
+#timer.rest.switch .rest-ring .arc { stroke: var(--label-2); }
+#timer.rest.ready .rest-ring { animation: rest-ring-pulse 900ms var(--ease) 3; }
+#timer.rest.ready .t { color: var(--acc); }
+@keyframes rest-ring-pulse {
+  0% { transform: rotate(-90deg) scale(1); opacity: 1; }
+  40% { transform: rotate(-90deg) scale(1.15); opacity: .55; }
+  100% { transform: rotate(-90deg) scale(1); opacity: 1; }
+}
+/* Below 381 px the ring would push the buttons onto a second row; the bar along the top edge
+   still shows the time left there. */
+@media (max-width: 380px) { #timer.rest .tclock .rest-ring { display: none; } }

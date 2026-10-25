@@ -113,3 +113,29 @@ describe('RestTimer switch-sides pause', () => {
     expect(host.querySelector('#timer')).toBeNull()
   })
 })
+
+describe('RestTimer ring', () => {
+  const arc = () => host.querySelector('#timer .rest-ring .arc')
+  it('empties as the rest runs down, and is hidden from screen readers', () => {
+    act(() => useUI.getState().startRest(100, 0))
+    mount()
+    expect(host.querySelector('#timer .rest-ring').getAttribute('aria-hidden')).toBe('true')
+    expect(Number(arc().getAttribute('stroke-dashoffset'))).toBe(0)
+    act(() => vi.advanceTimersByTime(25000))
+    expect(Number(arc().getAttribute('stroke-dashoffset'))).toBeCloseTo(25, 0)
+  })
+  it('is full again at Ready', () => {
+    act(() => useUI.getState().startRest(1, 0))
+    act(() => vi.advanceTimersByTime(1000))
+    mount()
+    expect(host.querySelector('#timer').classList.contains('ready')).toBe(true)
+    expect(Number(arc().getAttribute('stroke-dashoffset'))).toBe(0)
+  })
+  it('is not drawn for a timed work set, which keeps its own bar', () => {
+    act(() => useUI.getState().startWork(30, 'Plank'))
+    mount()
+    expect(useUI.getState().work).toBeTruthy()
+    expect(host.querySelector('.rest-ring')).toBeNull()
+  })
+})
+
