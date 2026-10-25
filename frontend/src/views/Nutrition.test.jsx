@@ -194,6 +194,20 @@ describe('Nutrition screen', () => {
     expect(el.querySelector('.nutri-week-h h2').textContent).toBe(before)
   })
 
+  it('a week stepped back to after the week turned over stays put at the next midnight', () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    vi.setSystemTime(new Date('2026-10-25T23:59:30'))   // a Sunday; weeks start on Monday
+    install({ nutritionDays: { '2026-10-25': day(2000, 150, 30) } })
+    const el = screen()
+    const head = () => el.querySelector('.nutri-week-h h2').textContent
+    act(() => { vi.advanceTimersByTime(60e3) })        // Monday: the card moves to the new week
+    expect(head()).toBe('This week')
+    act(() => el.querySelector('button[aria-label="Previous week"]').click())
+    expect(head()).toBe('Week of 19 Oct')
+    act(() => { vi.advanceTimersByTime(24 * 3600e3) }) // Tuesday: still the week stepped back to
+    expect(head()).toBe('Week of 19 Oct')
+  })
+
   it('sets targets per day type, empty until the profile fills them', () => {
     install()
     act(() => { nutritionSettingsSheet() })
