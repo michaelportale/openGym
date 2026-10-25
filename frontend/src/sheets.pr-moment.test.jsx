@@ -8,6 +8,7 @@ import { createRoot } from 'react-dom/client'
 import { DEF, useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
 import { finishWorkout } from './sheets.jsx'
+import { workoutCardModel } from './lib/workout-card.js'
 
 const BENCH = '0025'
 const clone = v => JSON.parse(JSON.stringify(v))
@@ -41,6 +42,33 @@ function finishWith(sets, ago = 1800e3) {
   useStore.setState({ S: st, user: null })
   act(() => finishWorkout())
   return mountTopSheet()
+}
+
+// A combined session (two routines) holding the same lift once in each section, after one earlier
+// session at `was`. Each section is `{ w, dbLoad? }`, one set of 10 at that weight.
+function finishCombined(id, was, sections, wasLoad) {
+  const st = clone(DEF)
+  const before = new Date('2026-09-14T18:00:00').getTime()
+  const target = (w, dbLoad) => ({ sets: 1, reps: 10, weight: w, mode: 'reps', ...(dbLoad ? { dbLoad } : {}) })
+  Object.assign(st, {
+    routines: [
+      { id: 'A', name: 'Push', emoji: 'dumbbell', ex: [{ id, sets: 1, reps: 10, weight: was, mode: 'reps' }] },
+      { id: 'B', name: 'More', emoji: 'dumbbell', ex: [{ id, sets: 1, reps: 10, weight: was, mode: 'reps' }] },
+    ],
+    week: {}, dayPlan: {}, weighIn: false,
+    workouts: [{ id: 'w1', d: '2026-09-14', start: before, end: before + 3600e3, name: 'Push', routineIds: ['A'], prs: [id],
+      entries: [{ id, rid: 'A', target: target(was, wasLoad), sets: [{ w: was, r: 10, done: true }] }] }],
+    exWeights: { [id]: { w: was, d: '2026-09-14' } },
+    active: { d: day, start: Date.now() - 1800e3, name: 'Push + More', routineIds: ['A', 'B'],
+      entries: sections.map((x, i) => ({ id, rid: i ? 'B' : 'A', target: target(x.w, x.dbLoad), sets: [{ w: x.w, r: 10, done: true }] })) },
+  })
+  useStore.setState({ S: st, user: null })
+  act(() => finishWorkout())
+  return mountTopSheet()
+}
+const recordOf = host => {
+  const card = host.querySelector('.finish-records.gold')
+  return { rows: card.querySelectorAll('.pr-row').length, v: card.querySelector('.finish-record-v').textContent, was: card.querySelector('.finish-record-s').textContent }
 }
 
 beforeEach(() => {
@@ -110,5 +138,29 @@ describe('the PR moment on the finish summary', () => {
     expect(tile('Sets').querySelector('.v').textContent).toBe('2')
     expect(tile('Sets').querySelector('.tile-cap').textContent).toBe('all working')
     expect(tile('Duration').querySelector('.v').textContent).toBe('<1 min')
+  })
+
+  it('reports the best section of a combined session, in either order, against the previous best', () => {
+    for (const order of [[100, 80], [80, 100]]) {
+      const host = finishCombined(BENCH, 70, order.map(w => ({ w })))
+      expect(recordOf(host)).toEqual({ rows: 1, v: '100 kg', was: 'Previous best: 70 kg' })
+      const saved = useStore.getState().S.workouts.at(-1)
+      expect(saved.prs).toContain(BENCH)
+      const model = workoutCardModel(saved, { unit: 'kg', nameOf: e => e.id })
+      expect(model.records).toEqual([BENCH])
+      act(() => { mounted.splice(0).forEach(root => root.unmount()) })
+      useUI.setState({ sheets: [] })
+    }
+  })
+
+  it('keeps the least assistance as the record when an assisted lift is in two sections', () => {
+    const host = finishCombined('0017', 40, [{ w: 20 }, { w: 30 }])
+    expect(recordOf(host)).toEqual({ rows: 1, v: '20 kg', was: 'Previous best: 40 kg' })
+  })
+
+  it('compares dumbbell sections logged in different meanings in one meaning', () => {
+    // 30 kg each, then 50 kg total (25 each), after 20 kg each: the record is 30 kg each.
+    const host = finishCombined('0289', 20, [{ w: 30, dbLoad: 'each' }, { w: 50, dbLoad: 'total' }], 'each')
+    expect(recordOf(host)).toEqual({ rows: 1, v: '30 kg', was: 'Previous best: 20 kg' })
   })
 })
