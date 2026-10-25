@@ -45,10 +45,18 @@ describe('bwWeekChange', () => {
 describe('trend change over a window and the goal direction', () => {
   const pts = (ys, step = 5) => ys.map((y, i) => ({ t: i * step * DAY_MS, y }))
   it('measures the trend from the first point inside the window to the last', () => {
-    expect(bwTrendChange(pts([80, 79.6, 79.2, 79]), 30)).toBe(-1)
-    expect(bwTrendChange(pts([82, 80, 79.5], 20), 30)).toBe(-0.5)
-    expect(bwTrendChange(pts([80]), 30)).toBeNull()
-    expect(bwTrendChange([], 30)).toBeNull()
+    expect(bwTrendChange(pts([80, 79.6, 79.2, 79]), 30, 15 * DAY_MS)).toBe(-1)
+    expect(bwTrendChange(pts([82, 80, 79.5], 20), 30, 40 * DAY_MS)).toBe(-0.5)
+    expect(bwTrendChange(pts([80]), 30, 0)).toBeNull()
+    expect(bwTrendChange([], 30, 0)).toBeNull()
+  })
+  it('counts back from now, not from the last weigh-in', () => {
+    const jan2020 = Date.UTC(2020, 0, 10, 12)
+    const stale = [{ t: jan2020, y: 80 }, { t: jan2020 + 5 * DAY_MS, y: 79 }]
+    expect(bwTrendChange(stale, 30, Date.UTC(2026, 9, 23, 12))).toBeNull()
+    expect(bwTrendChange(stale, 30, jan2020 + 6 * DAY_MS)).toBe(-1)
+    // One weigh-in left in the window is not a change, however many came before it.
+    expect(bwTrendChange([...stale, { t: jan2020 + 40 * DAY_MS, y: 78 }], 30, jan2020 + 41 * DAY_MS)).toBeNull()
   })
   it('says toward goal only when there is a goal not yet reached and a change', () => {
     expect(bwTowardGoal(-0.3, 80, 77)).toBe(true)

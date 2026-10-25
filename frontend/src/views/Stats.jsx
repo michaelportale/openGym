@@ -435,7 +435,7 @@ export default function Stats() {
   const bwWeek = bwWeekChange(bwTrendAll)
   const bwTrendNow = bwTrendAll.at(-1)
   // The tile reads the trend, not the first and last raw weigh-ins of the month.
-  const bwDelta30 = bwTrendChange(bwTrendAll, 30)
+  const bwDelta30 = bwTrendChange(bwTrendAll, 30, now)
   const bwToward = bwTowardGoal(bwWeek, bwTrendNow?.y, S.targetW)
   const bwSigned = v => (v > 0 ? '+' : v < 0 ? '−' : '±') + fmtNum(Math.abs(v)) + ' ' + S.unit
   const bwRangeName = range === 0 ? t('all time') : range === 365 ? t('last year') : t('last {0} days', range)
