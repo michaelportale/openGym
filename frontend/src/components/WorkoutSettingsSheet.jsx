@@ -20,8 +20,9 @@ import { Section, Row, Switch, Segmented, Button } from './ui.jsx'
 export function WorkoutSettings({ close }) {
   const S = useStore(s => s.S)
   const update = useStore(s => s.update)
-  const canVibrate = vibrateSupported()
+  // Live on an iPhone too: there Vibrate switches the system tap that stands in for a short buzz.
   const iPhone = appleTouchDevice()
+  const canVibrate = vibrateSupported() || iPhone
   const wakeOK = wakeLockSupported()
   const layout = ['list', 'compact'].includes(S.active?.workoutView || S.workoutView) ? (S.active?.workoutView || S.workoutView) : 'cards'
   const gif = S.gifSize === 'mini' || S.gifSize === 'off' ? S.gifSize : 'full'
@@ -44,7 +45,7 @@ export function WorkoutSettings({ close }) {
         <Switch checked={!!S.sound} onChange={v => { if (v) unlock(true); update(s => { s.sound = v }) }} />
       </Row>
       <Row icon="vibrate" iconTint="var(--indigo)" title={t('Vibrate')} className={canVibrate ? '' : 'dis'}
-        subtitle={canVibrate ? null : iPhone ? t('Not on iPhone') : t('Not supported in this browser.')}>
+        subtitle={canVibrate ? (iPhone && !vibrateSupported() ? t('A light tap on iPhone') : null) : t('Not supported in this browser.')}>
         <Switch checked={canVibrate && S.vibrate !== false} disabled={!canVibrate} onChange={v => update(s => { s.vibrate = v })} />
       </Row>
       <Row icon="sun" iconTint="var(--orange)" title={t('Flash the screen')}>
