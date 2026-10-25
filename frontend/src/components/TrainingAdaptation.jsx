@@ -5,7 +5,8 @@ import { proposeAdaptation, setDisposition, dispositionOf, estimateSession, adap
 import { todayISO, isoOf, exerciseNameText, weekKey, weekStartOf } from '../lib/format.js'
 import { exOr } from '../lib/exercises.js'
 import { t } from '../lib/i18n.js'
-import { Button } from './ui.jsx'
+import { useUI } from '../store/useUI.js'
+import { Button, Row, Section } from './ui.jsx'
 
 const statusNames=()=>({unknown:t('Unknown'),rest:t('Rest'),missed:t('Missed'), 'trained-unlogged':t('Trained but unlogged')})
 const errorText=error=>error==='stale'?t('Training changed. Preview again before accepting.')
@@ -82,4 +83,22 @@ export default function TrainingAdaptation({ S }) {
     </div>}
     {undo && <Button onClick={()=>{const result=undoTrainingAdaptation(undo);setError(result.error);if(!result.error)setUndo(null)}}>{t('Undo adjustment')}</Button>}
   </section>
+}
+
+// Plan opens the form in a sheet from one row. The sheet reads the store
+// itself, so a status saved or an adjustment accepted redraws it in place.
+function AdaptationSheet() {
+  const S = useStore(s => s.S)
+  return <div className="adaptation-sheet"><TrainingAdaptation S={S} /></div>
+}
+export const adaptationSheet = () => useUI.getState().openSheet(() => <AdaptationSheet />)
+// The row keeps the one message that must not wait for the sheet to open: new training arrived
+// after an accepted adjustment.
+export function AdaptationRow({ S }) {
+  const review = adaptationNeedsReview(S)
+  return <Section className="adaptation-row">
+    <Row icon="calendar" iconTint={review ? 'var(--warning)' : 'var(--blue)'} title={t('Adjust upcoming training')}
+      subtitle={review ? t('New training arrived after this adjustment. Review upcoming sessions.') : undefined}
+      accessory="chevron" onClick={adaptationSheet} />
+  </Section>
 }

@@ -1926,6 +1926,25 @@ button.wl-summary{width:100%;padding:0 0 10px;text-align:start;border-radius:var
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;
 }
 
+/* The Today card: the session row leads, larger, with what it holds; the week
+   strip or the coach week follows as the glance. The row keeps its classes, so everything that
+   reads .today-row/.ttl/.ss/.tag still finds them. */
+.today-hero{margin-top:0;padding:14px;align-items:center;flex-wrap:wrap;row-gap:12px}
+.today-hero>.row{flex:1 1 0}
+.today-hero .today-glyph{width:44px;height:44px;border-radius:12px;font-size:var(--fs-title-3);flex:none}
+.today-hero .ttl{font-size:var(--fs-title-2);font-weight:600;letter-spacing:-.021em}
+.today-hero .ss,.today-meta{font-size:var(--fs-footnote);color:var(--label-2);margin-top:3px;line-height:1.3}
+.today-meta{display:flex;align-items:baseline;gap:4px;min-width:0}
+.today-meta .icn{flex:none;font-size:var(--fs-caption);align-self:center}
+.today-up{color:var(--acc)}
+.today-hero .tag{font-size:var(--fs-subhead);font-weight:600;padding:8px 14px;border-radius:999px;flex:none;gap:5px}
+/* Start and Resume are the card's action: full width under the text, a thumb-sized target */
+.today-hero .tag.today-cta{flex:1 0 100%;justify-content:center;min-height:44px;font-size:var(--fs-body)}
+.today-hero .tag.acc{background:var(--acc);color:var(--on-acc)}
+.today-hero .tag .icn{font-size:var(--fs-caption)}
+.today-hero .tag.today-cta .icn{font-size:var(--fs-subhead)}
+.today-glance{margin-top:10px;padding-top:12px;border-top:.5px solid var(--sep)}
+
 /* Only where a pointer really hovers — on a phone :hover sticks to the row after the tap.
    Lighter than :active, which goes all the way to --surface-3, so the two stay distinct. */
 @media (hover:hover){
@@ -2177,3 +2196,20 @@ button.wl-summary{width:100%;padding:0 0 10px;text-align:start;border-radius:var
 .coverage-targets form{display:grid;gap:12px;padding-top:8px}
 .coverage-targets .num{background:var(--surface-2);width:100%;min-height:44px;border-radius:var(--r);padding:10px}
 @media(max-width:360px){.coverage-pair{grid-template-columns:1fr}}
+/* Home's glance: a bar per muscle, two columns; met aims go chalk with a check */
+.coverage-glance{cursor:pointer}
+.coverage-glance-h{margin-bottom:10px}
+.coverage-glance-h h2{margin:0}
+.coverage-glance .lbl2{font-size:11px;font-weight:500;letter-spacing:.03em;text-transform:uppercase;color:var(--label-3)}
+.coverage-bars{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 16px}
+.coverage-bar-t{display:flex;justify-content:space-between;align-items:baseline;gap:6px;font-size:var(--fs-footnote)}
+.coverage-bar-n{color:var(--label);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-width:0}
+.coverage-bar-v{color:var(--label-2);font-variant-numeric:tabular-nums;white-space:nowrap;display:inline-flex;align-items:center;gap:2px}
+.coverage-bar-v .icn{font-size:var(--fs-caption);color:var(--success)}
+.coverage-bar-track{height:6px;border-radius:3px;background:var(--surface-3);margin-top:4px;overflow:hidden}
+.coverage-bar-fill{height:100%;border-radius:3px;background:var(--acc)}
+.coverage-bar.met .coverage-bar-fill{background:var(--success)}
+@media(max-width:340px){.coverage-bars{grid-template-columns:1fr}}
+/* The full report in a sheet: the sheet is the surface, so the card drops its own */
+.coverage-sheet .training-coverage{background:none;box-shadow:none;padding:0;margin:0}
+.adaptation-sheet>.card{background:none;box-shadow:none}

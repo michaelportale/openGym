@@ -2452,4 +2452,6 @@ export default {
   "Edit settings": "Edit settings",
   "No replacements in this view. Try All or change the search.": "No replacements in this view. Try All or change the search.",
   "Workout changed. Reopen the replacement sheet.": "Workout changed. Reopen the replacement sheet.",
+  "Moving up today: {0}": "วันนี้เพิ่มขึ้น: {0}",
+  "Deload today: {0}": "วันนี้ดีโหลด: {0}",
 }
