@@ -160,7 +160,8 @@ describe('LineChart trend bounds', () => {
     const trend = [at(29, 85), at(28, 83.33), at(27, 82.5)]
     draw({ points, trend, goal: 75 })
     expect(inside(ysOf('polyline.trend'))).toBe(true)
-    const goal = [...container.querySelectorAll('line')].find(l => l.getAttribute('stroke') === 'var(--yellow)')
+    const goal = [...container.querySelectorAll('line')].find(l => /--(yellow|goal)\b/.test(l.getAttribute('stroke') || ''))
+    expect(goal).toBeTruthy()
     expect(inside([Number(goal.getAttribute('y1'))])).toBe(true)
   })
 
