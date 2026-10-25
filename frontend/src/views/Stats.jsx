@@ -2,12 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { EXIDX, matchExercise, betterWeight, isAssisted } from '../lib/exercises.js'
-import { lastBW, streakWeeks, setLabel, modeOf, effortOf, entriesForExercise, metricEntriesForExercise, metricModeForEntry, bestWeightForEntry, completedRepsOf, workoutDay, workoutAt } from '../lib/history.js'
+import { streakWeeks, setLabel, modeOf, effortOf, entriesForExercise, metricEntriesForExercise, metricModeForEntry, bestWeightForEntry, completedRepsOf, workoutDay, workoutAt } from '../lib/history.js'
 import { fmtNum, fmtDate, fmtVol, todayISO, isoOf, weekKey, weekStartOf, exerciseNameText } from '../lib/format.js'
 import { speedUnitOf, speedLabel, toSpeed } from '../lib/speed.js'
 import { t, tn, exerciseNameFor, exerciseNameClass, getLang } from '../lib/i18n.js'
 import { rotationStreak } from '../lib/rotation-streak.js'
-import { bwSheet, goalSheet, calendarSheet, dayOverrideSheet, workoutDetailSheet, exerciseHistorySheet, WorkoutRow, bwDeltaColor, weighInsSheet } from '../sheets.jsx'
+import { bwSheet, goalSheet, calendarSheet, dayOverrideSheet, workoutDetailSheet, exerciseHistorySheet, WorkoutRow, weighInsSheet } from '../sheets.jsx'
 import LineChart from '../components/LineChart.jsx'
 import Heatmap from '../components/Heatmap.jsx'
 import Icon from '../components/Icon.jsx'
@@ -16,7 +16,7 @@ import { loadOfWeeklyPlan, loadOfWorkouts, muscleBalanceWindow, rankOf, MUSCLES,
 import { fatigueOf, strengthOf, STRENGTH_FLOOR } from '../lib/recovery.js'
 import { strengthExerciseRowsForMuscle } from '../lib/strength-exercises.js'
 import { fatigueStateOf, profileBodyweightKg } from '../lib/recovery-view.js'
-import { bwTrend, bwWeekChange } from '../lib/bw-trend.js'
+import { bwTrend, bwWeekChange, bwTrendChange, bwTowardGoal, BW_TREND_MIN } from '../lib/bw-trend.js'
 import { e1rmSeries, best1RM, formulaOf } from '../lib/onerm.js'
 import { currentDbLoad, workoutAs } from '../lib/dumbbells.js'
 import { maxRepsSeries } from '../lib/pyramid.js'
@@ -430,10 +430,21 @@ export default function Stats() {
   const bwAll = S.bodyweight.map(b => ({ t: b.t || new Date(b.d).getTime(), y: b.w, d: b.d }))
   const bwTrendAll = bwTrend(bwAll)
   const bwTrendPts = bwTrendAll.filter(p => range === 0 || p.t > now - range * 86400000)
+  // Scrubbing names the weigh-in and the 7-day average under it.
+  if (bwTrendPts.length === bwPts.length) bwPts.forEach((p, i) => { p.note = t('avg {0}', fmtNum(bwTrendPts[i].y)) })
   const bwWeek = bwWeekChange(bwTrendAll)
   const bwTrendNow = bwTrendAll.at(-1)
-  const bw30 = S.bodyweight.filter(b => (b.t || new Date(b.d).getTime()) > now - 30 * 86400000)
-  const bwDelta30 = bw30.length > 1 ? bw30[bw30.length - 1].w - bw30[0].w : null
+  // The tile reads the trend, not the first and last raw weigh-ins of the month.
+  const bwDelta30 = bwTrendChange(bwTrendAll, 30, now)
+  const bwToward = bwTowardGoal(bwWeek, bwTrendNow?.y, S.targetW)
+  const bwSigned = v => (v > 0 ? '+' : v < 0 ? '−' : '±') + fmtNum(Math.abs(v)) + ' ' + S.unit
+  const bwRangeName = range === 0 ? t('all time') : range === 365 ? t('last year') : t('last {0} days', range)
+  const bwSummary = bwTrendNow && bwPts.length >= BW_TREND_MIN
+    ? t('Body weight, {0}: 7-day average {1}', bwRangeName, fmtNum(bwTrendNow.y) + ' ' + S.unit)
+      + (bwWeek !== null ? ', ' + t('{0} this week', bwSigned(bwWeek)) : '')
+      + (bwToward ? ', ' + t('toward goal') : '')
+    : t('Body weight, {0}', bwRangeName)
+  const bwLast7 = S.bodyweight.slice(-7).reverse()
   const workouts = S.workouts
   const monthW = workouts.filter(w => workoutDay(w)?.slice(0, 7) === todayISO().slice(0, 7)).length
   const rotStreak = rotationStreak(S, todayISO())
@@ -662,7 +673,7 @@ export default function Stats() {
       {rotStreak
         ? <div className="tile"><div className="l"><Icon name="repeat" />{t('Streak')}</div><div className="v tnum">{rotStreak.count}</div><div className="streak-tile-s">{rotStreak.mode === 'rotation' ? tn('session on rotation', 'sessions on rotation', rotStreak.count) : tn('session', 'sessions', rotStreak.count)}</div></div>
         : <div className="tile"><div className="l"><Icon name="flame" />{t('Week streak')}</div><div className="v">{streakWeeks(S)}</div></div>}
-      <div className="tile"><div className="l"><Icon name="scale" />{t('Weight 30d')}</div><div className="v" style={{ fontSize: 22, color: bwDelta30 === null ? 'inherit' : bwDeltaColor(bwDelta30, (lastBW(S) || {}).w || 0) }}>{bwDelta30 === null ? '–' : (bwDelta30 > 0 ? '+' : '') + fmtNum(bwDelta30) + ' ' + S.unit}</div></div>
+      <div className="tile"><div className="l"><Icon name="scale" />{t('Weight 30d')}</div><div className="v" style={{ fontSize: 22 }}>{bwDelta30 === null ? '–' : bwSigned(bwDelta30)}</div></div>
 
     </div>}
 
@@ -702,19 +713,38 @@ export default function Stats() {
         <div className="row between bw-head" style={{ marginBottom: 8 }}>
           <h2 style={{ margin: 0 }}>{t('Body weight')}</h2>
           <div className="row" style={{ gap: 8 }}>
-            <Button size="sm" icon="target" style={S.targetW ? { color: 'var(--goal)' } : undefined} onClick={goalSheet}>{S.targetW ? fmtNum(S.targetW) : t('Goal')}</Button>
-            <Button size="sm" icon="plus" onClick={() => bwSheet()}>{t('Log')}</Button>
+            <Button size="sm" className="bw-btn" icon="target" style={S.targetW ? { color: 'var(--goal)' } : undefined} onClick={goalSheet}>{S.targetW ? t('Goal {0}', fmtNum(S.targetW) + ' ' + S.unit) : t('Set goal')}</Button>
+            <Button size="sm" className="bw-btn" icon="plus" onClick={() => bwSheet()}>{t('Log')}</Button>
           </div>
         </div>
-        <Segmented className="seg-range" value={range} onChange={setRange}
+        {S.bodyweight.length === 0 ? <div className="bw-empty">
+          <div className="muted small">{t('No weigh-ins yet')}</div>
+          <Button size="sm" variant="tinted" className="bw-btn" icon="plus" onClick={() => bwSheet()}>{t('Log weight')}</Button>
+        </div> : <>
+        <Segmented className="seg-range seg-44" value={range} onChange={setRange}
           options={rangeOptions()} />
-        <div className="chart"><LineChart points={bwPts} trend={bwTrendPts.length > 2 ? bwTrendPts : null} h={160} unit={S.unit} goal={S.targetW} /></div>
-        {/* The smoothed line in words: where the week's average is, and how far it moved in a week. */}
-        {bwTrendPts.length > 2 && bwTrendNow && <div className="bw-trend-line small">
+        {/* One image to a screen reader, named by the summary; the last seven weigh-ins follow as a table. */}
+        <div className="chart"><LineChart points={bwPts} trend={bwPts.length >= BW_TREND_MIN && bwTrendPts.length > 2 ? bwTrendPts : null}
+          dotsOnly={bwPts.length < BW_TREND_MIN} h={180} yTicks={3} unit={S.unit} goal={S.targetW} label={bwSummary} /></div>
+        <table className="vh">
+          <caption>{t('Last 7 weigh-ins')}</caption>
+          <tbody>{bwLast7.map(b => <tr key={b.d + (b.t || '')}><th scope="row">{fmtDate(b.d, true)}</th><td>{fmtNum(b.w) + ' ' + S.unit}</td></tr>)}</tbody>
+        </table>
+        {bwPts.length < BW_TREND_MIN && <div className="bw-trend-line small muted">
+          {tn('Log {0} more weigh-in to see your trend', 'Log {0} more weigh-ins to see your trend', BW_TREND_MIN - bwPts.length)}
+        </div>}
+        {/* The smoothed line in words: where the week's average is, and how far it moved in a week.
+            The change is plain text with an arrow; whether it heads toward the goal is said, not coloured. */}
+        {bwPts.length >= BW_TREND_MIN && bwTrendPts.length > 2 && bwTrendNow && <div className="bw-trend-line small">
           <span className="bw-trend-key" aria-hidden="true" />
           <span>{t('7-day average {0}', fmtNum(bwTrendNow.y) + ' ' + S.unit)}</span>
-          {bwWeek !== null && <span className="bw-trend-week" style={{ color: bwDeltaColor(bwWeek, bwTrendNow.y) }}>{t('{0} this week', (bwWeek > 0 ? '+' : bwWeek < 0 ? '−' : '±') + fmtNum(Math.abs(bwWeek)) + ' ' + S.unit)}</span>}
+          {bwWeek !== null && <span className="bw-trend-week">
+            {!!bwWeek && <Icon name={bwWeek > 0 ? 'arrowUp' : 'arrowDown'} style={{ fontSize: 12 }} />}
+            {t('{0} this week', bwSigned(bwWeek))}
+            {bwToward && <span className="muted"> · {t('toward goal')}</span>}
+          </span>}
         </div>}
+        </>}
         {/* every weigh-in, week by week with its average (Discord 'Weight') */}
         {S.bodyweight.length > 0 && <div className="row" style={{ justifyContent: 'flex-end', marginTop: 4 }}>
           <Button size="sm" variant="ghost" trailingIcon="chevronRight" onClick={weighInsSheet}>{t('All weigh-ins')}</Button>
