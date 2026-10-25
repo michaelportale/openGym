@@ -26,7 +26,9 @@ import {
 import { anchorsByWorkout, resolveSetRir } from '../lib/recovery.js'
 import { Button, Segmented, SelectRow } from '../components/ui.jsx'
 import { tappable } from '../lib/use-sheet-keyboard.js'
+import StrengthTrend from '../components/StrengthTrend.jsx'
 import { isWarmupRow } from '../lib/workout-model.js'
+import { reducedMotion } from '../lib/use-swipe-row.js'
 
 // Set 1 to 5 on the per-set chart — system colours, so each line keeps its hue in dark mode.
 const SET_COLORS = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)', 'var(--chart-5)']
@@ -413,7 +415,7 @@ export default function Stats() {
   // scroll-to-top on navigation to have happened first.
   useEffect(() => {
     if (!/[?&]focus=weekly-volume\b/.test(window.location.hash || '')) return
-    const frame = window.requestAnimationFrame(() => document.getElementById('weekly-volume')?.scrollIntoView?.({ block: 'start', behavior: 'smooth' }))
+    const frame = window.requestAnimationFrame(() => document.getElementById('weekly-volume')?.scrollIntoView?.({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' }))
     return () => window.cancelAnimationFrame(frame)
   }, [])
   const [exId, setExId] = useState(null)
@@ -636,13 +638,29 @@ export default function Stats() {
     <div className="hdr"><div><h1>{t('Stats')}</h1><div className="sub">{t('Progress & history')}</div></div>
       <button className="iconbtn" onClick={() => nav('/history')} aria-label={t('History')}><Icon name="history" /></button></div>
 
-    <div className="tiles">
+    {/* The lead card opens a lift in Exercise progress on its estimated-1RM chart. */}
+    <StrengthTrend S={S} onPick={id => {
+      setExId(id); setExMetric('e1rm')
+      window.requestAnimationFrame(() => document.getElementById('exercise-progress')?.scrollIntoView?.({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' }))
+    }} />
+
+    {/* Before the first workout, one card says what will appear here and leads to the Start
+        screen. The count tiles would all read 0, so they wait for the first workout unless a
+        weigh-in already gives the weight tile something to say. The activity grid stays: a tap
+        on a past day is one way to log it. */}
+    {workouts.length === 0 && <div className="card stats-empty">
+      <div className="empty"><div className="ico"><Icon name="chartLine" /></div>
+        <div>{t('Finish your first workout and your progress curves will show up here.')}</div>
+        <Button variant="primary" icon="play" onClick={() => nav('/workout')}>{t('Start workout')}</Button>
+      </div>
+    </div>}
+    {(workouts.length > 0 || bwDelta30 !== null) && <div className="tiles">
       <div className="tile"><div className="l"><Icon name="dumbbell" />{t('Workouts')}</div><div className="v">{workouts.length}</div></div>
       <div className="tile"><div className="l"><Icon name="calendar" />{t('This month')}</div><div className="v">{monthW}</div></div>
       <div className="tile"><div className="l"><Icon name="flame" />{t('Week streak')}</div><div className="v">{streakWeeks(S)}</div></div>
       <div className="tile"><div className="l"><Icon name="scale" />{t('Weight 30d')}</div><div className="v" style={{ fontSize: 22, color: bwDelta30 === null ? 'inherit' : bwDeltaColor(bwDelta30, (lastBW(S) || {}).w || 0) }}>{bwDelta30 === null ? '–' : (bwDelta30 > 0 ? '+' : '') + fmtNum(bwDelta30) + ' ' + S.unit}</div></div>
 
-    </div>
+    </div>}
 
     <div className="card">
       <h2>{t('Activity (last 12 months)')}</h2>
@@ -693,7 +711,7 @@ export default function Stats() {
         </div>}
       </div>
 
-      <div className="card">
+      {workouts.length > 0 && <div className="card" id="exercise-progress">
         <h2>{t('Exercise progress')}</h2>
         {exHist.length ? <>
           <div className="sect-b" style={{ marginBottom: 10 }}>
@@ -742,7 +760,7 @@ export default function Stats() {
             {t('A fuller dot means less left in the tank. The same weight at a lower {0} is progress the line alone doesn’t show.', hd)}
           </div>}
         </> : <div className="muted small">{t('Finish your first workout and your progress curves will show up here.')}</div>}
-      </div>
+      </div>}
     </div>
 
     {workouts.length > 0 && <>

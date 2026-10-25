@@ -2498,4 +2498,6 @@ export default {
   "Workout changed. Reopen the replacement sheet.": "Workout changed. Reopen the replacement sheet.",
   "Moving up today: {0}": "يرتفع اليوم: {0}",
   "Deload today: {0}": "تفريغ اليوم: {0}",
+  "Strength trend": "اتجاه القوة",
+  "Last 8 weeks": "آخر 8 أسابيع",
 }
