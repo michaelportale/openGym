@@ -41,7 +41,7 @@
 .focus-set.complete .stp button:disabled,.focus-set.locked .stp button:disabled{opacity:.4}
 .focus-lock-note{margin:8px 0 0;color:var(--label-2);font-size:.875rem;line-height:1.4}
 .focus-effort{width:100%;min-height:48px;margin:0;font-size:1rem}
-.focus-card>.btn.primary.focus-complete{margin-top:16px;min-height:56px;border-radius:8px;background:var(--label);color:var(--bg);font-size:1rem;font-weight:600;transition:opacity 120ms var(--ease)}
+.focus-card>.btn.primary.focus-complete{margin-top:16px;min-height:56px;border-radius:8px;background:var(--label);color:var(--bg);font-size:1rem;font-weight:600;transition:opacity var(--fast) var(--ease)}
 .focus-complete:active{opacity:.85}
 .focus-secondary{display:grid;grid-template-columns:minmax(0,1fr) 44px;gap:8px;margin-top:8px}
 .focus-secondary>.iconbtn{width:44px;min-height:44px;border-radius:8px;color:var(--label-2)}
