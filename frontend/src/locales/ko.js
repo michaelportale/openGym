@@ -2468,4 +2468,12 @@ export default {
   "{0} muscles on target": "목표 달성 근육 {0}개",
   "Train a few sessions to see coverage": "몇 번 운동하면 커버리지가 보여요",
   "Set coverage aims": "커버리지 목표 설정",
+  "Last: {0}": "지난번: {0}",
+  "First time — set a baseline": "처음입니다 — 기준을 남기세요",
+  "Ahead of last time": "지난번보다 앞섬",
+  "Beat it": "넘어서기",
+  "Beat it: fill in {0}": "넘어서기: {0} 입력",
+  "{0} rep": "{0}회",
+  "{0} reps": "{0}회",
+  "New PR · {0}": "새 기록 · {0}",
 }

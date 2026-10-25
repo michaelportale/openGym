@@ -2547,4 +2547,12 @@ export default {
   "{0} muscles on target": "লক্ষ্যে পৌঁছানো পেশি: {0}",
   "Train a few sessions to see coverage": "কভারেজ দেখতে কয়েকটি সেশন করুন",
   "Set coverage aims": "কভারেজের লক্ষ্য ঠিক করুন",
+  "Last: {0}": "গতবার: {0}",
+  "First time — set a baseline": "প্রথমবার — একটি ভিত্তি ঠিক করুন",
+  "Ahead of last time": "গতবারের চেয়ে এগিয়ে",
+  "Beat it": "ছাড়িয়ে যান",
+  "Beat it: fill in {0}": "ছাড়িয়ে যান: {0} বসান",
+  "{0} rep": "{0} রেপ",
+  "{0} reps": "{0} রেপ",
+  "New PR · {0}": "নতুন PR · {0}",
 }

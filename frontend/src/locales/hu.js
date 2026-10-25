@@ -2471,4 +2471,12 @@ export default {
   "{0} muscles on target": "Célban lévő izmok: {0}",
   "Train a few sessions to see coverage": "Edz néhány alkalmat, hogy lásd a lefedettséget",
   "Set coverage aims": "Lefedettségi célok beállítása",
+  "Last: {0}": "Legutóbb: {0}",
+  "First time — set a baseline": "Első alkalom – rögzíts egy kiindulópontot",
+  "Ahead of last time": "Jobb, mint legutóbb",
+  "Beat it": "Túlszárnyalni",
+  "Beat it: fill in {0}": "Túlszárnyalni: {0} kitöltése",
+  "{0} rep": "{0} ism.",
+  "{0} reps": "{0} ism.",
+  "New PR · {0}": "Új rekord · {0}",
 }

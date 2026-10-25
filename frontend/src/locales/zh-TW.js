@@ -2461,4 +2461,12 @@ export default {
   "{0} muscles on target": "已達標肌群：{0}",
   "Train a few sessions to see coverage": "訓練幾次後即可查看覆蓋情況",
   "Set coverage aims": "設定覆蓋目標",
+  "Last: {0}": "上次：{0}",
+  "First time — set a baseline": "第一次——先建立基準",
+  "Ahead of last time": "比上次好",
+  "Beat it": "超越它",
+  "Beat it: fill in {0}": "超越它：填入 {0}",
+  "{0} rep": "{0} 次",
+  "{0} reps": "{0} 次",
+  "New PR · {0}": "新紀錄 · {0}",
 }
