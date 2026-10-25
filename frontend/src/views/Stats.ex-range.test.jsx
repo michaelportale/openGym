@@ -12,7 +12,7 @@ vi.mock('../store/useStore.js', () => ({ useStore: selector => selector({ S: moc
 vi.mock('react-router-dom', () => ({ useNavigate: () => () => {} }))
 vi.mock('../sheets.jsx', () => ({
   bwSheet: () => {}, goalSheet: () => {}, calendarSheet: () => {}, workoutDetailSheet: () => {}, exerciseHistorySheet: () => {},
-  WorkoutRow: () => null, bwDeltaColor: () => 'inherit',
+  WorkoutRow: () => null, bwDeltaColor: () => 'inherit', weighInsSheet: () => {},
 }))
 vi.mock('../components/LineChart.jsx', () => ({ default: props => { mocks.charts.push(props); return null } }))
 vi.mock('../components/Heatmap.jsx', () => ({ default: () => null }))
@@ -32,8 +32,8 @@ const session = (ago, w) => {
 let root, host
 afterEach(() => { act(() => root.unmount()); host.remove(); mocks.charts = [] })
 
-function mount(workouts) {
-  mocks.S = { body: 'male', effort: 'none', unit: 'kg', targetW: null, bodyweight: [], routines: [], exWeights: {}, workouts }
+function mount(workouts, bodyweight = []) {
+  mocks.S = { body: 'male', effort: 'none', unit: 'kg', targetW: null, bodyweight, routines: [], exWeights: {}, workouts }
   host = document.createElement('div')
   document.body.appendChild(host)
   root = createRoot(host)
@@ -84,7 +84,8 @@ describe('Stats: exercise progress date range', () => {
   })
 
   it('leaves the body weight range alone', () => {
-    mount([session(400, 100), session(200, 90), session(5, 80)])
+    // the range control shows once there is a weigh-in to range over
+    mount([session(400, 100), session(200, 90), session(5, 80)], [{ d: '2026-10-01', t: Date.now() - 5 * 86400000, w: 80 }])
     const bwCard = [...host.querySelectorAll('.card')].find(c => c.querySelector('h2')?.textContent === 'Body weight')
     press(exCard(), '1M')
     expect([...bwCard.querySelectorAll('.seg button.on')].map(b => b.textContent)).toEqual(['3M'])
