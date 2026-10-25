@@ -2507,5 +2507,11 @@ export default {
   "Body weight, {0}": "체중, {0}",
   "Log {0} more weigh-ins to see your trend": "추세를 보려면 체중을 {0}번 더 기록하세요",
   "Your goal is drawn as a dashed line through the weight charts.": "목표는 체중 차트에 점선으로 표시돼요.",
+  "{0} of {1} sessions": "{1}회 중 {0}회",
+  "New bests": "새 최고 기록",
+  "{0} sessions on rotation": "로테이션 {0}회 연속",
+  "Add your 7-day average. Off unless you turn it on.": "7일 평균을 추가해요. 켜기 전까지는 꺼져 있어요.",
   "sessions": "세션",
+  "{0} session in a row": "{0}회 연속",
+  "{0} sessions in a row": "{0}회 연속",
 }
