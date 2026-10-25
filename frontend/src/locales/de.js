@@ -226,7 +226,6 @@ export default {
   'Finish workout early · {0} exercises': 'Training vorzeitig beenden · {0} Übungen',
   'Rest’s over. Next set!': 'Pause vorbei. Nächster Satz!',
   // --- home ---
-  'Hi {0}': 'Hi {0}',
   'This week': 'Diese Woche',
   '{0} (in progress)': '{0} (läuft)',
   'Resume ▶': 'Weiter ▶',
@@ -2496,4 +2495,6 @@ export default {
   "{0} rep": "{0} Wdh.",
   "{0} reps": "{0} Wdh.",
   "New PR · {0}": "Neuer Rekord · {0}",
+  "Train anyway": "Trotzdem trainieren",
+  "Top set to beat: {0}": "Bester Satz zum Übertreffen: {0}",
 }

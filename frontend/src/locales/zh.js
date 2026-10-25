@@ -217,7 +217,6 @@ export default {
   'Freestyle workout. Add your first exercise and off you go.': '自由训练。添加第一个动作，开练吧。',
   'Finish workout early · {0} exercises': '提前结束 · {0} 个动作',
   'Rest’s over. Next set!': '休息结束，下一组！',
-  'Hi {0}': '你好，{0}',
   'This week': '本周',
   '{0} (in progress)': '{0}（进行中）',
   'Resume ▶': '继续 ▶',
@@ -2476,4 +2475,6 @@ export default {
   "{0} rep": "{0} 次",
   "{0} reps": "{0} 次",
   "New PR · {0}": "新纪录 · {0}",
+  "Train anyway": "仍然训练",
+  "Top set to beat: {0}": "要超越的最佳组：{0}",
 }

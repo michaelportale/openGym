@@ -35,7 +35,7 @@ describe("Home's Today preview", () => {
     expect(todayPreview(S, ['r1'], '2026-10-03')).toMatchObject({ exercises: 2, up: [], lighter: [] })
     expect(todayPreview({ routines: [{ id: 'r1', ex: [null, { id: 'x' }] }] }, ['r1', 'missing'], '2026-10-03'))
       .toMatchObject({ exercises: 1, last: null })
-    expect(todayPreview({}, [], '2026-10-03')).toEqual({ exercises: 0, last: null, up: [], lighter: [], recovering: [] })
+    expect(todayPreview({}, [], '2026-10-03')).toEqual({ exercises: 0, last: null, up: [], lighter: [], recovering: [], toBeat: null })
   })
 
   // Recovery: the same fatigue scoring as the Stats body map (lib/recovery.js).
@@ -56,6 +56,44 @@ describe("Home's Today preview", () => {
   it('says nothing once the muscle has had time to recover', () => {
     const S = { unit: 'kg', routines: [pushDay], workouts: [heavy(press, '2026-10-01')], exWeights: {} }
     expect(todayPreview(S, ['r1'], '2026-10-10', Date.parse('2026-10-10T09:00:00')).recovering).toEqual([])
+  })
+
+  it('reads the top set to beat from the first lift last time, warm-ups left out', () => {
+    const done = workout('w1', '2026-10-01', [entry(bench, [{ w: 40, r: 10, done: true, warmup: true }, set(60, 5), set(62.5, 3), set(62.5, 4)])])
+    const S = { unit: 'kg', routines: [routine()], workouts: [done], exWeights: {} }
+    expect(todayPreview(S, ['r1'], '2026-10-03').toBeat).toEqual({ id: 'bench', w: 62.5, r: 4 })
+  })
+  it('has no top set to beat without a loaded set logged', () => {
+    const S = { unit: 'kg', routines: [routine()], workouts: [], exWeights: {} }
+    expect(todayPreview(S, ['r1'], '2026-10-03').toBeat).toBeNull()
+  })
+})
+
+// The set to beat is read from the history the session is built from (buildPlannedEntry): a
+// lift moved to another machine station starts again, and a dumbbell weight is read the way it
+// is logged today.
+describe("the Today card's set to beat across load boundaries", () => {
+  const press = { id: '0576', stationId: 'b', sets: 2, reps: 9, weight: 7, mode: 'reps', prog: 'double' }
+  const station = id => ({ id, label: id, exerciseIds: [press.id], loadConvention: 'machine-total' })
+  const gym = { activeEquipId: 'gym', equipProfiles: [{ id: 'gym', stations: [station('a'), station('b')] }] }
+  const onStation = (id, w) => workout('w1', '2026-10-01', [{ id: press.id, rid: 'r1', target: { ...press, stationId: id }, planned: { ...press, stationId: id },
+    equipmentSnapshot: { stationId: id, label: id, loadConvention: 'machine-total', unit: 'kg', status: 'exact' }, sets: [set(w, 9), set(w, 9)] }])
+  const day = { id: 'r1', name: 'A', prog: 'double', ex: [press] }
+
+  it('offers no target from another station, as Start does not', () => {
+    const S = { unit: 'kg', routines: [day], workouts: [onStation('a', 80)], exWeights: {}, ...gym }
+    expect(buildPlannedEntry(S, press, day).plan.kind).toBe('first')
+    expect(todayPreview(S, ['r1'], '2026-10-03').toBeat).toBeNull()
+  })
+  it('still offers the same station\'s last top set', () => {
+    const S = { unit: 'kg', routines: [day], workouts: [onStation('b', 80)], exWeights: {}, ...gym }
+    expect(todayPreview(S, ['r1'], '2026-10-03').toBeat).toEqual({ id: press.id, w: 80, r: 9 })
+  })
+  it('reads a dumbbell weight logged as a total in today\'s per-bell meaning', () => {
+    const db = { id: '0289', sets: 2, reps: 8, weight: 20, mode: 'reps', dbLoad: 'each' }
+    const done = workout('w1', '2026-10-01', [{ id: db.id, rid: 'r1', target: { ...db, dbLoad: 'total' }, sets: [set(50, 8)] }])
+    const S = { unit: 'kg', routines: [{ id: 'r1', name: 'A', prog: 'linear', ex: [db] }], workouts: [done], exWeights: {} }
+    expect(todayPreview(S, ['r1'], '2026-10-03').toBeat).toEqual({ id: db.id, w: 25, r: 8 })
   })
 })
 
