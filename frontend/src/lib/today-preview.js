@@ -7,7 +7,7 @@
 import { buildPlannedEntry } from './session-start.js'
 import { workoutAt, lastEntryFor } from './history.js'
 import { isWarmupRow } from './workout-model.js'
-import { exOr } from './exercises.js'
+import { exOr, betterWeight } from './exercises.js'
 import { dbLoadFor, historyAs } from './dumbbells.js'
 import { historyForLoad } from './load-identity.js'
 import { MUSCLES, musclesOf } from './muscles.js'
@@ -76,10 +76,12 @@ function topSetToBeat(S, routines) {
   // read in today's meaning, and nothing from across a station or load-convention boundary.
   let entry = null
   try { entry = lastEntryFor(historyForLoad(historyAs(S, cfg.id, dbLoadFor(S, cfg)), cfg), cfg.id, routine.id) } catch { entry = null }
+  // The top set is the best weight, the one with the least help on an assisted lift.
+  const ex = { ...cfg, ...(entry?.target || {}), id: cfg.id }
   let top = null
   for (const s of entry?.sets || []) {
     if (isWarmupRow(s) || !(s.w > 0) || !(s.r > 0)) continue
-    if (!top || s.w > top.w || (s.w === top.w && s.r > top.r)) top = s
+    if (!top || (s.w !== top.w && betterWeight(ex, s.w, top.w) === s.w) || (s.w === top.w && s.r > top.r)) top = s
   }
   return top ? { id: cfg.id, w: top.w, r: top.r } : null
 }
