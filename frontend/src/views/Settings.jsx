@@ -30,7 +30,8 @@ import { syncMedia, fetchToStore } from '../lib/media-sync.js'
 import { getMediaStatus, subscribeMediaStatus, pendingRefCount } from '../lib/media-owed.js'
 import { limitsFrom, fmtMB, MB } from '../lib/media-limits.js'
 import { setRestAccent } from '../lib/rest-alert.js'
-import { CUSTOM, accentKey, adjustedIn, applyAccent, cleanHex, inkOn, isGrey } from '../lib/accent.js'
+import { CUSTOM, THEME, ACCENT_VERSION, accentKey, adjustedIn, applyAccent, cleanHex, inkOn, isGrey } from '../lib/accent.js'
+import { PALETTES, PALETTE_NAMES, PALETTE_ACCENT, paletteKey } from '../theme/palettes.js'
 import { checkForUpdate, downloadAndInstall, fetchChecksum, RELEASES_PAGE } from '../lib/update.js'
 import { forgetCoach } from '../lib/coach-api.js'
 import { REST_MAX, REST_PAUSE_MIN, REST_PAUSE_MAX, fmtRest, fmtDuration } from '../lib/duration.js'
@@ -427,7 +428,7 @@ export default function Settings({ page = null, find = null, via = null }) {
   }
 
   /* ---------------- the pages ---------------- */
-  const restRow = <Row icon="timer" iconTint="var(--orange)" title={t('Rest timer')} value={fmtRest(S.restSec)} accessory="chevron"
+  const restRow = <Row icon="timer" iconTint="var(--warning)" title={t('Rest timer')} value={fmtRest(S.restSec)} accessory="chevron"
     onClick={() => durationSheet({
       title: t('Rest timer'), value: S.restSec, max: REST_MAX, off: t('Off'),
       footer: t('Scroll to 0:00 to turn the rest timer off.'),
@@ -437,7 +438,7 @@ export default function Settings({ page = null, find = null, via = null }) {
   // (in its drop set / burst config) overrides it, the same way the main rest timer is the
   // fallback for an exercise without a rest of its own. On the wheel too, 5 s to 5 min: the
   // burst's rest is never 0 (lib/history.js keeps it at 5 s at least), so the wheel stops there.
-  const restPauseRow = <Row icon="bolt" iconTint="var(--orange)" title={t('Rest-pause rest')} value={fmtDuration(S.restPauseSec || 15)} accessory="chevron"
+  const restPauseRow = <Row icon="bolt" iconTint="var(--warning)" title={t('Rest-pause rest')} value={fmtDuration(S.restPauseSec || 15)} accessory="chevron"
     onClick={() => durationSheet({
       title: t('Rest-pause rest'), value: S.restPauseSec || 15, min: REST_PAUSE_MIN, max: REST_PAUSE_MAX,
       footer: t('The short break between the bursts of a rest-pause set.'),
@@ -487,7 +488,7 @@ export default function Settings({ page = null, find = null, via = null }) {
       <Section title={t('Before and during')}>
         {/* The quick weigh-in that opens on Start (sheets.jsx startFlow, issue #137); off skips
             straight to the session. Home and Stats still log weight by hand. */}
-        <Row icon="scale" iconTint="var(--green)" title={t('Weigh in before workouts')}
+        <Row icon="scale" iconTint="var(--success)" title={t('Weigh in before workouts')}
           subtitle={t('Asks for your body weight when a workout starts. Off starts the session straight away.')}>
           <Switch checked={S.weighIn !== false} onChange={v => update(s => { s.weighIn = v })} />
         </Row>
@@ -523,13 +524,13 @@ export default function Settings({ page = null, find = null, via = null }) {
               the routine is what you said you would do, and history and progression decide the
               weight. The other choice is the old behaviour, reps carried over from last time.
               Absent (an older profile) reads as the plan. */}
-          <SelectRow icon="clipboard" iconTint="var(--green)" title={t('Planned sessions start from')}
+          <SelectRow icon="clipboard" iconTint="var(--success)" title={t('Planned sessions start from')}
             value={S.startFrom === 'last' ? 'last' : 'plan'} onChange={v => update(s => { s.startFrom = v })}
             options={[
               { value: 'plan', label: t('Your plan'), subtitle: t('The routine’s sets and reps. Your history decides the weight.') },
               { value: 'last', label: t('Your last session'), subtitle: t('The reps you logged last time in that routine, carried over.') },
             ]} />
-          <Row icon="stopwatch" iconTint="var(--orange)" title={t('Keep timing after target')}
+          <Row icon="stopwatch" iconTint="var(--warning)" title={t('Keep timing after target')}
             subtitle={t('Timed sets continue up to 15 extra minutes. Tap Done to log the actual duration.')}>
             <Switch aria-label={t('Keep timing after target')} checked={!!S.timedSetOvertime}
               onChange={v => update(s => { s.timedSetOvertime = v })} />
@@ -538,10 +539,10 @@ export default function Settings({ page = null, find = null, via = null }) {
         {/* The lean workout screen keeps the sets and one "more" button per exercise; each switch
             brings one of the old always-visible button groups back for people who liked them. */}
         <Section title={t('Buttons on the workout screen')} footer={t('Everything hidden here stays one tap away: the ⋯ button of an exercise and the number of a set.')}>
-          <Row icon="plusCircle" iconTint="var(--green)" title={t('Weight and reps buttons')} subtitle={t('Off: tap the number and type it')}>
+          <Row icon="plusCircle" iconTint="var(--success)" title={t('Weight and reps buttons')} subtitle={t('Off: tap the number and type it')}>
             <Switch checked={wc.steppers} onChange={v => setWc('steppers', v)} />
           </Row>
-          <Row icon="bolt" iconTint="var(--orange)" title={t('Drop and burst shortcuts on every set')}>
+          <Row icon="bolt" iconTint="var(--warning)" title={t('Drop and burst shortcuts on every set')}>
             <Switch checked={wc.setShortcuts} onChange={v => setWc('setShortcuts', v)} />
           </Row>
           {/* Swipe actions (v1.3.11): not a button, but the same question of what a set row does. The
@@ -583,7 +584,7 @@ export default function Settings({ page = null, find = null, via = null }) {
               mutes the timer. On, the phone treats the timer like a music player (exclusive, and
               the music app is not told it may resume), so it is a choice, off by default. */}
           {S.sound && playOnSilentSupported() && (
-            <Row icon="speaker" iconTint="var(--orange)" title={t('Play even on silent')}
+            <Row icon="speaker" iconTint="var(--warning)" title={t('Play even on silent')}
               subtitle={<>{t('Music playing on this phone stops during a workout and does not resume by itself.')}<br />{t('iPhone only')}</>}>
               <Switch checked={!!S.soundOnSilent} onChange={v => update(s => { s.soundOnSilent = v })} />
             </Row>
@@ -619,7 +620,7 @@ export default function Settings({ page = null, find = null, via = null }) {
       <Section>
         {/* Fixed Week (S.week) or Rotation (the live queue, lib/queue.js + lib/rotation.js).
             Derived from the queue, never stored. */}
-        <Row icon="repeat" iconTint="var(--orange)" title={t('How you train')}>
+        <Row icon="repeat" iconTint="var(--warning)" title={t('How you train')}>
           {externalQ
             ? <span className="small dim">{t('Rotation')} · {t('Externally managed')}</span>
             : <Segmented className="seg-inline"
@@ -627,18 +628,18 @@ export default function Settings({ page = null, find = null, via = null }) {
                 value={mode} onChange={setScheduleMode} />}
         </Row>
         {/* Rotation chosen with no loop running yet: the loop is built on Plan. */}
-        {mode === 'rotation' && !liveQ && <Row icon="calendar" iconTint="var(--orange)" title={t('Build your loop in Plan')}
+        {mode === 'rotation' && !liveQ && <Row icon="calendar" iconTint="var(--warning)" title={t('Build your loop in Plan')}
           accessory="chevron" onClick={() => nav('/plan')} />}
         {/* Monday or Sunday: the Plan list, the Home strip, the calendar grid and every "this
             week" total follow it. Stored as a getDay() index (see lib/format.js). */}
-        <Row icon="calendar" iconTint="var(--orange)" title={t('Week starts on')}>
+        <Row icon="calendar" iconTint="var(--warning)" title={t('Week starts on')}>
           <Segmented className="seg-inline"
             options={[{ value: MONDAY, label: t('Monday') }, { value: SUNDAY, label: t('Sunday') }]}
             value={weekStartOf(S)} onChange={v => update(s => { s.weekStart = v })} />
         </Row>
       </Section>
       <Section>
-        <Row icon="clipboard" iconTint="var(--green)" title={t('Load starter plan')} accessory="chevron" onClick={starterPlanSheet} />
+        <Row icon="clipboard" iconTint="var(--success)" title={t('Load starter plan')} accessory="chevron" onClick={starterPlanSheet} />
       </Section>
     </>,
 
@@ -721,6 +722,9 @@ export default function Settings({ page = null, find = null, via = null }) {
             onChange={v => update(s => { s.theme = v })}
           />
         </Row>
+        <SelectRow icon="palette" iconTint="var(--acc)" title={t('Palette')}
+          value={paletteKey(S)} onChange={v => { update(s => { s.palette = v }); if (accentKey(S) === THEME) setRestAccent(THEME, v) }}
+          options={PALETTES.map(p => ({ value: p, label: t(PALETTE_NAMES[p]) }))} />
         <div className="lrow" style={{ flexWrap: 'wrap', rowGap: 12, paddingBottom: 14 }}>
           <span className="lrow-i" style={{ '--tint': 'var(--purple)' }}><Icon name="palette" /></span>
           <span className="lrow-m"><span className="lrow-t">{t('Accent color')}</span></span>
@@ -756,7 +760,7 @@ export default function Settings({ page = null, find = null, via = null }) {
           <Switch checked={S.checkIn !== false} onChange={v => update(s => { s.checkIn = v })} />
         </Row>
         {/* The Home summary is optional; hiding it leaves weight logging, history and Stats intact. */}
-        <Row icon="scale" iconTint="var(--green)" title={t('Body weight')}
+        <Row icon="scale" iconTint="var(--success)" title={t('Body weight')}
           subtitle={t('Show the body weight card on Home.')}>
           <Switch checked={S.showWeightCard !== false} onChange={v => update(s => { s.showWeightCard = v })} />
         </Row>
@@ -795,7 +799,7 @@ export default function Settings({ page = null, find = null, via = null }) {
       </Section>
       {hasMedia && <Section><MediaRow /></Section>}
       <Section>
-        <Row icon="trash" iconTint="var(--red)" title={t('Reset everything')} danger onClick={resetEverything} />
+        <Row icon="trash" iconTint="var(--danger)" title={t('Reset everything')} danger onClick={resetEverything} />
       </Section>
       <input ref={fileRef} type="file" accept=".json,.zip,application/json,application/zip" style={{ display: 'none' }} onChange={doImport} />
       {/* Reset after reading so picking the same file twice still fires onChange. */}
@@ -810,12 +814,12 @@ export default function Settings({ page = null, find = null, via = null }) {
       <Section footer={MOBILE ? (android ? t('Releases are checked on GitHub. The download is verified against its checksum before the installer opens.') : null) : t('The web app updates together with your server. The Android app installs its own updates from here.')}>
         <Row icon="info" iconTint="var(--grey)" title={t('Version')} value={'v' + __APP_VERSION__} />
         {MOBILE
-          ? android && <Row icon="download" iconTint="var(--green)"
+          ? android && <Row icon="download" iconTint="var(--success)"
               title={updateInfo?.hasUpdate ? t('Update to openGym v{0}', updateInfo.latestVersion) : t('Check for updates')}
               subtitle={checking ? t('Checking…') : t('You have v{0}', __APP_VERSION__)}
               accessory="chevron"
               onClick={() => (updateInfo?.hasUpdate ? onUpdateRowClick() : checkNow())} />
-          : <Row icon="download" iconTint="var(--green)" title={t('Get the Android app')}
+          : <Row icon="download" iconTint="var(--success)" title={t('Get the Android app')}
               subtitle={t('Download the APK from opengym.ch')} accessory="chevron"
               onClick={() => window.open('https://opengym.ch/#download', '_blank', 'noopener')} />}
       </Section>
@@ -844,7 +848,7 @@ export default function Settings({ page = null, find = null, via = null }) {
         {MOBILE && <>
           {user.admin && <Row icon="crown" iconTint="var(--indigo)" title={t('Admin dashboard')} accessory="chevron" onClick={() => nav('/admin')} />}
           <AccountIdRow id={user.id} />
-          <Row icon="signOut" iconTint="var(--red)" title={t('Disconnect')} danger onClick={disconnect} />
+          <Row icon="signOut" iconTint="var(--danger)" title={t('Disconnect')} danger onClick={disconnect} />
         </>}
       </ServerSyncSection>}
 
@@ -868,21 +872,21 @@ export default function Settings({ page = null, find = null, via = null }) {
           <Row icon="qr" iconTint="var(--blue)" title={t('Pair the mobile app')} subtitle={t('Connect the openGym app on your phone to this account.')} accessory="chevron"
             onClick={() => useUI.getState().openSheet(close => <PairSheet close={close} />)} />
           {pwOn && <PasswordRow version={credsV} />}
-          <Row icon="signOut" iconTint="var(--red)" title={t('Sign out')} danger onClick={signOutHere} />
-          <Row icon="shield" iconTint="var(--red)" title={t('Sign out everywhere')} subtitle={t('Ends this profile’s sessions on all your devices.')} danger onClick={signOutEverywhere} />
+          <Row icon="signOut" iconTint="var(--danger)" title={t('Sign out')} danger onClick={signOutHere} />
+          <Row icon="shield" iconTint="var(--danger)" title={t('Sign out everywhere')} subtitle={t('Ends this profile’s sessions on all your devices.')} danger onClick={signOutEverywhere} />
           <AccountIdRow id={user.id} />
         </> : webauthnOK() ? <>
           <Row icon="plusCircle" iconTint="var(--acc)" title={t('Create passkey profile')} subtitle={t('Keeps your data safe and separate per person.')} accessory="chevron" onClick={registerHere} />
           <Row icon="fingerprint" iconTint="var(--blue)" title={t('Sign in with passkey')} accessory="chevron" onClick={passkeySignIn} />
           {/* The Login screen offers both of these; a guest who skipped it had no way to either from here. */}
-          {pwOn && <Row icon="plusCircle" iconTint="var(--orange)" title={t('Create profile with a password')} accessory="chevron" onClick={openPasswordRegister} />}
-          {pwOn && <Row icon="key" iconTint="var(--orange)" title={t('Sign in with password')} accessory="chevron" onClick={() => openPasswordSignIn()} />}
+          {pwOn && <Row icon="plusCircle" iconTint="var(--warning)" title={t('Create profile with a password')} accessory="chevron" onClick={openPasswordRegister} />}
+          {pwOn && <Row icon="key" iconTint="var(--warning)" title={t('Sign in with password')} accessory="chevron" onClick={() => openPasswordSignIn()} />}
           <Row icon="qr" iconTint="var(--blue)" title={t('Use a code from your other device')} accessory="chevron" onClick={openDeviceLinkRedeem} />
           <KeptChangesRows />
         </> : pwOn ? <>
           {/* No passkeys in this browser (plain http on a LAN address, say): a password is the way in. */}
           <Row icon="plusCircle" iconTint="var(--acc)" title={t('Create new profile')} subtitle={t('Keeps your data safe and separate per person.')} accessory="chevron" onClick={openPasswordRegister} />
-          <Row icon="key" iconTint="var(--orange)" title={t('Sign in with password')} accessory="chevron" onClick={() => openPasswordSignIn()} />
+          <Row icon="key" iconTint="var(--warning)" title={t('Sign in with password')} accessory="chevron" onClick={() => openPasswordSignIn()} />
           <KeptChangesRows />
         </> : <>
           <Row icon="lock" iconTint="var(--grey)" title={t('Passkeys not supported in this browser.')} />
@@ -1083,7 +1087,7 @@ function MobileReminderCard({ S, update, toast }) {
   return (
     <Section title={t('Notifications')}
       footer={S.reminder?.on ? t('Reminds you at this time on days that have a routine planned.') + nudgeNote(S) : null}>
-      <Row icon="calendar" iconTint="var(--orange)" title={t('Workout day reminder')}>
+      <Row icon="calendar" iconTint="var(--warning)" title={t('Workout day reminder')}>
         <Switch checked={!!S.reminder?.on} onChange={toggle} />
       </Row>
       {S.reminder?.on && (
@@ -1102,7 +1106,7 @@ function MobileReminderCard({ S, update, toast }) {
 function NudgeRows({ S, setReminder }) {
   const r = S.reminder || {}
   return <>
-    <Row icon="bell" iconTint="var(--red)" title={t('Nudge me when I skip a planned workout')}>
+    <Row icon="bell" iconTint="var(--danger)" title={t('Nudge me when I skip a planned workout')}>
       <Switch checked={!!r.nudge} onChange={() => setReminder({ nudge: !r.nudge })} />
     </Row>
     {r.nudge && (
@@ -1163,11 +1167,11 @@ function PushCard({ S, update, toast }) {
           nudgeNote(S)
         : null}
     >
-      <Row icon="bell" iconTint="var(--red)" title={t('Push notifications')} subtitle={t('Rest-timer alerts, even if openGym is closed.')}>
+      <Row icon="bell" iconTint="var(--danger)" title={t('Push notifications')} subtitle={t('Rest-timer alerts, even if openGym is closed.')}>
         <Switch checked={on} disabled={busy} onChange={toggle} />
       </Row>
       {on && (
-        <Row icon="calendar" iconTint="var(--orange)" title={t('Workout day reminder')}>
+        <Row icon="calendar" iconTint="var(--warning)" title={t('Workout day reminder')}>
           <Switch checked={!!S.reminder?.on} onChange={() => update(s => { s.reminder = { ...(s.reminder || DEF.reminder), on: !s.reminder?.on, tz: localTZ() } })} />
         </Row>
       )}
@@ -1191,6 +1195,7 @@ function PushCard({ S, update, toast }) {
 // What the chosen accent is called: a preset's colour name, or the user's own.
 function accentLabel(S) {
   const k = accentKey(S)
+  if (k === THEME) return t('From palette')
   return k === CUSTOM ? t('Your own color') : t(ACCENT_NAMES[k] || 'Green')
 }
 
@@ -1210,11 +1215,14 @@ function AccentSwatches({ S, update }) {
   const key = accentKey(S)
   const own = cleanHex(S.accentCustom)
   const onCustom = key === CUSTOM
-  const pickPreset = k => { update(s => { s.accent = k }); setRestAccent(k) }
+  const themeHex = PALETTE_ACCENT[paletteKey(S)]
+  // Stamping the version marks the pick as the user's own, so a green chosen here is never
+  // taken for the old default and moved to the palette (lib/accent.js ACCENT_VERSION).
+  const pickPreset = k => { update(s => { s.accent = k; s.accentV = ACCENT_VERSION }); setRestAccent(k) }
   const pickOwn = hex => {
     const c = cleanHex(hex)
     if (!c || (onCustom && c === own)) return
-    update(s => { s.accent = CUSTOM; s.accentCustom = c })
+    update(s => { s.accent = CUSTOM; s.accentCustom = c; s.accentV = ACCENT_VERSION })
     setRestAccent(c)
   }
   // The picker sends a colour for every step of a drag (React's onChange is the `input` event).
@@ -1235,7 +1243,7 @@ function AccentSwatches({ S, update }) {
     const c = cleanHex(hex)
     if (!c) return
     const de = document.documentElement
-    applyAccent(de, c, de.dataset.theme)
+    applyAccent(de, c, de.dataset.theme === 'light' ? 'light' : 'dark')
     pending.current = c
     clearTimeout(timer.current)
     timer.current = setTimeout(commit, OWN_COLOR_SETTLE_MS)
@@ -1252,7 +1260,7 @@ function AccentSwatches({ S, update }) {
   // The input is not controlled (React would put the saved colour back after every drag step);
   // a colour changed elsewhere (sync, another tab) is put in by hand.
   useEffect(() => {
-    if (!pending.current && inputRef.current) inputRef.current.value = own || '#30d158'
+    if (!pending.current && inputRef.current) inputRef.current.value = own || themeHex
   }, [own])
   const ownLabel = t('Your own color')
   const grey = own && isGrey(own)
@@ -1262,6 +1270,8 @@ function AccentSwatches({ S, update }) {
   ].filter(Boolean) : []
   return <>
     <div className="swatches" style={{ flexBasis: '100%', paddingInlineStart: 41 }}>
+      <button className={'swatch' + (key === THEME ? ' on' : '')} style={{ background: themeHex }}
+        onClick={() => pickPreset(THEME)} aria-label={t('From palette')} />
       {Object.entries(ACCENTS).map(([k, c]) => (
         <button key={k} className={'swatch' + (key === k ? ' on' : '')}
           style={{ background: c }} onClick={() => pickPreset(k)} aria-label={t(ACCENT_NAMES[k] || k)} />
@@ -1270,7 +1280,7 @@ function AccentSwatches({ S, update }) {
         ? <button className="swatch swatch-own" style={{ background: own }} onClick={() => pickOwn(own)} aria-label={ownLabel} />
         : <span className={'swatch swatch-own' + (own ? ' on' : ' unset')} style={own ? { background: own, color: inkOn(own) } : undefined}>
           {own ? <Icon name="pencil" /> : <Icon name="plus" />}
-          <input ref={inputRef} type="color" className="swatch-input" defaultValue={own || '#30d158'}
+          <input ref={inputRef} type="color" className="swatch-input" defaultValue={own || themeHex}
             onChange={e => preview(e.target.value)}
             aria-label={own ? t('Change your own color') : t('Pick your own color')} />
         </span>}
@@ -1299,7 +1309,7 @@ function EquipmentCard({ S, update }) {
     ? bells.map(fmtPlate).join(' · ')
     : t('Any weight. Tap to list the ones you own.')
   return <Section title={t('Equipment')} footer={t('Filters the exercise library and picker, and flags routine exercises that need something you don’t have in the active profile.')}>
-    <Row icon="plate" iconTint="var(--orange)" title={t('Plates')} subtitle={plateSummary} accessory="chevron" onClick={() => plateInventorySheet()} />
+    <Row icon="plate" iconTint="var(--warning)" title={t('Plates')} subtitle={plateSummary} accessory="chevron" onClick={() => plateInventorySheet()} />
     <Row icon="dumbbell" iconTint="var(--teal)" title={t('Dumbbells')} subtitle={dumbbellSummary} accessory="chevron" onClick={() => dumbbellInventorySheet()} />
     {profiles.length > 0 && <Row icon="kettlebell" iconTint="var(--acc)" title={t('Filter by equipment')}>
       <Switch checked={!!S.equipFilterOn} onChange={v => update(s => { s.equipFilterOn = v })} />
@@ -1446,7 +1456,7 @@ function HealthConnectCard({ S, toast }) {
 
   if (st.status !== 'available') return (
     <Section title={t('Health Connect')}>
-      <Row icon="heart" iconTint="var(--red)" title={t('Health Connect')}
+      <Row icon="heart" iconTint="var(--danger)" title={t('Health Connect')}
         subtitle={st.status === 'update'
           ? t('Update Health Connect to share workouts and weigh-ins with other apps.')
           : t('Install Health Connect to share workouts and weigh-ins with other apps.')}
@@ -1484,11 +1494,11 @@ function HealthConnectCard({ S, toast }) {
   return (
     <Section title={t('Health Connect')}
       footer={h.on ? t('Workouts and weigh-ins go to Health Connect when you finish or change them. openGym reads nothing back.') : null}>
-      <Row icon="heart" iconTint="var(--red)" title={t('Write to Health Connect')}
+      <Row icon="heart" iconTint="var(--danger)" title={t('Write to Health Connect')}
         subtitle={t('Finished workouts and weigh-ins, from this phone only.')}>
         <Switch checked={!!h.on} disabled={busy} onChange={v => (v ? turnOn() : askOff())} />
       </Row>
-      {h.on && h.error === 'permission' && <Row icon="warning" iconTint="var(--orange)"
+      {h.on && h.error === 'permission' && <Row icon="warning" iconTint="var(--warning)"
         title={t('Permission withdrawn. Tap to allow again')} accessory="chevron" onClick={turnOn} />}
       {h.on && <Row icon="list" iconTint="var(--blue)" title={t('Open Health Connect')}
         accessory="chevron" onClick={() => openHealthConnect().catch(() => {})} />}

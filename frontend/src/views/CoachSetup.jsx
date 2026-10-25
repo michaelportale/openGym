@@ -162,7 +162,7 @@ export default function CoachSetup() {
       </Section>
 
       {meta.baseUrl && <Section title={t('Endpoint')}
-        footer={isCleartext(baseUrl) ? <span style={{ color: 'var(--red)' }}>{cleartextRefused()}</span> : null}>
+        footer={isCleartext(baseUrl) ? <span style={{ color: 'var(--danger)' }}>{cleartextRefused()}</span> : null}>
         <div style={{ padding: '8px 12px' }}>
           <TextField value={baseUrl} placeholder="https://ollama.example.com" inputMode="url" autoCapitalize="none" autoCorrect="off"
             onChange={e => setBaseUrl(e.target.value)} />
@@ -188,7 +188,7 @@ export default function CoachSetup() {
 
       {step >= 0 && <div className="card">
         {STEPS().map((s, i) => <div key={s} className="row" style={{ gap: 8, padding: '3px 0', opacity: i > step ? .4 : 1 }}>
-          <span style={{ color: i < step || step === 2 ? 'var(--green)' : i === step ? 'var(--acc)' : 'var(--dim)' }}><Icon name={i < step || step === 2 ? 'check' : 'hourglass'} /></span>
+          <span style={{ color: i < step || step === 2 ? 'var(--success)' : i === step ? 'var(--acc)' : 'var(--dim)' }}><Icon name={i < step || step === 2 ? 'check' : 'hourglass'} /></span>
           <span className="small">{s}</span>
         </div>)}
       </div>}
@@ -211,7 +211,7 @@ export default function CoachSetup() {
     </>}
 
     {coachLocal?.mode && coachLocal.mode !== 'off' && <Section title={t('Controls')}>
-      <Row icon="signOut" iconTint="var(--red)" title={t('Turn the Coach off on this phone')} danger onClick={turnOff} />
+      <Row icon="signOut" iconTint="var(--danger)" title={t('Turn the Coach off on this phone')} danger onClick={turnOff} />
     </Section>}
   </div>
 }

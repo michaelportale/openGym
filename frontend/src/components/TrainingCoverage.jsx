@@ -49,7 +49,7 @@ export default function TrainingCoverage({ S }) {
     <h2>{t('Training coverage')}</h2>
     {result.cycle && <Segmented value={cycle ? 'cycle' : 'rolling'} onChange={setView} options={[{ value: 'rolling', label: t('Last 7 days') }, { value: 'cycle', label: t('Accepted cycle') }]} />}
     <p className="small muted">{!cycle && t('Last 7 days') + ' · '}{fmtDate(data.window.startDate, true)} – {fmtDate(data.window.endDate, true)}{cycle && data.label ? ' · ' + data.label : ''}</p>
-    <p className="small muted">{cycle ? t('Cycle totals include off-program work since acceptance. Floating plans have no assumed training dates.') : t('Planned values use current dated prescriptions. Floating sessions appear in cycle context. No log does not mean missed.')}</p>
+    {cycle && <p className="small muted">{t('Cycle totals include off-program work since acceptance. Floating plans have no assumed training dates.')}</p>}
     {muscles.length === 0 && <p className="small muted">{t('No mapped work in this window. Unknown records are listed below.')}</p>}
     {muscles.map(([m, value]) => <details className="coverage-muscle" key={m}>
       <summary><span>{t(MUSCLE_NAME[m] || m)}</span><span className="small muted">{t('Estimated sets: {0} completed · {1} planned', fmtNum(value.actual.combinedEstimate), fmtNum(value.planned.combinedEstimate))}</span></summary>
@@ -72,7 +72,7 @@ export default function TrainingCoverage({ S }) {
         {!!data.unknowns[kind].acceptanceSessions && <div>{t('Sessions with unknown cycle timing: {0}', data.unknowns[kind].acceptanceSessions)}</div>}
       </div>)}
     </details>
-    <p className="sect-f">{t('Secondary credit uses 0.5 per set. Day aims describe your schedule, not stimulus adequacy.')}</p>
+    <p className="sect-f">{t('Secondary credit uses 0.5 per set.')}</p>
     <TargetEditor S={S} />
   </section>
 }

@@ -276,3 +276,14 @@ describe('cardCommits', () => {
     expect(cardCommits(80, 90)).toBe(false)          // ended up more vertical than sideways
   })
 })
+
+// The stack clips its card without being a scroll box. With overflow:hidden alone, the ⋯
+// button's 6px hit area made it 6px scrollable, and scrollIntoView on a set row shifted the
+// whole card left by that much. Layout is not measured here; this pins the rule.
+describe('the card stack clips without scrolling', () => {
+  it('uses overflow:clip where the browser has it', async () => {
+    const { readFileSync } = await import('node:fs')
+    const css = readFileSync(`${process.cwd()}/src/index.css`, 'utf8')
+    expect(css).toMatch(/@supports \(overflow:clip\)\{\.workout-swipe-stack\{overflow:clip\}\}/)
+  })
+})

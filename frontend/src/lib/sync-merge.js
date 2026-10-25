@@ -76,7 +76,7 @@
 import { beatsWeight } from './exercises.js'
 import { bestWeightForEntry } from './history.js'
 import { convertStateUnit, convertBodyWeight } from './units.js'
-import { sanitizeAccent } from './accent.js'
+import { sanitizeAccent, withAccentMigrated } from './accent.js'
 import { readDayNote as readNote } from './day-notes.js'
 
 const clone = o => JSON.parse(JSON.stringify(o))
@@ -744,7 +744,8 @@ function reconcileAdaptationPins(out, sources) {
 export function mergeStates(a0, b0, { prefer } = {}) {
   if (!a0) return b0 ? clone(b0) : b0
   if (!b0) return clone(a0)
-  let a = a0, b = b0
+  // The old default accent is moved on both copies first (lib/accent.js withAccentMigrated).
+  let a = withAccentMigrated(a0), b = withAccentMigrated(b0)
   // A reset seen by one copy only: the other keeps what was made after it, and the reset copy
   // decides the rest (the file's header).
   let side = prefer === 'a' || prefer === 'b' ? prefer : newerOf(a, b) === a ? 'a' : 'b'
