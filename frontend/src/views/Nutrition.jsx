@@ -185,8 +185,8 @@ export default function Nutrition() {
   const loggedToday = isLoggedDay(todayDay)
   const ticks = new Set(todayDay?.supps || [])
   const history = useMemo(() => nutritionHistory(S).slice(0, 14), [S])
-  // Today is read when the box is ticked, not when the screen last rendered: a tick just after
-  // midnight lands on the new day.
+  // Today is read when the box is ticked or Log is tapped, not when the screen last rendered: a
+  // tap just after midnight lands on the new day.
   const tick = (id, on) => update(s => { s.nutritionDays = withSupplementTick(s.nutritionDays, todayISO(), id, on) })
 
   return <div className="narrow">
@@ -204,7 +204,7 @@ export default function Nutrition() {
             ? <div className="big num" style={{ marginTop: 3 }}>{fmtNum(todayDay.kcal)} <span className="muted" style={{ fontSize: '1rem' }}>{t('kcal')}</span></div>
             : <div className="nutri-empty-line">{t('Nothing logged today yet.')}</div>}
         </div>
-        <Button size="sm" variant={loggedToday ? 'tinted' : 'primary'} icon={loggedToday ? 'pencil' : 'plus'} onClick={() => nutritionLogSheet(today)}>
+        <Button size="sm" variant={loggedToday ? 'tinted' : 'primary'} icon={loggedToday ? 'pencil' : 'plus'} onClick={() => nutritionLogSheet(todayISO())}>
           {loggedToday ? t('Edit') : t('Log')}</Button>
       </div>
       {loggedToday && <div className="measure-preview">{NUTRIENTS.filter(k => k !== 'kcal').map(k => <span key={k}>{NUTRIENT_NAME[k]()} <b>{amount(k, todayDay[k])}</b></span>)}</div>}

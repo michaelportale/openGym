@@ -143,6 +143,18 @@ describe('Nutrition screen', () => {
     expect(days['2026-10-21']).toBeUndefined()
   })
 
+  it('Log just after midnight opens the new day, even before the screen re-renders', () => {
+    install()
+    const el = screen()
+    vi.setSystemTime(new Date('2026-10-22T00:05:00'))
+    act(() => button(el, 'Log').click())
+    const sheet = topSheet()
+    expect(sheet.querySelector('input[type="date"]').value).toBe('2026-10-22')
+    for (const [k, v] of [['Calories', '2000'], ['Protein', '150'], ['Carbs', '200'], ['Fat', '70'], ['Fiber', '30']]) act(() => type(field(sheet, k), v))
+    act(() => button(sheet, 'Save').click())
+    expect(Object.keys(useStore.getState().S.nutritionDays)).toEqual(['2026-10-22'])
+  })
+
   it('sets targets per day type, empty until the profile fills them', () => {
     install()
     act(() => { nutritionSettingsSheet() })
