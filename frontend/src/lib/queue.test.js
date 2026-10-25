@@ -421,3 +421,22 @@ describe('DONE RULE in linear work', () => {
     expect(queueDone({ ...twice, workouts: [both] })).toEqual(['d1', 'd2'])
   })
 })
+
+describe('weekTally — which workout earns a session its credit', () => {
+  it('two workouts with the same date and start: the first in the log earns the credit', () => {
+    // Same d and start, both on d1; only the second also carries your own Core day.
+    const plain = w({ id: 'plain', routineIds: ['d1'], name: 'US W1 D1' })
+    const merged = w({ id: 'merged', routineIds: ['d1', 'own'], name: 'US W1 D1 + Core' })
+    // plain earns d1; merged is training on top (its Core half): 1 + 1.
+    expect(weekTally(S({ workouts: [plain, merged] }), TODAY)).toEqual({ done: 2, planned: 3 })
+    // merged earns d1 but still counts on top for its Core half, and plain is a redo: 1 + 2.
+    expect(weekTally(S({ workouts: [merged, plain] }), TODAY)).toEqual({ done: 3, planned: 3 })
+  })
+
+  it('a queue session whose routine was deleted still reads as the queue\'s, not your own training', () => {
+    // 'gone' is in the stored queue but no longer a routine, so the week plans two sessions.
+    // A workout logged on d1 and 'gone' earns d1, and its 'gone' half is not training on top.
+    const st = S({ queue: { ...S().queue, ids: ['d1', 'd2', 'gone'] }, workouts: [w({ routineIds: ['d1', 'gone'], name: 'US W1 D1' })] })
+    expect(weekTally(st, TODAY)).toEqual({ done: 1, planned: 2 })
+  })
+})
