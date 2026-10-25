@@ -21,11 +21,24 @@ describe('ghostFor', () => {
 })
 
 describe('beatTarget', () => {
+  // A routine's 8–12 is stored as reps 12 (the top) and repsMin 8 (the bottom).
+  const range = { mode: 'reps', reps: 12, repsMin: 8, step }
   it('adds a rep inside a rep range whose top was not reached', () => {
-    expect(beatTarget({ w: 80, r: 9 }, { mode: 'reps', reps: 8, repsMax: 12, step })).toEqual({ w: 80, r: 10 })
+    expect(beatTarget({ w: 80, r: 9 }, range)).toEqual({ w: 80, r: 10 })
   })
-  it('adds the weight step at the plan\'s reps once the top is reached', () => {
-    expect(beatTarget({ w: 80, r: 12 }, { mode: 'reps', reps: 8, repsMax: 12, step })).toEqual({ w: 82.5, r: 8 })
+  it('adds the weight step at the bottom of the range once the top is reached', () => {
+    expect(beatTarget({ w: 80, r: 12 }, range)).toEqual({ w: 82.5, r: 8 })
+    expect(beatTarget({ w: 80, r: 13 }, range)).toEqual({ w: 82.5, r: 8 })
+  })
+  it('climbs a per-side total by two, never past the top', () => {
+    expect(beatTarget({ w: 20, r: 16 }, { mode: 'reps', reps: 24, repsMin: 16, repStep: 2, step })).toEqual({ w: 20, r: 18 })
+    expect(beatTarget({ w: 20, r: 23 }, { mode: 'reps', reps: 24, repsMin: 16, repStep: 2, step })).toEqual({ w: 20, r: 24 })
+  })
+  it('ignores the bodyweight ceiling on a weighted set', () => {
+    expect(beatTarget({ w: 80, r: 9 }, { mode: 'reps', reps: 10, repsMax: 12, step })).toEqual({ w: 82.5, r: 10 })
+  })
+  it('adds the weight step at the plan\'s reps without a range', () => {
+    expect(beatTarget({ w: 80, r: 10 }, { mode: 'reps', reps: 10, step })).toEqual({ w: 82.5, r: 10 })
   })
   it('adds the weight step at last time\'s reps without a plan', () => {
     expect(beatTarget({ w: 80, r: 10 }, { mode: 'reps', step })).toEqual({ w: 82.5, r: 10 })
