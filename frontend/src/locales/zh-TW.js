@@ -2442,4 +2442,6 @@ export default {
   "Filters": "篩選",
   "Filters: {0}": "篩選：{0}",
   "Type": "類型",
+  "7-day average {0}": "7 天平均 {0}",
+  "{0} this week": "本週 {0}",
 }

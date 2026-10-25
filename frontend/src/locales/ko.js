@@ -2449,4 +2449,6 @@ export default {
   "Filters": "필터",
   "Filters: {0}": "필터: {0}",
   "Type": "유형",
+  "7-day average {0}": "7일 평균 {0}",
+  "{0} this week": "이번 주 {0}",
 }
