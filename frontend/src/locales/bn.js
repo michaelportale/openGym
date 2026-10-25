@@ -2586,5 +2586,11 @@ export default {
   "Body weight, {0}": "শরীরের ওজন, {0}",
   "Log {0} more weigh-ins to see your trend": "আপনার ট্রেন্ড দেখতে আরও {0}টি ওজন লগ করুন",
   "Your goal is drawn as a dashed line through the weight charts.": "আপনার লক্ষ্য ওজনের চার্টে একটি ড্যাশ লাইন হিসেবে দেখানো হয়।",
+  "{0} of {1} sessions": "{1}টির মধ্যে {0}টি সেশন",
+  "New bests": "নতুন সেরা",
+  "{0} sessions on rotation": "রোটেশনে {0}টি সেশন",
+  "Add your 7-day average. Off unless you turn it on.": "আপনার ৭ দিনের গড় যোগ করুন। আপনি চালু না করলে বন্ধ থাকে।",
   "sessions": "সেশন",
+  "{0} session in a row": "টানা {0}টি সেশন",
+  "{0} sessions in a row": "টানা {0}টি সেশন",
 }

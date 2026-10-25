@@ -55,3 +55,84 @@ describe('topMuscle', () => {
     expect(topMuscle({})).toBeNull()
   })
 })
+
+describe('weekRecapModel v2: sessions, record values, streak and body weight', () => {
+  // A six-routine rotation; this week (Mon 19 – Sun 25 Oct) ran four of them, one with a record.
+  const ids = ['A', 'B', 'C', 'D', 'E', 'F']
+  const S = {
+    scheduleMode: 'rotation', rotation: { id: 'rot', sequence: ids, label: '' },
+    queue: { ids, since: 0, startsOn: '2026-10-01', label: '', rotationId: 'rot' },
+    routines: ids.map(id => ({ id, name: 'Day ' + id })), week: {}, status: null, pauses: [],
+    bodyweight: [], unit: 'kg',
+  }
+  const run = (d, rid, entries = [], prs = []) => ({ ...wk(d, entries, prs), routineId: rid })
+  const before = run('2026-10-15', 'F', [{ id: 'bench', sets: sets(3, 80, 5) }])
+  const weekRuns = [
+    run('2026-10-19', 'A'), run('2026-10-20', 'B', [{ id: 'bench', sets: sets(3, 82.5, 5) }], ['bench']),
+    run('2026-10-21', 'C'), run('2026-10-23', 'D'),
+  ]
+  const all = [before, ...weekRuns]
+  const opts = { today: '2026-10-23', unit: 'kg', nameOf: e => (e.id === 'bench' ? 'Bench Press' : e.id), S: { ...S, workouts: all } }
+
+  it('shows a pill per rotation slot: four done, one with a record, two still open', () => {
+    const m = weekRecapModel(all, opts)
+    expect(m.sessions).toHaveLength(6)
+    expect(m.sessions.filter(s => s.done)).toHaveLength(4)
+    expect(m.sessions.filter(s => s.pr)).toEqual([{ label: 'Day B', done: true, pr: true }])
+    expect(m.sessionsLine).toBe('4 of 6 sessions')
+  })
+
+  it('gives each record its value and how far it passed the best before the week', () => {
+    const m = weekRecapModel(all, opts)
+    expect(m.records).toEqual(['Bench Press'])
+    expect(m.recordValues).toEqual(['82.5 kg · +2.5'])
+    expect(m.recordsTitle).toBe('New bests')
+    expect(m.footer).toBe('Made with openGym')
+  })
+
+  it('in Fixed Week mode the streak line counts sessions in a row, never "on rotation"', () => {
+    const SW = { ...S, scheduleMode: 'week', queue: null, rotation: null, week: { 1: ['A'], 2: ['B'], 3: ['C'], 4: ['D'], 5: ['E'] }, workouts: all }
+    const m = weekRecapModel(all, { ...opts, S: SW })
+    expect(m.lines.some(l => /^\d+ sessions in a row$/.test(l))).toBe(true)
+    expect(m.lines.some(l => l.includes('on rotation'))).toBe(false)
+  })
+
+  it('adds the rotation streak line, and the body weight only when asked', () => {
+    const bw = [{ d: '2026-10-15', t: Date.parse('2026-10-15T08:00:00'), w: 79 }, { d: '2026-10-22', t: Date.parse('2026-10-22T08:00:00'), w: 78.7 }]
+    const S2 = { ...opts.S, bodyweight: bw }
+    const off = weekRecapModel(all, { ...opts, S: S2 })
+    expect(off.lines.some(l => /sessions on rotation$/.test(l))).toBe(true)
+    expect(off.lines.some(l => l.includes('7-day average'))).toBe(false)
+    const on = weekRecapModel(all, { ...opts, S: S2, bw: true })
+    expect(on.lines.some(l => l.startsWith('7-day average'))).toBe(true)
+  })
+
+  it('leaves the v1 card alone without the state', () => {
+    const m = weekRecapModel(all, { today: '2026-10-23', unit: 'kg', nameOf: e => e.id })
+    expect(m.sessions).toBeUndefined()
+    expect(m.lines).toBeUndefined()
+    expect(m.footer).toBeUndefined()
+  })
+
+  it('uses planned weekdays in Fixed Week', () => {
+    const SW = { ...S, scheduleMode: 'week', queue: null, week: { 1: ['A'], 3: ['B'], 5: ['C'] }, workouts: [] }
+    const runs = [run('2026-10-19', 'A'), run('2026-10-21', 'C')]
+    const m = weekRecapModel(runs, { ...opts, S: SW })
+    expect(m.sessions.map(s => [s.label, s.done])).toEqual([['Day A', true], ['Day B', false], ['Day C', false]])
+  })
+})
+
+describe('record values for assisted and dumbbell lifts', () => {
+  const opts = { today: '2026-10-23', unit: 'kg', nameOf: e => e.id }
+  it('names the least assistance as the best of an assisted lift', () => {
+    // 0017 is assisted: 20 kg of help this week passes the 30 kg before it.
+    const W = [wk('2026-10-12', [{ id: '0017', sets: sets(3, 30, 8) }]),
+      wk('2026-10-20', [{ id: '0017', sets: [...sets(1, 30, 8), ...sets(2, 20, 8)] }], ['0017'])]
+    expect(weekRecapModel(W, opts).recordValues).toEqual(['20 kg · −10'])
+  })
+  it('reads an earlier best logged as a total in the week\'s per-bell meaning', () => {
+    const W = [wk('2026-10-12', [{ id: '0289', target: { dbLoad: 'total' }, sets: sets(3, 50, 8) }]),
+      wk('2026-10-20', [{ id: '0289', target: { dbLoad: 'each' }, sets: sets(3, 30, 8) }], ['0289'])]
+    expect(weekRecapModel(W, opts).recordValues).toEqual(['30 kg · +5'])
+  })
+})

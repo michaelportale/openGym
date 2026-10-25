@@ -2507,5 +2507,11 @@ export default {
   "Body weight, {0}": "शरीर का वज़न, {0}",
   "Log {0} more weigh-ins to see your trend": "अपना ट्रेंड देखने के लिए {0} और वज़न दर्ज करें",
   "Your goal is drawn as a dashed line through the weight charts.": "आपका लक्ष्य वज़न चार्ट में एक डैश लाइन के रूप में दिखता है।",
+  "{0} of {1} sessions": "{1} में से {0} सेशन",
+  "New bests": "नए सर्वश्रेष्ठ",
+  "{0} sessions on rotation": "रोटेशन पर {0} सेशन",
+  "Add your 7-day average. Off unless you turn it on.": "अपना 7 दिन का औसत जोड़ें। जब तक आप चालू न करें, बंद रहता है।",
   "sessions": "सत्र",
+  "{0} session in a row": "लगातार {0} सेशन",
+  "{0} sessions in a row": "लगातार {0} सेशन",
 }

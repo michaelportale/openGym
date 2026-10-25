@@ -235,3 +235,23 @@ describe('record values on the card', () => {
     expect(workoutCardModel(w, { unit: 'kg', nameOf }).recordValues).toEqual(['92.5 kg'])
   })
 })
+
+describe('layoutWorkoutCard: the week recap rows', () => {
+  const base = { title: 'Your week', date: '19–25 Oct', stats: [{ label: 'Workouts', value: '4' }], records: [], levels: null }
+  it('lays out a pill per session with the record dot only on a done one, then the lines and footer', () => {
+    const sessions = [{ done: true, pr: false }, { done: true, pr: true }, { done: false, pr: true }, { done: false, pr: false }]
+    const layout = layoutWorkoutCard({ ...base, sessions, sessionsLine: '2 of 4 sessions', lines: ['14 sessions on rotation'], footer: 'Made with openGym' }, { measure })
+    const pills = layout.items.filter(i => i.kind === 'pill')
+    expect(pills.map(p => [p.done, p.pr])).toEqual([[true, false], [true, true], [false, false], [false, false]])
+    expect(new Set(pills.map(p => p.y)).size).toBe(1)
+    const texts = layout.items.filter(i => i.kind === 'text').map(i => i.text)
+    expect(texts).toContain('2 of 4 sessions')
+    expect(texts).toContain('14 sessions on rotation')
+    expect(texts.at(-1)).toBe('Made with openGym')
+  })
+  it('mirrors the pills for right-to-left', () => {
+    const layout = layoutWorkoutCard({ ...base, sessions: [{ done: true }, { done: false }] }, { measure, rtl: true })
+    const [a, b] = layout.items.filter(i => i.kind === 'pill')
+    expect(a.x).toBeGreaterThan(b.x)
+  })
+})
