@@ -1501,8 +1501,6 @@ export const PT_BR_OVERRIDES = {
   "Rows with unknown completion: {0}": "Rows with unknown completion: {0}",
   "Rows with unknown working-set status: {0}": "Rows with unknown working-set status: {0}",
   "Save aims": "Save aims",
-  "Secondary credit uses 0.5 per set. Day aims describe your schedule, not stimulus adequacy.": "Secondary credit uses 0.5 per set. Day aims describe your schedule, not stimulus adequacy.",
-  "Secondary credit uses 0.5 per set.": "Secondary credit uses 0.5 per set.",
   "Secondary sets: {0} · estimated credit: {1}": "Secondary sets: {0} · estimated credit: {1}",
   "Secondary-only days: {0}": "Secondary-only days: {0}",
   "Sessions without known dates: {0}": "Sessions without known dates: {0}",
@@ -1595,6 +1593,8 @@ export const PT_BR_OVERRIDES = {
   'Your week': 'Sua semana',
   'Share your week': 'Compartilhar sua semana',
   'Show which muscles this week trained.': 'Mostrar quais músculos você treinou nesta semana.',
+  '{0} of {1} planned sets done': '{0} de {1} séries planejadas feitas',
+  'Set your aims': 'Defina suas metas',
 }
 
 export default { ...pt, ...PT_BR_OVERRIDES }
