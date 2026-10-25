@@ -57,7 +57,10 @@ export default function LineChart({ points, h = 150, unit = '', color = 'var(--a
   const single = points.length === 1
   const pts = single ? [points[0], points[0]] : points
   const multi = Array.isArray(series) && series.length > 0
-  const ys = multi ? series.flatMap(s => s.points.map(p => p.y)) : pts.map(p => p.y)
+  const smooth = !multi && !single && Array.isArray(trend) && trend.length === points.length
+  // The axis spans the trend as well as the readings: an average carried over from readings
+  // before the range can sit outside every reading the range shows.
+  const ys = multi ? series.flatMap(s => s.points.map(p => p.y)) : [...pts.map(p => p.y), ...(smooth ? trend.map(p => p.y) : [])]
   let ymin = Math.min(...ys), ymax = Math.max(...ys)
   if (goal != null && isFinite(goal)) { ymin = Math.min(ymin, goal); ymax = Math.max(ymax, goal) }
   if (ymin === ymax) { ymin -= 1; ymax += 1 }
@@ -121,7 +124,6 @@ export default function LineChart({ points, h = 150, unit = '', color = 'var(--a
 
   const poly = pts.map(p => X(p.t).toFixed(1) + ',' + Y(p.y).toFixed(1)).join(' ')
   const last = pts[pts.length - 1]
-  const smooth = !multi && !single && Array.isArray(trend) && trend.length === points.length
   const tpoly = smooth ? trend.map(p => X(p.t).toFixed(1) + ',' + Y(p.y).toFixed(1)).join(' ') : ''
   const tlast = smooth ? trend[trend.length - 1] : null
   const gid = 'g' + Math.round(t0 % 1e7) + '_' + H
