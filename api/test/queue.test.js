@@ -309,3 +309,45 @@ test('queue: a crafted state of any shape is read in time linear in its size', (
   // a long weekday list against many routines
   assert.ok(within({ ...base, routines: ids(R).map(id => ({ id })), week: { 1: ids(R).map(i => i + 'x') } }, '2026-10-12') < 1000);
 });
+
+// The dated-name clause on its own: a past workout dated in the week, started before since, lists
+// every queue id and carries as many name parts, none of them a session's title but the last. The
+// work is counted rather than timed: matching each id by scanning the name parts walks ids x parts
+// elements, and the lookup must stay within a small multiple of the input's size.
+test('queue: many unmatched names through the dated-name clause are matched in linear work', () => {
+  const N = 40000;
+  const routines = Array.from({ length: N }, (_, i) => ({ id: 'r' + i, name: 'Routine ' + i }));
+  const names = Array.from({ length: N }, (_, i) => 'Other ' + i);
+  names.push('Routine ' + (N - 1));
+  const S = {
+    ...base, routines,
+    workouts: [{ d: '2026-10-05', start: 0, routineIds: routines.map(r => r.id), name: names.join(' + ') }],
+    queue: { ids: routines.map(r => r.id), since: Date.parse('2026-10-10T00:00:00Z'), startsOn: '2026-10-01' },
+  };
+  const includes = Array.prototype.includes;
+  let scanned = 0;
+  Array.prototype.includes = function (...a) { scanned += this.length; return includes.apply(this, a); };
+  let next, first, last;
+  try {
+    next = effectiveRoutineId(S, '2026-10-12');
+    first = pinState(S, 'r0');
+    last = pinState(S, 'r' + (N - 1));
+  } finally {
+    Array.prototype.includes = includes;
+  }
+  assert.equal(next, 'r0');            // no other session's title is in the name
+  assert.equal(first, 'open');
+  assert.equal(last, 'done');          // the one named session still counts by its date
+  assert.ok(scanned <= 10 * (N + names.length), `scanned ${scanned} elements`);
+});
+
+test('queue: the dated-name clause keeps the strict, clock and historical-import rules', () => {
+  const S = { ...base, queue: { ids: ['r1', 'r2'], since: 5000, startsOn: '2026-09-07' },
+    workouts: [{ d: '2026-09-08', start: 1, routineIds: ['r1', 'r2'], name: 'Push + Pull' }] };
+  assert.equal(pinState(S, 'r1'), 'done');
+  assert.equal(pinState(S, 'r2'), 'done');
+  assert.equal(pinState({ ...S, queue: { ...S.queue, strict: true } }, 'r1'), 'open');
+  assert.equal(pinState({ ...S, workouts: [{ ...S.workouts[0], historicalImport: true }] }, 'r1'), 'open');
+  assert.equal(pinState({ ...S, workouts: [{ ...S.workouts[0], d: '2026-09-06' }] }, 'r1'), 'open');
+  assert.equal(pinState({ ...S, workouts: [{ ...S.workouts[0], d: '2026-09-06', start: 6000, name: '' }] }, 'r2'), 'done');
+});

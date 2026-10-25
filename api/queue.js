@@ -53,10 +53,12 @@ function doneIds(S, q) {
     const byClock = (w.start ?? 0) >= S.queue.since;
     const byName = S.queue.strict !== true && String(w.d || '') >= q.startsOn;
     if (!byClock && !byName) continue;
+    // The name parts become a Set once, on the first id that needs the dated-name clause, so a
+    // long name against a long id list stays one pass over each rather than one over the other.
     let parts;
     for (const id of ids) {
       if (!want.has(id) || done.has(id)) continue;
-      if (byClock || (parts ??= nameParts(w)).includes(names.get(id))) done.add(id);
+      if (byClock || (parts ??= new Set(nameParts(w))).has(names.get(id))) done.add(id);
     }
   }
   return done;
