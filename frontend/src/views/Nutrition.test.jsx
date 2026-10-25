@@ -155,6 +155,20 @@ describe('Nutrition screen', () => {
     expect(Object.keys(useStore.getState().S.nutritionDays)).toEqual(['2026-10-22'])
   })
 
+  it('the Today card turns over at midnight without anything else redrawing it', () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    vi.setSystemTime(new Date('2026-10-21T23:59:30'))
+    install({ nutritionDays: { '2026-10-21': day(2000, 150, 30) } })
+    const el = screen()
+    expect(button(el, 'Edit')).toBeTruthy()
+    act(() => { vi.advanceTimersByTime(60e3) })
+    expect(button(el, 'Edit')).toBeFalsy()
+    expect(button(el, 'Log')).toBeTruthy()
+    expect(el.textContent).toContain('Nothing logged today yet.')
+    act(() => button(el, 'Log').click())
+    expect(topSheet().querySelector('input[type="date"]').value).toBe('2026-10-22')
+  })
+
   it('sets targets per day type, empty until the profile fills them', () => {
     install()
     act(() => { nutritionSettingsSheet() })

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
@@ -175,10 +175,30 @@ function DayRow({ S, iso, supplements }) {
   </div>
 }
 
+// Today's date, read on every render; the screen also renders at the next midnight (and when it
+// comes back into view, since a hidden page's timers stall), so the Today card turns over with
+// the day instead of waiting for something else to redraw it.
+function useToday() {
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    let timer
+    const arm = () => {
+      clearTimeout(timer)
+      const now = new Date()
+      timer = setTimeout(() => { setTick(n => n + 1); arm() }, new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1) - now + 50)
+    }
+    const onVisible = () => { if (document.visibilityState === 'visible') { setTick(n => n + 1); arm() } }
+    arm()
+    document.addEventListener('visibilitychange', onVisible)
+    return () => { clearTimeout(timer); document.removeEventListener('visibilitychange', onVisible) }
+  }, [])
+  return todayISO()
+}
+
 export default function Nutrition() {
   const nav = useNavigate()
   const S = useStore(s => s.S)
-  const today = todayISO()
+  const today = useToday()
   const [anchor, setAnchor] = useState(today)
   const supplements = readSupplements(S.supplements)
   const todayDay = nutritionDayOf(S, today)
