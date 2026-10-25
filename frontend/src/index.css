@@ -57,6 +57,9 @@
   /* motion */
   --ease:cubic-bezier(.32,.72,0,1);
   --fast:140ms; --med:220ms;
+  /* a press: quick in, the same scale everywhere; --ease-out for things arriving */
+  --dur-press:90ms; --press-scale:.97;
+  --ease-out:cubic-bezier(.2,.8,.2,1);
 
   /* The system bars the page is drawn under. env() is all a browser and the iOS app give; the
      Android WebView reports only the camera cutout there, and on Android 15, which draws the app
@@ -157,7 +160,7 @@ summary:not(:has(.chev))::-webkit-details-marker{display:none}
 summary:not(:has(.chev))::before{
   content:"";display:inline-block;width:14px;height:14px;margin-inline-end:4px;vertical-align:-2px;
   background:var(--label-3);-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9.6 5.6 6.6 6.4-6.6 6.4'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9.6 5.6 6.6 6.4-6.6 6.4'/%3E%3C/svg%3E") center/contain no-repeat;
-  transition:transform .18s ease;
+  transition:transform var(--fast) var(--ease);
 }
 [dir="rtl"] summary:not(:has(.chev))::before{transform:scaleX(-1)}
 details[open]>summary:not(:has(.chev))::before,[dir="rtl"] details[open]>summary:not(:has(.chev))::before{transform:rotate(90deg)}
@@ -395,7 +398,10 @@ h4.sec{
   transition:transform var(--fast) var(--ease),background var(--fast),opacity var(--fast);
 }
 .btn .icn{font-size:19px}
-.btn:active{transform:scale(.975)}
+.btn:active{transform:scale(var(--press-scale));transition-duration:var(--dur-press)}
+/* rows and tappable cards answer a press the same way, by scale (transform only, no reflow) */
+.lrow:active,.card.tappable:active,.today-row:active{transform:scale(var(--press-scale))}
+.lrow,.card.tappable,.today-row{transition:transform var(--dur-press) var(--ease-out)}
 .btn.primary{background:var(--acc);color:var(--on-acc)}
 .btn.primary:active{background:var(--acc-2)}
 .btn.tinted{background:var(--acc-soft);color:var(--acc-text)}
@@ -932,7 +938,8 @@ body::before{
 }
 .exhd{align-items:center}
 .wprog{height:4px;background:var(--surface-2);border-radius:99px;overflow:hidden;margin-bottom:16px}
-.wprog i{display:block;height:100%;background:var(--acc);border-radius:99px;transition:width var(--med) var(--ease)}
+.wprog i{display:block;height:100%;width:100%;background:var(--acc);border-radius:99px;transform-origin:0 50%;transition:transform var(--med) var(--ease)}
+[dir="rtl"] .wprog i{transform-origin:100% 50%}
 .exmedia{position:relative;border-radius:var(--r-lg);overflow:hidden;background:#fff;margin-bottom:12px}
 .exmedia img{width:100%;height:320px;object-fit:contain;display:block}
 .exmedia .gifhint,.exmedia .giftoggle{
@@ -1220,14 +1227,14 @@ body::before{
 .swpane{position:absolute;top:0;bottom:0;width:0;overflow:hidden;z-index:0}
 .swpane.del{inset-inline-end:0;background:color-mix(in srgb,var(--danger) 22%,var(--surface))}
 .swpane.cp{inset-inline-start:0;background:var(--acc-soft)}
-.swpane button{position:absolute;top:0;bottom:0;width:76px;padding:0;color:#fff;transition:width .16s var(--ease)}
+.swpane button{position:absolute;top:0;bottom:0;width:76px;padding:0;color:#fff;transition:width var(--fast) var(--ease)}
 .swpane.del button{inset-inline-end:0;background:var(--danger)}
 .swpane.cp button{inset-inline-start:0;background:var(--acc);color:var(--on-acc)}
 .swpane.armed button{width:100%}
 .swpane .lab{position:absolute;top:0;bottom:0;width:76px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:12px}
 .swpane.del .lab{inset-inline-start:0}
 .swpane.cp .lab{inset-inline-end:0}
-.swpane .lab .icn{font-size:21px;transform:scale(.8);transition:transform .16s var(--ease)}
+.swpane .lab .icn{font-size:21px;transform:scale(.8);transition:transform var(--fast) var(--ease)}
 .swpane .lab b{font-weight:500}
 .swpane.armed .lab .icn{transform:scale(1)}
 .swpane.armed .lab b{font-weight:800}
@@ -1477,7 +1484,10 @@ body::before{
 }
 @keyframes slideup{from{transform:translateY(16px);opacity:0}to{transform:none;opacity:1}}
 #timer .bar{position:absolute;top:0;inset-inline-start:0;inset-inline-end:0;height:3px;background:var(--surface-3)}
-#timer .bar i{display:block;height:100%;background:var(--acc);transition:width 1s linear}
+/* the bar moves with the clock, a second at a time, so its one duration is the tick (1s linear),
+   not a motion token; scaleX, so a tick never re-lays out the dock */
+#timer .bar i{display:block;height:100%;width:100%;background:var(--acc);transform-origin:0 50%;transition:transform 1s linear}
+[dir="rtl"] #timer .bar i{transform-origin:100% 50%}
 /* The clock is what the bar is for, so it never gives up width: the buttons do (Skip is the one that
    gives: in a long language on a narrow phone it becomes an icon, RestTimer.jsx useSkipFits). The label under the
    clock fills the clock's width but does not widen it. */
