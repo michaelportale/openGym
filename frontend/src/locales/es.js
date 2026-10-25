@@ -2451,4 +2451,8 @@ export default {
   "Type": "Tipo",
   "7-day average {0}": "Media de 7 días {0}",
   "{0} this week": "{0} esta semana",
+  "Your week": "Tu semana",
+  "Top muscle": "Músculo principal",
+  "Share your week": "Compartir tu semana",
+  "Show which muscles this week trained.": "Muestra qué músculos entrenaste esta semana.",
 }
