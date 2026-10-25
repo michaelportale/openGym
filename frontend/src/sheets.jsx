@@ -2970,7 +2970,7 @@ export function WorkoutRow({ w, onClick }) {
     <div className="grow"><div className="tt">{w.name}</div>
       <div className="ss">{[fmtDate(w.d, true), ...durPart(w.end - w.start), tn('{0} set', '{0} sets', setsDone(w)), fmtVol(w.vol, st.unit, w.volumePartial)].join(' · ')}</div></div>
     {mediaN > 0 && <span className="wrow-media" title={tn('{0} photo or video', '{0} photos or videos', mediaN)} aria-label={tn('{0} photo or video', '{0} photos or videos', mediaN)}><Icon name="image" />{mediaN}</span>}
-    {w.prs && w.prs.length > 0 && <span className="pr"><Icon name="trophy" />{w.prs.length} PR</span>}
+    {w.prs && w.prs.length > 0 && <span className="pr"><Icon name="trophy" />{new Set(w.prs).size} PR</span>}
     <Icon name="chevronRight" className="chev" />
   </div>
 }
@@ -3628,7 +3628,8 @@ function doFinishWorkout() {
     // Held against history read the way this session logged a dumbbell weight (lib/dumbbells.js).
     const was = bestWeightFor(st, e.id, entryDbLoad(e))
     if (beatsWeight(e.id, mx, was)) {
-      prs.push(e.id)
+      // A lift held in more than one section is one record, listed and counted once.
+      if (!prs.includes(e.id)) prs.push(e.id)
       // A combined session can hold the same lift in more than one section: the record is the
       // best of them, read in the meaning of the first section that set it, against that
       // section's previous best.
@@ -3639,8 +3640,10 @@ function doFinishWorkout() {
     // A heavier estimate without a heavier top set is its own kind of progress —
     // same weight for more reps. Reported separately so it can't be read as a load PR.
     const rec = is1RMRecord(st, e.id, e)
-    if (rec && !prs.includes(e.id)) e1prs.push({ id: e.id, ...rec })
+    if (rec && !prs.includes(e.id) && !e1prs.some(p => p.id === e.id)) e1prs.push({ id: e.id, ...rec })
   })
+  // A later section's load record outranks an earlier section's estimate record of the same lift.
+  if (!past) for (let i = e1prs.length - 1; i >= 0; i--) if (prs.includes(e1prs[i].id)) e1prs.splice(i, 1)
   const w = buildCompletedWorkout(A, {
     end: past ? backfillEnd(A) : sessionEnd(A),
     prs,
