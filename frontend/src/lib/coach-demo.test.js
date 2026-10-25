@@ -294,6 +294,12 @@ describe('coach-demo — the debrief', () => {
     expect(think(() => demoDebrief(state({ workouts: [short] }))).score).toBe(7)
   })
 
+  it('counts a lift recorded in two sections as one record', () => {
+    const p = think(() => demoDebrief(state({ workouts: [workout({ prs: ['a', 'a', 'b'] })] })))
+    expect(p.workout.prs).toBe(2)
+    expect(p.highlights).toContain('2 new personal records.')
+  })
+
   it('counts neither warm-up rows nor their volume', () => {
     const w = workout()
     w.entries[0].sets.unshift({ done: true, w: 20, r: 10, phase: 'warmup' })
