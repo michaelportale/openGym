@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 vi.mock('react-router-dom', () => ({ useNavigate: () => () => {} }))
 vi.mock('../lib/api.js', async importOriginal => ({ ...await importOriginal(), api: vi.fn() }))
 import Home from '../views/Home.jsx'
+import { useUI } from '../store/useUI.js'
 import Plan from '../views/Plan.jsx'
 import { freshState, useStore } from '../store/useStore.js'
 import { todayISO } from '../lib/format.js'
@@ -17,7 +18,7 @@ afterEach(() => { act(() => root.unmount()); host.remove(); localStorage.clear()
 const render = View => act(() => root.render(<View />))
 const card = () => host.querySelector('[aria-label="Training coverage"]')
 const button = label => [...card().querySelectorAll('button')].find(b => b.textContent === label)
-it.each([['Home', Home], ['Plan', Plan]])('renders actual vs planned coverage in the real %s view', (_, View) => {
+it.each([['Plan', Plan]])('renders actual vs planned coverage in the real %s view', (_, View) => {
   render(View)
   expect(card()).not.toBeNull()
   const chest = [...card().querySelectorAll('details')].find(d => d.querySelector('summary')?.textContent.includes('Chest'))
@@ -66,7 +67,7 @@ it('merges independent muscle aims and reset removes them', () => {
 })
 it('shows partial limbs and unclassified records without awarding completed sets', () => {
   const s = S(); s.workouts[0].entries = [{ id: 'mystery', trainingSnapshot: { primary: [], secondary: [], role: null, status: 'unknown' }, sets: [{ done: true }, { done: false, sides: { L: { done: true }, R: { done: false } } }] }]
-  useStore.setState({ S: s }); render(Home)
+  useStore.setState({ S: s }); render(Plan)
   expect(card().textContent).toContain('Partially completed limb rows: 1')
   expect(card().textContent).toContain('Sets with unknown targets: 1')
   expect(card().textContent).toContain('Sets with unknown role: 1')
@@ -76,4 +77,28 @@ it('opening the muscle picker does not save an aim before the explicit Save acti
   const picker = card().querySelector('.coverage-targets .lrow')
   act(() => picker.click())
   expect(useStore.getState().S.coverageTargets.chest).toBeUndefined()
+})
+// Home shows a glance and opens the full report in a sheet.
+it('Home shows one bar per muscle and opens the full report, aims editor included, in a sheet', () => {
+  useUI.setState({ sheets: [] })
+  render(Home)
+  const glance = host.querySelector('.coverage-glance')
+  expect(glance).not.toBeNull()
+  expect(glance.querySelector('details')).toBeNull()
+  const bar = name => [...glance.querySelectorAll('.coverage-bar')].find(b => b.querySelector('.coverage-bar-n').textContent === name)
+  expect(bar('Chest').querySelector('.coverage-bar-v').textContent).toBe('1 / 4')
+  expect(bar('Triceps').querySelector('.coverage-bar-v').textContent).toBe('0.5 / 2')
+  act(() => glance.click())
+  const sheets = useUI.getState().sheets
+  expect(sheets.length).toBe(1)
+  act(() => root.render(<>{sheets[0].render(() => {})}</>))
+  expect(card().textContent).toContain('Planned: 4 estimated sets')
+  expect(card().textContent).toContain('Secondary credit uses 0.5 per set.')
+  expect(card().querySelector('.coverage-targets')).not.toBeNull()
+  useUI.setState({ sheets: [] })
+})
+it('Home leaves the glance out when nothing was done or planned in the last 7 days', () => {
+  useStore.setState({ S: { ...freshState(), routines: [], week: {}, workouts: [] } })
+  render(Home)
+  expect(host.querySelector('.coverage-glance')).toBeNull()
 })

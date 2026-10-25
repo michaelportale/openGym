@@ -10,7 +10,7 @@ import {
 } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
 import TrainingCoverage from '../components/TrainingCoverage.jsx'
-import TrainingAdaptation from '../components/TrainingAdaptation.jsx'
+import { AdaptationRow } from '../components/TrainingAdaptation.jsx'
 import { Button, Row, Section, Segmented } from '../components/ui.jsx'
 import SwipeRow from '../components/SwipeRow.jsx'
 import { copyRoutine, deleteRoutine, restoreRoutine, routineSnapshot } from '../lib/routines.js'
@@ -367,7 +367,7 @@ function Schedule({ S, update, nav, mode }) {
     </div>}
 
     <TrainingCoverage S={S} />
-    <TrainingAdaptation S={S} />
+    <AdaptationRow S={S} />
 
     {/* Weekly muscle volume is analysis: it moved to Stats, next to Muscle balance. Stats only
         shows that card once there is a routine, so the link waits for one too. */}
