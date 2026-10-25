@@ -2446,4 +2446,7 @@ export default {
   "Strength trend": "力量趋势",
   "Last 8 weeks": "最近 8 周",
   "Still recovering: {0}": "仍在恢复：{0}",
+  "Filters": "筛选",
+  "Filters: {0}": "筛选：{0}",
+  "Type": "类型",
 }

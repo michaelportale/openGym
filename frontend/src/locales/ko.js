@@ -2446,4 +2446,7 @@ export default {
   "Strength trend": "근력 추세",
   "Last 8 weeks": "최근 8주",
   "Still recovering: {0}": "아직 회복 중: {0}",
+  "Filters": "필터",
+  "Filters: {0}": "필터: {0}",
+  "Type": "유형",
 }

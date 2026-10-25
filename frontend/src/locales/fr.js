@@ -2446,4 +2446,7 @@ export default {
   "Strength trend": "Évolution de la force",
   "Last 8 weeks": "8 dernières semaines",
   "Still recovering: {0}": "Encore en récupération : {0}",
+  "Filters": "Filtres",
+  "Filters: {0}": "Filtres : {0}",
+  "Type": "Type",
 }
