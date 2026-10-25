@@ -48,4 +48,16 @@ describe('Stats body-weight trend', () => {
     expect(line).toContain('7-day average')
     expect(line).not.toContain('this week')
   })
+
+  it('keeps the trend inside the chart in a 1M view when the week before it was heavier', () => {
+    const el = mount([wi(31, 90), wi(29, 80), wi(28, 80), wi(27, 80)])
+    const seg = el.querySelector('polyline.trend').closest('.chart').previousElementSibling
+    act(() => { [...seg.querySelectorAll('button')].find(b => b.textContent === '1M').click() })
+    const trend = el.querySelector('polyline.trend')
+    expect(trend).toBeTruthy()
+    const h = Number(trend.closest('svg').getAttribute('viewBox').split(' ')[3])
+    const ys = trend.getAttribute('points').trim().split(/\s+/).map(xy => Number(xy.split(',')[1]))
+    expect(ys).toHaveLength(3)
+    ys.forEach(y => { expect(y).toBeGreaterThanOrEqual(0); expect(y).toBeLessThanOrEqual(h) })
+  })
 })
