@@ -172,7 +172,7 @@ export function layoutWorkoutCard(model, { measure, rtl = false, width = CARD_WI
 
   if (model.records.length) {
     y += 52
-    text(t('New personal records'), 34, 600, 'acc')
+    text(t('New personal records'), 34, 600, 'pr')
     y += 10
     const icon = 44
     const indent = icon + 22
@@ -219,6 +219,16 @@ export function mixColor(a, b, p) {
   if (!x || !y) return x ? a : b
   const ch = i => Math.round(x[i] * p + y[i] * (1 - p))
   return `rgb(${ch(0)}, ${ch(1)}, ${ch(2)})`
+}
+/**
+ * The colour new records are painted in: the theme's gold (`--pr`), which the app keeps for
+ * personal records alone. On a light card it is darkened the way the finish summary darkens its
+ * gold text (70 % gold, 30 % black), since the light gold is too faint to read as text. A gold the
+ * card cannot read falls back to the accent, which is what records were painted in before.
+ */
+export function recordColor(pr, acc, light = false) {
+  if (!parseColor(pr)) return acc
+  return light ? mixColor(pr, '#000000', 0.7) : pr
 }
 /**
  * The muscle map's fills for the card, worked out the way index.css works them out for .bodymap:
@@ -287,7 +297,7 @@ export function drawWorkoutCard(ctx, layout, colors, map = null, family = CARD_F
       ctx.save()
       ctx.translate(item.x, item.y)
       ctx.scale(item.size / 24, item.size / 24)
-      ctx.strokeStyle = colors.acc
+      ctx.strokeStyle = colors.pr || colors.acc
       ctx.lineWidth = 1.7
       ctx.lineCap = 'round'
       ctx.lineJoin = 'round'
