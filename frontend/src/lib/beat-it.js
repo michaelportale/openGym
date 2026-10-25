@@ -29,6 +29,7 @@ export function ghostFor(last, workIndex, mode) {
  *      last time: one more rep (`repStep`, two for a per-side total) at the same weight;
  *   4. otherwise: the next weight step, at the bottom of the range, or at the plan's reps (last
  *      time's when the plan has none) without one.
+ *   5. when the weight cannot step (`step` returns the same weight): one more rep at it.
  * `step(w, dir)` returns the next weight in direction `dir` (the plate or dumbbell step the row's
  * + and − use). On an assistance machine the next step is less help, so it steps down.
  * `repsMax` is the bodyweight ceiling (it adds sets, not reps) and plays no part here.
@@ -39,7 +40,11 @@ export function beatTarget(ghost, { mode, reps, repsMin, step, repStep = 1, assi
   if (!(ghost.w > 0)) return { r: ghost.r + 1 }
   const range = repsMin > 0 && repsMin < reps
   if (range && ghost.r < reps) return { w: ghost.w, r: Math.min(reps, ghost.r + repStep) }
-  return { w: step(ghost.w, assisted ? -1 : 1), r: range ? repsMin : reps > 0 ? reps : ghost.r }
+  const next = step(ghost.w, assisted ? -1 : 1)
+  // No next weight (no increment, or the last plate or dumbbell): one more rep at this weight is
+  // still progress, where dropping back to the bottom of the range would offer less than last time.
+  if (!(Number.isFinite(next) && next >= 0 && next !== ghost.w)) return { w: ghost.w, r: ghost.r + repStep }
+  return { w: next, r: range ? repsMin : reps > 0 ? reps : ghost.r }
 }
 
 /**
