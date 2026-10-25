@@ -274,9 +274,12 @@ export default function Home() {
         <div className="row" style={{ justifyContent: 'flex-end', marginTop: 4 }}>
           <Button size="sm" variant="ghost" trailingIcon="chevronRight" onClick={weighInsSheet}>{t('All weigh-ins')}</Button>
         </div>
-      </> : <div className="muted small">{S.weighIn === false
-        ? t('No weigh-ins yet. Log your weight to start the curve.')
-        : t("No weigh-ins yet. Log your weight to start the curve (we also ask before every workout).")}</div>}
+      </> : <div className="empty-cta">
+        <p>{S.weighIn === false
+          ? t('No weigh-ins yet. Log your weight to start the curve.')
+          : t("No weigh-ins yet. Log your weight to start the curve (we also ask before every workout).")}</p>
+        <Button size="sm" className="empty-cta-btn" icon="plus" onClick={() => bwSheet()}>{t('Log weight')}</Button>
+      </div>}
     </div>}
 
     {/* The rotation streak (lib/rotation-streak.js) when there is a loop to keep, else weeks. */}
