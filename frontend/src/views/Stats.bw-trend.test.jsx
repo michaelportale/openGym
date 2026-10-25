@@ -65,9 +65,12 @@ describe('Stats body-weight trend', () => {
   })
 
   it('leaves Weight 30d empty when the only weigh-ins are years old', () => {
-    const el = mount([{ d: '2020-01-10', t: Date.parse('2020-01-10T12:00:00'), w: 80 }, { d: '2020-01-15', t: Date.parse('2020-01-15T12:00:00'), w: 79 }])
+    // A workout this week keeps the tiles on screen, so the tile is read, not just absent.
+    const oneWorkout = { workouts: [{ id: 'w1', d: wi(2, 0).d, start: NOW - 2 * day, end: NOW - 2 * day + 3600000, entries: [] }] }
+    const el = mount([{ d: '2020-01-10', t: Date.parse('2020-01-10T12:00:00'), w: 80 }, { d: '2020-01-15', t: Date.parse('2020-01-15T12:00:00'), w: 79 }], oneWorkout)
     const tile = [...el.querySelectorAll('.tile')].find(n => n.textContent.includes('Weight 30d'))
-    expect(tile?.querySelector('.v').textContent ?? '–').toBe('–')
+    expect(tile).toBeTruthy()
+    expect(tile.querySelector('.v').textContent).toBe('–')
   })
 
   it('does not say toward goal when the change heads away from it', () => {
