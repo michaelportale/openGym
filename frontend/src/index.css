@@ -2251,3 +2251,6 @@ button.wl-summary{width:100%;padding:0 0 10px;text-align:start;border-radius:var
 .bw-trend-line{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin-top:6px;color:var(--label-2)}
 .bw-trend-key{width:14px;height:3px;border-radius:2px;background:var(--acc);flex:none}
 .bw-trend-week{font-weight:600}
+
+/* "Share your week" under the streak card, at its trailing edge like "All weigh-ins". */
+.week-recap-row{justify-content:flex-end;margin-top:-4px}

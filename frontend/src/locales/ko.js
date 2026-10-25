@@ -2451,4 +2451,8 @@ export default {
   "Type": "유형",
   "7-day average {0}": "7일 평균 {0}",
   "{0} this week": "이번 주 {0}",
+  "Your week": "이번 주 기록",
+  "Top muscle": "가장 많이 쓴 근육",
+  "Share your week": "이번 주 공유",
+  "Show which muscles this week trained.": "이번 주에 단련한 근육을 보여줍니다.",
 }
