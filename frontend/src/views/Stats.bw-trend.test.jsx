@@ -64,6 +64,12 @@ describe('Stats body-weight trend', () => {
     expect(tile.querySelector('.v').getAttribute('style') || '').not.toMatch(/acc|danger/)
   })
 
+  it('leaves Weight 30d empty when the only weigh-ins are years old', () => {
+    const el = mount([{ d: '2020-01-10', t: Date.parse('2020-01-10T12:00:00'), w: 80 }, { d: '2020-01-15', t: Date.parse('2020-01-15T12:00:00'), w: 79 }])
+    const tile = [...el.querySelectorAll('.tile')].find(n => n.textContent.includes('Weight 30d'))
+    expect(tile?.querySelector('.v').textContent ?? '–').toBe('–')
+  })
+
   it('does not say toward goal when the change heads away from it', () => {
     const el = mount([wi(10, 78), wi(8, 78), wi(3, 79), wi(1, 80)], { targetW: 77 })
     expect(el.querySelector('.bw-trend-week').textContent).not.toContain('toward goal')
@@ -82,6 +88,18 @@ describe('Stats body-weight trend', () => {
     const el = mount([wi(10, 82), wi(8, 82), wi(3, 81), wi(1, 80)])
     const ys = [...el.querySelectorAll('.chart text[text-anchor="end"][font-size="11"]')].filter(n => n.getAttribute('class') === 'lc-text')
     expect(ys.length).toBe(3)
+  })
+
+  it('keeps the trend inside the chart in a 1M view when the week before it was heavier', () => {
+    const el = mount([wi(31, 90), wi(29, 80), wi(28, 80), wi(27, 80)])
+    const seg = el.querySelector('polyline.trend').closest('.chart').previousElementSibling
+    act(() => { [...seg.querySelectorAll('button')].find(b => b.textContent === '1M').click() })
+    const trend = el.querySelector('polyline.trend')
+    expect(trend).toBeTruthy()
+    const h = Number(trend.closest('svg').getAttribute('viewBox').split(' ')[3])
+    const ys = trend.getAttribute('points').trim().split(/\s+/).map(xy => Number(xy.split(',')[1]))
+    expect(ys).toHaveLength(3)
+    ys.forEach(y => { expect(y).toBeGreaterThanOrEqual(0); expect(y).toBeLessThanOrEqual(h) })
   })
 
   it('offers Log weight when there are no weigh-ins, and Set goal without a goal', () => {
