@@ -39,7 +39,7 @@ import { importHevyData, HevyApiError, HEVY_DEV_SETTINGS, mergeHevyRoutines } fr
 import { buildPlanBundle, parsePlan, mergePlan, printPlan, planPrintHTML } from './lib/plan-share.js'
 import { estimate1RM, best1RM, is1RMRecord, REP_CAP, formulaOf, FORMULA_NAMES } from './lib/onerm.js'
 import { exerciseHistory } from './lib/exercise-history.js'
-import { isBellEx, dbLoadOf, dbLoadFor, withDbLoad, withMeaning, historyAs, entryDbLoad, currentDbLoad, isOneArm, ownedWeightsFor, dumbbellsOf, ownsDumbbells, withDumbbells, presetWeights, cleanWeights } from './lib/dumbbells.js'
+import { isBellEx, dbLoadOf, dbLoadFor, withDbLoad, withMeaning, historyAs, entryDbLoad, meaningFactor, currentDbLoad, isOneArm, ownedWeightsFor, dumbbellsOf, ownsDumbbells, withDumbbells, presetWeights, cleanWeights } from './lib/dumbbells.js'
 import { policyFor, defaultIncrement, POLICIES_FOR, POLICY_NAME, POLICY_DESC, MAX_BW_SETS, MAX_TRIPLE_SETS, weightIncrement } from './lib/progression.js'
 import { normalizeRepRange } from './lib/rep-range.js'
 import { isBackoff, backoffWeights } from './lib/backoff.js'
@@ -3614,7 +3614,15 @@ function doFinishWorkout() {
     const mx = loads.length ? loads.reduce((a, b) => betterWeight(e.id, a, b)) : 0
     // Held against history read the way this session logged a dumbbell weight (lib/dumbbells.js).
     const was = bestWeightFor(st, e.id, entryDbLoad(e))
-    if (beatsWeight(e.id, mx, was)) { prs.push(e.id); prBest[e.id] = { w: mx, was } }
+    if (beatsWeight(e.id, mx, was)) {
+      prs.push(e.id)
+      // A combined session can hold the same lift in more than one section: the record is the
+      // best of them, read in the meaning of the first section that set it, against that
+      // section's previous best.
+      const had = prBest[e.id]
+      if (!had) prBest[e.id] = { w: mx, was, as: entryDbLoad(e) }
+      else had.w = betterWeight(e.id, had.w, Math.round(mx * meaningFactor(entryDbLoad(e), had.as, { ...(e.target || {}), id: e.id }) * 1000) / 1000)
+    }
     // A heavier estimate without a heavier top set is its own kind of progress —
     // same weight for more reps. Reported separately so it can't be read as a load PR.
     const rec = is1RMRecord(st, e.id, e)
