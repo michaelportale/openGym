@@ -111,3 +111,66 @@ describe('LineChart y axis', () => {
     expect(labels.some(l => /^[-\u2212]0$/.test(l))).toBe(false)
   })
 })
+
+// The y axis spans the 7-day trend as well as the readings. A trend that averages readings from
+// before the range can sit outside every reading the range shows, and was drawn off the chart.
+describe('LineChart trend bounds', () => {
+  const H = 160, TOP = 10, BOTTOM = H - 22 // the plot area with axes (P.t, H - P.b)
+  const DAY = 86400000, NOW = Date.UTC(2026, 9, 23, 12)
+  const at = (ago, y) => ({ t: NOW - ago * DAY, y })
+  const ysOf = sel => [...container.querySelectorAll(sel)].flatMap(el =>
+    el.tagName.toLowerCase() === 'circle' ? [Number(el.getAttribute('cy'))]
+      : el.getAttribute('points').trim().split(/\s+/).map(xy => Number(xy.split(',')[1])))
+  const inside = ys => ys.every(y => y >= TOP - 1e-6 && y <= BOTTOM + 1e-6)
+  const draw = props => act(() => root.render(<LineChart h={H} unit="kg" {...props} />))
+
+  it('keeps every trend point inside the plot when the average comes from before the range', () => {
+    // 90 kg 31 days ago, then 80 kg on each of the three days after: in a 30-day view the
+    // readings are all 80 while the trend is 85, 83.33 and 82.5.
+    const points = [at(29, 80), at(28, 80), at(27, 80)]
+    const trend = [at(29, 85), at(28, 83.33), at(27, 82.5)]
+    draw({ points, trend })
+    const ys = ysOf('polyline.trend')
+    expect(ys).toHaveLength(3)
+    expect(inside(ys)).toBe(true)
+    expect(inside(ysOf('polyline.raw'))).toBe(true)
+    expect(inside(ysOf('circle.raw'))).toBe(true)
+  })
+
+  it('leaves a chart without a trend spanning its readings as before', () => {
+    draw({ points: [at(3, 80), at(2, 82), at(1, 81)] })
+    expect(container.querySelector('polyline.trend')).toBeNull()
+    const ys = ysOf('polyline')
+    // The highest and lowest readings sit 12 % of the span inside the plot's top and bottom.
+    const inset = (BOTTOM - TOP) * 0.12 / 1.24
+    expect(Math.min(...ys)).toBeCloseTo(TOP + inset, 1)
+    expect(Math.max(...ys)).toBeCloseTo(BOTTOM - inset, 1)
+  })
+
+  it('draws a flat trend over flat readings in the middle of the plot', () => {
+    const points = [at(3, 80), at(2, 80), at(1, 80)]
+    draw({ points, trend: points.map(p => ({ ...p })) })
+    const ys = ysOf('polyline.trend')
+    expect(inside(ys)).toBe(true)
+    ys.forEach(y => expect(y).toBeCloseTo((TOP + BOTTOM) / 2, 1))
+  })
+
+  it('still includes the goal, with the trend, in the axis', () => {
+    const points = [at(29, 80), at(28, 80), at(27, 80)]
+    const trend = [at(29, 85), at(28, 83.33), at(27, 82.5)]
+    draw({ points, trend, goal: 75 })
+    expect(inside(ysOf('polyline.trend'))).toBe(true)
+    const goal = [...container.querySelectorAll('line')].find(l => l.getAttribute('stroke') === 'var(--yellow)')
+    expect(inside([Number(goal.getAttribute('y1'))])).toBe(true)
+  })
+
+  it('keeps several series spanning only their own values', () => {
+    const anchors = [at(3, 0), at(1, 0)]
+    const series = [{ points: [at(3, 50), at(1, 60)], color: 'red' }]
+    draw({ points: anchors, series, trend: [at(3, 500), at(1, 500)] })
+    expect(container.querySelector('polyline.trend')).toBeNull()
+    const ys = ysOf('circle')
+    const inset = (BOTTOM - TOP) * 0.12 / 1.24
+    expect(Math.min(...ys)).toBeCloseTo(TOP + inset, 1)
+  })
+})
