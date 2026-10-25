@@ -502,7 +502,7 @@ h4.sec{
 .wday .dot{width:5px;height:5px;border-radius:50%;background:transparent;margin:0 auto}
 .wday .dot.plan{background:var(--label-3)}
 .wday .dot.ovr{background:var(--warning)}
-.wday .dot.done{background:var(--acc)}
+.wday .dot.done{background:var(--success)}
 /* a day off with a note on it (#261, lib/day-notes.js): the same colour on every calendar */
 .wday .dot.noted{background:var(--indigo)}
 .wday:active{background:var(--surface-2)}
@@ -557,6 +557,11 @@ h4.sec{
   display:flex;align-items:center;justify-content:center;font-size:21px;
   background:var(--surface-2);color:var(--label-2);
 }
+/* the muscle glyph on a row without a picture: outline in the tertiary label, the trained
+   region in the label colour; no accent and no gold */
+.thumb-x .mglyph{width:1.15em;height:1.15em}
+.mglyph-fig{fill:none;stroke:var(--label-3);stroke-width:1.1;stroke-linecap:round;stroke-linejoin:round}
+.mglyph-on{fill:var(--label);stroke:none}
 .item .tt{font-size:16px;font-weight:400;line-height:1.25;letter-spacing:-.009em}
 .item .ss{color:var(--label-2);font-size:13px;margin-top:2px}
 .item .grow{flex:1;min-width:0}
@@ -866,7 +871,9 @@ body.chips-dragging *{cursor:inherit}
 /* 30px is the right look next to a stepper but a poor target: extend the tap area to 44px
    without painting it; the left side stays shorter so the stepper's + button keeps its edge */
 .chk::before,.ck::before{content:'';position:absolute;inset:-7px -7px -7px -4px}
-.chk.on{background:var(--acc);box-shadow:none;color:var(--on-acc)}
+/* a logged set: done is --success with its check, never the accent (the accent is for the one
+   thing to press next) */
+.chk.on{background:var(--success);box-shadow:none;color:var(--on-success-tile)}
 .chk:active,.ck:active{transform:scale(.9)}
 .ck svg{
   width:16px;height:16px;stroke:transparent;fill:none;stroke-width:2.6;
@@ -1185,7 +1192,7 @@ body::before{
 .effpick .effpick-free .stp{flex:none;width:148px}
 .effpick .effpick-free .stp .num{font-size:17px;font-weight:600}
 .effpick .effpick-free .stp .num::placeholder{color:var(--label-3);font-weight:500}
-.setrow.done .n{background:var(--acc);color:var(--on-acc)}
+.setrow.done .n{background:var(--surface-3);color:var(--label-2)}
 .setrow.done{opacity:.45}
 
 /* Swipe on sets (v1.3.11, components/SwipeRow.jsx). The row slides over two panes: Copy at the
@@ -1338,7 +1345,7 @@ body::before{
   .setrow.timed .stp.r,.sethead.timed .r-sp{--num:41px}
   .setrow.timed .stp.w:not(.plain),.setrow.timed .stp.r:not(.plain),.sethead.timed:not(.plain) .w-sp,.sethead.timed:not(.plain) .r-sp{--btn-floor:16px}
 }
-.setrow.side.done .sidetag{background:var(--acc);color:var(--on-acc)}
+.setrow.side.done .sidetag{background:var(--surface-3);color:var(--label-2)}
 .setrow.side.done{opacity:.45}
 
 /* drop-set drops / rest-pause bursts riding on a work row, editable like the row itself
@@ -2283,6 +2290,13 @@ body.fab-aside #tabbar button.start{opacity:0;pointer-events:none;visibility:hid
    on the finish summary. Body text and small inline numbers keep the text face. */
 .stp .num,#timer .t,#tabbar button.start .tab-time,.tile .v,.stat-v,.st-row .st-v,
 .dw-read,.bw-read .num,.finish-record-v,.focus-set .stp .num,.focus-timed strong{font-family:var(--font-num)}
+/* A number that changes (a weight, a rep count, a time, a count): the rounded numerals, fixed-width
+   digits so it does not jitter as it changes, bold so it leads its row. Its unit is half its size,
+   secondary and medium, so "92.5" reads before "kg". (.num is already the name of the stepper
+   inputs and the week strip's dates, so this utility is .tnum.) */
+.tnum{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-weight:700}
+.tnum .unit{font-size:.5em;font-weight:500;color:var(--label-2);margin-left:.18em;letter-spacing:0}
+.tnum.display{font-size:var(--fs-display);line-height:1.05;letter-spacing:-.02em}
 
 /* Body-weight trend: the line under the chart naming the 7-day average, keyed by a short bar in
    the chart's colour, then the week's change. */

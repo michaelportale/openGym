@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { MuscleGlyph, glyphMuscleOf } from './MuscleGlyph.jsx'
 import { imgSrc, gifSrc, isVideoSrc, isCustomEx, figureOf } from '../lib/exercises.js'
 import { MOBILE } from '../lib/mobile.js'
 import { useStore } from '../store/useStore.js'
@@ -138,6 +139,6 @@ function BuiltinThumb({ ex }) {
   const body = useStore(s => figureOf(s.S))
   const src = ex.img ? imgSrc(ex, body) : null
   const [broken, setBroken] = useState(null)
-  if (!src || broken === src) return <div className="thumb thumb-x"><Icon name="dumbbell" /></div>
+  if (!src || broken === src) return <div className="thumb thumb-x"><MuscleGlyph muscle={glyphMuscleOf(ex)} /></div>
   return <img className="thumb" loading="lazy" decoding="async" draggable={false} src={src} alt="" onError={() => setBroken(src)} />
 }
