@@ -3640,7 +3640,12 @@ function doFinishWorkout() {
     // A heavier estimate without a heavier top set is its own kind of progress —
     // same weight for more reps. Reported separately so it can't be read as a load PR.
     const rec = is1RMRecord(st, e.id, e)
-    if (rec && !prs.includes(e.id) && !e1prs.some(p => p.id === e.id)) e1prs.push({ id: e.id, ...rec })
+    // A lift in two sections keeps its higher estimate, whichever section came first.
+    const at = e1prs.findIndex(p => p.id === e.id)
+    if (rec && !prs.includes(e.id)) {
+      if (at < 0) e1prs.push({ id: e.id, ...rec })
+      else if (rec.est > e1prs[at].est) e1prs[at] = { id: e.id, ...rec }
+    }
   })
   // A later section's load record outranks an earlier section's estimate record of the same lift.
   if (!past) for (let i = e1prs.length - 1; i >= 0; i--) if (prs.includes(e1prs[i].id)) e1prs.splice(i, 1)

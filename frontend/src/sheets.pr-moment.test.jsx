@@ -162,6 +162,18 @@ describe('the PR moment on the finish summary', () => {
     expect(host.querySelectorAll('.e1-row').length).toBe(0)
   })
 
+  it('keeps the higher estimate when a lift in two sections beats its estimate in both, in either order', () => {
+    const shown = []
+    for (const order of [[11, 12], [12, 11]]) {
+      const host = finishCombined(BENCH, 70, order.map(r => ({ w: 70, r })))
+      const rows = [...host.querySelectorAll('.e1-row')]
+      expect(rows.length).toBe(1)
+      shown.push(rows[0].textContent)
+    }
+    expect(shown[0]).toBe(shown[1])
+    expect(shown[0]).toContain('98')
+  })
+
   it('keeps the least assistance as the record when an assisted lift is in two sections', () => {
     const host = finishCombined('0017', 40, [{ w: 20 }, { w: 30 }])
     expect(recordOf(host)).toEqual({ rows: 1, v: '20 kg', was: 'Previous best: 40 kg' })
