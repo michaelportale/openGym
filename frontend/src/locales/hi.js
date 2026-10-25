@@ -2445,4 +2445,5 @@ export default {
   "Deload today: {0}": "आज डीलोड: {0}",
   "Strength trend": "शक्ति का रुझान",
   "Last 8 weeks": "पिछले 8 सप्ताह",
+  "Still recovering: {0}": "अभी रिकवर हो रहे हैं: {0}",
 }
