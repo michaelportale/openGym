@@ -9,13 +9,15 @@ import Icon from './Icon.jsx'
 // order, on whatever days you train. One chip per session in slot order; the next undone one
 // is lit, and any undone chip starts its own routine, in whatever order the day calls for. A
 // done chip is inert: that session is logged. A session pinned to another day (the day sheet,
-// S.dayPlan) is not lit and wears its day instead of a state word — it still starts on a tap.
+// S.dayPlan) is not lit and wears a pin and its day instead — it still starts on a tap. Only the
+// next chip carries a word ("Up next"); a slot that is neither next nor done is just its name.
+// A done chip is the name in the secondary label colour with a success check, not a fade.
 // Reads through queueView so the words here and the today row (effectiveRoutineIds →
 // queueNext) can never disagree about which is next.
 export default function QueueRow({ S, today, onStart, managed }) {
   const v = queueView(S, today)
   if (!v) return null
-  const word = { done: t('Done'), next: t('Up next'), later: t('Later') }
+  const word = { done: t('Done'), next: t('Up next') }
   const next = v.items.find(i => i.state === 'next')
   // With every remaining session pinned to its own day nothing floats, so there is no 'next'
   // chip at all; the status line then names the soonest pinned one with its day.
@@ -43,10 +45,13 @@ export default function QueueRow({ S, today, onStart, managed }) {
         keeps .chip's capitals, so it reads "Seg., 12 out." and not "seg." in Portuguese. */}
     {/* three chips do not fit one phone row and .chips hides its scrollbar — wrap instead */}
     <div className="chips" style={{ flexWrap: 'wrap' }}>
-      {v.items.map((i, n) => <button key={n} className={'chip' + (i.state === 'next' ? ' on' : '')}
+      {v.items.map((i, n) => <button key={n} className={'chip' + (i.state === 'next' ? ' on' : i.state === 'done' ? ' is-done' : '')}
         disabled={i.state === 'done'} onClick={() => onStart(i.id)}
-        style={{ display: 'inline-flex', alignItems: 'center', gap: 5, opacity: i.state === 'done' ? 0.55 : undefined }}>
-        {i.state === 'done' && <Icon name="check" />}{i.name}<span className={'dim' + (i.state === 'pinned' ? '' : ' qstate')}>{i.state === 'pinned' ? fmtDate(i.on, true) : word[i.state]}</span>
+        aria-label={i.state === 'done' ? i.name + ', ' + t('Done') : undefined}
+        style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+        {i.state === 'done' && <Icon name="check" />}{i.name}
+        {i.state === 'pinned' && <span className="dim row" style={{ gap: 2 }}><Icon name="pin" /><span className="vh">{t('pinned')}</span>{fmtDate(i.on, true)}</span>}
+        {i.state === 'next' && <span className="dim qstate">{word.next}</span>}
       </button>)}
     </div>
     <div className="small muted queue-status" style={{ marginTop: 8 }}>{status}</div>
