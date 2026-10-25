@@ -91,7 +91,8 @@ export function sessionInsights(S, workout) {
     volume: Math.round(Number.isFinite(w.vol) ? w.vol : workoutVolume(w)), volumePartial: workoutVolumeIsPartial(w),
     sets: (w.entries || []).reduce((n, en) => n + (en.sets || []).filter(s => s.done && !isWarmupRow(s)).length, 0),
     minutes: w.end && w.start ? Math.round((w.end - w.start) / 60000) : null,
-    prs: (w.prs || []).length
+    // One record per lift, however many sections held it (a saved workout may list it twice).
+    prs: new Set(w.prs || []).size
   })
   const now = stat(workout)
   const then = prev ? stat(prev) : null
