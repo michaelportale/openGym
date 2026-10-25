@@ -81,6 +81,16 @@ describe('Admin user drill-down', () => {
     expect(rows[0].textContent).toContain('Push day')
     expect(rows[0].textContent).toContain('1 sets')
   })
+
+  it('counts a lift recorded in two sections of a session as one PR', async () => {
+    mocks.answers['/api/admin/user'].workouts = [{ ...good, prs: ['bench', 'bench'] }]
+    const page = render(<Admin />)
+    await settle()
+    act(() => [...page.querySelectorAll('.item')].find(el => el.textContent.includes('Mallory')).click())
+    const sheet = render(mocks.sheets[0](() => {}))
+    await settle()
+    expect(sheet.querySelector('.list > div').textContent).toContain('1 sets · 1 PR')
+  })
 })
 
 // The users call failing, or answering without a list, used to leave "Loading…" up for good —

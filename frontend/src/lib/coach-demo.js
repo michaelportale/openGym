@@ -131,7 +131,8 @@ function buildDebrief(S, workoutId) {
   const done = entries.reduce((n, en) => n + en.sets.filter(s => s.done && !isWarmupRow(s)).length, 0)
   const planned = entries.reduce((n, en) => n + en.sets.filter(s => !isWarmupRow(s)).length, 0)
   const vol = Math.round(Number.isFinite(w.vol) ? w.vol : workoutVolume({ ...w, entries }))
-  const prs = (w.prs || []).length
+  // A lift recorded in two sections of one session is one record (as coach-insights counts).
+  const prs = new Set(w.prs || []).size
   const minutes = w.end && w.start ? Math.round((w.end - w.start) / 60000) : null
   const complete = planned > 0 && done >= planned
   const score = complete ? (prs ? 9 : 8) : 7

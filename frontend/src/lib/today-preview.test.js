@@ -63,6 +63,13 @@ describe("Home's Today preview", () => {
     const S = { unit: 'kg', routines: [routine()], workouts: [done], exWeights: {} }
     expect(todayPreview(S, ['r1'], '2026-10-03').toBeat).toEqual({ id: 'bench', w: 62.5, r: 4 })
   })
+  it('reads the set with the least help as the top set of an assisted lift', () => {
+    // 0017 is assisted: 20 kg of help is the better set, not the 30 kg one.
+    const dip = { id: '0017', sets: 3, reps: 8, weight: 30, mode: 'reps' }
+    const done = workout('w1', '2026-10-01', [entry(dip, [set(30, 8), set(20, 8), set(25, 8)])])
+    const S = { unit: 'kg', routines: [{ id: 'r1', name: 'A', prog: 'linear', ex: [dip] }], workouts: [done], exWeights: {} }
+    expect(todayPreview(S, ['r1'], '2026-10-03').toBeat).toEqual({ id: '0017', w: 20, r: 8 })
+  })
   it('has no top set to beat without a loaded set logged', () => {
     const S = { unit: 'kg', routines: [routine()], workouts: [], exWeights: {} }
     expect(todayPreview(S, ['r1'], '2026-10-03').toBeat).toBeNull()

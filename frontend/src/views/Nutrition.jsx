@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
@@ -7,7 +7,7 @@ import {
   nutritionDayOf, nutritionHistory, nutritionInputError, readSupplements, readTargets,
   withNutritionDay, withSupplement, withSupplementTick, withTarget, withoutSupplement,
 } from '../lib/nutrition.js'
-import { fmtDate, fmtNum, todayISO, uid } from '../lib/format.js'
+import { fmtDate, fmtNum, isoOf, startOfWeek, todayISO, uid, weekStartOf } from '../lib/format.js'
 import { t } from '../lib/i18n.js'
 import Icon from '../components/Icon.jsx'
 import { Button, Check, NumberField, Section, Segmented, TextArea, TextField } from '../components/ui.jsx'
@@ -175,11 +175,41 @@ function DayRow({ S, iso, supplements }) {
   </div>
 }
 
+// Today's date, read on every render; the screen also renders at the next midnight (and when it
+// comes back into view, since a hidden page's timers stall), so the Today card turns over with
+// the day instead of waiting for something else to redraw it.
+function useToday() {
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    let timer
+    const arm = () => {
+      clearTimeout(timer)
+      const now = new Date()
+      timer = setTimeout(() => { setTick(n => n + 1); arm() }, new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1) - now + 50)
+    }
+    const onVisible = () => { if (document.visibilityState === 'visible') { setTick(n => n + 1); arm() } }
+    arm()
+    document.addEventListener('visibilitychange', onVisible)
+    return () => { clearTimeout(timer); document.removeEventListener('visibilitychange', onVisible) }
+  }, [])
+  return todayISO()
+}
+
 export default function Nutrition() {
   const nav = useNavigate()
   const S = useStore(s => s.S)
-  const today = todayISO()
+  const today = useToday()
   const [anchor, setAnchor] = useState(today)
+  // When the day turns over, a week card left on the week that was current moves with it (Sunday
+  // night into Monday is a new week); a week the user stepped back to stays where it is.
+  const shownToday = useRef(today)
+  useEffect(() => {
+    const was = shownToday.current
+    if (was === today) return
+    shownToday.current = today
+    const weekOf = iso => isoOf(startOfWeek(iso, weekStartOf(S)))
+    setAnchor(a => (weekOf(a) === weekOf(was) ? today : a))
+  }, [today, S])
   const supplements = readSupplements(S.supplements)
   const todayDay = nutritionDayOf(S, today)
   const loggedToday = isLoggedDay(todayDay)
