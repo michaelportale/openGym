@@ -379,6 +379,35 @@ describe('DONE RULE in linear work', () => {
     expect(out).toEqual({ done: ['r' + (N - 1)], left: N - 1, next: 'r0', first: 'open', last: 'done' })
     expect(scanned).toBeLessThanOrEqual(20 * (N + names.length))
   })
+
+  // Home also draws the progress row (queueView) and the streak card (weekTally) from the same
+  // state, with pins on many of the sessions and a weekday plan beside the queue.
+  it('the progress row and the week tally, with many pins, sessions and routines', () => {
+    const N = 20000
+    const many = Array.from({ length: N }, (_, i) => ({ id: 'r' + i, name: 'Routine ' + i }))
+    const names = Array.from({ length: N }, (_, i) => 'Other ' + i).concat('Routine ' + (N - 1))
+    const day = i => { const d = new Date('2026-09-10T12:00:00'); d.setDate(d.getDate() + i); return d.toISOString().slice(0, 10) }
+    // Every other session from the third on is pinned to a later day.
+    const dayPlan = Object.fromEntries(Array.from({ length: N / 2 }, (_, i) => [day(i), 'r' + (2 * i + 2)]))
+    const st = S({
+      routines: [...many, { id: 'own', name: 'Core' }], dayPlan, week: { 1: ['r1', 'own'], 2: ['own'] },
+      workouts: [
+        w({ d: '2026-09-08', start: SINCE - 1, routineIds: many.map(r => r.id), name: names.join(' + ') }),
+        w({ id: 'w2', d: '2026-09-08', start: SINCE + 1, routineIds: ['r5', 'own'], name: 'Routine 5 + Core' }),
+      ],
+      queue: { ids: many.map(r => r.id), since: SINCE, startsOn: '2026-09-07' },
+    })
+    const [view, viewScanned] = counting(() => queueView(st, TODAY))
+    const [tally, tallyScanned] = counting(() => weekTally(st, TODAY))
+    expect(view.items.slice(0, 4).map(x => x.state)).toEqual(['next', 'later', 'pinned', 'later'])
+    expect(view.items[2]).toMatchObject({ id: 'r2', name: 'Routine 2', on: '2026-09-10' })
+    expect(view.items[5].state).toBe('done')
+    expect(view.items.at(-1).state).toBe('done')
+    expect(view.remaining.length).toBe(N - 2)
+    expect(tally).toEqual({ done: 2 + 1, planned: N + 2 })
+    expect(viewScanned).toBeLessThanOrEqual(20 * (N + names.length))
+    expect(tallyScanned).toBeLessThanOrEqual(20 * (N + names.length))
+  })
   it('keeps the strict, clock, date and historical-import rules', () => {
     const both = w({ d: '2026-09-08', start: SINCE - 1, routineIds: ['d1', 'd2'], name: 'US W1 D1 + US W1 D2' })
     expect(queueDone(S({ workouts: [both] }))).toEqual(['d1', 'd2'])
