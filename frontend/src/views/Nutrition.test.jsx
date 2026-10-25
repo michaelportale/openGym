@@ -169,6 +169,31 @@ describe('Nutrition screen', () => {
     expect(topSheet().querySelector('input[type="date"]').value).toBe('2026-10-22')
   })
 
+  it('the week card moves to the new week when Sunday night turns into Monday', () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    vi.setSystemTime(new Date('2026-10-25T23:59:30'))   // a Sunday; weeks start on Monday
+    install({ nutritionDays: { '2026-10-25': day(2000, 150, 30) } })
+    const el = screen()
+    const head = () => el.querySelector('.nutri-week-h h2').textContent
+    expect(head()).toBe('This week')
+    act(() => { vi.advanceTimersByTime(60e3) })
+    expect(head()).toBe('This week')
+    expect(el.querySelector('button[aria-label="Next week"]').disabled).toBe(true)
+    expect(tile(el, 'logged')).toBeNull()   // the new week has nothing logged yet
+  })
+
+  it('leaves a week the user stepped back to where it is at midnight', () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    vi.setSystemTime(new Date('2026-10-25T23:59:30'))
+    install({ nutritionDays: { '2026-10-15': day(2000, 150, 30) } })
+    const el = screen()
+    act(() => el.querySelector('button[aria-label="Previous week"]').click())
+    const before = el.querySelector('.nutri-week-h h2').textContent
+    expect(before).toContain('Week of')
+    act(() => { vi.advanceTimersByTime(60e3) })
+    expect(el.querySelector('.nutri-week-h h2').textContent).toBe(before)
+  })
+
   it('sets targets per day type, empty until the profile fills them', () => {
     install()
     act(() => { nutritionSettingsSheet() })

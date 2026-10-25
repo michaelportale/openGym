@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
@@ -7,7 +7,7 @@ import {
   nutritionDayOf, nutritionHistory, nutritionInputError, readSupplements, readTargets,
   withNutritionDay, withSupplement, withSupplementTick, withTarget, withoutSupplement,
 } from '../lib/nutrition.js'
-import { fmtDate, fmtNum, todayISO, uid } from '../lib/format.js'
+import { fmtDate, fmtNum, isoOf, startOfWeek, todayISO, uid, weekStartOf } from '../lib/format.js'
 import { t } from '../lib/i18n.js'
 import Icon from '../components/Icon.jsx'
 import { Button, Check, NumberField, Section, Segmented, TextArea, TextField } from '../components/ui.jsx'
@@ -200,6 +200,16 @@ export default function Nutrition() {
   const S = useStore(s => s.S)
   const today = useToday()
   const [anchor, setAnchor] = useState(today)
+  // When the day turns over, a week card left on the week that was current moves with it (Sunday
+  // night into Monday is a new week); a week the user stepped back to stays where it is.
+  const shownToday = useRef(today)
+  useEffect(() => {
+    const was = shownToday.current
+    if (was === today) return
+    shownToday.current = today
+    const weekOf = iso => isoOf(startOfWeek(iso, weekStartOf(S)))
+    setAnchor(a => (weekOf(a) === weekOf(was) ? today : a))
+  }, [today, S])
   const supplements = readSupplements(S.supplements)
   const todayDay = nutritionDayOf(S, today)
   const loggedToday = isLoggedDay(todayDay)
