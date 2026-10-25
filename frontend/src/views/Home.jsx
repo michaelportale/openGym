@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useId, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { effectiveRoutines, effectiveRoutineIds, nextTrainingDay, streakWeeks, lastBW, setsDoneActive } from '../lib/history.js'
@@ -21,12 +21,20 @@ import { todayPreview, PREVIEW_INPUTS } from '../lib/today-preview.js'
 import { exOr } from '../lib/exercises.js'
 import { MUSCLE_NAME } from '../lib/muscles.js'
 import { useFabAsideWhileVisible } from '../lib/use-hide-fab.js'
+import Elapsed from '../components/Elapsed.jsx'
+import { isWarmupRow } from '../lib/workout-model.js'
+
+// A logged session in one line: how long it took and how many work sets it held.
+function doneSummary(w) {
+  const min = w.start && w.end ? Math.max(1, Math.round((w.end - w.start) / 60000)) : 0
+  const sets = (w.entries || []).reduce((n, e) => n + (e.sets || []).filter(x => x.done && !isWarmupRow(x)).length, 0)
+  return [min && t('{0} min', min), sets && tn('{0} set', '{0} sets', sets)].filter(Boolean).join(' · ')
+}
 
 // Home = what to do now + a quick glance. Deep charts & history live in Stats.
 export default function Home() {
   const nav = useNavigate()
   const S = useStore(s => s.S)
-  const user = useStore(s => s.user)
   // The banner switched off and the sync stuck: a dot on the gear (Settings → Show connection status).
   const trouble = useConnectionTrouble()
   const [weekOffset, setWeekOffset] = useState(0)
@@ -119,44 +127,54 @@ export default function Home() {
   // The card's Start is the screen's one accent action; while it is in view the tab bar's Start
   // steps aside rather than repeat it.
   const startRef = useRef(null)
+  const todayId = useId()
+  const todayDetailId = useId()
   const showStart = !S.active && !doneToday && !!routine
   useFabAsideWhileVisible(startRef, showStart)
 
   return <div className="narrow">
     <div className="hdr">
-      <div><h1>{user ? t('Hi {0}', user.name) : 'openGym'}</h1><div className="sub">{today.toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' })}</div></div>
+      {/* The day leads, not a greeting: the screen is about what today holds. */}
+      <div><h1>{today.toLocaleDateString(dateLocale(), { weekday: 'long' })}</h1><div className="sub">{today.toLocaleDateString(dateLocale(), { day: 'numeric', month: 'long' })}</div></div>
       <button className="iconbtn" onClick={() => nav('/settings')} aria-label={trouble ? t('Settings') + ', ' + t('Connection problem') : t('Settings')}><Icon name="gear" />{trouble && <span className="tab-dot" aria-hidden="true" />}</button>
     </div>
 
     {/* Today first: what is next and the one action that starts it, with the week (or the
         coach week) below as the glance. */}
-    <div className="card today-card">
+    <section className="card today-card" aria-labelledby={todayId}>
       {/* Once today's session is logged the row stops asking for it. The week strip already
           knew (its dot goes 'done'); this row did not, so a finished day kept showing the
           routine name behind a green Start tag and read as still outstanding (issue #4).
           An in-progress session still wins — that one is happening right now. Tapping the
           row keeps working, so a second session in one day is a tap away, just not urged. */}
-      <div className="today-row today-hero" {...tappable(onToday)}>
+      <div className="today-row today-hero" {...tappable(onToday)} aria-label={showStart ? t('Start {0}', todayName) : undefined}
+        aria-describedby={showStart ? todayDetailId : undefined}>
         <div className="row" style={{ gap: 9, minWidth: 0 }}>
           <span className="lrow-i today-glyph" style={{ background: S.active ? 'var(--warning)' : doneToday ? 'var(--surface-3)' : routine ? 'var(--acc)' : 'var(--surface-3)' }}>
             <Icon name={S.active ? (editingSaved ? 'pencil' : 'play') : doneToday ? 'checkCircle' : routine ? glyphOf(routine.emoji) : 'moon'}
               style={doneToday && !S.active ? { color: 'var(--success)' } : undefined} />
           </span>
           <div style={{ minWidth: 0 }}>
-            <div className="lbl2">{t('Today')}</div>
+            <div className="lbl2" id={todayId}>{t('Today')}</div>
             <div className="ttl">{S.active ? (editingSaved ? S.active.name : t('{0} (in progress)', S.active.name))
               : doneToday ? (doneToday.name ? t('{0} (done)', doneToday.name) : t('Workout done'))
               : routine ? todayName : t('Rest day')}{todayOvr && routine && !doneToday ? ' · ' + t('rescheduled') : ''}</div>
+            {/* The Start label names the action; these lines are its description, so a screen
+                reader still hears the exercises, what moves up, recovery and the set to beat. */}
+            <div id={todayDetailId}>
             {preview && <>
               <div className="today-meta">{[tn('{0} exercise', '{0} exercises', preview.exercises), preview.last && t('Last time') + ' (' + fmtDaysAgo(preview.last.d) + ')'].filter(Boolean).join(' · ')}</div>
               {preview.up.length > 0 && <div className="today-meta today-up"><Icon name="arrowUp" />{t('Moving up today: {0}', namesOf(preview.up))}</div>}
               {preview.lighter.length > 0 && <div className="today-meta"><Icon name="arrowDown" />{t('Deload today: {0}', namesOf(preview.lighter))}</div>}
               {preview.recovering.length > 0 && <div className="today-meta today-recovering"><Icon name="hourglass" /><span className="today-recovering-t">{t('Still recovering: {0}', preview.recovering.slice(0, 3).map(m => t(MUSCLE_NAME[m] || m)).join(', ') + (preview.recovering.length > 3 ? ' +' + (preview.recovering.length - 3) : ''))}</span></div>}
             </>}
+            {preview?.toBeat && <div className="today-meta today-beat">{t('Top set to beat: {0}', exerciseNameText(exOr(preview.toBeat.id)))} <span className="tnum">{fmtNum(preview.toBeat.w)}<span className="unit">{S.unit}</span> × {fmtNum(preview.toBeat.r)}</span></div>}
+            {doneToday && !S.active && <div className="today-meta">{doneSummary(doneToday)}</div>}
             {next && !doneToday && <div className="ss">{t('Next session: {0}, {1}', t(DAYN[next.weekday]), next.routine.name)}</div>}
+            </div>
           </div>
         </div>
-        {S.active ? <span className="tag today-cta" style={{ color: 'var(--warning)', background: 'color-mix(in srgb,var(--warning) 16%,transparent)' }}>{editingSaved ? t('Edit') : t('Resume')}</span>
+        {S.active ? <span className="tag today-cta" style={{ color: 'var(--warning)', background: 'color-mix(in srgb,var(--warning) 16%,transparent)' }}>{editingSaved ? t('Edit') : <>{t('Resume')} · <span className="tnum"><Elapsed start={S.active.start} /></span></>}</span>
           : doneToday ? <span className="tag" style={{ color: 'var(--success)', background: 'color-mix(in srgb,var(--success) 16%,transparent)' }}>{t('Done')}</span>
           : routine ? <span className="tag acc today-cta" ref={startRef}><Icon name="play" />{t('Start')}</span>
           : <Icon name="plus" className="chev" />}
@@ -169,7 +187,7 @@ export default function Home() {
           weigh-in is switched off. This is that door, and it starts nothing on its own. */}
       {!S.active && <div style={{ display: 'flex', justifyContent: 'center', marginTop: 4 }}>
         <Button size="sm" variant="ghost" className="today-choose" onClick={() => nav('/workout')}>
-          {t('Choose a different workout')}
+          {!routine && !doneToday ? t('Train anyway') : t('Choose a different workout')}
         </Button>
       </div>}
       <div className="today-glance">
@@ -188,7 +206,7 @@ export default function Home() {
           <div className="week">{strip}</div>
         </>}
       </div>
-    </div>
+    </section>
 
     <CoverageGlance S={S} />
 

@@ -217,7 +217,6 @@ export default {
   'Freestyle workout. Add your first exercise and off you go.': '자유 운동. 첫 운동을 추가하고 바로 시작하세요.',
   'Finish workout early · {0} exercises': '일찍 마치기 · 운동 {0}개',
   'Rest’s over. Next set!': '휴식 끝. 다음 세트!',
-  'Hi {0}': '안녕하세요 {0}',
   'This week': '이번 주',
   '{0} (in progress)': '{0}(진행 중)',
   'Resume ▶': '이어하기 ▶',
@@ -2476,4 +2475,6 @@ export default {
   "{0} rep": "{0}회",
   "{0} reps": "{0}회",
   "New PR · {0}": "새 기록 · {0}",
+  "Train anyway": "그래도 운동하기",
+  "Top set to beat: {0}": "넘어설 최고 세트: {0}",
 }

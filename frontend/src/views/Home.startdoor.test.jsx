@@ -55,9 +55,10 @@ describe('Home — the way to the Start screen when a plan already owns today', 
     expect(startFlow).not.toHaveBeenCalled()
   })
 
-  it('is still there on a rest day, where freestyle is the only thing left to start', () => {
+  it('is still there on a rest day, where freestyle is the only thing left to start, as Train anyway', () => {
     setS({ week: {} }); mount()
-    expect(door()).toBeTruthy()
+    expect(door()).toBeUndefined()
+    expect(host.querySelector('.today-choose').textContent).toBe('Train anyway')
   })
 
   it('goes away once a session is running — that screen resumes it, it does not choose', () => {
@@ -81,6 +82,7 @@ describe('Home — the way to the Start screen when a plan already owns today', 
     mount()
     const row = host.querySelector('.today-row')
     expect(row.querySelector('.ttl').textContent).toBe('Push (in progress)')
-    expect(row.querySelector('.tag').textContent).toBe('Resume')
+    // with the session's running time beside it
+    expect(row.querySelector('.tag').textContent).toMatch(/^Resume · \d+:\d\d$/)
   })
 })

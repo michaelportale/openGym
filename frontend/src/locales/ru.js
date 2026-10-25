@@ -211,7 +211,6 @@ export default {
   'Freestyle workout. Add your first exercise and off you go.': 'Свободная тренировка. Добавьте первое упражнение, и вперёд.',
   'Finish workout early · {0} exercises': 'Завершить раньше · упражнений: {0}',
   'Rest’s over. Next set!': 'Отдых окончен. Следующий подход!',
-  'Hi {0}': 'Привет, {0}',
   'This week': 'Эта неделя',
   '{0} (in progress)': '{0} (идёт)',
   'Resume ▶': 'Продолжить ▶',
@@ -2480,4 +2479,6 @@ export default {
   "{0} rep": "{0} повт.",
   "{0} reps": {"one": "{0} повт.", "few": "{0} повт.", "many": "{0} повт.", "other": "{0} повт."},
   "New PR · {0}": "Новый рекорд · {0}",
+  "Train anyway": "Всё равно тренироваться",
+  "Top set to beat: {0}": "Лучший подход, который нужно побить: {0}",
 }

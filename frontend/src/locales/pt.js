@@ -217,7 +217,6 @@ export default {
   'Freestyle workout. Add your first exercise and off you go.': 'Treino livre. Adiciona o primeiro exercício e bora lá.',
   'Finish workout early · {0} exercises': 'Terminar mais cedo · {0} exercícios',
   'Rest’s over. Next set!': 'Acabou o descanso. Próxima série!',
-  'Hi {0}': 'Olá {0}',
   'This week': 'Esta semana',
   '{0} (in progress)': '{0} (em curso)',
   'Resume ▶': 'Retomar ▶',
@@ -2476,4 +2475,6 @@ export default {
   "{0} rep": "{0} rep.",
   "{0} reps": "{0} rep.",
   "New PR · {0}": "Novo recorde · {0}",
+  "Train anyway": "Treinar mesmo assim",
+  "Top set to beat: {0}": "Melhor série a superar: {0}",
 }
