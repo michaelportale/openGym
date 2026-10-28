@@ -2427,7 +2427,7 @@ function DayOverride({ iso, close }) {
   const { [iso]: _ovr, ...noOvr } = st.dayPlan
   const weeklyNames = effectiveRoutineIds({ ...st, dayPlan: noOvr }, iso).map(id => st.routines.find(r => r.id === id)?.name).filter(Boolean)
   // A weekday can hold several routines; the per-date override stays single-pick, so picking
-  // one here collapses a combined day to it (docs/dev/COMBINE_ROUTINES.md §8). The check marks
+  // one here collapses a combined day to it (docs/ENGINEERING.md, Combined routines). The check marks
   // show everything currently planned for the day.
   const effIds = effectiveRoutineIds(st, iso)
   // A planned day in the past with nothing logged was missed — or trained and never logged,
@@ -2524,7 +2524,7 @@ function DayNote({ iso, close }) {
 export const dayNoteSheet = iso => ui().openSheet(close => <DayNote iso={iso} close={close} />)
 
 // Plan → Schedule → a weekday. One sheet for the whole day: tap routines to put them on it or
-// take them off (two or more make a combined day, docs/dev/COMBINE_ROUTINES.md), in the order
+// take them off (two or more make a combined day, docs/ENGINEERING.md), in the order
 // tapped, which is the order the session runs them; "Rest day" clears it. The sheet stays open
 // for a second pick, so "Done" closes it. The weekday never stores [] (the key goes instead).
 function DayAssign({ day, close }) {

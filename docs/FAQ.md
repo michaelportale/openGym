@@ -9,33 +9,20 @@ to support it anyway, there's [Buy Me a Coffee](https://buymeacoffee.com/duartes
 
 ### Do I need my own server?
 
-No, there are three ways to use it:
+A self-hosted instance provides profiles and synchronization between devices. Follow the
+[self-hosting guide](SELF_HOSTING.md) to build and run this repository with Docker Compose.
+The [upstream demo](https://opengym.ch/demo/) can be used to try the application with example data.
 
-- **Try it:** the [online demo](https://opengym.ch/demo/) runs entirely in your
-  browser with example data.
-- **Phone only:** the Android app needs no server and no account; everything stays on the phone.
-  See [MOBILE.md](MOBILE.md).
-- **Your own instance:** `docker compose up` on any machine with Docker gives you sync between
-  devices and profiles for friends and family. See [SELF_HOSTING.md](SELF_HOSTING.md).
+### Can I use it on a phone?
 
-### Is there an iPhone app?
-
-Not in the App Store, and Apple doesn't allow installing apps from anywhere else. On an iPhone you can
-self-host and add openGym to your home screen from Safari (it's a full PWA that works offline), or
-build the native app onto your own phone with Xcode. Both are described in [MOBILE.md](MOBILE.md).
-An App Store build is on the [roadmap](../ROADMAP.md).
-
-### Why isn't it on the Play Store?
-
-That's deliberate. The APK is signed, published with a `.sha256` next to every release, and the app
-checks for updates itself. Get it from the
-[latest release](https://github.com/DuarteSantos8/openGym/releases/latest).
+Yes. Open your instance over HTTPS in Safari or Chrome and use **Add to Home Screen**.
+This repository targets the web/PWA installation and does not include native Android or iOS
+project directories. See [HTTPS setup](SELF_HOSTING_HTTPS.md).
 
 ### Where is my data?
 
 On a self-hosted instance, in the `./data` folder next to `docker-compose.yml`: one JSON file per
-profile plus the account list. Back up that folder and you've backed up everything. In the phone app
-it's in the app's private storage. In guest mode it's only in that browser. You can export
+profile plus the account list. Back up that folder and you've backed up everything. In guest mode it's only in that browser. You can export
 everything as one file at any time under **Settings → Data & backup**.
 
 ### Does the app send anything anywhere?
@@ -44,13 +31,6 @@ Your instance has no telemetry and phones home to nobody. The exercise pictures 
 inside the web image, so not even those are downloaded. The AI coach, if an admin turns it on, sends
 the training data it needs to the provider you configured; [AI_COACH.md](AI_COACH.md) lists exactly
 what. Push notifications go through your browser's push service, as all web push does.
-
-### Was openGym written with AI?
-
-It's developed with [Claude Code](https://claude.com/claude-code), Anthropic's coding agent, and a
-large share of the code, tests and docs is drafted that way. The maintainer decides what goes in,
-reviews it, and tests every release on a staging instance and on real phones. The longer answer is in
-the [README](../README.md#how-opengym-is-built).
 
 ### Does the app itself use AI?
 
@@ -83,7 +63,7 @@ invite-only and give yourself an admin dashboard; see
 
 ### How do I update?
 
-`git pull && docker compose pull && docker compose up -d`. Your data is untouched. See
+`git pull --ff-only && docker compose up -d --build`. Your data is untouched. See
 [updating](SELF_HOSTING.md#8-updating).
 
 Then update the app on every device that syncs. A phone still on v1.3.9 or older keeps syncing,
