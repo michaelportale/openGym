@@ -17,25 +17,26 @@ This guide takes you from "just cloned it" to "using it from my phone over the i
 - [Which passkey providers work](#which-passkey-providers-work)
 - [Troubleshooting](#troubleshooting)
 
-HTTPS on a LAN without a public domain has [its own guide](SELF_HOSTING_HTTPS.md), and so does
-[Kubernetes](SELF_HOSTING_KUBERNETES.md). Short answers to common questions are in the [FAQ](FAQ.md).
+HTTPS on a LAN has [its own guide](SELF_HOSTING_HTTPS.md). Short answers to common questions
+are in the [FAQ](FAQ.md). This fork ships Docker Compose configuration; native project directories
+and Kubernetes manifests are not included. Native-client references below describe compatibility
+with upstream clients.
 
 ## 1. Run it locally (5 minutes)
 
 Requirements: [Docker](https://docs.docker.com/get-docker/) with the Compose plugin.
 
 ```bash
-git clone https://github.com/DuarteSantos8/openGym   # or https://gitlab.com/DuarteSantos8/opengym — same repo
+git clone https://github.com/michaelportale/openGym
 cd openGym
 cp .env.example .env
-docker compose pull   # prebuilt images from ghcr.io (amd64 + arm64; the same images are on GitLab's registry) — or skip and build from source
-docker compose up -d
+docker compose up -d --build
 ```
 
 - The exercise stills and animations (180 px, ~80 MB) ship inside the web image; nothing is downloaded on first start. An old `media/` folder and its two volume lines from before v1.4.0 are no longer used: harmless if you keep them, safe to delete.
 - Open **http://localhost:8080** and create a profile with a passkey.
-- Rather build from source than pull prebuilt images? Skip `docker compose pull` and run
-  `docker compose up -d --build` instead — no Node needed locally either way.
+- Build with `--build` to use this fork. The image names in Compose refer to upstream
+  packages; pulling them does not include this repository's changes.
 
 Check it's healthy:
 
@@ -60,7 +61,7 @@ passkey prompt won't appear. To use openGym from your phone you need a real HTTP
 (You can still open it over LAN in **guest mode**, which stores data only in that browser — or
 turn on **password sign-in**, see [§4](#password-sign-in-optional).)
 
-The standalone mobile app (`docs/MOBILE.md`) sidesteps this entirely for its "connect to my
+The upstream standalone mobile app sidesteps this entirely for its "connect to my
 server" mode: instead of a passkey ceremony (impossible from inside its WebView, which never
 runs at your real hostname), it pairs by redeeming a short one-time code — minted from
 Settings → Account → "Pair the mobile app" in an already signed-in browser tab — for a bearer token
@@ -134,7 +135,7 @@ Visit `https://gym.example.com`, create your profile, and add it to your home sc
 #### Phone app and CORS
 
 The browser app is served from your domain, so it never makes a cross-origin request. The
-[phone app](MOBILE.md#connecting-the-app-to-your-own-server) does: its WebView runs at
+upstream phone app does: its WebView runs at
 `https://localhost` (Android) or `capacitor://localhost` (iOS), and the browser engine asks your
 server first (a CORS preflight, `OPTIONS`) before every request with a JSON body or a token.
 **openGym answers that preflight itself**: it allows the requesting origin, the methods
@@ -433,8 +434,8 @@ from Settings → Account → "Pair the mobile app", as with a passkey.
 
 ## 5. Fitting it into an existing stack
 
-Running Kubernetes? Example manifests (Deployment, PVCs, Service, Gateway API route) are in
-`kubernetes/`, described in [SELF_HOSTING_KUBERNETES.md](SELF_HOSTING_KUBERNETES.md).
+Kubernetes manifests are not included in this repository. The service configuration below
+describes the supplied Docker Compose deployment.
 
 The defaults assume openGym is the only thing here: a service called `api` on port 3000, and nginx
 on port 80 inside its container. If you are merging this into a compose file that already has an
@@ -666,8 +667,7 @@ Running prebuilt images:
 
 ```bash
 git pull                    # picks up compose/config changes
-docker compose pull
-docker compose up -d
+docker compose up -d --build
 ```
 
 Building from source instead:
@@ -725,7 +725,7 @@ everybody registers again — which is why it pays to settle the domain before o
 
 > On a LAN without certificates there is nothing to configure that makes passkeys work over
 > plain `http://192.168.x.x`: browsers only allow WebAuthn on HTTPS (or `localhost`). Use guest
-> mode, the standalone mobile app (`docs/MOBILE.md`), or put a certificate in front of it.
+> mode or put a certificate in front of it.
 
 ## Which passkey providers work
 
@@ -798,7 +798,7 @@ browser (see section 2).
 |---|---|
 | No passkey prompt on my phone | You're on `http://` or an IP, not HTTPS. Set up a domain (section 3). |
 | "verification failed" on login | `RP_ID`/`ORIGIN` don't match the URL in the address bar. See the section above — start with what the server logged on startup. |
-| Exercise pictures missing | You are on an image older than v1.4.0 or a custom build: `docker compose pull && docker compose up -d`. A source build needs `catalogue/media/` checked out. |
+| Exercise pictures missing | You are on an image older than v1.4.0 or a custom build: `docker compose up -d --build`. A source build needs `catalogue/media/` checked out. |
 | Port 8080 already used | Set `WEB_PORT=9090` in `.env` (and update `ORIGIN` for local testing). |
 | A photo or video will not upload ("refused as too large", or it stops partway) | A proxy in front caps the body or cuts the request off: see [Photos and videos](#photos-and-videos-of-custom-exercises) for the body size and timeouts it needs. |
 | No "Reminders" page in Settings | Requires a signed-in profile and HTTPS (or `localhost`) — guest mode and plain HTTP over LAN can't subscribe. |

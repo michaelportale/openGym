@@ -28,21 +28,11 @@ All settings live in `.env`; [`.env.example`](../.env.example) explains each one
 
 ## Working on the code
 
-| Guide | Read it when |
+| Guide | Covers |
 |---|---|
-| [CLAUDE.md](../CLAUDE.md) | You want the architecture in one page (written for Claude Code, useful for people too) |
-| [HTTP API](API.md) | You're touching routes; the OpenAPI spec is the source of truth |
-
-Design notes for specific features, kept next to the code they describe:
-
-| Note | Covers |
-|---|---|
-| [Set types](dev/SET_TYPES.md) | Drop sets and rest-pause: the set-row model and how totals are counted |
-| [Workout views](dev/LIST_VIEW.md) | The cards, list and compact layouts of the workout screen |
-| [Combine routines](dev/COMBINE_ROUTINES.md) | Spec for running more than one routine in a session |
-| [Personal strength policy](dev/PERSONAL_STRENGTH_POLICY.md) | Coverage accounting, effort suggestions, duration assumptions and evidence limits |
-| [Personal strength acceptance](dev/PERSONAL_STRENGTH_ACCEPTANCE.md) | Verified local behavior, release checks and the open installed-iPhone gate |
-| [Fitbod research](dev/FITBOD_RESEARCH.md) | Installed-artifact findings and unverified runtime behavior |
+| [Engineering guide](ENGINEERING.md) | Architecture, local development, workout data, training calculations and verification |
+| [HTTP API](API.md) | Routes and the OpenAPI contract |
+| [Data imports](DATA_IMPORTS.md) | Supported formats and import behavior |
 
 ## Still stuck?
 
