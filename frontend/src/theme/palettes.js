@@ -2,7 +2,7 @@
 // becomes attributes on <html>.
 //
 // <html data-theme> names what the page is drawn in: 'light', or in dark mode the palette's own
-// name ('ember', 'volt', 'chalk'), or 'dark' for Classic, the original look with no palette file.
+// name ('tide', 'ember', 'volt', 'chalk'), or 'dark' for Classic, the original look with no palette file.
 // Every existing `[data-theme="light"]` rule and `=== 'light'` check keeps working unchanged.
 // <html data-palette> always names the chosen palette, so light mode can still use its accent.
 import data from './palettes.json'
@@ -11,7 +11,7 @@ export const CLASSIC = 'classic'
 export const DEFAULT_PALETTE = data.default
 export const PALETTES = [...data.palettes.map(p => p.name), CLASSIC]
 // Translated in the locale packs; what Settings → Look shows.
-export const PALETTE_NAMES = { ember: 'Ember', volt: 'Volt', chalk: 'Chalk', [CLASSIC]: 'Classic' }
+export const PALETTE_NAMES = { tide: 'Tide', ember: 'Ember', volt: 'Volt', chalk: 'Chalk', [CLASSIC]: 'Classic' }
 
 const byName = Object.fromEntries(data.palettes.map(p => [p.name, p.tokens]))
 // The accent drawn while the accent setting is "From palette" (dark shade), for places outside

@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { outputs, loadPalettes, paletteCss } from '../../scripts/gen-palettes.mjs'
 import { isGreenRgb } from '../../scripts/color-audit.mjs'
-import { contrast, readableIn } from '../lib/accent.js'
+import { contrast, mix, readableIn } from '../lib/accent.js'
 import { CLASSIC, DEFAULT_PALETTE, PALETTES, PALETTE_NAMES, PALETTE_BG, paletteKey, themeAttr, darkAttrOf } from './palettes.js'
 
 const data = loadPalettes()
@@ -55,6 +55,28 @@ describe('palettes.json', () => {
   it('keeps the personal-record gold apart from success', () => {
     for (const { tokens: t } of data.palettes) expect(t.pr.toLowerCase()).not.toBe(t.success.toLowerCase())
   })
+  it('keeps Tide accent text readable on light surfaces', () => {
+    const tide = data.palettes.find(p => p.name === 'tide')
+    for (const surface of ['#ffffff', '#ececef', '#f2f2f7']) {
+      expect(contrast(tide.light.accentText, surface)).toBeGreaterThanOrEqual(4.5)
+    }
+  })
+  it('keeps Tide secondary light text readable on the standard light surfaces', () => {
+    const tide = data.palettes.find(p => p.name === 'tide')
+    for (const label of ['text2', 'text3']) {
+      for (const surface of ['#ffffff', '#f7f7fa', '#f2f2f7', '#ececef', '#e3e3e8']) {
+        expect(contrast(tide.light[label], surface)).toBeGreaterThanOrEqual(4.5)
+      }
+      expect(paletteCss(tide)).toContain(`--label-${label.slice(-1)}: ${tide.light[label]};`)
+    }
+  })
+  it('keeps Tide completed checks readable on their translucent light background', () => {
+    const tide = data.palettes.find(p => p.name === 'tide')
+    for (const surface of ['#ffffff', '#ececef', '#f2f2f7']) {
+      const background = mix(tide.light.success, surface, 0.84)
+      expect(contrast(tide.light.success, background)).toBeGreaterThanOrEqual(3)
+    }
+  })
 })
 
 describe('generated palette CSS', () => {
@@ -62,7 +84,8 @@ describe('generated palette CSS', () => {
     for (const { file, css } of outputs(data)) expect(readFileSync(file, 'utf8')).toBe(css)
   })
   it('scopes the accent to data-accent="theme" so presets and own colours still win', () => {
-    for (const { css } of outputs(data)) {
+    const materials = readFileSync(new URL('./materials.css', import.meta.url), 'utf8')
+    for (const { css } of [...outputs(data), { css: materials }]) {
       for (const m of css.matchAll(/^([^\n{]+)\{[^}]*--acc:/gm)) expect(m[1]).toContain('[data-accent="theme"]')
     }
   })
@@ -81,7 +104,7 @@ describe('generated palette CSS', () => {
         }
       }
     }
-    expect(n).toBe(12)
+    expect(n).toBe(data.palettes.length * 4)
   })
 })
 
@@ -94,10 +117,10 @@ describe('switching palettes on <html>', () => {
     expect(themeAttr('dark', 'nope')).toBe('dark')
   })
   it('defaults to the palette named in palettes.json', () => {
-    expect(DEFAULT_PALETTE).toBe('ember')
-    expect(paletteKey({})).toBe('ember')
+    expect(DEFAULT_PALETTE).toBe('tide')
+    expect(paletteKey({})).toBe('tide')
     expect(paletteKey({ palette: 'chalk' })).toBe('chalk')
-    expect(paletteKey({ palette: '"><x' })).toBe('ember')
+    expect(paletteKey({ palette: '"><x' })).toBe('tide')
     expect(paletteKey({ palette: CLASSIC })).toBe(CLASSIC)
   })
   it('lists every palette in Settings, with Classic last', () => {
@@ -129,5 +152,25 @@ describe('install assets', () => {
       // PNG IHDR: width and height, big-endian, at bytes 16 and 20
       expect([png.readUInt32BE(16), png.readUInt32BE(20)], href).toEqual([w * r, h * r])
     }
+  })
+})
+
+
+describe('material palette compatibility', () => {
+  const materials = readFileSync(new URL('./materials.css', import.meta.url), 'utf8')
+  const base = readFileSync(new URL('../index.css', import.meta.url), 'utf8')
+  it('leaves Classic neutrals and its black system-bar color consistent', () => {
+    expect(materials).not.toContain(':root[data-theme="dark"]')
+    expect(base.match(/--bg:\s*(#[0-9a-f]{6})/)[1]).toBe(PALETTE_BG[CLASSIC])
+    expect(materials).toContain(':root:not([data-theme="dark"]) body')
+  })
+  it('keeps Resume readable on both system blues without a highlight', () => {
+    const ink = materials.match(/--on-workout-active:\s*(#[0-9a-f]{6})/)[1]
+    const blues = [...base.matchAll(/--blue:\s*(#[0-9a-f]{6})/g)]
+    expect(blues).toHaveLength(2)
+    for (const [, blue] of blues) expect(contrast(ink, blue)).toBeGreaterThanOrEqual(4.5)
+    const resume = materials.match(/\n\.today-hero \.tag\.today-cta\.active-session \{([^}]+)\}/)[1]
+    expect(resume).not.toContain('gradient')
+    expect(materials).toContain(':root:not([data-theme="tide"]) .today-cta.active-session::after { content: none; }')
   })
 })

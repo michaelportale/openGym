@@ -19,6 +19,9 @@ import './components/WorkoutReplacementSheet.css'
 import './theme/theme-ember.css'
 import './theme/theme-volt.css'
 import './theme/theme-chalk.css'
+import './theme/theme-tide.css'
+// Shared material and motion treatment, layered over the user's palette.
+import './theme/materials.css'
 
 // App.jsx restores per-route scroll itself; the browser's own attempt races it.
 if ('scrollRestoration' in history) history.scrollRestoration = 'manual'

@@ -1,0 +1,285 @@
+/* Athletic materials: clay for things you press, glass for things above the work.
+   Palette surfaces, accents and status colours remain user-controlled.
+   Opaque cards keep logging legible. */
+:root {
+  --r-sm: 12px;
+  --r: 16px;
+  --r-lg: 22px;
+  --r-xl: 28px;
+  --r-card: 24px;
+  --material-edge: rgba(255,255,255,.09);
+  --material-highlight: rgba(255,255,255,.13);
+  --material-shade: rgba(0,0,0,.38);
+  --clay-shadow: inset 0 2px 1px var(--material-highlight), inset 0 -3px 5px var(--material-shade), 0 5px 10px -5px var(--material-shade);
+  --panel-shadow: inset 0 1px 0 var(--material-edge), 0 12px 28px -18px rgba(0,0,0,.65);
+  --material-sheen: linear-gradient(145deg, rgba(255,255,255,.045), transparent 62%);
+  --material-spring: cubic-bezier(.2,.85,.25,1.15);
+  --material-feedback: 260ms;
+  --workout-active: var(--blue);
+  --on-workout-active: #000000;
+}
+
+:root[data-theme="light"] {
+  --material-edge: rgba(0,0,0,.06);
+  --material-highlight: rgba(255,255,255,.9);
+  --material-shade: rgba(0,0,0,.12);
+  --panel-shadow: inset 0 1px 0 var(--material-highlight), 0 10px 22px -18px rgba(0,0,0,.3);
+}
+
+:root:not([data-theme="dark"]) body {
+  background-image: radial-gradient(ellipse at 50% 0, color-mix(in srgb,var(--acc) 3%,transparent), transparent 650px);
+}
+.hdr { margin-block: 16px 24px; }
+.hdr h1 { font-weight: 750; letter-spacing: -.04em; }
+.lc-text { font-size: 11px; }
+.streak-kicker { text-transform: none; letter-spacing: 0; }
+.card, .sect-b, .tile, body.no-tabbar .wl-unit {
+  background-color: var(--surface);
+  background-image: var(--material-sheen);
+  box-shadow: var(--panel-shadow);
+  border-radius: var(--r-card);
+}
+.card { margin-bottom: 16px; padding: 20px; }
+.card.today-card {
+  background-image: linear-gradient(135deg, color-mix(in srgb,var(--acc) 9%,transparent), transparent 70%), var(--material-sheen);
+  box-shadow: inset 0 1px 0 color-mix(in srgb,var(--acc) 24%,var(--material-edge)), var(--panel-shadow);
+}
+.today-hero .ttl { font-size: 26px; font-weight: 700; letter-spacing: -.035em; }
+.today-hero .ss, .today-meta { line-height: 1.45; }
+.today-beat { display: block; }
+.today-beat > .tnum { display: inline-block; white-space: nowrap; }
+.today-card .today-glance { margin-top: 16px; padding-top: 16px; }
+.today-hero .tag.today-cta { min-height: 50px; margin-top: 8px; border-radius: 17px; background: var(--acc); color: var(--on-acc); }
+.wday { border-radius: 16px; }
+.wday.today { background: var(--acc-soft); box-shadow: inset 0 1px 0 var(--material-edge); }
+.wday.today .num { box-shadow: var(--clay-shadow); }
+
+.btn:not(.plain):not(.ghost):not(.today-choose):not(:disabled):not([aria-disabled="true"]),
+.today-cta, .chip.on, .seg-sel, .lrow-i,
+body.no-tabbar .setrow .chk:not(:disabled),
+body.no-tabbar .setrow .stp button:not(:disabled) {
+  box-shadow: var(--clay-shadow);
+}
+.btn.primary { background-image: linear-gradient(180deg, rgba(255,255,255,.12), transparent 65%); }
+.iconbtn { background-color: var(--surface-2); box-shadow: var(--clay-shadow); border-radius: 14px; }
+.btn.ghost, .btn.plain, .btn.today-choose { box-shadow: none; }
+.seg { box-shadow: inset 0 2px 5px var(--material-shade); }
+.seg-sel { border-radius: 12px; }
+
+/* Blur only the floating layer; dozens of blurred list cards are costly on phones. */
+#tabbar, .sheet, #timer, body.no-tabbar .whdr.stick {
+  background: color-mix(in srgb,var(--bg-el) 88%,transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(130%);
+  backdrop-filter: blur(16px) saturate(130%);
+  box-shadow: inset 0 1px 0 var(--material-edge), 0 -8px 32px rgba(0,0,0,.16);
+}
+#tabbar { border-top: 0; border-radius: 24px 24px 0 0; }
+#tabbar button { font-size: 11px; padding-top: 5px; }
+#tabbar button.start .cir, #tabbar button.start.rec .cir {
+  border-radius: 20px;
+  box-shadow: var(--clay-shadow), 0 0 0 4px var(--bg-el);
+}
+.sheet { border-radius: 28px 28px 0 0; }
+body.no-tabbar #timer { border-radius: 24px 24px 0 0; border-top: 0; box-shadow: var(--panel-shadow); }
+body.no-tabbar .wl-unit.cur { box-shadow: inset 0 0 0 1px var(--acc-line), var(--panel-shadow); }
+body.no-tabbar .setrow .stp { border-radius: 14px; box-shadow: inset 0 2px 5px var(--material-shade); }
+body.no-tabbar .setrow .stp button { border-radius: 12px; background: var(--surface-3); }
+body.no-tabbar .setrow .chk { border-radius: 14px; }
+body.no-tabbar .setrow .chk.on { background: var(--success-soft); color: var(--success); border-color: transparent; }
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  #tabbar, .sheet, #timer, body.no-tabbar .whdr.stick { background: var(--bg-el); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  #tabbar, .sheet, #timer, body.no-tabbar .whdr.stick { background: var(--bg-el); backdrop-filter: none; -webkit-backdrop-filter: none; }
+}
+
+/* Finite, event-driven motion: no idle loops or delays before a control can be used.
+   No fill-mode forwards: transformed cards must not trap fixed sheets after entry. */
+@media (prefers-reduced-motion: no-preference) {
+  #app.vfade { animation: none; }
+  #app > .hdr { animation: material-heading 420ms var(--ease-out); }
+  #app > :is(.card,.sect,.row,.tiles,.grid),
+  #app > div > .wl-unit { animation: material-arrive 520ms var(--ease-out) backwards; }
+  #app > :is(.card,.sect,.row,.tiles,.grid):nth-child(2) { animation-delay: 40ms; }
+  #app > :is(.card,.sect,.row,.tiles,.grid):nth-child(3) { animation-delay: 90ms; }
+  #app > :is(.card,.sect,.row,.tiles,.grid):nth-child(4) { animation-delay: 140ms; }
+  #app > :is(.card,.sect,.row,.tiles,.grid):nth-child(n+5) { animation-delay: 180ms; }
+  .wday { animation: material-day 420ms var(--material-spring) backwards; }
+  .wday:nth-child(2n) { animation-delay: 70ms; }
+  .wday:nth-child(3n) { animation-delay: 140ms; }
+  .btn, .iconbtn, .chip, .wday, .seg button, .stp button, .chk {
+    transition: transform var(--material-feedback) var(--material-spring), opacity var(--fast) var(--ease);
+  }
+  .btn:not(:disabled):not([aria-disabled="true"]):active,
+  .chip:active, .iconbtn:not(:disabled):active,
+  .stp button:not(:disabled):active, .chk:not(:disabled):active {
+    transform: translateY(2px) scale(.95); transition-duration: var(--dur-press);
+  }
+  #tabbar button .tab-ic { transition: transform var(--material-feedback) var(--material-spring); }
+  #tabbar button.on .tab-ic { animation: material-confirm 380ms var(--material-spring); }
+  #tabbar button:active .tab-ic { transform: scale(.85); }
+  .sheet { animation-duration: 380ms; animation-timing-function: var(--ease-out); }
+  #timer { animation: material-arrive 380ms var(--material-spring); }
+  .setrow .chk.on .icn, .workout-finish-summary .finish-check { animation: material-confirm 420ms var(--material-spring); }
+  .streak-num { animation: material-heading 600ms var(--ease-out); }
+  .strength-feedback { animation: material-heading 320ms var(--ease-out); }
+  .coverage-bar-fill { transform-origin: left; animation: material-progress 700ms var(--ease-out); }
+  [dir="rtl"] .coverage-bar-fill { transform-origin: right; }
+  @media (hover: hover) and (pointer: fine) {
+    .btn:not(:disabled):not([aria-disabled="true"]):not(:active):hover,
+    .iconbtn:not(:disabled):not(:active):hover { transform: translateY(-2px); }
+    .wday:not(:active):hover { transform: translateY(-3px); }
+  }
+}
+@keyframes material-arrive {
+  from { opacity: .35; transform: translateY(18px) scale(.985); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes material-heading {
+  from { opacity: .5; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes material-day {
+  from { opacity: .4; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes material-confirm {
+  0% { transform: scale(.7); opacity: .5; }
+  65% { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); }
+}
+@keyframes material-progress {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* Tide: blue slate and restrained color differences between materials. */
+:root[data-theme="tide"] {
+  --r-card: 20px;
+  --material-edge: rgba(213,240,255,.12);
+  --material-highlight: rgba(239,255,255,.22);
+  --material-shade: rgba(8,28,42,.28);
+  --material-ice: #a6cee6;
+  --material-lilac: #c6c4de;
+  --material-mint: #b2d5c8;
+  --workout-active: var(--material-ice);
+  --on-workout-active: #14383e;
+  --panel-shadow: inset 0 1px 0 var(--material-edge), inset 0 -1px 0 rgba(10,30,45,.3), 0 18px 36px -24px rgba(4,23,38,.8);
+}
+:root[data-theme="tide"] body {
+  background-image:
+    radial-gradient(ellipse at 0 0, rgba(85,132,151,.16) 0, transparent 55%),
+    radial-gradient(ellipse at 100% 35%, rgba(111,113,153,.1) 0, transparent 65%);
+  background-attachment: fixed;
+}
+:root[data-theme="tide"] .card,
+:root[data-theme="tide"] .sect-b,
+:root[data-theme="tide"] .tile {
+  background-color: color-mix(in srgb,var(--surface) 86%,transparent);
+  background-image: linear-gradient(130deg, rgba(196,236,255,.035), rgba(196,236,255,0) 65%);
+}
+:root[data-theme="tide"] .card.today-card {
+  background: linear-gradient(135deg, #36525e, #2c4058);
+  box-shadow: var(--panel-shadow);
+}
+:root[data-theme="tide"] .coverage-glance {
+  background: linear-gradient(130deg, #2d485f, #2b3e51);
+}
+:root[data-theme="tide"][data-accent="theme"] .coverage-glance {
+  --acc: var(--material-ice);
+  --acc-text: var(--material-ice);
+}
+:root[data-theme="tide"] .weight-card {
+  background: linear-gradient(135deg, #3a425c, #303e53);
+}
+:root[data-theme="tide"][data-accent="theme"] .weight-card {
+  --acc: var(--material-lilac);
+  --acc-text: var(--material-lilac);
+}
+:root[data-theme="tide"] .streak-card {
+  background: linear-gradient(130deg, #304c52, #2c414f);
+}
+:root[data-theme="tide"] .streak-num { color: var(--label); }
+:root[data-theme="tide"][data-accent="theme"] .today-hero .tag.today-cta {
+  background: linear-gradient(180deg, #aacfe4, #98c2db);
+  color: #14383e;
+  box-shadow: inset 0 1px 1px rgba(255,255,255,.4), inset 0 -2px 3px rgba(20,75,80,.18), 0 5px 10px -7px #102f41;
+}
+:root[data-theme="tide"] .today-glyph {
+  width: 42px; height: 44px; border-radius: 14px;
+  font-size: 23px;
+  background-image: linear-gradient(145deg, rgba(255,255,255,.18), transparent 70%);
+}
+:root[data-theme="tide"] .wday.today {
+  background: rgba(194,225,243,.08);
+  box-shadow: inset 0 1px 0 rgba(226,245,255,.12);
+}
+:root[data-theme="tide"] .wday.today .num { background: var(--material-mint); color: #14383e; }
+:root[data-theme="tide"] #tabbar {
+  background: rgba(32,53,70,.9);
+  box-shadow: inset 0 1px 0 rgba(222,246,255,.16), 0 -8px 24px rgba(10,27,43,.12);
+}
+#tabbar button.start.rec .cir { background: var(--workout-active); color: var(--on-workout-active); }
+#tabbar button.start.rec span { color: var(--workout-active); }
+#tabbar button.start.rec .cir::after { border-color: var(--workout-active); animation-iteration-count: 3; }
+.today-card.is-active .today-glyph { color: var(--on-workout-active); }
+.today-hero .tag.today-cta.active-session {
+  background: var(--workout-active); color: var(--on-workout-active);
+}
+:root:not([data-theme="tide"]) .today-cta.active-session::after { content: none; }
+:root[data-theme="tide"] .today-hero .tag.today-cta.active-session {
+  background: linear-gradient(180deg, #aacfe4, #98c2db);
+  color: var(--on-workout-active);
+}
+.wchip.partial { background: linear-gradient(to top, color-mix(in srgb,var(--workout-active) 35%,var(--surface)) 50%,var(--surface) 50%); box-shadow: inset 0 0 0 1.5px var(--workout-active); }
+.wchip.partial.cur { box-shadow: inset 0 0 0 1.5px var(--workout-active), 0 0 0 2px var(--bg), 0 0 0 3.5px var(--acc); }
+.wday .dot.ovr, .cal-d i.ovr { background: var(--workout-active); }
+#timer.rest .rest-ring .arc { stroke: var(--workout-active); }
+#timer.rest .t { color: var(--workout-active); }
+:root[data-theme="tide"] .today-meta { color: #d3e8ee; }
+:root[data-theme="tide"] .coverage-bar-track { background: rgba(215,237,255,.16); }
+:root[data-theme="tide"][data-accent="theme"] .coverage-bar-fill { background: var(--material-ice); }
+
+/* The light follows the pointer, while the card and its hit targets stay still. */
+.today-card, .coverage-glance, .weight-card, .streak-card { position: relative; }
+.today-card::before, .coverage-glance::before, .weight-card::before, .streak-card::before {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: radial-gradient(240px circle at var(--shine-x,50%) var(--shine-y,0%), rgba(220,249,255,.07), transparent 75%);
+  opacity: 0;
+}
+.material-lit::before { opacity: 1; }
+.today-cta { position: relative; overflow: hidden; isolation: isolate; }
+.today-cta::after {
+  content: ''; position: absolute; inset: -100% -30%; pointer-events: none;
+  background: linear-gradient(110deg, transparent 40%, rgba(255,255,255,.2) 50%, transparent 60%);
+  transform: translateX(-100%);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .today-hero:hover .today-cta::after { animation: glass-sweep 1200ms var(--ease-out); }
+  .today-glyph { animation: material-heading 500ms var(--ease-out); }
+  .today-card::before, .coverage-glance::before, .weight-card::before, .streak-card::before { transition: opacity var(--med) var(--ease-out); }
+  .today-card .today-glance { animation: material-arrive 700ms var(--ease-out) 120ms backwards; }
+  .today-hero .ttl { animation: material-heading 600ms var(--ease-out); }
+  .sheet { animation: glass-sheet-in 460ms var(--material-spring); }
+  .setrow .chk.on .icn { animation: clay-confirm 560ms var(--material-spring); }
+}
+@keyframes glass-sweep { to { transform: translateX(100%); } }
+@keyframes glass-sheet-in {
+  from { transform: translateY(60px) scale(.96); opacity: .3; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes clay-confirm {
+  0% { transform: rotate(-30deg) scale(.4); }
+  60% { transform: rotate(8deg) scale(1.25); }
+  100% { transform: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-theme="tide"] #tabbar { background: var(--bg-el); }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root[data-theme="tide"] #tabbar { background: var(--bg-el); }
+}

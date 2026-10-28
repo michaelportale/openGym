@@ -145,7 +145,7 @@ export default function Home() {
 
     {/* Today first: what is next and the one action that starts it, with the week (or the
         coach week) below as the glance. */}
-    <section className="card today-card" aria-labelledby={todayId}>
+    <section className={'card today-card' + (S.active ? ' is-active' : '')} aria-labelledby={todayId}>
       {/* Once today's session is logged the row stops asking for it. The week strip already
           knew (its dot goes 'done'); this row did not, so a finished day kept showing the
           routine name behind a green Start tag and read as still outstanding (issue #4).
@@ -154,7 +154,7 @@ export default function Home() {
       <div className="today-row today-hero" {...tappable(onToday)} aria-label={showStart ? t('Start {0}', todayName) : undefined}
         aria-describedby={showStart ? todayDetailId : undefined}>
         <div className="row" style={{ gap: 9, minWidth: 0 }}>
-          <span className="lrow-i today-glyph" style={{ background: S.active ? 'var(--warning)' : doneToday ? 'var(--surface-3)' : routine ? 'var(--acc)' : 'var(--surface-3)' }}>
+          <span className="lrow-i today-glyph" style={{ background: S.active ? 'var(--workout-active)' : doneToday ? 'var(--surface-3)' : routine ? 'var(--acc)' : 'var(--surface-3)' }}>
             <Icon name={S.active ? (editingSaved ? 'pencil' : 'play') : doneToday ? 'checkCircle' : routine ? glyphOf(routine.emoji) : 'moon'}
               style={doneToday && !S.active ? { color: 'var(--success)' } : undefined} />
           </span>
@@ -178,7 +178,7 @@ export default function Home() {
             </div>
           </div>
         </div>
-        {S.active ? <span className="tag today-cta" style={{ color: 'var(--warning)', background: 'color-mix(in srgb,var(--warning) 16%,transparent)' }}>{editingSaved ? t('Edit') : <>{t('Resume')} · <span className="tnum"><Elapsed start={S.active.start} /></span></>}</span>
+        {S.active ? <span className="tag today-cta active-session">{editingSaved ? t('Edit') : <>{t('Resume')} · <span className="tnum"><Elapsed start={S.active.start} /></span></>}</span>
           : doneToday ? <span className="tag" style={{ color: 'var(--success)', background: 'color-mix(in srgb,var(--success) 16%,transparent)' }}>{t('Done')}</span>
           : routine ? <span className="tag acc today-cta" ref={startRef}><Icon name="play" />{t('Start')}</span>
           : <Icon name="plus" className="chev" />}
@@ -243,7 +243,7 @@ export default function Home() {
       </div>
     )}
 
-    {S.showWeightCard !== false && <div className="card">
+    {S.showWeightCard !== false && <div className="card weight-card">
       <div className="row between bw-head" style={{ marginBottom: 6 }}>
         <h2 style={{ margin: 0 }}>{t('Body weight')}</h2>
         <div className="row" style={{ gap: 8 }}>
