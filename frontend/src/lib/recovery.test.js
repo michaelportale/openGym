@@ -368,7 +368,7 @@ describe('causal session scoring', () => {
   // Phase-2 contract: anchors and gains are history-dependent by design, so only the
   // latest session's deletion is monotonic. Deleting mid-history may re-score later
   // sessions (a removed PR lowers their anchors and raises their gains) - documented
-  // in docs/dev/FATIGUE_SETS_MODEL.md rather than forbidden.
+  // in docs/ENGINEERING.md rather than forbidden.
   it('never increases fatigue when the latest workout is deleted', () => {
     const workouts = [
       loadedWorkout(NOW - 40 * DAY, 100, 15),
