@@ -19,6 +19,7 @@ import './components/WorkoutReplacementSheet.css'
 import './theme/theme-ember.css'
 import './theme/theme-volt.css'
 import './theme/theme-chalk.css'
+import './theme/theme-tide.css'
 // Shared material and motion treatment, layered over the user's palette.
 import './theme/materials.css'
 

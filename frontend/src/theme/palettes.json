@@ -1,13 +1,41 @@
 {
   "version": 1,
   "generated": "2026-10-23",
-  "default": "ember",
+  "default": "tide",
   "notes": "Dark-first tokens for openGym (frontend/src/index.css :root). Map: bg0->--bg, bg1->--bg-el, surface->--surface, surface2->--surface-2, surface3->--surface-3, line->--sep, text1->--label, text2->--label-2, text3->--label-3, accent->--acc, accentPressed->--acc-2, onAccent->--on-acc, accentMuted->--acc-soft (solid equivalent of ~16% accent on surface). success is deliberately NOT green; pr is the personal-record/medal colour. Contrast ratios are WCAG 2 against 'surface'.",
   "palettes": [
     {
+      "name": "tide",
+      "label": "Tide Glass",
+      "default": true,
+      "vibe": "Quiet blue slate, soft ice-blue controls and a trace of lilac. Tactile depth without glossy spectacle.",
+      "tokens": {
+        "bg0": "#152C3A",
+        "bg1": "#203B4C",
+        "surface": "#294657",
+        "surface2": "#34566A",
+        "surface3": "#426A80",
+        "track": "#607D8D",
+        "line": "#557384",
+        "text1": "#F3FAFF",
+        "text2": "#C7DDE9",
+        "text3": "#B7D0DE",
+        "accent": "#A6CEE6",
+        "accentPressed": "#7FAFCB",
+        "onAccent": "#142F40",
+        "accentMuted": "#344F65",
+        "success": "#A8DFFF",
+        "pr": "#E5CEF8",
+        "warning": "#F5D998",
+        "danger": "#FFB3C5"
+      },
+      "successTreatment": "Ice blue checks for completed sets; lilac for records; warm sand reserved for warnings.",
+      "light": { "accentText": "#216A91" }
+    },
+    {
       "name": "ember",
       "label": "Ember on Graphite",
-      "default": true,
+      "default": false,
       "vibe": "Warm graphite and chalk with one hot ember accent: a forge, not a hospital.",
       "tokens": {
         "bg0": "#0B0A09",

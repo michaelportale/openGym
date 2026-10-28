@@ -55,6 +55,12 @@ describe('palettes.json', () => {
   it('keeps the personal-record gold apart from success', () => {
     for (const { tokens: t } of data.palettes) expect(t.pr.toLowerCase()).not.toBe(t.success.toLowerCase())
   })
+  it('keeps Tide accent text readable on light surfaces', () => {
+    const tide = data.palettes.find(p => p.name === 'tide')
+    for (const surface of ['#ffffff', '#ececef', '#f2f2f7']) {
+      expect(contrast(tide.light.accentText, surface)).toBeGreaterThanOrEqual(4.5)
+    }
+  })
 })
 
 describe('generated palette CSS', () => {
@@ -81,7 +87,7 @@ describe('generated palette CSS', () => {
         }
       }
     }
-    expect(n).toBe(12)
+    expect(n).toBe(data.palettes.length * 4)
   })
 })
 
@@ -94,10 +100,10 @@ describe('switching palettes on <html>', () => {
     expect(themeAttr('dark', 'nope')).toBe('dark')
   })
   it('defaults to the palette named in palettes.json', () => {
-    expect(DEFAULT_PALETTE).toBe('ember')
-    expect(paletteKey({})).toBe('ember')
+    expect(DEFAULT_PALETTE).toBe('tide')
+    expect(paletteKey({})).toBe('tide')
     expect(paletteKey({ palette: 'chalk' })).toBe('chalk')
-    expect(paletteKey({ palette: '"><x' })).toBe('ember')
+    expect(paletteKey({ palette: '"><x' })).toBe('tide')
     expect(paletteKey({ palette: CLASSIC })).toBe(CLASSIC)
   })
   it('lists every palette in Settings, with Classic last', () => {

@@ -181,7 +181,7 @@ describe('Settings: your own accent colour', () => {
   it('shows the palette and offers its accent first', () => {
     mount()
     const palette = [...host.querySelectorAll('.lrow')].find(r => r.textContent.includes('Palette'))
-    expect(palette.querySelector('.lrow-v').textContent).toBe('Ember')
+    expect(palette.querySelector('.lrow-v').textContent).toBe('Tide')
     const first = host.querySelector('.swatches .swatch')
     expect(first.getAttribute('aria-label')).toBe('From palette')
     act(() => first.click())
@@ -202,7 +202,7 @@ describe('Settings: your own accent colour', () => {
   })
 
   it('the settings search finds the palette', () => {
-    for (const q of ['palette', 'ember', 'chalk']) {
+    for (const q of ['palette', 'tide', 'ember', 'chalk']) {
       expect(searchSettings(q, {}).map(h => h.title), q).toContain('Palette')
     }
   })

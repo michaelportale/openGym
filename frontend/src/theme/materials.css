@@ -1,5 +1,5 @@
 /* Athletic materials: clay for things you press, glass for things above the work.
-   Dark palettes share graphite neutrals; accents and status colours remain user-controlled.
+   Palette surfaces, accents and status colours remain user-controlled.
    Opaque cards keep logging legible. */
 :root {
   --r-sm: 12px;
@@ -15,10 +15,12 @@
   --material-sheen: linear-gradient(145deg, rgba(255,255,255,.045), transparent 62%);
   --material-spring: cubic-bezier(.2,.85,.25,1.15);
   --material-feedback: 260ms;
+  --workout-active: var(--blue);
+  --on-workout-active: #ffffff;
 }
 
-:root:not([data-theme="light"]),
-:root:not([data-theme="light"]) body.no-tabbar {
+:root[data-theme="dark"],
+:root[data-theme="dark"] body.no-tabbar {
   --bg: #0c0d0f;
   --bg-el: #17191c;
   --surface: #202226;
@@ -61,7 +63,7 @@ body {
 .today-beat { display: block; }
 .today-beat > .tnum { display: inline-block; white-space: nowrap; }
 .today-card .today-glance { margin-top: 16px; padding-top: 16px; }
-.today-hero .tag.today-cta { min-height: 50px; margin-top: 8px; border-radius: 17px; }
+.today-hero .tag.today-cta { min-height: 50px; margin-top: 8px; border-radius: 17px; background: var(--acc); color: var(--on-acc); }
 .wday { border-radius: 16px; }
 .wday.today { background: var(--acc-soft); box-shadow: inset 0 1px 0 var(--material-edge); }
 .wday.today .num { box-shadow: var(--clay-shadow); }
@@ -167,4 +169,127 @@ body.no-tabbar .setrow .chk.on { background: var(--success-soft); color: var(--s
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* Tide: blue slate and restrained color differences between materials. */
+:root[data-theme="tide"] {
+  --r-card: 20px;
+  --material-edge: rgba(213,240,255,.12);
+  --material-highlight: rgba(239,255,255,.22);
+  --material-shade: rgba(8,28,42,.28);
+  --material-ice: #a6cee6;
+  --material-lilac: #c6c4de;
+  --material-mint: #b2d5c8;
+  --workout-active: var(--material-ice);
+  --on-workout-active: #14383e;
+  --panel-shadow: inset 0 1px 0 var(--material-edge), inset 0 -1px 0 rgba(10,30,45,.3), 0 18px 36px -24px rgba(4,23,38,.8);
+}
+:root[data-theme="tide"] body {
+  background-image:
+    radial-gradient(ellipse at 0 0, rgba(85,132,151,.16) 0, transparent 55%),
+    radial-gradient(ellipse at 100% 35%, rgba(111,113,153,.1) 0, transparent 65%);
+  background-attachment: fixed;
+}
+:root[data-theme="tide"] .card,
+:root[data-theme="tide"] .sect-b,
+:root[data-theme="tide"] .tile {
+  background-color: color-mix(in srgb,var(--surface) 86%,transparent);
+  background-image: linear-gradient(130deg, rgba(196,236,255,.035), rgba(196,236,255,0) 65%);
+}
+:root[data-theme="tide"] .card.today-card {
+  background: linear-gradient(135deg, #36525e, #2c4058);
+  box-shadow: var(--panel-shadow);
+}
+:root[data-theme="tide"] .coverage-glance {
+  background: linear-gradient(130deg, #2d485f, #2b3e51);
+  --acc: var(--material-ice);
+  --acc-text: var(--material-ice);
+}
+:root[data-theme="tide"] .weight-card {
+  background: linear-gradient(135deg, #3a425c, #303e53);
+  --acc: var(--material-lilac);
+  --acc-text: var(--material-lilac);
+}
+:root[data-theme="tide"] .streak-card {
+  background: linear-gradient(130deg, #304c52, #2c414f);
+}
+:root[data-theme="tide"] .streak-num { color: var(--label); }
+:root[data-theme="tide"] .today-hero .tag.today-cta {
+  background: linear-gradient(180deg, #aacfe4, #98c2db);
+  color: #14383e;
+  box-shadow: inset 0 1px 1px rgba(255,255,255,.4), inset 0 -2px 3px rgba(20,75,80,.18), 0 5px 10px -7px #102f41;
+}
+:root[data-theme="tide"] .today-glyph {
+  width: 42px; height: 44px; border-radius: 14px;
+  font-size: 23px;
+  background-image: linear-gradient(145deg, rgba(255,255,255,.18), transparent 70%);
+}
+:root[data-theme="tide"] .wday.today {
+  background: rgba(194,225,243,.08);
+  box-shadow: inset 0 1px 0 rgba(226,245,255,.12);
+}
+:root[data-theme="tide"] .wday.today .num { background: var(--material-mint); color: #14383e; }
+:root[data-theme="tide"] #tabbar {
+  background: rgba(32,53,70,.9);
+  box-shadow: inset 0 1px 0 rgba(222,246,255,.16), 0 -8px 24px rgba(10,27,43,.12);
+}
+#tabbar button.start.rec .cir { background: var(--workout-active); color: var(--on-workout-active); }
+#tabbar button.start.rec span { color: var(--workout-active); }
+#tabbar button.start.rec .cir::after { border-color: var(--workout-active); animation-iteration-count: 3; }
+.today-card.is-active .today-glyph { color: var(--on-workout-active); }
+.today-hero .tag.today-cta.active-session {
+  background: var(--workout-active); color: var(--on-workout-active);
+  background-image: linear-gradient(120deg, rgba(255,255,255,.25), transparent 70%);
+}
+:root[data-theme="tide"] .today-hero .tag.today-cta.active-session {
+  background: linear-gradient(180deg, #aacfe4, #98c2db);
+  color: var(--on-workout-active);
+}
+.wchip.partial { background: linear-gradient(to top, color-mix(in srgb,var(--workout-active) 35%,var(--surface)) 50%,var(--surface) 50%); box-shadow: inset 0 0 0 1.5px var(--workout-active); }
+.wchip.partial.cur { box-shadow: inset 0 0 0 1.5px var(--workout-active), 0 0 0 2px var(--bg), 0 0 0 3.5px var(--acc); }
+.wday .dot.ovr, .cal-d i.ovr { background: var(--workout-active); }
+#timer.rest .rest-ring .arc { stroke: var(--workout-active); }
+#timer.rest .t { color: var(--workout-active); }
+:root[data-theme="tide"] .today-meta { color: #d3e8ee; }
+:root[data-theme="tide"] .coverage-bar-track { background: rgba(215,237,255,.16); }
+:root[data-theme="tide"] .coverage-bar-fill { background: var(--material-ice); }
+
+/* The light follows the pointer, while the card and its hit targets stay still. */
+.today-card, .coverage-glance, .weight-card, .streak-card { position: relative; }
+.today-card::before, .coverage-glance::before, .weight-card::before, .streak-card::before {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: radial-gradient(240px circle at var(--shine-x,50%) var(--shine-y,0%), rgba(220,249,255,.07), transparent 75%);
+  opacity: 0;
+}
+.material-lit::before { opacity: 1; }
+.today-cta { position: relative; overflow: hidden; isolation: isolate; }
+.today-cta::after {
+  content: ''; position: absolute; inset: -100% -30%; pointer-events: none;
+  background: linear-gradient(110deg, transparent 40%, rgba(255,255,255,.2) 50%, transparent 60%);
+  transform: translateX(-100%);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .today-hero:hover .today-cta::after { animation: glass-sweep 1200ms var(--ease-out); }
+  .today-glyph { animation: material-heading 500ms var(--ease-out); }
+  .today-card::before, .coverage-glance::before, .weight-card::before, .streak-card::before { transition: opacity var(--med) var(--ease-out); }
+  .today-card .today-glance { animation: material-arrive 700ms var(--ease-out) 120ms backwards; }
+  .today-hero .ttl { animation: material-heading 600ms var(--ease-out); }
+  .sheet { animation: glass-sheet-in 460ms var(--material-spring); }
+  .setrow .chk.on .icn { animation: clay-confirm 560ms var(--material-spring); }
+}
+@keyframes glass-sweep { to { transform: translateX(100%); } }
+@keyframes glass-sheet-in {
+  from { transform: translateY(60px) scale(.96); opacity: .3; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes clay-confirm {
+  0% { transform: rotate(-30deg) scale(.4); }
+  60% { transform: rotate(8deg) scale(1.25); }
+  100% { transform: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-theme="tide"] #tabbar { background: var(--bg-el); }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root[data-theme="tide"] #tabbar { background: var(--bg-el); }
 }
