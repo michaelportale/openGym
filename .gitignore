@@ -10,6 +10,7 @@ data/
 .env
 
 # Build output / deps
+__pycache__/
 frontend/dist/
 node_modules/
 *.log

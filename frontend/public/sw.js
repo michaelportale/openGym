@@ -213,8 +213,8 @@ self.addEventListener('push', e => {
     try { for (const n of await self.registration.getNotifications({ tag })) n.close() } catch {}
     await self.registration.showNotification(data.title || 'openGym', {
       body: data.body || '',
-      icon: 'icon-512.png',
-      badge: 'icon-180.png',
+      icon: 'icon-512.png?v=tide-1',
+      badge: 'icon-180.png?v=tide-1',
       tag,
       renotify: true
     })
