@@ -28,8 +28,6 @@ junit.xml
 coverage/
 frontend/bundle-size.json
 
-# Local planning notes
-docs/superpowers/plans/
 
 # AI Coach provider credential cache (live refresh token)
 coach-auth/
@@ -41,3 +39,30 @@ coach-auth/
 *.db
 *.sqlite
 *.sqlite3
+
+# Local development instructions, notes, and tool artifacts
+AGENTS.md
+CLAUDE.md
+.local-work/
+.codex/
+.serena/
+.impeccable/
+.taste-skill/
+.playwright-cli/
+playwright-report/
+test-results/
+/output/playwright/
+/docs/dev/
+/docs/superpowers/
+/docs/plans/
+/docs/PR_FIX_HANDOFF.md
+/docs/architecture.html
+/GLOSSARY.md
+/PROJECT_CONTEXT.md
+/ISSUE_ON_GITHUB.md
+/FORK.md
+/ui-*/
+/main/dark/
+/main/light/
+/nutrition/dark/
+/nutrition/light/

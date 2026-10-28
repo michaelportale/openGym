@@ -34,6 +34,11 @@ cd frontend && npm ci && npm test && npm run build
 cd mcp      && npm ci && npm test
 ```
 
+## Documentation
+
+See the [documentation index](docs/README.md) for user and hosting guides, and the
+[engineering guide](docs/ENGINEERING.md) for architecture and development details.
+
 ## License
 
 openGym is licensed under AGPL-3.0; see [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md). The exercise
