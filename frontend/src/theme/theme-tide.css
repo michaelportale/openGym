@@ -55,12 +55,12 @@
 
 /* light: the app's light surfaces, with this palette's colours made readable on them */
 :root[data-theme="light"][data-palette="tide"] {
-  --success: #0091e5;
+  --success: #0066a3;
   --warning: #b08011;
   --danger: #ff3968;
   --pr: #b16cea;
   --on-success: #000000;
-  --on-success-tile: #000000;
+  --on-success-tile: #ffffff;
   --on-warning-tile: #000000;
 }
 

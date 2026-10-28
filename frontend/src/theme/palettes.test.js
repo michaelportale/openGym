@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { outputs, loadPalettes, paletteCss } from '../../scripts/gen-palettes.mjs'
 import { isGreenRgb } from '../../scripts/color-audit.mjs'
-import { contrast, readableIn } from '../lib/accent.js'
+import { contrast, mix, readableIn } from '../lib/accent.js'
 import { CLASSIC, DEFAULT_PALETTE, PALETTES, PALETTE_NAMES, PALETTE_BG, paletteKey, themeAttr, darkAttrOf } from './palettes.js'
 
 const data = loadPalettes()
@@ -61,6 +61,13 @@ describe('palettes.json', () => {
       expect(contrast(tide.light.accentText, surface)).toBeGreaterThanOrEqual(4.5)
     }
   })
+  it('keeps Tide completed checks readable on their translucent light background', () => {
+    const tide = data.palettes.find(p => p.name === 'tide')
+    for (const surface of ['#ffffff', '#ececef', '#f2f2f7']) {
+      const background = mix(tide.light.success, surface, 0.84)
+      expect(contrast(tide.light.success, background)).toBeGreaterThanOrEqual(3)
+    }
+  })
 })
 
 describe('generated palette CSS', () => {
@@ -68,7 +75,8 @@ describe('generated palette CSS', () => {
     for (const { file, css } of outputs(data)) expect(readFileSync(file, 'utf8')).toBe(css)
   })
   it('scopes the accent to data-accent="theme" so presets and own colours still win', () => {
-    for (const { css } of outputs(data)) {
+    const materials = readFileSync(new URL('./materials.css', import.meta.url), 'utf8')
+    for (const { css } of [...outputs(data), { css: materials }]) {
       for (const m of css.matchAll(/^([^\n{]+)\{[^}]*--acc:/gm)) expect(m[1]).toContain('[data-accent="theme"]')
     }
   })

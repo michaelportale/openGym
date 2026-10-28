@@ -30,7 +30,7 @@
         "danger": "#FFB3C5"
       },
       "successTreatment": "Ice blue checks for completed sets; lilac for records; warm sand reserved for warnings.",
-      "light": { "accentText": "#216A91" }
+      "light": { "accentText": "#216A91", "success": "#0066A3" }
     },
     {
       "name": "ember",

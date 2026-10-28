@@ -202,11 +202,15 @@ body.no-tabbar .setrow .chk.on { background: var(--success-soft); color: var(--s
 }
 :root[data-theme="tide"] .coverage-glance {
   background: linear-gradient(130deg, #2d485f, #2b3e51);
+}
+:root[data-theme="tide"][data-accent="theme"] .coverage-glance {
   --acc: var(--material-ice);
   --acc-text: var(--material-ice);
 }
 :root[data-theme="tide"] .weight-card {
   background: linear-gradient(135deg, #3a425c, #303e53);
+}
+:root[data-theme="tide"][data-accent="theme"] .weight-card {
   --acc: var(--material-lilac);
   --acc-text: var(--material-lilac);
 }
@@ -214,7 +218,7 @@ body.no-tabbar .setrow .chk.on { background: var(--success-soft); color: var(--s
   background: linear-gradient(130deg, #304c52, #2c414f);
 }
 :root[data-theme="tide"] .streak-num { color: var(--label); }
-:root[data-theme="tide"] .today-hero .tag.today-cta {
+:root[data-theme="tide"][data-accent="theme"] .today-hero .tag.today-cta {
   background: linear-gradient(180deg, #aacfe4, #98c2db);
   color: #14383e;
   box-shadow: inset 0 1px 1px rgba(255,255,255,.4), inset 0 -2px 3px rgba(20,75,80,.18), 0 5px 10px -7px #102f41;
@@ -252,7 +256,7 @@ body.no-tabbar .setrow .chk.on { background: var(--success-soft); color: var(--s
 #timer.rest .t { color: var(--workout-active); }
 :root[data-theme="tide"] .today-meta { color: #d3e8ee; }
 :root[data-theme="tide"] .coverage-bar-track { background: rgba(215,237,255,.16); }
-:root[data-theme="tide"] .coverage-bar-fill { background: var(--material-ice); }
+:root[data-theme="tide"][data-accent="theme"] .coverage-bar-fill { background: var(--material-ice); }
 
 /* The light follows the pointer, while the card and its hit targets stay still. */
 .today-card, .coverage-glance, .weight-card, .streak-card { position: relative; }
