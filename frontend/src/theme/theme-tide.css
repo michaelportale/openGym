@@ -62,6 +62,8 @@
   --on-success: #000000;
   --on-success-tile: #ffffff;
   --on-warning-tile: #000000;
+  --label-2: #545458;
+  --label-3: #636366;
 }
 
 :root[data-theme="light"][data-palette="tide"][data-accent="theme"] {

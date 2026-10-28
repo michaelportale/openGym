@@ -61,6 +61,15 @@ describe('palettes.json', () => {
       expect(contrast(tide.light.accentText, surface)).toBeGreaterThanOrEqual(4.5)
     }
   })
+  it('keeps Tide secondary light text readable on the standard light surfaces', () => {
+    const tide = data.palettes.find(p => p.name === 'tide')
+    for (const label of ['text2', 'text3']) {
+      for (const surface of ['#ffffff', '#f7f7fa', '#f2f2f7', '#ececef', '#e3e3e8']) {
+        expect(contrast(tide.light[label], surface)).toBeGreaterThanOrEqual(4.5)
+      }
+      expect(paletteCss(tide)).toContain(`--label-${label.slice(-1)}: ${tide.light[label]};`)
+    }
+  })
   it('keeps Tide completed checks readable on their translucent light background', () => {
     const tide = data.palettes.find(p => p.name === 'tide')
     for (const surface of ['#ffffff', '#ececef', '#f2f2f7']) {
@@ -143,5 +152,25 @@ describe('install assets', () => {
       // PNG IHDR: width and height, big-endian, at bytes 16 and 20
       expect([png.readUInt32BE(16), png.readUInt32BE(20)], href).toEqual([w * r, h * r])
     }
+  })
+})
+
+
+describe('material palette compatibility', () => {
+  const materials = readFileSync(new URL('./materials.css', import.meta.url), 'utf8')
+  const base = readFileSync(new URL('../index.css', import.meta.url), 'utf8')
+  it('leaves Classic neutrals and its black system-bar color consistent', () => {
+    expect(materials).not.toContain(':root[data-theme="dark"]')
+    expect(base.match(/--bg:\s*(#[0-9a-f]{6})/)[1]).toBe(PALETTE_BG[CLASSIC])
+    expect(materials).toContain(':root:not([data-theme="dark"]) body')
+  })
+  it('keeps Resume readable on both system blues without a highlight', () => {
+    const ink = materials.match(/--on-workout-active:\s*(#[0-9a-f]{6})/)[1]
+    const blues = [...base.matchAll(/--blue:\s*(#[0-9a-f]{6})/g)]
+    expect(blues).toHaveLength(2)
+    for (const [, blue] of blues) expect(contrast(ink, blue)).toBeGreaterThanOrEqual(4.5)
+    const resume = materials.match(/\n\.today-hero \.tag\.today-cta\.active-session \{([^}]+)\}/)[1]
+    expect(resume).not.toContain('gradient')
+    expect(materials).toContain(':root:not([data-theme="tide"]) .today-cta.active-session::after { content: none; }')
   })
 })
