@@ -38,6 +38,8 @@ Outcome: every gate passed. Decision: use `@kingstinct/react-native-healthkit` 1
 
 Owner confirmed on device: saving the manual test workout twice gives one workout in the Health app, and Remove clears it.
 
+Review follow-up: Remove test workouts now clears gate workouts from every run, under both the current and old sync keys. Owner confirmed on device: after saving one test workout it removed 1 and left or kept none, and the Health app shows no openGym test workouts. So no earlier gate run left anything behind.
+
 Important finding: the first run failed retry (2 found) and replace (3 found) because the plan used `HKSyncIdentifier` / `HKSyncVersion`. Apple's raw metadata keys are `HKMetadataKeySyncIdentifier` / `HKMetadataKeySyncVersion`. The library's generated schema has the wrong names. Phase 6 must use the Apple names.
 
 ## Decision
@@ -58,6 +60,7 @@ Unverified or open:
 - `npm audit` reports 5 moderate advisories, from `glob` and `minimatch` via Expo's tooling. The fix path goes through Expo; unresolved.
 - The library's dev dependency is React Native 0.81.5. Compatibility with 0.88.1 rests on the peer range plus these device gates, not on release notes.
 - Not tested: interrupted exports, background delivery (turned off), read-denied behavior, and body-weight writes (only workouts were written).
+- The shared-lib scanner still misses a regex literal containing a quote or backtick, bracket access such as `window['localStorage']`, aliases such as `const w = window`, and globals outside its token list such as `location.`. None exist in the shared graph today, checked with a parser-based walk.
 
 ## Carry into Phase 6
 
