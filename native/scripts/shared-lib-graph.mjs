@@ -60,7 +60,10 @@ export function scanSource(file) {
     CallExpression(path) {
       const { callee, arguments: args } = path.node
       if (callee.type === 'Import') dynamic(args[0])
-      else if (callee.type === 'Identifier' && callee.name === 'require' && isFree(path, 'require')) tokens.add('require(')
+      else if (callee.type === 'Identifier' && callee.name === 'require' && isFree(path, 'require')) {
+        tokens.add('require(')
+        if (args[0] && args[0].type === 'StringLiteral') requests.add(args[0].value)
+      }
     },
     Identifier(path) {
       const { name } = path.node

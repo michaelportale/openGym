@@ -188,3 +188,11 @@ test('an unparseable native file is a boundary violation', () => {
     root => scanNativeBoundary(nativeSourceFiles(join(root, 'native')), join(root, 'frontend')).map(v => v.spec))
   expect(specs).toEqual(['unparseable'])
 })
+
+test('a require() of a frontend file is a boundary violation', () => {
+  const specs = withTree({
+    'native/Card.js': "const lib = require('../frontend/lib.js')\nexport const A = lib\n",
+    'frontend/lib.js': 'module.exports = 1\n'
+  }, root => scanNativeBoundary(nativeSourceFiles(join(root, 'native')), join(root, 'frontend')).map(v => v.spec))
+  expect(specs).toEqual(['../frontend/lib.js'])
+})
