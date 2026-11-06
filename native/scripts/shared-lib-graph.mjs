@@ -1,23 +1,104 @@
 import { readFileSync, existsSync } from 'node:fs'
-import { basename, dirname, resolve } from 'node:path'
+import { basename, dirname, resolve, sep } from 'node:path'
 
-// Tokens that only exist in a browser or in the web build's tooling. `window.` etc. are matched
-// with a leading word boundary so `myWindow.x` is not flagged.
-const TOKENS = [
-  'localStorage', 'sessionStorage', 'indexedDB',
-  'document.', 'navigator.', 'window.', 'import.meta.glob'
-]
+// Tokens that only exist in a browser or in the web build's tooling. Property tokens match
+// `x.` and `x?.`; storage globals match bare. A preceding `.` only exempts ordinary properties
+// (`obj.document.x`), never a global object (`globalThis.localStorage`, `window.localStorage`).
+const BARE = ['localStorage', 'sessionStorage', 'indexedDB']
+const PROPERTY = ['document', 'navigator', 'window']
+const GLOBAL_OBJECTS = '(?:globalThis|self|window|global)'
 const BANNED_FILES = ['mobile.js', 'i18n.js']
 
-const stripComments = src => src.replace(/\/\*[\s\S]*?\*\/|(^|[^:'"`\\])\/\/[^\n]*/g, '$1')
+const TOKENS = [
+  ...BARE.map(name => ({ token: name, re: `${name}\\b` })),
+  ...PROPERTY.map(name => ({ token: `${name}.`, re: `${name}\\s*\\??\\.` })),
+  { token: 'import.meta.glob', re: 'import\\.meta\\.glob' }
+]
+
+// Blanks comments and returns two same-length views: `text` keeps string contents (specifiers
+// live there), `code` blanks them too. Respects ', " and template literals with ${} nesting.
+export function sanitize(src) {
+  let text = ''
+  let code = ''
+  const braces = []
+  const emit = (t, c) => {
+    text += t
+    code += c
+  }
+  const blank = s => s.replace(/[^\n]/g, ' ')
+  let i = 0
+  while (i < src.length) {
+    const ch = src[i]
+    const next = src[i + 1]
+    if (ch === '/' && next === '/') {
+      let j = src.indexOf('\n', i)
+      if (j < 0) j = src.length
+      emit(blank(src.slice(i, j)), blank(src.slice(i, j)))
+      i = j
+    } else if (ch === '/' && next === '*') {
+      let j = src.indexOf('*/', i + 2)
+      j = j < 0 ? src.length : j + 2
+      emit(blank(src.slice(i, j)), blank(src.slice(i, j)))
+      i = j
+    } else if (ch === "'" || ch === '"') {
+      let j = i + 1
+      while (j < src.length && src[j] !== ch && src[j] !== '\n') j += src[j] === '\\' ? 2 : 1
+      j = Math.min(j + 1, src.length)
+      emit(src.slice(i, j), ch + blank(src.slice(i + 1, j - 1)) + (j - i > 1 ? src[j - 1] : ''))
+      i = j
+    } else if (ch === '`' || (ch === '}' && braces[braces.length - 1] === 'tpl')) {
+      if (ch === '}') braces.pop()
+      let j = i + 1
+      while (j < src.length && src[j] !== '`' && !(src[j] === '$' && src[j + 1] === '{')) j += src[j] === '\\' ? 2 : 1
+      j = Math.min(j, src.length)
+      const body = src.slice(i + 1, j)
+      if (src[j] === '$') {
+        braces.push('tpl')
+        emit(ch + body + '${', ch + blank(body) + '${')
+        i = j + 2
+      } else {
+        emit(ch + body + (src[j] || ''), ch + blank(body) + (src[j] || ''))
+        i = j + 1
+      }
+    } else {
+      if (ch === '{') braces.push('{')
+      else if (ch === '}') braces.pop()
+      emit(ch, ch)
+      i++
+    }
+  }
+  return { text, code }
+}
 
 const SPECIFIER = [
   /\bimport\s+(?:[\w*{}\s,$]+?\s+from\s+)?['"]([^'"]+)['"]/g,
   /\bexport\s+(?:[\w*{}\s,$]+?)\s+from\s+['"]([^'"]+)['"]/g,
-  /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g
+  /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
+  /(?<![\w$.])require\s*\(\s*['"]([^'"]+)['"]\s*\)/g
 ]
 
-const specifiersOf = code => SPECIFIER.flatMap(re => [...code.matchAll(re)].map(m => m[1]))
+// Specifiers whose keyword sits in real code (not inside a string), plus dynamic forms that
+// cannot be followed statically.
+export function specifiersOf({ text, code }) {
+  const specs = SPECIFIER.flatMap(re =>
+    [...text.matchAll(re)].filter(m => code[m.index] === text[m.index]).map(m => m[1]))
+  const dynamic = []
+  for (const m of code.matchAll(/(?<![\w$.])(import|require)\s*\(/g)) {
+    const literal = /^\s*(['"])[^'"\n]*\1\s*\)/.test(text.slice(m.index + m[0].length))
+    if (m[1] === 'require' || !literal) dynamic.push(`${m[1]}(`)
+  }
+  return { specs, dynamic: [...new Set(dynamic)] }
+}
+
+const violationsFor = code => {
+  const found = []
+  for (const { token, re } of TOKENS) {
+    const bare = new RegExp(`(?<![\\w$.])${re}`)
+    const viaGlobal = new RegExp(`(?<![\\w$])${GLOBAL_OBJECTS}\\s*\\??\\.\\s*${re}`)
+    if (bare.test(code) || viaGlobal.test(code)) found.push(token)
+  }
+  return found
+}
 
 export function scanSharedGraph(entryFile, allow = {}) {
   const files = []
@@ -30,18 +111,17 @@ export function scanSharedGraph(entryFile, allow = {}) {
     files.push(file)
     if (file.endsWith('.json')) return
 
-    const code = stripComments(readFileSync(file, 'utf8'))
+    const clean = sanitize(readFileSync(file, 'utf8'))
     const allowed = new Set(allow[basename(file)] || [])
     const flag = token => {
       if (!allowed.has(token)) violations.push({ file, token })
     }
 
-    for (const token of TOKENS) {
-      const escaped = token.replace(/\./g, '\\.')
-      if (new RegExp(`(?<![\\w$.])${escaped}`).test(code)) flag(token)
-    }
+    violationsFor(clean.code).forEach(flag)
 
-    for (const spec of specifiersOf(code)) {
+    const { specs, dynamic } = specifiersOf(clean)
+    dynamic.forEach(flag)
+    for (const spec of specs) {
       if (!spec.startsWith('.')) {
         flag(spec)
         continue
@@ -55,4 +135,20 @@ export function scanSharedGraph(entryFile, allow = {}) {
 
   visit(resolve(entryFile))
   return { files, violations }
+}
+
+// Files outside training.js must not reach into frontend/ themselves, or Metro bundles it
+// without the graph scan ever seeing it.
+export function scanNativeBoundary(files, frontendDir) {
+  const root = resolve(frontendDir)
+  const violations = []
+  for (const file of files) {
+    const { specs } = specifiersOf(sanitize(readFileSync(file, 'utf8')))
+    for (const spec of specs) {
+      if (!spec.startsWith('.')) continue
+      const target = resolve(dirname(file), spec)
+      if (target === root || target.startsWith(root + sep)) violations.push({ file, spec })
+    }
+  }
+  return violations
 }

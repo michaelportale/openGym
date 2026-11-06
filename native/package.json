@@ -17,8 +17,10 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "test": "vitest run",
-    "check:shared": "node scripts/check-shared-lib.mjs"
+    "check:shared": "node scripts/check-shared-lib.mjs",
+    "verify": "npm test && npm run check:shared"
   },
+  "license": "AGPL-3.0-or-later",
   "private": true,
   "devDependencies": {
     "vitest": "^4.1.12"
