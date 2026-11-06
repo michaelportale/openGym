@@ -37,7 +37,8 @@ export default function App() {
     run(async () => {
       const r = await runWorkoutGates(adapter, { nowMs: Date.now() })
       const out = r.gates.map(g => g.name + ': ' + g.status + (g.detail ? ' (' + g.detail + ')' : ''))
-      if (r.leftovers > 0) out.push('leftovers: ' + r.leftovers)
+      if (r.leftovers === null) out.push('WARNING: could not read Health, test workouts may remain: check the Health app')
+      else if (r.leftovers > 0) out.push('leftovers: ' + r.leftovers)
       return out
     })
 

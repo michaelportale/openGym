@@ -12,14 +12,21 @@ export async function runWorkoutGates(adapter, { nowMs }) {
   const start = new Date(nowMs - HOUR)
   const end = new Date(nowMs)
   const gates = []
+  const known = new Set()
   const find = async () => {
     try {
-      return await adapter.findWorkoutsBySyncId(id)
+      const found = await adapter.findWorkoutsBySyncId(id)
+      for (const w of found) known.add(w.uuid)
+      return found
     } catch (e) {
       return null
     }
   }
-  const save = (version, volumeLb) => adapter.saveStrengthWorkout({ id, version, start, end, volumeLb })
+  const save = async (version, volumeLb) => {
+    const saved = await adapter.saveStrengthWorkout({ id, version, start, end, volumeLb })
+    if (saved && saved.uuid) known.add(saved.uuid)
+    return saved
+  }
   const record = (name, ok, detail) => gates.push(ok ? { name, status: 'pass', detail } : { name, status: 'fail', detail })
   const count = found => (found ? found.length : 'unreadable')
 
@@ -67,11 +74,12 @@ export async function runWorkoutGates(adapter, { nowMs }) {
     record('delete', !!found && found.length === 0, note + 'workouts left: ' + count(found))
   }
 
-  for (const w of (await find()) || []) {
+  const found = await find()
+  for (const uuid of found ? found.map(w => w.uuid) : known) {
     try {
-      await adapter.deleteWorkout(w.uuid)
+      await adapter.deleteWorkout(uuid)
     } catch (e) {}
   }
   const left = await find()
-  return { gates, leftovers: left ? left.length : 0 }
+  return { gates, leftovers: left ? left.length : null }
 }

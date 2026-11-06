@@ -6,6 +6,7 @@ function fake(opts = {}) {
   let n = 0
   const a = {
     deleteCalls: 0,
+    store,
     async saveStrengthWorkout({ id, version, volumeLb }) {
       if (opts.rejectSave) throw opts.rejectSave
       const same = store.find(w => w.id === id)
@@ -26,11 +27,13 @@ function fake(opts = {}) {
       return { uuid: 'u' + n }
     },
     async findWorkoutsBySyncId(id) {
+      if (opts.findThrows) throw new Error('read denied')
       return store.filter(w => w.id === id).map(({ uuid, syncVersion, volumeLb }) => ({ uuid, syncVersion, volumeLb }))
     },
     async deleteWorkout(uuid) {
       a.deleteCalls++
       if (opts.deleteNoop) return 0
+      if (opts.deleteFailsOnce && a.deleteCalls === 1) return 0
       const i = store.findIndex(w => w.uuid === uuid)
       if (i < 0) return 0
       store.splice(i, 1)
@@ -73,4 +76,16 @@ test('a delete that removes nothing fails and reports the leftover', async () =>
   const r = await runWorkoutGates(fake({ deleteNoop: true }), { nowMs: 1 })
   expect(statuses(r).delete).toBe('fail')
   expect(r.leftovers).toBe(1)
+})
+test('an unreadable store reports unknown leftovers, never a pass or zero', async () => {
+  const a = fake({ findThrows: true })
+  const r = await runWorkoutGates(a, { nowMs: 1 })
+  expect(r.leftovers).toBeNull()
+  expect(r.gates.some(g => g.status === 'pass')).toBe(false)
+  expect(a.store).toHaveLength(0)
+})
+test('cleanup alone removes a workout the delete gate failed to remove', async () => {
+  const r = await runWorkoutGates(fake({ deleteFailsOnce: true }), { nowMs: 1 })
+  expect(statuses(r).delete).toBe('fail')
+  expect(r.leftovers).toBe(0)
 })
