@@ -1,0 +1,77 @@
+import { gateSyncId } from './gates.js'
+
+const NAMES = ['save', 'retry', 'replace', 'delete']
+const V1_VOLUME = 1000
+const V2_VOLUME = 1500
+const HOUR = 3600000
+
+const message = e => (e && e.message) || String(e)
+
+export async function runWorkoutGates(adapter, { nowMs }) {
+  const id = gateSyncId(nowMs)
+  const start = new Date(nowMs - HOUR)
+  const end = new Date(nowMs)
+  const gates = []
+  const find = async () => {
+    try {
+      return await adapter.findWorkoutsBySyncId(id)
+    } catch (e) {
+      return null
+    }
+  }
+  const save = (version, volumeLb) => adapter.saveStrengthWorkout({ id, version, start, end, volumeLb })
+  const record = (name, ok, detail) => gates.push(ok ? { name, status: 'pass', detail } : { name, status: 'fail', detail })
+  const count = found => (found ? found.length : 'unreadable')
+
+  let saved = false
+  try {
+    await save(1, V1_VOLUME)
+    const found = await find()
+    saved = !!found && found.length === 1
+    record('save', saved, 'workouts found: ' + count(found))
+  } catch (e) {
+    record('save', false, message(e))
+  }
+
+  if (!saved) {
+    for (const name of NAMES.slice(1)) gates.push({ name, status: 'skipped' })
+  } else {
+    let note = ''
+    try {
+      await save(1, V1_VOLUME)
+    } catch (e) {
+      note = 'second save threw: ' + message(e) + '; '
+    }
+    let found = await find()
+    record('retry', !!found && found.length === 1, note + 'workouts found: ' + count(found))
+
+    note = ''
+    try {
+      await save(2, V2_VOLUME)
+    } catch (e) {
+      note = 'save threw: ' + message(e) + '; '
+    }
+    found = await find()
+    const replaced = !!found && found.length === 1 && found[0].syncVersion === 2 && found[0].volumeLb === V2_VOLUME
+    record('replace', replaced, note + 'workouts found: ' + count(found) + (found && found[0] ? ', version ' + found[0].syncVersion : ''))
+
+    note = ''
+    for (const w of found || []) {
+      try {
+        await adapter.deleteWorkout(w.uuid)
+      } catch (e) {
+        note = 'delete threw: ' + message(e) + '; '
+      }
+    }
+    found = await find()
+    record('delete', !!found && found.length === 0, note + 'workouts left: ' + count(found))
+  }
+
+  for (const w of (await find()) || []) {
+    try {
+      await adapter.deleteWorkout(w.uuid)
+    } catch (e) {}
+  }
+  const left = await find()
+  return { gates, leftovers: left ? left.length : 0 }
+}
