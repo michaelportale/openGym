@@ -58,3 +58,11 @@ Unverified or open:
 - `npm audit` reports 5 moderate advisories, from `glob` and `minimatch` via Expo's tooling. The fix path goes through Expo; unresolved.
 - The library's dev dependency is React Native 0.81.5. Compatibility with 0.88.1 rests on the peer range plus these device gates, not on release notes.
 - Not tested: interrupted exports, background delivery (turned off), read-denied behavior, and body-weight writes (only workouts were written).
+
+## Carry into Phase 6
+
+- Every edit must bump the sync version. The gates only tried same-version saves with identical data; a same-version save with changed data may be dropped.
+- Unverified: the uuid returned by a save may not be the stored one after a no-op retry or replace. Key Health links on the sync id and re-query the uuid, or add a gate first.
+- `toRead` currently includes workouts, although the PRD excludes reading workouts. Try dropping it and rerun the gates.
+- Adapter reads need guards for missing metadata and missing `sourceRevision`.
+- `npm audit fix --force` proposes downgrading Expo to 53; don't take it.
