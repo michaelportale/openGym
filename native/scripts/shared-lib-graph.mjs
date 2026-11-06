@@ -1,5 +1,5 @@
-import { readFileSync, existsSync } from 'node:fs'
-import { basename, dirname, resolve, sep } from 'node:path'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { basename, dirname, join, resolve, sep } from 'node:path'
 
 // Tokens that only exist in a browser or in the web build's tooling. Property tokens match
 // `x.` and `x?.`; storage globals match bare. A preceding `.` only exempts ordinary properties
@@ -70,18 +70,28 @@ export function sanitize(src) {
   return { text, code }
 }
 
+// Sticky: each is tried only at a keyword found in `code`, so a string can neither start a match
+// nor swallow the real import after it. No whitespace is required: `import{a}from'x'` is valid.
+const KEYWORD = /(?<![\w$.])(?:import|export|require)\b/g
 const SPECIFIER = [
-  /\bimport\s+(?:[\w*{}\s,$]+?\s+from\s+)?['"]([^'"]+)['"]/g,
-  /\bexport\s+(?:[\w*{}\s,$]+?)\s+from\s+['"]([^'"]+)['"]/g,
-  /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
-  /(?<![\w$.])require\s*\(\s*['"]([^'"]+)['"]\s*\)/g
+  /import\b\s*(?:[\w*{}\s,$]+?\bfrom\s*)?['"]([^'"\n]+)['"]/y,
+  /export\b\s*[\w*{}\s,$]+?\bfrom\s*['"]([^'"\n]+)['"]/y,
+  /import\s*\(\s*['"]([^'"\n]+)['"]\s*\)/y,
+  /require\s*\(\s*['"]([^'"\n]+)['"]\s*\)/y
 ]
 
 // Specifiers whose keyword sits in real code (not inside a string), plus dynamic forms that
 // cannot be followed statically.
 export function specifiersOf({ text, code }) {
-  const specs = SPECIFIER.flatMap(re =>
-    [...text.matchAll(re)].filter(m => code[m.index] === text[m.index]).map(m => m[1]))
+  const found = new Set()
+  for (const { index } of code.matchAll(KEYWORD)) {
+    for (const re of SPECIFIER) {
+      re.lastIndex = index
+      const m = re.exec(text)
+      if (m) found.add(m[1])
+    }
+  }
+  const specs = [...found]
   const dynamic = []
   for (const m of code.matchAll(/(?<![\w$.])(import|require)\s*\(/g)) {
     const literal = /^\s*(['"])[^'"\n]*\1\s*\)/.test(text.slice(m.index + m[0].length))
@@ -135,6 +145,21 @@ export function scanSharedGraph(entryFile, allow = {}) {
 
   visit(resolve(entryFile))
   return { files, violations }
+}
+
+const NOT_APP_CODE = new Set(['node_modules', 'ios', 'android', 'dist', 'web-build', '.expo', 'scripts'])
+const SOURCE_FILE = /\.(js|jsx|ts|tsx|mjs|cjs)$/
+const TEST_FILE = /\.test\.\w+$/
+
+// Everything Metro could bundle from native/. It walks instead of listing folders, so a new folder
+// is covered by default. Skips apply at the top level only: src/scripts/ is still app code.
+export function nativeSourceFiles(root) {
+  const walk = dir => readdirSync(dir, { withFileTypes: true }).flatMap(e => {
+    const path = join(dir, e.name)
+    if (e.isDirectory()) return dir === root && NOT_APP_CODE.has(e.name) ? [] : walk(path)
+    return SOURCE_FILE.test(e.name) && !TEST_FILE.test(e.name) ? [path] : []
+  })
+  return walk(root)
 }
 
 // Files outside training.js must not reach into frontend/ themselves, or Metro bundles it
