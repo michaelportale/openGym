@@ -5,16 +5,12 @@
  * native/ imports frontend/src/lib in place. vitest (Vite) and Metro both tolerate things that
  * a React Native runtime does not, so this runs by bare `node` on purpose, following
  * mcp/scripts/check-node-loadable.mjs. Do not port it to a vitest test file.
- *
- * The allow list is exact: training-coverage.js has a local variable named `window`.
- * Do not extend it without the owner's approval.
  */
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { nativeSourceFiles, scanNativeBoundary, scanSharedGraph } from './shared-lib-graph.mjs'
 
 const ENTRY = fileURLToPath(new URL('../src/shared/training.js', import.meta.url))
-const ALLOW = { 'training-coverage.js': ['window.'] }
 
 const NATIVE = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const FRONTEND = fileURLToPath(new URL('../../frontend', import.meta.url))
@@ -29,7 +25,7 @@ try {
   console.error(`  FAIL  training.js — ${e.message}`)
 }
 
-const { files, violations } = scanSharedGraph(ENTRY, ALLOW)
+const { files, violations } = scanSharedGraph(ENTRY)
 console.log(`  scanned ${files.length} files`)
 for (const v of violations) {
   failed++

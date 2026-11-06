@@ -60,7 +60,7 @@ Unverified or open:
 - `npm audit` reports 5 moderate advisories, from `glob` and `minimatch` via Expo's tooling. The fix path goes through Expo; unresolved.
 - The library's dev dependency is React Native 0.81.5. Compatibility with 0.88.1 rests on the peer range plus these device gates, not on release notes.
 - Not tested: interrupted exports, background delivery (turned off), read-denied behavior, and body-weight writes (only workouts were written).
-- The shared-lib scanner still misses a regex literal containing a quote or backtick, bracket access such as `window['localStorage']`, aliases such as `const w = window`, and globals outside its token list such as `location.`. None exist in the shared graph today, checked with a parser-based walk.
+- The shared-lib scanner's regex blind spots (regex literals, bracket access, aliases, globals outside its list) were closed in Phase 1 by an AST scanner.
 
 ## Carry into Phase 6
 
@@ -69,3 +69,4 @@ Unverified or open:
 - `toRead` currently includes workouts, although the PRD excludes reading workouts. Try dropping it and rerun the gates.
 - Adapter reads need guards for missing metadata and missing `sourceRevision`.
 - `npm audit fix --force` proposes downgrading Expo to 53; don't take it.
+- `App.js`'s hard-coded bundle id must come from one source before the no-echo rule ships.

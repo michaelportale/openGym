@@ -23,6 +23,8 @@
   "license": "AGPL-3.0-or-later",
   "private": true,
   "devDependencies": {
+    "@babel/parser": "^7.29.13",
+    "@babel/traverse": "^7.29.13",
     "vitest": "^4.1.12"
   }
 }

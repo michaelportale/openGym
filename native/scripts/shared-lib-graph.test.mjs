@@ -23,14 +23,7 @@ test('ignores comments', () => {
   expect(scanSharedGraph(fixture('commented-entry.js')).violations).toEqual([])
 })
 
-test('allow list silences a named token in a named file only', () => {
-  const allow = { 'bad-entry.js': ['localStorage'] }
-  const tokens = scanSharedGraph(fixture('bad-entry.js'), allow).violations.map(v => v.token)
-  expect(tokens).not.toContain('localStorage')
-  expect(tokens).toContain('@capacitor/core')
-})
-
-const tokensOf = (name, allow) => scanSharedGraph(fixture(name), allow).violations.map(v => v.token)
+const tokensOf = name => scanSharedGraph(fixture(name)).violations.map(v => v.token)
 
 test('a /* inside a string does not hide the code after it', () => {
   expect(tokensOf('string-comment-entry.js')).toEqual(expect.arrayContaining(['@capacitor/core', 'localStorage']))
@@ -55,10 +48,8 @@ test.each(['global-this-entry.js', 'self-entry.js', 'window-storage-entry.js'])(
   }
 )
 
-test('allowing window. does not exempt window.localStorage', () => {
-  const tokens = tokensOf('window-storage-entry.js', { 'window-storage-entry.js': ['window.'] })
-  expect(tokens).toContain('localStorage')
-  expect(tokens).not.toContain('window.')
+test('window.localStorage reports both globals', () => {
+  expect(tokensOf('window-storage-entry.js')).toEqual(expect.arrayContaining(['localStorage', 'window.']))
 })
 
 test('ordinary properties and string contents are not flagged', () => {
@@ -112,11 +103,6 @@ test('flags a relative import that does not resolve', () => {
   expect(tokensOf('missing-entry.js')).toContain('./does-not-exist.js')
 })
 
-test('allow list is scoped to the named file', () => {
-  const tokens = tokensOf('bad-entry.js', { 'other.js': ['localStorage', '@capacitor/core'] })
-  expect(tokens).toEqual(expect.arrayContaining(['localStorage', '@capacitor/core']))
-})
-
 test('native boundary: names files that import from frontend/', () => {
   const dir = fixture('boundary')
   const files = ['ok.js', 'bad.js', 'sibling.js'].map(n => `${dir}/native/${n}`)
@@ -165,4 +151,40 @@ test('a UI file outside src/ that imports from frontend/ is a violation', () => 
   }, root => scanNativeBoundary(nativeSourceFiles(join(root, 'native')), join(root, 'frontend'))
     .map(v => ({ file: relative(root, v.file), spec: v.spec })))
   expect(violations).toEqual([{ file: 'native/components/Card.jsx', spec: '../../frontend/lib.js' }])
+})
+
+test.each([
+  ['regex-backtick-entry.js', 'localStorage'],
+  ['regex-quote-entry.js', 'localStorage'],
+  ['bracket-entry.js', 'localStorage'],
+  ['alias-entry.js', 'window.'],
+  ['typeof-window-entry.js', 'window.'],
+  ['location-entry.js', 'location.'],
+  ['history-entry.js', 'history.'],
+  ['match-media-entry.js', 'matchMedia'],
+  ['meta-glob-entry.js', 'import.meta.glob']
+])('reports the browser-only reference in %s', (name, token) => {
+  expect(tokensOf(name)).toContain(token)
+})
+
+test('a local or parameter named like a global is not flagged', () => {
+  expect(tokensOf('shadowed-globals-entry.js')).toEqual([])
+})
+
+test('an unparseable file is a violation, not a pass', () => {
+  expect(tokensOf('broken-entry.js')).toEqual(['unparseable'])
+})
+
+test('a JSX apostrophe does not hide a frontend import after it', () => {
+  const violations = withTree({
+    'native/Card.js': "export const A = () => <Text>don't</Text>\nimport { lib } from '../frontend/lib.js'\n",
+    'frontend/lib.js': 'export const lib = 1\n'
+  }, root => scanNativeBoundary(nativeSourceFiles(join(root, 'native')), join(root, 'frontend')).map(v => v.spec))
+  expect(violations).toEqual(['../frontend/lib.js'])
+})
+
+test('an unparseable native file is a boundary violation', () => {
+  const specs = withTree({ 'native/Bad.js': 'export const = 1\n', 'frontend/lib.js': '' },
+    root => scanNativeBoundary(nativeSourceFiles(join(root, 'native')), join(root, 'frontend')).map(v => v.spec))
+  expect(specs).toEqual(['unparseable'])
 })
