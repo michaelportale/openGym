@@ -3,11 +3,12 @@ import {
   WorkoutActivityType,
   deleteObjects,
   queryQuantitySamples,
+  querySources,
   queryWorkoutSamples,
   requestAuthorization,
   saveWorkoutSample
 } from '@kingstinct/react-native-healthkit'
-import { syncMetadata } from './gates.js'
+import { syncIdOf, syncMetadata } from './gates.js'
 
 const WORKOUT = 'HKWorkoutTypeIdentifier'
 const BODY_MASS = 'HKQuantityTypeIdentifierBodyMass'
@@ -44,6 +45,25 @@ export async function findWorkoutsBySyncId(id) {
       w.dispose()
     }
   })
+}
+
+export async function findOwnWorkouts(ownBundleId) {
+  const sources = await querySources(WORKOUT)
+  try {
+    const own = sources.filter(s => s.bundleIdentifier === ownBundleId)
+    // The library treats an empty source list as no filter, which would read every app's workouts.
+    if (own.length === 0) return []
+    const workouts = await queryWorkoutSamples({ limit: 0, filter: { sources: own } })
+    return workouts.map(w => {
+      try {
+        return { uuid: w.uuid, bundleId: w.sourceRevision?.source?.bundleIdentifier, syncId: syncIdOf(w.metadata) }
+      } finally {
+        w.dispose()
+      }
+    })
+  } finally {
+    sources.forEach(s => s.dispose())
+  }
 }
 
 export function deleteWorkout(uuid) {

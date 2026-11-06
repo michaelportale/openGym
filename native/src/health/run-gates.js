@@ -1,4 +1,4 @@
-import { gateSyncId } from './gates.js'
+import { gateSyncId, sortOwnWorkouts } from './gates.js'
 
 const NAMES = ['save', 'retry', 'replace', 'delete']
 const V1_VOLUME = 1000
@@ -82,4 +82,22 @@ export async function runWorkoutGates(adapter, { nowMs }) {
   }
   const left = await find()
   return { gates, leftovers: left ? left.length : null }
+}
+
+// Clears gate workouts from every run, including ones an interrupted run left behind. Anything
+// without a gate id is only counted, never deleted. A failed read rejects, so it can't look like
+// there was nothing to remove.
+export async function removeGateWorkouts(adapter, ownBundleId) {
+  const read = async () => sortOwnWorkouts(await adapter.findOwnWorkouts(ownBundleId), ownBundleId)
+  let removed = 0
+  let error
+  for (const w of (await read()).gate) {
+    try {
+      removed += await adapter.deleteWorkout(w.uuid)
+    } catch (e) {
+      error = message(e)
+    }
+  }
+  const { gate, other } = await read()
+  return { removed, left: gate.length, other: other.length, error }
 }

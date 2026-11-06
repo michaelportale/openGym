@@ -3,9 +3,10 @@ import { useState } from 'react'
 import { Button, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { sharedLogicProof } from './src/shared/proof'
 import { readVerdict } from './src/health/gates'
-import { runWorkoutGates } from './src/health/run-gates'
+import { removeGateWorkouts, runWorkoutGates } from './src/health/run-gates'
 import {
   deleteWorkout,
+  findOwnWorkouts,
   findWorkoutsBySyncId,
   readBodyMass,
   requestHealthAccess,
@@ -14,7 +15,7 @@ import {
 
 const OWN_BUNDLE = 'io.github.michaelportale.opengym'
 const MANUAL_ID = 'opengym-phase0-gate-manual'
-const adapter = { saveStrengthWorkout, findWorkoutsBySyncId, deleteWorkout }
+const adapter = { saveStrengthWorkout, findWorkoutsBySyncId, findOwnWorkouts, deleteWorkout }
 const message = e => (e && e.message) || String(e)
 
 export default function App() {
@@ -58,12 +59,12 @@ export default function App() {
       return ['test workouts: ' + found.length]
     })
 
-  const removeManual = () =>
+  const removeTests = () =>
     run(async () => {
-      let removed = 0
-      for (const w of await findWorkoutsBySyncId(MANUAL_ID)) removed += await deleteWorkout(w.uuid)
-      const left = await findWorkoutsBySyncId(MANUAL_ID)
-      return ['removed: ' + removed, 'left: ' + left.length]
+      const r = await removeGateWorkouts(adapter, OWN_BUNDLE)
+      const out = ['removed: ' + r.removed, 'left: ' + r.left, 'other workouts from this app (kept): ' + r.other]
+      if (r.error) out.push('error: ' + r.error)
+      return out
     })
 
   return (
@@ -75,7 +76,7 @@ export default function App() {
         <Button title="Run workout gates" disabled={busy} onPress={gates} />
         <Button title="Read body weight" disabled={busy} onPress={readWeight} />
         <Button title="Save one test workout" disabled={busy} onPress={saveManual} />
-        <Button title="Remove test workouts" disabled={busy} onPress={removeManual} />
+        <Button title="Remove test workouts" disabled={busy} onPress={removeTests} />
       </View>
       <ScrollView style={styles.output}>
         {lines.map((l, i) => (
