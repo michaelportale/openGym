@@ -1,9 +1,9 @@
-import { StatusBar } from 'expo-status-bar'
 import { useState } from 'react'
-import { Button, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { sharedLogicProof } from './src/shared/proof'
-import { readVerdict } from './src/health/gates'
-import { removeGateWorkouts, runWorkoutGates } from './src/health/run-gates'
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { color, radius, space, touch } from '../theme/tokens'
+import AppText from '../ui/AppText'
+import { readVerdict } from '../health/gates'
+import { removeGateWorkouts, runWorkoutGates } from '../health/run-gates'
 import {
   deleteWorkout,
   findOwnWorkouts,
@@ -11,15 +11,34 @@ import {
   readBodyMass,
   requestHealthAccess,
   saveStrengthWorkout
-} from './src/health/healthkit'
+} from '../health/healthkit'
 
 const OWN_BUNDLE = 'io.github.michaelportale.opengym'
 const MANUAL_ID = 'opengym-phase0-gate-manual'
 const adapter = { saveStrengthWorkout, findWorkoutsBySyncId, findOwnWorkouts, deleteWorkout }
 const message = e => (e && e.message) || String(e)
 
-export default function App() {
-  const { e1rm, catalogueSize } = sharedLogicProof()
+function ActionButton({ title, disabled, onPress }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={[styles.button, disabled && styles.buttonDisabled]}
+    >
+      <AppText variant="button" color={color.onAccent}>{title}</AppText>
+    </Pressable>
+  )
+}
+
+export default function Diagnostics() {
+  const [proof] = useState(() => {
+    const start = performance.now()
+    const { sharedLogicProof } = require('../shared/proof')
+    return { ...sharedLogicProof(), loadMs: Math.round(performance.now() - start) }
+  })
+  const { e1rm, catalogueSize, loadMs } = proof
   const [lines, setLines] = useState([])
   const [busy, setBusy] = useState(false)
 
@@ -69,21 +88,21 @@ export default function App() {
 
   return (
     <View style={styles.container}>
-      <Text>e1RM {e1rm}</Text>
-      <Text>{catalogueSize} exercises</Text>
+      <AppText variant="value">e1RM {e1rm}</AppText>
+      <AppText variant="body" color={color.textSecondary}>{catalogueSize} exercises</AppText>
+      <AppText variant="body" color={color.textSecondary}>training.js load: {loadMs} ms</AppText>
       <View style={styles.buttons}>
-        <Button title="Request access" disabled={busy} onPress={() => run(async () => { await requestHealthAccess(); return ['access requested'] })} />
-        <Button title="Run workout gates" disabled={busy} onPress={gates} />
-        <Button title="Read body weight" disabled={busy} onPress={readWeight} />
-        <Button title="Save one test workout" disabled={busy} onPress={saveManual} />
-        <Button title="Remove test workouts" disabled={busy} onPress={removeTests} />
+        <ActionButton title="Request access" disabled={busy} onPress={() => run(async () => { await requestHealthAccess(); return ['access requested'] })} />
+        <ActionButton title="Run workout gates" disabled={busy} onPress={gates} />
+        <ActionButton title="Read body weight" disabled={busy} onPress={readWeight} />
+        <ActionButton title="Save one test workout" disabled={busy} onPress={saveManual} />
+        <ActionButton title="Remove test workouts" disabled={busy} onPress={removeTests} />
       </View>
       <ScrollView style={styles.output}>
         {lines.map((l, i) => (
-          <Text key={i}>{l}</Text>
+          <AppText key={i} variant="body">{l}</AppText>
         ))}
       </ScrollView>
-      <StatusBar style="auto" />
     </View>
   )
 }
@@ -91,11 +110,19 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: color.bg,
+    alignItems: 'center',
+    paddingTop: space.xl,
+    gap: space.xs
+  },
+  buttons: { marginTop: space.lg, alignSelf: 'stretch', paddingHorizontal: space.lg, gap: space.sm },
+  button: {
+    minHeight: touch.min,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 60
+    borderRadius: radius.md,
+    backgroundColor: color.accent
   },
-  buttons: { marginTop: 16 },
-  output: { flex: 1, alignSelf: 'stretch', padding: 16 }
+  buttonDisabled: { opacity: 0.4 },
+  output: { flex: 1, alignSelf: 'stretch', padding: space.lg }
 })
