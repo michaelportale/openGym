@@ -5,7 +5,7 @@ export function gateSyncId(nowMs) {
 }
 
 export function syncMetadata(id, version, volumeLb) {
-  return { HKSyncIdentifier: id, HKSyncVersion: version, openGymTotalVolumeLb: volumeLb }
+  return { HKMetadataKeySyncIdentifier: id, HKMetadataKeySyncVersion: version, openGymTotalVolumeLb: volumeLb }
 }
 
 export function externalBodyMass(samples, ownBundleId) {

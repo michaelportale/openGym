@@ -35,11 +35,11 @@ export async function saveStrengthWorkout({ id, version, start, end, volumeLb })
 export async function findWorkoutsBySyncId(id) {
   const workouts = await queryWorkoutSamples({
     limit: 0,
-    filter: { metadata: { withMetadataKey: 'HKSyncIdentifier', operatorType: ComparisonPredicateOperator.equalTo, value: id } }
+    filter: { metadata: { withMetadataKey: 'HKMetadataKeySyncIdentifier', operatorType: ComparisonPredicateOperator.equalTo, value: id } }
   })
   return workouts.map(w => {
     try {
-      return { uuid: w.uuid, syncVersion: w.metadata.HKSyncVersion, volumeLb: w.metadata.openGymTotalVolumeLb }
+      return { uuid: w.uuid, syncVersion: Number(w.metadata.HKMetadataKeySyncVersion), volumeLb: Number(w.metadata.openGymTotalVolumeLb) }
     } finally {
       w.dispose()
     }

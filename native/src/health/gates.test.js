@@ -8,7 +8,7 @@ test('gate sync ids carry the phase prefix and the time', () => {
 })
 
 test('sync metadata carries id, version and volume', () => {
-  expect(syncMetadata('w1', 2, 1500)).toEqual({ HKSyncIdentifier: 'w1', HKSyncVersion: 2, openGymTotalVolumeLb: 1500 })
+  expect(syncMetadata('w1', 2, 1500)).toEqual({ HKMetadataKeySyncIdentifier: 'w1', HKMetadataKeySyncVersion: 2, openGymTotalVolumeLb: 1500 })
 })
 
 test('own samples never count as external', () => {
