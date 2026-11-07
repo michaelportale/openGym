@@ -20,11 +20,11 @@ Do not push to `main` and do not commit on it. `main` waits for Michael's phone 
 
 ## F004 is still open in the code
 
-`#persistSeen` in `native/src/session/session.js` catches a rejected `putLastSeen`, clears its private marker, and does not report an error. That is still the code at `ccf975c`.
+`#persistSeen` in `native/src/session/session.js` catches a rejected `putLastSeen`, clears its private marker, and does not report an error. That was the code at the #104 merge `ccf975c`. It was not re-read after #105 merged at `ed4fdc2`. T2 in the PRD is unblocked.
 
-The write-up is F004 in `docs/reviews/2026-11-06-overnight-pr-audit.md` on open PR #65. That file's discovery snapshot stops at #103. It was not re-read against #104 for this note. The catch itself was re-read at `ccf975c`.
+The write-up is F004 in `docs/reviews/2026-11-06-overnight-pr-audit.md` on open PR #65. That file's discovery snapshot stops at #103. It was not re-read against #104 for this note. The catch itself was re-read at the #104 merge `ccf975c`. It was not re-read after #105 merged at `ed4fdc2`.
 
-Task 2 in the PRD is to make the failure visible without marking an already-saved set or draft as unsaved. Whether anything else in the audit changed after #103 was not re-checked.
+T2 in the PRD is to make the failure visible without marking an already-saved set or draft as unsaved. T3 queues `putDraft` on the same chain so a draft write after a commit or remove cannot bring a cleared draft back. Whether anything else in the audit changed after #103 was not re-checked.
 
 ## expo-sqlite is not installed
 
@@ -51,7 +51,7 @@ None of that is a task in the PRD's next-tasks list. Do not edit `frontend/src/l
 
 ## finish() checks discarded before the duplicate id
 
-Most commands check the event id first, then the model. `finish` checks `discarded`, then the duplicate id, then `finished`. Draft #105 keeps that order inside the queue. Leave it unless a review asks for a change.
+Most commands check the event id first, then the model. `finish` checks `discarded`, then the duplicate id, then `finished`. #105, merged at `ed4fdc2`, keeps that order inside the queue. Leave it unless a review asks for a change.
 
 ## Phase 0 limits that were never closed
 

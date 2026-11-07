@@ -1,6 +1,6 @@
 # Session architecture
 
-Head this describes: `native/phase-1` at `ccf975cae4b268e08c04d19bbf3a4aa5f85cdda7` (merge of #104). Draft #105 is not in that head. It moves model preconditions onto the queue below.
+Head this describes: `native/phase-1` at `ed4fdc288601dde5504246eeb2131a53b19b69d7` (merge of #105).
 
 Code lives in `native/src/session/`. The Workout tab does not call it yet. See [ui-handoff.md](ui-handoff.md).
 
@@ -29,9 +29,9 @@ If a command's event would not change `workoutFold`, `#appendNow` does not write
 - An append queued after the discard sees `discarded` and returns `failure('discarded')` without writing.
 - A rejection is caught on the chain so the next task still runs.
 
-`putDraft` is not on this chain. `#seenChain` is a separate chain for the last-seen stamp. A failed stamp write is still swallowed there. That is F004 in [open-questions.md](open-questions.md).
+Model checks such as unknown set, unknown exercise, no rest, and known set run inside the queued task (#105). Argument checks stay argument checks, in the same order.
 
-On this head, checks such as unknown set, unknown exercise, no rest, and known set still run before the task is queued. Two commands fired together can both pass, and the second can then be `unchanged` because the fold ignores it. Draft #105 moves that read inside the queued task, after the earlier command has landed. Argument checks stay argument checks, in the same order.
+`putDraft` is not on this chain. A draft write can land after `commitSet` or `removeSet` clears that draft and put it back. The PRD task T3 queues that write with the clear. `#seenChain` is a separate chain for the last-seen stamp. A failed stamp write is still swallowed there. That is F004 in [open-questions.md](open-questions.md).
 
 ## First-write-wins zone
 

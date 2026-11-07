@@ -67,14 +67,14 @@ Guard: the two discard tests in `journal-effect.test.js`.
 
 ## Preconditions that read a stale model
 
-On `ccf975c` the model checks still run before `#enqueue`. `removeSet` then `commitSet` on the same set, fired together, can save a commit the fold ignores (`unchanged` instead of `unknown-set`). `cancelRest` then `extendRest` can do the same (`unchanged` instead of `no-rest`).
+#105, merged at `ed4fdc2`. Model checks run inside `#enqueue`. `removeSet` then `commitSet` on the same set returns `unknown-set`. `cancelRest` then `extendRest` returns `no-rest`.
 
-That is open draft #105, not a merged guard yet. When it merges, its two interleave tests join this list. Do not open a second implementation. See the PRD.
+Guard: `a commit queued behind removeSet reports unknown-set` and `an extend queued behind cancelRest reports no-rest` in `journal-effect.test.js`. Do not open a second implementation.
 
 ## Review lessons
 
 - Prefer an invariant that discovers every command over another one-off case. `journal-effect.test.js` and `replay.test.js` find commands by reading `eventId` on the prototype.
 - A read-modify-write that awaits in the middle needs one serialized queue. Catch errors so the chain stays alive.
 - Keep fold and `view` pure. `view` does not write the journal.
-- Check a duplicate event id before the model preconditions, and keep that order. On #105 the whole sequence runs inside the queue so it sees the journal after the earlier command. `finish` still checks `discarded` before the duplicate id. Leave that unless a review says otherwise.
+- Check a duplicate event id before the model preconditions, and keep that order. #105 runs that sequence inside the queue so it sees the journal after the earlier command. `finish` still checks `discarded` before the duplicate id. Leave that unless a review says otherwise.
 - Merge parallel PRs one at a time. After each merge, run `npm run verify` on the new `native/phase-1` head before branching again.
