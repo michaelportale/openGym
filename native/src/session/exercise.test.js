@@ -75,7 +75,8 @@ test('an exercise added mid-session starts unlogged and can be committed', async
 })
 
 test('removing an exercise drops its logged work and clears its draft', async () => {
-  const session = await started()
+  const storage = createMemoryStorage()
+  const session = await started(storage)
   const bench0 = plannedSetId('bench', 0)
   await session.commitSet({
     eventId: 'c-bench',
@@ -95,13 +96,29 @@ test('removing an exercise drops its logged work and clears its draft', async ()
   const missing = await session.removeExercise({ eventId: 'rm-missing', exerciseId: 'row' })
   expect(missing).toMatchObject({ ok: false, saved: false, error: { code: 'unknown-exercise' } })
 
-  await session.removeExercise({ eventId: 'rm-bench', exerciseId: 'bench' })
-  expect(session.view().entries).toEqual([])
-  expect(session.view().totals).toMatchObject({ completedSets: 0, reps: 0, loadReps: 0 })
+  const last = await session.removeExercise({ eventId: 'rm-bench', exerciseId: 'bench' })
+  expect(last).toMatchObject({ ok: false, saved: false, error: { code: 'last-exercise' } })
+  expect(session.view().entries.map(entry => entry.id)).toEqual(['bench'])
+  expect(session.view().totals).toMatchObject({ completedSets: 1, reps: 5, loadReps: 300 })
+  expect((await storage.readAll()).some(event => event.id === 'rm-bench')).toBe(false)
   await session.finish({ eventId: 'finish-1' })
-  expect(session.view().finished.entries).toEqual([])
+  expect(session.view().finished.entries.map(entry => entry.id)).toEqual(['bench'])
   const after = await session.removeExercise({ eventId: 'rm-after', exerciseId: 'bench' })
   expect(after).toMatchObject({ ok: false, saved: false, error: { code: 'finished' } })
+})
+
+test('a smuggled remove cannot drop the last exercise', async () => {
+  const storage = createMemoryStorage()
+  const session = await started(storage)
+  await session.removeExercise({ eventId: 'rm-row', exerciseId: 'row' })
+  await storage.append({
+    id: 'rm-smuggle',
+    type: 'exercise.remove',
+    at: T0 + 60_000,
+    exerciseId: 'bench',
+  })
+  const restored = await openSession({ storage, now: () => T0 + 60_000, timeZone: 'UTC' })
+  expect(restored.view().entries.map(entry => entry.id)).toEqual(['bench'])
 })
 
 test('an added exercise and a removal survive replay', async () => {
