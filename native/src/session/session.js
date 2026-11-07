@@ -1,5 +1,5 @@
 import { finishWorkout } from '../shared/training.js'
-import { activityAt, elapsedStamps, entryExists, foldJournal, projectSession, slotExists, toActive } from './fold.js'
+import { activityAt, elapsedStamps, entryExists, exerciseSetIds, foldJournal, projectSession, slotExists, toActive } from './fold.js'
 import { DURATION_GAP_MS, compactSeen, isOvernight, shownThrough } from './timing.js'
 import { createEventId } from './ids.js'
 
@@ -250,7 +250,20 @@ class SessionLog {
     if (this.#seen(eventId)) return duplicate()
     if (!this.discarded && !this.#isFinished()) {
       if (typeof exerciseId !== 'string' || exerciseId === '') return failure('unknown-exercise')
-      if (entryExists(this.#model(), exerciseId)) return failure('known-exercise')
+      const model = this.#model()
+      if (entryExists(model, exerciseId)) return failure('known-exercise')
+      // Same ids the fold would store. A repeat, or one already on the session,
+      // would append an exercise whose sets cannot be told apart.
+      const setIds = exerciseSetIds(exerciseId, entry)
+      const taken = new Set()
+      for (const item of model.entries) {
+        for (const slot of item.sets) taken.add(slot.setId)
+      }
+      const seen = new Set()
+      for (const setId of setIds) {
+        if (seen.has(setId) || taken.has(setId)) return failure('known-set')
+        seen.add(setId)
+      }
     }
     return this.#append({
       id: eventId,
