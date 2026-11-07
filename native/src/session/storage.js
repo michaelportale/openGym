@@ -10,7 +10,8 @@
  * session_base(id INTEGER PRIMARY KEY CHECK (id = 1), body TEXT NOT NULL)
  *
  * The base body may include `_sessionTimeZone`, the zone captured when the journal
- * was first stored. readBase leaves that key out so it never becomes part of the workout.
+ * was first stored, and `_sessionLastSeen`, the latest instant the timer counted.
+ * readBase leaves both keys out so they never become part of the workout.
  *
  * append inserts a new event id. A repeated id is a no-op at this layer too (INSERT OR IGNORE),
  * so a replayed tap cannot create a second row. readAll returns events in insert order.
@@ -41,12 +42,20 @@ function clone(value) {
 }
 
 export const SESSION_TIME_ZONE_KEY = '_sessionTimeZone'
+export const SESSION_LAST_SEEN_KEY = '_sessionLastSeen'
 
 export function baseWithoutTimeZone(value) {
   if (value == null || typeof value !== 'object' || Array.isArray(value)) return value
   const copy = clone(value)
   delete copy[SESSION_TIME_ZONE_KEY]
+  delete copy[SESSION_LAST_SEEN_KEY]
   return copy
+}
+
+export function lastSeenFromBase(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const at = value[SESSION_LAST_SEEN_KEY]
+  return Number.isFinite(at) ? at : null
 }
 
 export function timeZoneFromBase(value) {
@@ -99,9 +108,11 @@ export function createMemoryStorage() {
         base = null
         return
       }
+      const seen = lastSeenFromBase(base)
       const body = baseWithoutTimeZone(value)
       const zone = timeZoneForWrite(options, timeZoneFromBase(base))
       if (zone) body[SESSION_TIME_ZONE_KEY] = zone
+      if (seen != null) body[SESSION_LAST_SEEN_KEY] = seen
       base = body
     },
     async readBase() {
@@ -109,6 +120,13 @@ export function createMemoryStorage() {
     },
     async readTimeZone() {
       return timeZoneFromBase(base)
+    },
+    async putLastSeen(at) {
+      if (!base || !Number.isFinite(at)) return
+      base[SESSION_LAST_SEEN_KEY] = at
+    },
+    async readLastSeen() {
+      return lastSeenFromBase(base)
     },
     failAppends(error) {
       fail = error || null

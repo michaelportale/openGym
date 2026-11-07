@@ -1,4 +1,4 @@
-import { SESSION_TIME_ZONE_KEY, SQLITE_SESSION_SCHEMA, baseWithoutTimeZone, timeZoneForWrite, timeZoneFromBase } from './storage.js'
+import { SESSION_LAST_SEEN_KEY, SESSION_TIME_ZONE_KEY, SQLITE_SESSION_SCHEMA, baseWithoutTimeZone, lastSeenFromBase, timeZoneForWrite, timeZoneFromBase } from './storage.js'
 
 // SQLite adapter for the session journal. The handle is injected so this file does not import
 // expo-sqlite. native/package.json does not depend on it yet. When the app adds it, open the
@@ -106,10 +106,12 @@ export function createSqliteSessionStorage(db) {
         return
       }
       const rows = await db.getAll('SELECT body FROM session_base WHERE id = ?', [1])
-      const existing = rows.length ? timeZoneFromBase(parse(rows[0].body)) : ''
+      const existingBody = rows.length ? parse(rows[0].body) : null
       const body = baseWithoutTimeZone(value)
-      const zone = timeZoneForWrite(options, existing)
+      const zone = timeZoneForWrite(options, timeZoneFromBase(existingBody))
+      const seen = lastSeenFromBase(existingBody)
       if (zone) body[SESSION_TIME_ZONE_KEY] = zone
+      if (seen != null) body[SESSION_LAST_SEEN_KEY] = seen
       await db.run(
         'INSERT OR REPLACE INTO session_base (id, body) VALUES (?, ?)',
         [1, JSON.stringify(body)],
@@ -126,6 +128,23 @@ export function createSqliteSessionStorage(db) {
       await ready()
       const rows = await db.getAll('SELECT body FROM session_base WHERE id = ?', [1])
       return rows.length ? timeZoneFromBase(parse(rows[0].body)) : ''
+    },
+
+    async putLastSeen(at) {
+      await ready()
+      if (!Number.isFinite(at)) return
+      // One statement. A read of the whole body, then a later replace, would wipe a
+      // writeBase that committed in between.
+      await db.run(
+        `UPDATE session_base SET body = json_set(body, '$.${SESSION_LAST_SEEN_KEY}', ?) WHERE id = 1`,
+        [at],
+      )
+    },
+
+    async readLastSeen() {
+      await ready()
+      const rows = await db.getAll('SELECT body FROM session_base WHERE id = ?', [1])
+      return rows.length ? lastSeenFromBase(parse(rows[0].body)) : null
     },
   }
 }

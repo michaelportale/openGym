@@ -174,6 +174,22 @@ function squeeze(sql) {
   return String(sql).replace(/\s+/g, ' ')
 }
 
+test('putLastSeen does not clobber a writeBase that lands while it is in flight', async () => {
+  const db = createFakeSqliteDb()
+  const storage = createSqliteSessionStorage(db)
+  const stamp = Date.parse('2026-11-08T00:05:00.000Z')
+  await storage.writeBase({ id: 'w1', title: 'before' }, { timeZone: 'UTC' })
+  db.holdNext(/json_set\(body, '\$\._sessionLastSeen'|INSERT OR REPLACE INTO session_base/)
+  const pending = storage.putLastSeen(stamp)
+  await db.held()
+  await storage.writeBase({ id: 'w1', title: 'after' }, { timeZone: 'America/New_York' })
+  db.release()
+  await pending
+  expect(await storage.readBase()).toEqual({ id: 'w1', title: 'after' })
+  expect(await storage.readTimeZone()).toBe('America/New_York')
+  expect(await storage.readLastSeen()).toBe(stamp)
+})
+
 test('sqlite storage requires an injected db handle', () => {
   expect(() => createSqliteSessionStorage()).toThrow(/expo-sqlite/)
 })

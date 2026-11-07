@@ -45,6 +45,7 @@ export function createSessionController({ base, storage, finishedWorkouts, now, 
       state = recovered.status === 'saved'
         ? { status: 'saved', error: null, view: null }
         : { status: 'ready', error: null, view: session.view() }
+      if (session && state.status === 'ready') await session.noteSeen()
     } catch (error) {
       session = null
       state = {
@@ -72,6 +73,7 @@ export function createSessionController({ base, storage, finishedWorkouts, now, 
       return { ok: false, saved: false, error: { code: 'sender', message: 'sender is required' } }
     }
 
+    await session.flushSeen()
     const current = session.view()
     if (current.status === 'discarded') {
       const error = { code: 'discarded', message: 'discarded' }
@@ -131,6 +133,7 @@ export function createSessionController({ base, storage, finishedWorkouts, now, 
     }
 
     try {
+      await session.flushSeen()
       await storage.clear()
     } catch (error) {
       const failure = { code: 'storage', message: error?.message || 'clear failed' }
@@ -157,6 +160,7 @@ export function createSessionController({ base, storage, finishedWorkouts, now, 
       view,
       error: result && result.ok === false ? (result.error || { code: 'failed', message: 'request failed' }) : null,
     }
+    if (view.status !== 'discarded') await session.noteSeen()
     return result
   }
 

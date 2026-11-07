@@ -1,11 +1,15 @@
 import { finishWorkout } from '../shared/training.js'
-import { activityAt, entryExists, foldJournal, projectSession, slotExists, toActive } from './fold.js'
-import { isOvernight } from './timing.js'
+import { activityAt, elapsedStamps, entryExists, foldJournal, projectSession, slotExists, toActive } from './fold.js'
+import { DURATION_GAP_MS, isOvernight, shownThrough } from './timing.js'
 import { createEventId } from './ids.js'
 
 const { sessionEnd } = finishWorkout
 
 export { plannedSetId } from './ids.js'
+
+// A live timer reads view() often. The base is rewritten only after the counted
+// instant has moved this far, unless the caller flushes.
+export const SEEN_PERSIST_MS = 15 * 1000
 
 function failure(code, message) {
   return { ok: false, saved: false, error: { code, message: message || code } }
@@ -28,6 +32,7 @@ export async function openSession({ base, storage, now, timeZone = 'UTC' } = {})
   const callerZone = typeof timeZone === 'string' && timeZone ? timeZone : 'UTC'
   let zone = typeof storage.readTimeZone === 'function' ? await storage.readTimeZone() : ''
   if (typeof zone !== 'string' || !zone) zone = ''
+  const seenAt = typeof storage.readLastSeen === 'function' ? await storage.readLastSeen() : null
   if (!resolved && base) {
     await storage.writeBase(base, { timeZone: callerZone })
     resolved = await storage.readBase()
@@ -43,11 +48,15 @@ export async function openSession({ base, storage, now, timeZone = 'UTC' } = {})
     storage,
     now: typeof now === 'function' ? now : Date.now,
     timeZone: zone || callerZone,
+    seenAt,
   })
 }
 
 class SessionLog {
-  constructor({ base, events, drafts, storage, now, timeZone }) {
+  #seenChain = Promise.resolve()
+  #queuedSeen = null
+
+  constructor({ base, events, drafts, storage, now, timeZone, seenAt }) {
     this.base = base
     this.events = events || []
     this.drafts = drafts || {}
@@ -55,9 +64,10 @@ class SessionLog {
     this.now = now
     this.timeZone = timeZone
     this.discarded = false
-    // now() values already shown in this process. Elapsed keeps them so a later clock step
-    // cannot erase time the live view already reported. Not written to storage.
-    this.samples = []
+    // In-process samples plus the last counted instant from a previous process.
+    // A later clock step cannot erase time the timer already counted.
+    this.samples = Number.isFinite(seenAt) ? [seenAt] : []
+    if (Number.isFinite(seenAt)) this.#queuedSeen = seenAt
   }
 
   view({ timeZone = this.timeZone } = {}) {
@@ -68,6 +78,42 @@ class SessionLog {
     }
     const model = foldJournal(this.base, this.events)
     return projectSession(model, { now, timeZone, drafts: this.drafts, discarded: false, samples: this.samples })
+  }
+
+  // Records the instant the timer has counted. Skips the write when that instant is
+  // still within SEEN_PERSIST_MS of the last one stored.
+  async noteSeen() {
+    this.#persistSeen(this.#shownNow(), false)
+    await this.#seenChain
+  }
+
+  // Background, finish, and discard. Writes the current instant even inside the throttle.
+  async flushSeen() {
+    this.#persistSeen(this.#shownNow(), true)
+    await this.#seenChain
+  }
+
+  #shownNow() {
+    const now = this.now()
+    this.#sample(now)
+    if (this.discarded) return null
+    const model = foldJournal(this.base, this.events)
+    const clockEnd = model.finished ? model.finished.end : now
+    return shownThrough(elapsedStamps(model, this.samples), clockEnd, DURATION_GAP_MS, this.timeZone)
+  }
+
+  #persistSeen(at, force) {
+    if (!Number.isFinite(at)) return
+    if (this.#queuedSeen != null && at <= this.#queuedSeen) return
+    if (!force && this.#queuedSeen != null && at - this.#queuedSeen < SEEN_PERSIST_MS) return
+    if (typeof this.storage.putLastSeen !== 'function') return
+    this.#queuedSeen = at
+    this.#seenChain = this.#seenChain
+      .catch(() => {})
+      .then(() => this.storage.putLastSeen(at))
+      .catch(() => {
+        if (this.#queuedSeen === at) this.#queuedSeen = null
+      })
   }
 
   #sample(now) {
@@ -340,6 +386,7 @@ class SessionLog {
     if (this.discarded) return duplicate()
     if (this.#isFinished()) return failure('finished')
     try {
+      await this.flushSeen()
       await this.storage.clear()
     } catch (error) {
       return failure('storage', error?.message || 'clear failed')

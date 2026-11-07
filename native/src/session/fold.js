@@ -1,7 +1,7 @@
 import { finishWorkout, workoutModel } from '../shared/training.js'
 import { DURATION_GAP_MS, REST_MAX_MS, clampMs, elapsedMs, isOvernight, projectRest, stampAt } from './timing.js'
 import { plannedSetId } from './ids.js'
-import { SESSION_TIME_ZONE_KEY } from './storage.js'
+import { SESSION_LAST_SEEN_KEY, SESSION_TIME_ZONE_KEY } from './storage.js'
 
 const { buildCompletedWorkout, sessionEnd } = finishWorkout
 const { hasCompletedWork, isSideSet } = workoutModel
@@ -263,6 +263,7 @@ export function foldJournal(base, events) {
 export function toActive(model) {
   const base = clone(model.base || {})
   delete base[SESSION_TIME_ZONE_KEY]
+  delete base[SESSION_LAST_SEEN_KEY]
   const entries = model.entries.map(entry => {
     const src = clone(entry.source || {})
     delete src.sets
@@ -328,6 +329,25 @@ function loadRepsOf(row) {
   return (Number(row.w) || 0) * (Number(row.r) || 0)
 }
 
+// Samples are instants this timer has already counted. They are not journal events, so
+// they do not move the activity anchor. The newest one that counted is also stored on the
+// base; a restarted process seeds it back and does not rewind that time.
+export function elapsedStamps(model, samples) {
+  const finished = model?.finished
+  const stamps = []
+  if (Number.isFinite(model?.start)) stamps.push(model.start)
+  for (const stamp of model?.stamps || []) {
+    const at = stampAt(stamp)
+    if (at == null) continue
+    if (!finished || at <= finished.end) stamps.push(stamp)
+  }
+  for (const sample of samples || []) {
+    if (!Number.isFinite(sample)) continue
+    if (!finished || sample <= finished.end) stamps.push({ at: sample, sample: true })
+  }
+  return stamps
+}
+
 export function projectSession(model, { now, timeZone, drafts, discarded, samples }) {
   if (discarded) {
     return {
@@ -351,20 +371,7 @@ export function projectSession(model, { now, timeZone, drafts, discarded, sample
   const activity = activityAt(model)
   const overnight = !finished && isOvernight(activity, now, timeZone)
   const clockEnd = finished ? finished.end : now
-  // Samples are now() values this process has already shown. They are not journal events.
-  // A later clock step cannot erase time the live session already displayed. A restarted
-  // process has only the journal, which is the durable source.
-  const stamps = []
-  if (Number.isFinite(model.start)) stamps.push(model.start)
-  for (const stamp of model.stamps) {
-    const at = stampAt(stamp)
-    if (at == null) continue
-    if (!finished || at <= finished.end) stamps.push(stamp)
-  }
-  for (const sample of samples || []) {
-    if (!Number.isFinite(sample)) continue
-    if (!finished || sample <= finished.end) stamps.push({ at: sample, sample: true })
-  }
+  const stamps = elapsedStamps(model, samples)
 
   let completedSets = 0
   let reps = 0
