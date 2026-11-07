@@ -1,6 +1,6 @@
 import { StyleSheet, View } from 'react-native'
-import { SymbolView } from 'expo-symbols'
 import { color, radius, size, space, touch } from '../theme/tokens'
+import NativeSymbol from '../ui/NativeSymbol'
 import AppText from '../ui/AppText'
 import Card from '../ui/Card'
 import { upNextAccessibilityLabel } from './preview-actions'
@@ -15,13 +15,13 @@ export default function UpNextRow({ name }) {
         style={styles.row}
       >
         <View style={styles.tile}>
-          <SymbolView name="dumbbell" tintColor={color.textSecondary} size={size.icon} />
+          <NativeSymbol name="dumbbell" tintColor={color.textSecondary} size={size.icon} />
         </View>
         <View style={styles.text}>
           <AppText variant="label" color={color.textSecondary}>Up next</AppText>
           <AppText variant="heading">{name}</AppText>
         </View>
-        <SymbolView name="chevron.right" tintColor={color.textSecondary} size={size.icon} />
+        <NativeSymbol name="chevron.right" tintColor={color.textSecondary} size={size.icon} />
       </View>
     </Card>
   )

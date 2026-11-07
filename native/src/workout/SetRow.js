@@ -1,6 +1,6 @@
 import { StyleSheet, View } from 'react-native'
-import { SymbolView } from 'expo-symbols'
 import { color, radius, size, space, touch } from '../theme/tokens'
+import NativeSymbol from '../ui/NativeSymbol'
 import AppText from '../ui/AppText'
 import { setRowView } from './set-row-view'
 
@@ -54,7 +54,7 @@ export default function SetRow({ number, weight, reps, status }) {
         <AppText variant="value" color={amountColor}>{view.repsText}</AppText>
       </View>
       <View style={[styles.done, styles.marker]}>
-        <SymbolView name={marker.name} tintColor={marker.tint} weight={marker.weight} size={size.marker} />
+        <NativeSymbol name={marker.name} tintColor={marker.tint} weight={marker.weight} size={size.marker} />
       </View>
     </View>
   )
