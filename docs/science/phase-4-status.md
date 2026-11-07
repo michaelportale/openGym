@@ -26,7 +26,7 @@ Checked against the science section and the Phase 4 done-when line in
 | Rep ranges | Done in science. `programRepRange` keeps the stored `reps` and `repsMin`. A missing range stays empty, and nothing labels 8-12 optimal. The shared normalizer is unchanged. |
 | Progression | Done in science. PR #46. An old routine stored as `prog: 'linear'` changes only if something calls `migrateLinearRoutines`. PR #47. |
 | Effort | Done in science. PR #47. Journal wiring is blocked on the session lane. |
-| Weekly volume | Done as a register entry, and not started as a number. No target ships until the primary paper is read. PR #43. |
+| Weekly volume | Not started as a number. The register entry is PR #43. `weeklyVolumeTarget` returns null, so this lane does not ship a set target. The primary paper is still unread. |
 | Deload, e1RM, rest, increments | Done as four register entries, labeled convention until audited. PR #43. The audit itself is not started. The numbers stay in the shared engine. |
 
 ## Populations that need a source
