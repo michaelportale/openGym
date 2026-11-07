@@ -1,26 +1,30 @@
 import { useEffect, useState } from 'react'
 import { AccessibilityInfo } from 'react-native'
+import { accessibilityFlag, accessibilityFlagDefault } from './accessibility-flag'
 
-const FLAGS = {
-  reduceMotion: { read: 'isReduceMotionEnabled', event: 'reduceMotionChanged' },
-  reduceTransparency: { read: 'isReduceTransparencyEnabled', event: 'reduceTransparencyChanged' }
-}
-
-// Starts on, so nobody who asked for less motion or transparency sees it while the OS answers.
+// Starts reduced only when the platform can answer, so a requested reduction is
+// not shown early. A missing reader is left off and is not called.
 export function useAccessibilityFlag(name) {
-  if (!Object.hasOwn(FLAGS, name)) throw new Error(`Unknown accessibility flag: ${name}`)
-  const [enabled, setEnabled] = useState(true)
+  const { read, event } = accessibilityFlag(name)
+  const [enabled, setEnabled] = useState(() => accessibilityFlagDefault(AccessibilityInfo, name))
   useEffect(() => {
-    const { read, event } = FLAGS[name]
+    const readFlag = AccessibilityInfo[read]
+    if (typeof readFlag !== 'function') return undefined
     let mounted = true
-    AccessibilityInfo[read]().then(value => {
-      if (mounted) setEnabled(value)
+    Promise.resolve(readFlag.call(AccessibilityInfo)).then(value => {
+      if (mounted) setEnabled(Boolean(value))
+    }, () => {
+      if (mounted) setEnabled(true)
     })
-    const subscription = AccessibilityInfo.addEventListener(event, setEnabled)
+    const subscription = typeof AccessibilityInfo.addEventListener === 'function'
+      ? AccessibilityInfo.addEventListener(event, value => {
+        if (mounted) setEnabled(Boolean(value))
+      })
+      : null
     return () => {
       mounted = false
-      subscription.remove()
+      if (subscription && typeof subscription.remove === 'function') subscription.remove()
     }
-  }, [name])
+  }, [event, read])
   return enabled
 }

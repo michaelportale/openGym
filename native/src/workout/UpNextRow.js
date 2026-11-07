@@ -3,11 +3,17 @@ import { SymbolView } from 'expo-symbols'
 import { color, radius, size, space, touch } from '../theme/tokens'
 import AppText from '../ui/AppText'
 import Card from '../ui/Card'
+import { upNextAccessibilityLabel } from './preview-actions'
 
 export default function UpNextRow({ name }) {
   return (
     <Card>
-      <View accessible style={styles.row}>
+      <View
+        accessible
+        accessibilityRole="text"
+        accessibilityLabel={upNextAccessibilityLabel(name)}
+        style={styles.row}
+      >
         <View style={styles.tile}>
           <SymbolView name="dumbbell" tintColor={color.textSecondary} size={size.icon} />
         </View>

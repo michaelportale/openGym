@@ -1,5 +1,8 @@
+import { destinationCopy } from '../../shell/destinations'
 import UnbuiltScreen from '../../ui/UnbuiltScreen'
 
+const copy = destinationCopy('plan')
+
 export default function Plan() {
-  return <UnbuiltScreen title="Plan" phase={7} summary="Your rotation and routines, with reorder, swap and progression overrides." />
+  return <UnbuiltScreen title={copy.title} phaseLabel={copy.phaseLabel} summary={copy.summary} status={copy.status} />
 }

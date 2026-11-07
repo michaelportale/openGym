@@ -15,6 +15,7 @@ export default function ScreenHeader({ title, subtitle }) {
         <IconButton
           symbol="ellipsis"
           accessibilityLabel="More"
+          accessibilityHint="Opens diagnostics."
           onPress={() => router.push('/diagnostics')}
         />
       </View>
