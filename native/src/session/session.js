@@ -154,130 +154,129 @@ class SessionLog {
   }
 
   async commitSet({ eventId, exerciseId, setId, fields } = {}) {
-    if (this.#seen(eventId)) return duplicate()
-    const model = this.#model()
-    if (!this.discarded && !this.#isFinished() && !slotExists(model, exerciseId, setId)) return failure('unknown-set')
-    const merged = { ...(this.drafts[setId] || {}) }
-    for (const [key, value] of Object.entries(fields || {})) merged[key] = value
-    const result = await this.#append({
-      id: eventId,
-      type: 'set.commit',
-      at: this.now(),
-      exerciseId,
-      setId,
-      fields: merged,
-    })
-    if (result.saved) {
-      try {
-        await this.storage.putDraft(setId, null)
-      } catch (error) {
-        return { ok: true, saved: true, draftError: { code: 'storage', message: error?.message || 'draft clear failed' } }
+    return this.#enqueue(async () => {
+      if (this.#seen(eventId)) return duplicate()
+      if (!this.discarded && !this.#isFinished() && !slotExists(this.#model(), exerciseId, setId)) {
+        return failure('unknown-set')
       }
-      delete this.drafts[setId]
-    }
-    return result
+      const merged = { ...(this.drafts[setId] || {}) }
+      for (const [key, value] of Object.entries(fields || {})) merged[key] = value
+      const result = await this.#appendNow({
+        id: eventId,
+        type: 'set.commit',
+        at: this.now(),
+        exerciseId,
+        setId,
+        fields: merged,
+      })
+      return this.#clearDraft(result, setId)
+    })
   }
 
   async editSet({ eventId, exerciseId, setId, fields } = {}) {
-    if (this.#seen(eventId)) return duplicate()
-    const model = this.#model()
-    if (!this.discarded && !this.#isFinished() && !slotExists(model, exerciseId, setId)) return failure('unknown-set')
-    return this.#append({
-      id: eventId,
-      type: 'set.edit',
-      at: this.now(),
-      exerciseId,
-      setId,
-      fields: fields || {},
+    return this.#enqueue(async () => {
+      if (this.#seen(eventId)) return duplicate()
+      if (!this.discarded && !this.#isFinished() && !slotExists(this.#model(), exerciseId, setId)) {
+        return failure('unknown-set')
+      }
+      return this.#appendNow({
+        id: eventId,
+        type: 'set.edit',
+        at: this.now(),
+        exerciseId,
+        setId,
+        fields: fields || {},
+      })
     })
   }
 
   async undoSet({ eventId, exerciseId, setId } = {}) {
-    if (this.#seen(eventId)) return duplicate()
-    const model = this.#model()
-    if (!this.discarded && !this.#isFinished() && !slotExists(model, exerciseId, setId)) return failure('unknown-set')
-    return this.#append({
-      id: eventId,
-      type: 'set.undo',
-      at: this.now(),
-      exerciseId,
-      setId,
+    return this.#enqueue(async () => {
+      if (this.#seen(eventId)) return duplicate()
+      if (!this.discarded && !this.#isFinished() && !slotExists(this.#model(), exerciseId, setId)) {
+        return failure('unknown-set')
+      }
+      return this.#appendNow({
+        id: eventId,
+        type: 'set.undo',
+        at: this.now(),
+        exerciseId,
+        setId,
+      })
     })
   }
 
   // A live exercise keeps at least one set. Undo clears the tick; remove drops the row.
   async removeSet({ eventId, exerciseId, setId } = {}) {
-    if (this.#seen(eventId)) return duplicate()
-    if (!this.discarded && !this.#isFinished()) {
-      const model = this.#model()
-      if (!slotExists(model, exerciseId, setId)) return failure('unknown-set')
-      const entry = model.entries.find(item => item.id === exerciseId)
-      if (!entry || entry.sets.length <= 1) return failure('last-set')
-    }
-    const result = await this.#append({
-      id: eventId,
-      type: 'set.remove',
-      at: this.now(),
-      exerciseId,
-      setId,
-    })
-    if (result.saved) {
-      try {
-        await this.storage.putDraft(setId, null)
-      } catch (error) {
-        return { ok: true, saved: true, draftError: { code: 'storage', message: error?.message || 'draft clear failed' } }
+    return this.#enqueue(async () => {
+      if (this.#seen(eventId)) return duplicate()
+      if (!this.discarded && !this.#isFinished()) {
+        const model = this.#model()
+        if (!slotExists(model, exerciseId, setId)) return failure('unknown-set')
+        const entry = model.entries.find(item => item.id === exerciseId)
+        if (!entry || entry.sets.length <= 1) return failure('last-set')
       }
-      delete this.drafts[setId]
-    }
-    return result
+      const result = await this.#appendNow({
+        id: eventId,
+        type: 'set.remove',
+        at: this.now(),
+        exerciseId,
+        setId,
+      })
+      return this.#clearDraft(result, setId)
+    })
   }
 
   async addSet({ eventId, exerciseId, setId, fields } = {}) {
-    if (this.#seen(eventId)) return duplicate()
-    const model = this.#model()
-    if (!this.discarded && !this.#isFinished()) {
-      if (!entryExists(model, exerciseId)) return failure('unknown-exercise')
-      // A missing id, or one already on any exercise, would append a row the fold drops.
-      // Replay would then disagree with the saved: true the caller already saw.
-      if (typeof setId !== 'string' || setId === '') return failure('unknown-set')
-      const taken = model.entries.some(entry => entry.sets.some(slot => slot.setId === setId))
-      if (taken) return failure('known-set')
-    }
-    return this.#append({
-      id: eventId,
-      type: 'set.add',
-      at: this.now(),
-      exerciseId,
-      setId,
-      fields: fields || {},
+    return this.#enqueue(async () => {
+      if (this.#seen(eventId)) return duplicate()
+      if (!this.discarded && !this.#isFinished()) {
+        const model = this.#model()
+        if (!entryExists(model, exerciseId)) return failure('unknown-exercise')
+        // A missing id, or one already on any exercise, would append a row the fold drops.
+        // Replay would then disagree with the saved: true the caller already saw.
+        if (typeof setId !== 'string' || setId === '') return failure('unknown-set')
+        const taken = model.entries.some(entry => entry.sets.some(slot => slot.setId === setId))
+        if (taken) return failure('known-set')
+      }
+      return this.#appendNow({
+        id: eventId,
+        type: 'set.add',
+        at: this.now(),
+        exerciseId,
+        setId,
+        fields: fields || {},
+      })
     })
   }
 
   async addExercise({ eventId, exerciseId, entry } = {}) {
-    if (this.#seen(eventId)) return duplicate()
-    if (!this.discarded && !this.#isFinished()) {
-      if (typeof exerciseId !== 'string' || exerciseId === '') return failure('unknown-exercise')
-      const model = this.#model()
-      if (entryExists(model, exerciseId)) return failure('known-exercise')
-      // Same ids the fold would store. A repeat, or one already on the session,
-      // would append an exercise whose sets cannot be told apart.
-      const setIds = exerciseSetIds(exerciseId, entry)
-      const taken = new Set()
-      for (const item of model.entries) {
-        for (const slot of item.sets) taken.add(slot.setId)
+    return this.#enqueue(async () => {
+      if (this.#seen(eventId)) return duplicate()
+      if (!this.discarded && !this.#isFinished()) {
+        if (typeof exerciseId !== 'string' || exerciseId === '') return failure('unknown-exercise')
+        const model = this.#model()
+        if (entryExists(model, exerciseId)) return failure('known-exercise')
+        // Same ids the fold would store. A repeat, or one already on the session,
+        // would append an exercise whose sets cannot be told apart.
+        const setIds = exerciseSetIds(exerciseId, entry)
+        const taken = new Set()
+        for (const item of model.entries) {
+          for (const slot of item.sets) taken.add(slot.setId)
+        }
+        const seen = new Set()
+        for (const setId of setIds) {
+          if (seen.has(setId) || taken.has(setId)) return failure('known-set')
+          seen.add(setId)
+        }
       }
-      const seen = new Set()
-      for (const setId of setIds) {
-        if (seen.has(setId) || taken.has(setId)) return failure('known-set')
-        seen.add(setId)
-      }
-    }
-    return this.#append({
-      id: eventId,
-      type: 'exercise.add',
-      at: this.now(),
-      exerciseId,
-      entry: entry && typeof entry === 'object' ? entry : {},
+      return this.#appendNow({
+        id: eventId,
+        type: 'exercise.add',
+        at: this.now(),
+        exerciseId,
+        entry: entry && typeof entry === 'object' ? entry : {},
+      })
     })
   }
 
@@ -285,147 +284,163 @@ class SessionLog {
   // Finishing with no completed sets stays allowed: that is a skipped workout, not an
   // empty plan. Discard is how the session goes away.
   async removeExercise({ eventId, exerciseId } = {}) {
-    if (this.#seen(eventId)) return duplicate()
-    let setIds = []
-    if (!this.discarded && !this.#isFinished()) {
-      const model = this.#model()
-      const entry = model.entries.find(item => item.id === exerciseId)
-      if (!entry) return failure('unknown-exercise')
-      if (model.entries.length <= 1) return failure('last-exercise')
-      setIds = entry.sets.map(slot => slot.setId)
-    }
-    const result = await this.#append({
-      id: eventId,
-      type: 'exercise.remove',
-      at: this.now(),
-      exerciseId,
-    })
-    if (result.saved) {
-      for (const setId of setIds) {
-        try {
-          await this.storage.putDraft(setId, null)
-        } catch (error) {
-          return { ok: true, saved: true, draftError: { code: 'storage', message: error?.message || 'draft clear failed' } }
-        }
-        delete this.drafts[setId]
+    return this.#enqueue(async () => {
+      if (this.#seen(eventId)) return duplicate()
+      let setIds = []
+      if (!this.discarded && !this.#isFinished()) {
+        const model = this.#model()
+        const entry = model.entries.find(item => item.id === exerciseId)
+        if (!entry) return failure('unknown-exercise')
+        if (model.entries.length <= 1) return failure('last-exercise')
+        setIds = entry.sets.map(slot => slot.setId)
       }
-    }
-    return result
+      const result = await this.#appendNow({
+        id: eventId,
+        type: 'exercise.remove',
+        at: this.now(),
+        exerciseId,
+      })
+      if (!result.saved) return result
+      for (const setId of setIds) {
+        const cleared = await this.#clearDraft(result, setId)
+        if (cleared !== result) return cleared
+      }
+      return result
+    })
   }
 
   async moveExercise({ eventId, exerciseId, toIndex } = {}) {
-    if (this.#seen(eventId)) return duplicate()
-    // The fold ignores a non-integer index, so the event would say the exercise moved.
-    if (!Number.isInteger(toIndex)) return failure('bad-index')
-    const model = this.#model()
-    if (!this.discarded && !this.#isFinished() && !entryExists(model, exerciseId)) return failure('unknown-exercise')
-    return this.#append({
-      id: eventId,
-      type: 'exercise.move',
-      at: this.now(),
-      exerciseId,
-      toIndex,
+    return this.#enqueue(async () => {
+      if (this.#seen(eventId)) return duplicate()
+      // The fold ignores a non-integer index, so the event would say the exercise moved.
+      if (!Number.isInteger(toIndex)) return failure('bad-index')
+      if (!this.discarded && !this.#isFinished() && !entryExists(this.#model(), exerciseId)) {
+        return failure('unknown-exercise')
+      }
+      return this.#appendNow({
+        id: eventId,
+        type: 'exercise.move',
+        at: this.now(),
+        exerciseId,
+        toIndex,
+      })
     })
   }
 
   async startRest({ eventId, deadline, durationMs, totalMs } = {}) {
-    if (this.#seen(eventId)) return duplicate()
-    const at = this.now()
-    const resolved = Number.isFinite(deadline) ? deadline : at + Number(durationMs)
-    if (!Number.isFinite(resolved)) return failure('bad-deadline')
-    const span = Math.max(0, resolved - at)
-    return this.#append({
-      id: eventId,
-      type: 'rest.start',
-      at,
-      deadline: resolved,
-      totalMs: Number.isFinite(totalMs) ? totalMs : span,
+    return this.#enqueue(async () => {
+      if (this.#seen(eventId)) return duplicate()
+      const at = this.now()
+      const resolved = Number.isFinite(deadline) ? deadline : at + Number(durationMs)
+      if (!Number.isFinite(resolved)) return failure('bad-deadline')
+      const span = Math.max(0, resolved - at)
+      return this.#appendNow({
+        id: eventId,
+        type: 'rest.start',
+        at,
+        deadline: resolved,
+        totalMs: Number.isFinite(totalMs) ? totalMs : span,
+      })
     })
   }
 
   async pauseRest({ eventId } = {}) {
-    if (this.#seen(eventId)) return duplicate()
-    const rest = this.view().rest
-    if (!this.discarded && !this.#isFinished() && (!rest || rest.status !== 'running')) return failure('no-rest')
-    return this.#append({ id: eventId, type: 'rest.pause', at: this.now() })
+    return this.#enqueue(async () => {
+      if (this.#seen(eventId)) return duplicate()
+      const rest = this.view().rest
+      if (!this.discarded && !this.#isFinished() && (!rest || rest.status !== 'running')) return failure('no-rest')
+      return this.#appendNow({ id: eventId, type: 'rest.pause', at: this.now() })
+    })
   }
 
   async extendRest({ eventId, byMs } = {}) {
-    if (this.#seen(eventId)) return duplicate()
-    if (!Number.isFinite(byMs) || byMs === 0) return failure('bad-extend')
-    const rest = this.view().rest
-    if (!this.discarded && !this.#isFinished()) {
-      if (!rest) return failure('no-rest')
-      // A full rest grows by nothing. The fold would keep the event and ignore it.
-      if (extendBy(rest, byMs) === 0) return failure('bad-extend')
-    }
-    return this.#append({ id: eventId, type: 'rest.extend', at: this.now(), byMs })
+    return this.#enqueue(async () => {
+      if (this.#seen(eventId)) return duplicate()
+      if (!Number.isFinite(byMs) || byMs === 0) return failure('bad-extend')
+      if (!this.discarded && !this.#isFinished()) {
+        const rest = this.view().rest
+        if (!rest) return failure('no-rest')
+        // A full rest grows by nothing. The fold would keep the event and ignore it.
+        if (extendBy(rest, byMs) === 0) return failure('bad-extend')
+      }
+      return this.#appendNow({ id: eventId, type: 'rest.extend', at: this.now(), byMs })
+    })
   }
 
   async cancelRest({ eventId } = {}) {
-    if (this.#seen(eventId)) return duplicate()
-    const rest = this.view().rest
-    if (!this.discarded && !this.#isFinished() && !rest) return failure('no-rest')
-    return this.#append({ id: eventId, type: 'rest.cancel', at: this.now() })
+    return this.#enqueue(async () => {
+      if (this.#seen(eventId)) return duplicate()
+      const rest = this.view().rest
+      if (!this.discarded && !this.#isFinished() && !rest) return failure('no-rest')
+      return this.#appendNow({ id: eventId, type: 'rest.cancel', at: this.now() })
+    })
   }
 
   async setNote({ eventId, note } = {}) {
-    if (this.#seen(eventId)) return duplicate()
-    if (!this.discarded && !this.#isFinished()) {
-      if (typeof note !== 'string') return failure('bad-note')
-      if (note.length > 2000) return failure('note-too-long')
-    }
-    return this.#append({
-      id: eventId,
-      type: 'session.note',
-      at: this.now(),
-      note: typeof note === 'string' ? note : '',
+    return this.#enqueue(async () => {
+      if (this.#seen(eventId)) return duplicate()
+      if (!this.discarded && !this.#isFinished()) {
+        if (typeof note !== 'string') return failure('bad-note')
+        if (note.length > 2000) return failure('note-too-long')
+      }
+      return this.#appendNow({
+        id: eventId,
+        type: 'session.note',
+        at: this.now(),
+        note: typeof note === 'string' ? note : '',
+      })
     })
   }
 
   async setExerciseNote({ eventId, exerciseId, note, notePin } = {}) {
-    if (this.#seen(eventId)) return duplicate()
-    if (!this.discarded && !this.#isFinished()) {
-      if (typeof note !== 'string') return failure('bad-note')
-      if (note.length > 2000) return failure('note-too-long')
-      if (!entryExists(this.#model(), exerciseId)) return failure('unknown-exercise')
-      if (notePin != null && typeof notePin !== 'boolean') return failure('bad-note')
-    }
-    const event = {
-      id: eventId,
-      type: 'exercise.note',
-      at: this.now(),
-      exerciseId,
-      note: typeof note === 'string' ? note : '',
-    }
-    if (typeof notePin === 'boolean') event.notePin = notePin
-    return this.#append(event)
+    return this.#enqueue(async () => {
+      if (this.#seen(eventId)) return duplicate()
+      if (!this.discarded && !this.#isFinished()) {
+        if (typeof note !== 'string') return failure('bad-note')
+        if (note.length > 2000) return failure('note-too-long')
+        if (!entryExists(this.#model(), exerciseId)) return failure('unknown-exercise')
+        if (notePin != null && typeof notePin !== 'boolean') return failure('bad-note')
+      }
+      const event = {
+        id: eventId,
+        type: 'exercise.note',
+        at: this.now(),
+        exerciseId,
+        note: typeof note === 'string' ? note : '',
+      }
+      if (typeof notePin === 'boolean') event.notePin = notePin
+      return this.#appendNow(event)
+    })
   }
 
   async resume({ eventId } = {}) {
-    if (this.#seen(eventId)) return duplicate()
-    if (this.discarded) return failure('discarded')
-    if (this.#isFinished()) return failure('finished')
-    if (!this.view().overnight) return failure('not-overnight')
-    return this.#append({ id: eventId, type: 'session.resume', at: this.now() })
+    return this.#enqueue(async () => {
+      if (this.#seen(eventId)) return duplicate()
+      if (this.discarded) return failure('discarded')
+      if (this.#isFinished()) return failure('finished')
+      if (!this.view().overnight) return failure('not-overnight')
+      return this.#appendNow({ id: eventId, type: 'session.resume', at: this.now() })
+    })
   }
 
   async finish({ eventId, end } = {}) {
-    if (this.discarded) return failure('discarded')
-    if (this.#seen(eventId)) return duplicate()
-    if (this.#isFinished()) return failure('finished')
-    const now = this.now()
-    const model = this.#model()
-    const active = toActive(model)
-    const overnight = isOvernight(activityAt(model), now, this.timeZone)
-    let chosen = end
-    if (chosen == null) {
-      if (overnight) return failure('overnight')
-      chosen = sessionEnd(active, now)
-    }
-    if (!Number.isFinite(chosen)) return failure('bad-end')
-    if (Number.isFinite(active.start) && chosen < active.start) return failure('end-before-start')
-    return this.#append({ id: eventId, type: 'session.finish', at: now, end: chosen })
+    return this.#enqueue(async () => {
+      if (this.discarded) return failure('discarded')
+      if (this.#seen(eventId)) return duplicate()
+      if (this.#isFinished()) return failure('finished')
+      const now = this.now()
+      const model = this.#model()
+      const active = toActive(model)
+      const overnight = isOvernight(activityAt(model), now, this.timeZone)
+      let chosen = end
+      if (chosen == null) {
+        if (overnight) return failure('overnight')
+        chosen = sessionEnd(active, now)
+      }
+      if (!Number.isFinite(chosen)) return failure('bad-end')
+      if (Number.isFinite(active.start) && chosen < active.start) return failure('end-before-start')
+      return this.#appendNow({ id: eventId, type: 'session.finish', at: now, end: chosen })
+    })
   }
 
   async discard() {
@@ -461,9 +476,8 @@ class SessionLog {
     return this.events.some(event => event.type === 'session.finish')
   }
 
-  // One queue for append and discard. Each task reads this.events and #fold,
-  // then awaits storage, then writes them back. The next task waits until that
-  // finishes. A rejection must not drop the rest of the queue.
+  // One queue. Checks that read the journal run here, after earlier commands
+  // have landed. A rejection must not drop the rest of the queue.
   #enqueue(task) {
     const run = this.#appendChain
       .catch(() => {})
@@ -472,8 +486,15 @@ class SessionLog {
     return run
   }
 
-  async #append(event) {
-    return this.#enqueue(() => this.#appendNow(event))
+  async #clearDraft(result, setId) {
+    if (!result?.saved) return result
+    try {
+      await this.storage.putDraft(setId, null)
+    } catch (error) {
+      return { ok: true, saved: true, draftError: { code: 'storage', message: error?.message || 'draft clear failed' } }
+    }
+    delete this.drafts[setId]
+    return result
   }
 
   async #appendNow(event) {
