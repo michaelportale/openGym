@@ -148,7 +148,9 @@ function applyEvent(model, event) {
     case 'set.edit': {
       const slot = findSlot(model, event.exerciseId, event.setId)
       if (!slot) return
-      slot.row = mergeFields(slot.row, event.fields)
+      const row = mergeFields(slot.row, event.fields)
+      if (isSideSet(row)) row.done = row.sides.L?.done === true && row.sides.R?.done === true
+      slot.row = row
       return
     }
     case 'set.undo': {
