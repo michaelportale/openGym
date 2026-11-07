@@ -5,7 +5,7 @@
 **Repository:** michaelportale/openGym, across every target branch.
 **Cadence:** every half hour, with a final 7:30 a.m. reconciliation.
 **Status:** in progress. This is a rolling handoff for the coding agents, not an assertion that all listed PRs are safe.
-**Latest discovery:** 62 merged PRs through #105 (November 7, 00:26:08 EST), unchanged in the 01:02 EST refresh. Exhaustive inventory still contains 107 PRs (pages of 100 and 7), with no new merges or reviewed-head revisions. All discovered merged PRs have source reviews; historical V001 installation limits and device validation remain unresolved. F004 remains open on integration: its validated candidate #107 is still draft. N002 remains open on unchanged documentation PR #106. No audit merge was performed.
+**Latest discovery:** 62 merged PRs through #105 (November 7, 00:26:08 EST), unchanged in the 01:31 EST refresh. Exhaustive inventory still contains 107 PRs (pages of 100 and 7), with no new merges or reviewed-head revisions. All discovered merged PRs have source reviews; historical V001 installation limits and device validation remain unresolved. F004 remains open on integration: its validated candidate #107 is still draft. N002 remains open on unchanged documentation PR #106. No audit merge was performed.
 **Audit PR:** [#65](https://github.com/michaelportale/openGym/pull/65), kept draft for rolling documentation updates.
 
 ## Agent action queue
@@ -467,6 +467,14 @@ Current metadata, discussions, review submissions, unresolved-thread lists, chec
 **Evidence reuse:** no source or base moved, so no local test was repeated in this pass. The previous independent evidence remains tied to the same commits: actual merge #105 has 348 native tests/shared checks; #107 head has 361, its generated preview `d39859dba71b4dac050059a6d8cabe3cf91e4a3c` has 363, and the failure/retry probes passed at the candidate head and preview. None of those preview checks establishes an actual merged fix. Frontend/API/MCP evidence remains attributed to merge #85, and historical V001 and device/Expo SQLite limitations remain visible.
 
 F004 and N002 stay open. [Existing #106 feedback](https://github.com/michaelportale/openGym/pull/106#issuecomment-6702889244) and [#107 verification](https://github.com/michaelportale/openGym/pull/107#issuecomment-6702891847) were read back and not duplicated. No application file was changed and no PR was merged by this audit.
+
+## 1:30 a.m. unchanged-head refresh
+
+Exhaustive all-state pagination again returned 107 PRs (100 + 7), with the same 62 in-window merges across all base branches. Every head/base/merge/time tuple matches the preceding inventory, and all 62 historical merge parent pairs were rechecked. The integration branch remains `ed4fdc288601dde5504246eeb2131a53b19b69d7`; #67/#106/#107 retain the exact heads and recorded bases in the 1:00 a.m. table. #65 remains the excluded audit draft.
+
+Current metadata, discussions/reviews, unresolved threads and checks were refreshed. All four open PRs remain drafts and report mergeable; there are no new responses or inline threads. The three non-audit open heads still have zero check runs/statuses and a pending aggregate. Actions remains disabled; classic branch protection is absent and rulesets are empty. F004 is still open on integration because candidate #107 has not merged. N002 remains uncorrected on #106. Existing actionable comments were not duplicated.
+
+No source or base moved, so this pass reused the previously documented exact-commit validation and ran no new tests. Candidate-head and generated-preview results remain separate from actual-merge evidence. Historical V001, device/Expo SQLite and mounted-hook limitations remain unresolved. No application changes or PR merges were performed.
 
 ## Coverage ledger
 
