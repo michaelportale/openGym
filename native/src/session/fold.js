@@ -74,8 +74,8 @@ function clearDone(row) {
   return next
 }
 
-// A per-side row is done only when both sides are. The fold applies this after every
-// set event, so commit, edit, undo, and add do not each keep their own copy.
+// A per-side row is done only when both sides are. The fold applies this to the base
+// and after every event, so a move or a copied exercise cannot leave a stale flag.
 function syncSideDone(model) {
   for (const entry of model.entries) {
     for (const slot of entry.sets) {
@@ -265,13 +265,14 @@ function applyEvent(model, event) {
 // their ids (so a duplicate still no-ops) but do not change sets, rest, or the finished end.
 export function foldJournal(base, events) {
   const model = blankModel(base)
+  syncSideDone(model)
   const seen = new Set()
   for (const event of events || []) {
     if (!event || event.id == null || seen.has(event.id)) continue
     seen.add(event.id)
     if (model.finished) continue
     applyEvent(model, event)
-    if (typeof event.type === 'string' && event.type.startsWith('set.')) syncSideDone(model)
+    syncSideDone(model)
     if (Number.isFinite(event.at)) {
       model.stamps.push(event.type === 'session.resume' ? { at: event.at, resume: true } : event.at)
     }
