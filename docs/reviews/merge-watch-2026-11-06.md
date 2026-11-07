@@ -2,35 +2,36 @@
 
 Running log of pulls merged into `native/phase-1` on the night of 6 November 2026. This pull request is a log only. Do not merge it.
 
-- Last checked: 2026-11-06 21:52 EST
-- `native/phase-1` head: `b973478fe795507e65f90dd5cfaaba39f215681f`
+- Last checked: 2026-11-06 21:57 EST
+- `native/phase-1` head: `f66609519231c03800aaec05faee11bc738f2fcf`
+- Native `npm test` at that head: 37 files, 281 passed, no failures
 - Window: merges after `aac6bcc` (the #48 session-adapter merge), from #49 through the head above
 - Lanes: session = Charlie, shell/screens = Gus, science = Bob
 - Independent review below is this log's reading of the diff. `NOT YET REVIEWED` means that diff was not read. `Self-authored, not independent` means this lane wrote the pull request, so the reading is not a review. Charlie's review line is his comment, not this reading.
 
 ## Open findings
 
-The first pass of this log said the #59 Node-import gap and the #62 journal gap were closed on the head at that time. Both of those are still closed. That is not a claim that nothing is open in Charlie's session lane. Two findings from Codex's audit [#65](https://github.com/michaelportale/openGym/pull/65) are open. Each stays `OPEN` until a fix pull request merges. When one does, link it here.
+The first pass of this log said the #59 Node-import gap and the #62 journal gap were closed on the head at that time. Both of those are still closed. F001 and F002, from Codex's audit [#65](https://github.com/michaelportale/openGym/pull/65), were open in Charlie's session lane. Both were checked again on `f66609519231c03800aaec05faee11bc738f2fcf` and are closed.
 
 ### F001 — finish can save without a set write that is still in flight
 
-- Status: OPEN
+- Status: CLOSED
 - Severity: P1
 - Lane: session (Charlie)
 - Traces to: [#48](https://github.com/michaelportale/openGym/pull/48) (the public command wrapper) and [#54](https://github.com/michaelportale/openGym/pull/54) (finish)
 - What Codex reproduced at `018621ed`: hold a set append, start `finishSession`, let the sender confirm, then release the append. Finish returns saved with that set missing, the journal is cleared, and the pending command then fails because the session is already null. The event is left behind.
-- Still true on `b973478fe795507e65f90dd5cfaaba39f215681f`. `finishSession` does not share a queue with `call`. [#57](https://github.com/michaelportale/openGym/pull/57), [#62](https://github.com/michaelportale/openGym/pull/62), [#63](https://github.com/michaelportale/openGym/pull/63), [#64](https://github.com/michaelportale/openGym/pull/64), and [#66](https://github.com/michaelportale/openGym/pull/66) do not add one.
-- Fix: none yet
+- Checked on `f66609519231c03800aaec05faee11bc738f2fcf`. `open`, `call`, and `finishSession` all return `enqueue(...)`. The tail is one promise chain, and a rejection does not drop the later commands. The test `finish waits for a pending set commit before it saves and clears the journal` holds the append, starts finish, then releases it. It expects the commit to save, one sender call, volume 300, and one saved set.
+- Fix: [#69](https://github.com/michaelportale/openGym/pull/69)
 
 ### F002 — opening a session without `structuredClone` still fails
 
-- Status: OPEN
+- Status: CLOSED
 - Severity: P2
 - Lane: session (Charlie)
 - Traces to: [#42](https://github.com/michaelportale/openGym/pull/42) (the journal fold) and [#54](https://github.com/michaelportale/openGym/pull/54) (the payload-only test)
-- What Codex reproduced at `018621ed`: delete `globalThis.structuredClone` before opening a populated session. Open returns an error. `fold.js` clones with `structuredClone`. The #54 test removes the global only after the session is already opened, committed, and finished, then checks `toWorkoutPayload`.
-- Still true on `b973478fe795507e65f90dd5cfaaba39f215681f`. `native/src/session/fold.js` still calls `structuredClone`. [#66](https://github.com/michaelportale/openGym/pull/66) uses that clone when an exercise is added.
-- Fix: none yet
+- What Codex reproduced at `018621ed`: delete `globalThis.structuredClone` before opening a populated session. Open returns an error. `fold.js` cloned with `structuredClone`. The #54 test removed the global only after the session was already opened, committed, and finished, then checked `toWorkoutPayload`.
+- Checked on `f66609519231c03800aaec05faee11bc738f2fcf`. `native/src/session` has no `structuredClone(` call. `fold.js` copies with `JSON.parse(JSON.stringify(...))`, and so do the session draft get/put, the memory storage, and `buildCompletedWorkout` in `frontend/src/lib/finish-workout.js`. The test `the session opens, drafts, commits, finishes, and reopens when structuredClone is missing` deletes the global before `open` and leaves it absent through draft, commit, finish, and reopen.
+- Fix: [#70](https://github.com/michaelportale/openGym/pull/70)
 
 ## Merges
 
@@ -86,7 +87,7 @@ The first pass of this log said the #59 Node-import gap and the #62 journal gap 
 - Lane: session (Charlie)
 - Summary: Finishing a session writes the workout through an injected sender and copies the payload with JSON so Hermes can run it.
 - Tests claimed at merge: `npm run verify`, 31 files, 238 tests passed.
-- Review status: Reviewed by Charlie at `a83bf3df57ade15298cd54de6f025c7000b7b42f` (an earlier review at `cc7f8dd9469ac51d3f8dcf2a6d2ecb97259a62f6` had asked for the JSON copy). Independent findings: scope is `native/src/session` only. No lockfile change, no secrets, no `node:` import. The JSON copy is only in `toWorkoutPayload`. The test deletes `structuredClone` after the session is already sealed, so it does not cover open. See F002. `finishSession` does not wait for an in-flight `call`, so a set append still in flight can be left out of the save. See F001. If `storage.clear()` throws after the sender confirms, the session stays open and a later finish calls the sender again. The workout id is the same.
+- Review status: Reviewed by Charlie at `a83bf3df57ade15298cd54de6f025c7000b7b42f` (an earlier review at `cc7f8dd9469ac51d3f8dcf2a6d2ecb97259a62f6` had asked for the JSON copy). Independent findings: scope is `native/src/session` only. No lockfile change, no secrets, no `node:` import. The JSON copy is only in `toWorkoutPayload`. The test deletes `structuredClone` after the session is already sealed, so it does not cover open. See F002, closed by [#70](https://github.com/michaelportale/openGym/pull/70). `finishSession` does not wait for an in-flight `call`, so a set append still in flight can be left out of the save. See F001, closed by [#69](https://github.com/michaelportale/openGym/pull/69). If `storage.clear()` throws after the sender confirms, the session stays open and a later finish calls the sender again. The workout id is the same.
 
 ### #55 — [native: cover rounding, bar edges, RIR bounds, and migration idempotence](https://github.com/michaelportale/openGym/pull/55)
 
@@ -113,7 +114,7 @@ The first pass of this log said the #59 Node-import gap and the #62 journal gap 
 - Lane: science (Bob)
 - Summary: One-page standup brief of the science lane, including #56 as merged.
 - Tests claimed at merge: native `npm test`, 32 files, 247 passed.
-- Review status: Reviewed by Charlie at `e8db45ab978d3840299f9b815b7c1e43b07db4cd`. Self-authored, not independent. The brief says 80 lb on a 5 lb step is 30 and 60. The case tested in #55, with a 45 lb bar, is 45 and 60. 30 is under that bar. That sentence is still in `docs/science/overnight-2026-11-06.md` on this head.
+- Review status: Reviewed by Charlie at `e8db45ab978d3840299f9b815b7c1e43b07db4cd`. Self-authored, not independent. The brief said 80 lb on a 5 lb step is 30 and 60. The case tested in #55, with a 45 lb bar, is 45 and 60. [#68](https://github.com/michaelportale/openGym/pull/68) corrected that sentence. On this head it reads 45 and 60.
 
 ### #57 — [native: store each finished workout by id and date](https://github.com/michaelportale/openGym/pull/57)
 
@@ -122,7 +123,7 @@ The first pass of this log said the #59 Node-import gap and the #62 journal gap 
 - Lane: session (Charlie)
 - Summary: Finished workouts are one SQLite row per id, upserted on conflict, with an index on the date.
 - Tests claimed at merge: `npm run verify`, 33 files, 250 tests passed.
-- Review status: Reviewed by Charlie at `4564a9a884a5de12ee61885dc2ed2d1a6f080ed9`. Independent findings: scope is `native/src/session` only. Statements are parameterized. The same id upserts. No `expo-sqlite` import, no lockfile change, no secrets. A crash after `put` and before `storage.clear()` leaves the journal in place. [#62](https://github.com/michaelportale/openGym/pull/62) later drops that journal when the finished row exists. Writing the row does not serialize finish with an in-flight set command. F001 stays open.
+- Review status: Reviewed by Charlie at `4564a9a884a5de12ee61885dc2ed2d1a6f080ed9`. Independent findings: scope is `native/src/session` only. Statements are parameterized. The same id upserts. No `expo-sqlite` import, no lockfile change, no secrets. A crash after `put` and before `storage.clear()` leaves the journal in place. [#62](https://github.com/michaelportale/openGym/pull/62) later drops that journal when the finished row exists. Writing the row does not serialize finish with an in-flight set command. F001 stayed open until [#69](https://github.com/michaelportale/openGym/pull/69).
 
 ### #59 — [native: let iOS draw a symbol that has no text glyph](https://github.com/michaelportale/openGym/pull/59)
 
@@ -185,10 +186,45 @@ The first pass of this log said the #59 Node-import gap and the #62 journal gap 
 - Lane: session (Charlie)
 - Summary: An exercise can be added or removed during the session. An added exercise starts with its sets unticked. Replay keeps both the add and the remove.
 - Tests claimed at merge: `npm run verify`, 37 files, 277 tests passed.
-- Review status: Reviewed by Charlie at `2d62bdc6e936c843fe982e0cc4219a0b3dc9c206`. Independent findings: the diff is `fold.js`, `session.js`, `use-active-session.js`, and a new test. No lockfile change, no secrets, no `node:` import, no files outside `native/src/session`. A duplicate id is refused, and a crafted `done: true` on the incoming sets is cleared by the fold. Removing the last exercise is allowed, and finish then saves an empty entry list. The test covers that. Charlie noted it as a follow-up. This pull request does not close F001 or F002.
+- Review status: Reviewed by Charlie at `2d62bdc6e936c843fe982e0cc4219a0b3dc9c206`. Independent findings: the diff is `fold.js`, `session.js`, `use-active-session.js`, and a new test. No lockfile change, no secrets, no `node:` import, no files outside `native/src/session`. A duplicate id is refused, and a crafted `done: true` on the incoming sets is cleared by the fold. Removing the last exercise is allowed, and finish then saves an empty entry list. The test covers that. Charlie noted it as a follow-up. [#71](https://github.com/michaelportale/openGym/pull/71) refuses that removal. This pull request does not close F001 or F002. Those are closed later by [#69](https://github.com/michaelportale/openGym/pull/69) and [#70](https://github.com/michaelportale/openGym/pull/70).
+
+### #68 — [native: correct the standup warm-up bar example](https://github.com/michaelportale/openGym/pull/68)
+
+- Merged commit: `bb2486889304d6e835b9a96028b41b9ab1022dbc`
+- Resulting `native/phase-1` head: `d053d46a271e0dcca9dde578dc233a78b0ae9662`
+- Lane: science (Bob)
+- Summary: The standup brief now says 80 lb on a 5 lb step with a 45 lb bar is 45 and 60.
+- Tests claimed at merge: none. The change is one sentence in `docs/science/overnight-2026-11-06.md`.
+- Review status: Reviewed by Charlie at `bb2486889304d6e835b9a96028b41b9ab1022dbc`. Self-authored, not independent
+
+### #69 — [native: serialize session commands ahead of finish](https://github.com/michaelportale/openGym/pull/69)
+
+- Merged commit: `549db024a8c1ece2376dee13be9e06bf84ca9a17`
+- Resulting `native/phase-1` head: `3c4e769f2fc711848d8da72e4d4f3193ca8f1434`
+- Lane: session (Charlie)
+- Summary: `open`, `call`, and `finishSession` share one promise queue, so finish waits for a set write that has already started.
+- Tests claimed at merge: `npm run verify`, 37 files, 280 tests passed.
+- Review status: Reviewed by Charlie at `549db024a8c1ece2376dee13be9e06bf84ca9a17`. Independent findings: the diff is `session-controller.js` and its test. No lockfile change, no secrets, no `node:` import, no files outside `native/src/session`. `enqueue` runs the next task from the same tail whether the previous one fulfilled or rejected. The pending-append test holds `storage.append`, starts finish, then releases, and expects volume 300 and one saved set. A second finish during a held sender is covered and calls the sender once. This is the F001 fix. Checked again on the current head.
+
+### #70 — [native: copy session documents without structuredClone](https://github.com/michaelportale/openGym/pull/70)
+
+- Merged commit: `dbd045e60aea1e6aa732ef0e8294cb031ad4771c`
+- Resulting `native/phase-1` head: `ba2da913b9d64f62bc85842b569d983a0a9f3311`
+- Lane: session (Charlie)
+- Summary: Session copies, including the fold, use a JSON round-trip so a missing `structuredClone` does not fail open.
+- Tests claimed at merge: `npm run verify`, 37 files, 277 tests passed. Frontend `finish-workout.test.js`: 1 file, 28 tests passed.
+- Review status: Reviewed by Charlie at `dbd045e60aea1e6aa732ef0e8294cb031ad4771c`. Independent findings: `fold.js`, `session.js`, `storage.js`, and the compatibility test stay in `native/src/session`. The same replacement also edits `frontend/src/lib/finish-workout.js`, which is outside the session directory and on the path `fold.js` calls for the finished document. No lockfile change and no secrets. On `f666095` there is no `structuredClone(` call under `native/src/session` or in that shared helper. The test deletes the global before `open`. A JSON copy drops values that are not JSON. The new test uses plain objects. This is the F002 fix.
+
+### #71 — [native: keep at least one exercise in a live session](https://github.com/michaelportale/openGym/pull/71)
+
+- Merged commit: `c00a9a07a8423f17f8fe077267ff1596b1c343ec`
+- Resulting `native/phase-1` head: `f66609519231c03800aaec05faee11bc738f2fcf`
+- Lane: session (Charlie)
+- Summary: Removing the last exercise is refused, including when the journal is replayed. A workout with no completed sets can still finish.
+- Tests claimed at merge: `npm run verify`, 37 files, 278 tests passed.
+- Review status: Reviewed by Charlie at `c00a9a07a8423f17f8fe077267ff1596b1c343ec`. Independent findings: the diff is `session.js`, `fold.js`, and `exercise.test.js`. No lockfile change, no secrets, no `node:` import, no files outside `native/src/session`. `removeExercise` returns `last-exercise` before appending, and the fold ignores an `exercise.remove` that would leave no entries. The test checks that the refused event is not stored, and a smuggled event leaves the last exercise in place. Finishing with zero completed sets stays allowed.
 
 ## Open pulls into `native/phase-1`
 
-- [#65](https://github.com/michaelportale/openGym/pull/65) — draft, `docs: overnight PR audit for November 6–7`. Not merged. The F001 and F002 entries above are taken from that audit. The rest of its ledger is not this log's review.
+- [#65](https://github.com/michaelportale/openGym/pull/65) — draft, `docs: overnight PR audit for November 6–7`. Not merged. The F001 and F002 entries above started in that audit. The rest of its ledger is not this log's review.
 - [#67](https://github.com/michaelportale/openGym/pull/67) — draft, this log. Not merged. Do not merge it.
-- [#68](https://github.com/michaelportale/openGym/pull/68) — draft, `native: correct the standup warm-up bar example`. Docs only. Changes the 80 lb example so a 5 lb step with a 45 lb bar is 45 and 60. Not merged. Self-authored, not independent.
