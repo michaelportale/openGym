@@ -1,4 +1,4 @@
-import { SESSION_TIME_ZONE_KEY, SQLITE_SESSION_SCHEMA, baseWithoutTimeZone, timeZoneFromBase } from './storage.js'
+import { SESSION_TIME_ZONE_KEY, SQLITE_SESSION_SCHEMA, baseWithoutTimeZone, timeZoneForWrite, timeZoneFromBase } from './storage.js'
 
 // SQLite adapter for the session journal. The handle is injected so this file does not import
 // expo-sqlite. native/package.json does not depend on it yet. When the app adds it, open the
@@ -105,8 +105,10 @@ export function createSqliteSessionStorage(db) {
         await db.run('DELETE FROM session_base')
         return
       }
+      const rows = await db.getAll('SELECT body FROM session_base WHERE id = ?', [1])
+      const existing = rows.length ? timeZoneFromBase(parse(rows[0].body)) : ''
       const body = baseWithoutTimeZone(value)
-      const zone = options && typeof options.timeZone === 'string' ? options.timeZone : ''
+      const zone = timeZoneForWrite(options, existing)
       if (zone) body[SESSION_TIME_ZONE_KEY] = zone
       await db.run(
         'INSERT OR REPLACE INTO session_base (id, body) VALUES (?, ?)',

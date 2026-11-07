@@ -50,6 +50,14 @@ function storageContract(title, open) {
       expect(await storage.readBase()).toBeNull()
     })
 
+    test('rewriting the base without options keeps the stored time zone', async () => {
+      const { storage } = await open()
+      await storage.writeBase({ id: 'w1', name: 'Push' }, { timeZone: 'America/New_York' })
+      await storage.writeBase({ id: 'w1', name: 'Pull' })
+      expect(await storage.readBase()).toEqual({ id: 'w1', name: 'Pull' })
+      expect(await storage.readTimeZone()).toBe('America/New_York')
+    })
+
     test('clear drops events, drafts, and the base together', async () => {
       const { storage } = await open()
       await storage.append(event('a', 1))

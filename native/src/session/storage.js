@@ -55,6 +55,13 @@ export function timeZoneFromBase(value) {
   return typeof zone === 'string' ? zone : ''
 }
 
+// A rewrite that does not pass timeZone keeps the zone already stored. An explicit
+// string replaces it, and an empty string clears it.
+export function timeZoneForWrite(options, existing) {
+  if (options && typeof options.timeZone === 'string') return options.timeZone
+  return typeof existing === 'string' ? existing : ''
+}
+
 export function createMemoryStorage() {
   const events = []
   const drafts = new Map()
@@ -93,7 +100,7 @@ export function createMemoryStorage() {
         return
       }
       const body = baseWithoutTimeZone(value)
-      const zone = options && typeof options.timeZone === 'string' ? options.timeZone : ''
+      const zone = timeZoneForWrite(options, timeZoneFromBase(base))
       if (zone) body[SESSION_TIME_ZONE_KEY] = zone
       base = body
     },
