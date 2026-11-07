@@ -151,6 +151,30 @@ test('a phase warm-up stays on the set and is left out of top weight and volume'
   expect(payload.workout.vol).toBe(250)
 })
 
+test('the payload is built when structuredClone is missing', async () => {
+  const finished = await sealed(baseWorkout(), async (session) => {
+    await session.commitSet({
+      eventId: 'bench-0',
+      exerciseId: 'bench',
+      setId: plannedSetId('bench', 0),
+      fields: { w: 60, r: 5 },
+    })
+  })
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'structuredClone')
+  delete globalThis.structuredClone
+  try {
+    expect(globalThis.structuredClone).toBeUndefined()
+    const payload = toWorkoutPayload(finished)
+    expect(payload.workout.id).toBe('session-1')
+    expect(payload.workout.vol).toBe(300)
+    expect(payload.workout.entries[0].sets[0].r).toBe(5)
+    payload.workout.entries[0].sets[0].r = 1
+    expect(finished.entries[0].sets[0].r).toBe(5)
+  } finally {
+    if (descriptor) Object.defineProperty(globalThis, 'structuredClone', descriptor)
+  }
+})
+
 test('finishing the same session twice replaces the workout with that id', async () => {
   const finished = await sealed(baseWorkout(), async (session) => {
     await session.commitSet({

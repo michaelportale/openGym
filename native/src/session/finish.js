@@ -24,7 +24,9 @@ export function toWorkoutPayload(finished, { workouts } = {}) {
   if (!isRecord(finished) || finished.id == null || finished.id === '') {
     throw new Error('finished session needs an id')
   }
-  const workout = structuredClone(finished)
+  // Plain JSON only. Hermes on device may not provide structuredClone, and a Node
+  // test run would not notice. JSON copy is the path that exists on both.
+  const workout = JSON.parse(JSON.stringify(finished))
   workout.vol = history.workoutVolume(workout)
   return { workout, workouts: upsertWorkout(workouts, workout) }
 }
