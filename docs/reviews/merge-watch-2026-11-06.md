@@ -2,8 +2,8 @@
 
 Running log of pulls merged into `native/phase-1` on the night of 6 November 2026. This pull request is a log only. Do not merge it.
 
-- Last checked: 2026-11-06 22:06 EST
-- `native/phase-1` head: `8a71a1affebe78588e319d5ea0cf01673e68ed60`
+- Last checked: 2026-11-06 22:31 EST
+- `native/phase-1` head: `8bfbf93e7ae36e7ea3817228d05773c9cae423a5`
 - Native `npm test` at `f66609519231c03800aaec05faee11bc738f2fcf`: 37 files, 281 passed, no failures. This check did not re-run the suite.
 - Window: merges after `aac6bcc` (the #48 session-adapter merge), from #49 through the head above
 - Lanes: session = Charlie, shell/screens = Gus, science = Bob
@@ -240,7 +240,7 @@ The first pass of this log said the #59 Node-import gap and the #62 journal gap 
 - Lane: session (Charlie)
 - Summary: SQLite `clear()` runs `BEGIN`, the three deletes, and `COMMIT` as one script, and rolls back if that script throws.
 - Tests claimed at merge: `npm run verify`, 37 files, 284 tests passed.
-- Review status: Reviewed by Charlie at `dc5e109bc140888daf41095d16e4333d33722310`. Independent findings: the diff is `sqlite-storage.js` and `storage-contract.test.js` only. No lockfile change, no secrets, no `node:` import. The new test fails the drafts delete and checks that the event, the draft, and the base all remain, then a later append still works. The `catch` always runs `ROLLBACK` and then rethrows. If the script throws before a transaction exists, that `ROLLBACK` can itself throw and hide the original error. The in-memory driver does not throw on a bare `ROLLBACK`, so this suite does not show that case. Charlie left it as a follow-up. It is still in the code on this head.
+- Review status: Reviewed by Charlie at `dc5e109bc140888daf41095d16e4333d33722310`. Independent findings: the diff is `sqlite-storage.js` and `storage-contract.test.js` only. No lockfile change, no secrets, no `node:` import. The new test fails the drafts delete and checks that the event, the draft, and the base all remain, then a later append still works. The `catch` always runs `ROLLBACK` and then rethrows. If the script throws before a transaction exists, that `ROLLBACK` can itself throw and hide the original error. The in-memory driver does not throw on a bare `ROLLBACK`, so this suite does not show that case. Charlie left it as a follow-up. [#75](https://github.com/michaelportale/openGym/pull/75) guards that `ROLLBACK` and rethrows the original error.
 
 ### #74 — [native: record a session note in the journal](https://github.com/michaelportale/openGym/pull/74)
 
@@ -250,6 +250,51 @@ The first pass of this log said the #59 Node-import gap and the #62 journal gap 
 - Summary: A session note is a journal event. The last note wins, a blank note clears it, and finish copies the note onto the workout.
 - Tests claimed at merge: `npm run verify`, 38 files, 287 tests passed.
 - Review status: Reviewed by Charlie at `72810bca064ee6757858216bd85e7661f2081aa0`. Independent findings: the diff is `fold.js`, `session.js`, `use-active-session.js`, and a new test. No lockfile change, no secrets, no `node:` import, no files outside `native/src/session`. A non-string note is refused with `bad-note` before append. `#append` still refuses a discarded or finished session. The fold ignores a non-string note and deletes `base.note` when the text is blank after trim. Tests cover a duplicate event id, SQLite replay, and the controller. The fixture notes are short phrases, not personal training data.
+
+### #75 — [native: keep a clear failure and cap a session note](https://github.com/michaelportale/openGym/pull/75)
+
+- Merged commit: `e8644e5c3e10f5884e856d53043da83002267bfa`
+- Resulting `native/phase-1` head: `3e7198db5b4c724d9b1b6eba7bb674aa09c8a54b`
+- Lane: session (Charlie)
+- Summary: A failed journal clear still rejects with the original error when `ROLLBACK` also throws. A session note longer than 2000 characters is refused.
+- Tests claimed at merge: `npm run verify`, 38 files, 291 tests passed.
+- Review status: Reviewed by Charlie at `e8644e5c3e10f5884e856d53043da83002267bfa`. Independent findings: the diff stays in `native/src/session`. No lockfile change, no secrets, no `node:` import. `clear()` catches a throwing `ROLLBACK` and rethrows the original error. One test makes `ROLLBACK` throw `no transaction`, and another makes it throw `rollback failed`. Both expect the rejection to be `locked`. `setNote` refuses `note.length > 2000` before append, and the test checks the long event is not stored. This closes the #73 rollback follow-up.
+
+### #76 — [native: record an exercise note in the journal](https://github.com/michaelportale/openGym/pull/76)
+
+- Merged commit: `817e22a759b42e1192761632279e7e76ee7f5dcf`
+- Resulting `native/phase-1` head: `f9d7bc96fa6a54fa69ab00f91d92695a87f6643a`
+- Lane: session (Charlie)
+- Summary: An exercise note is a journal event. A later note keeps a pin unless the note is blank, which drops both.
+- Tests claimed at merge: `npm run verify`, 38 files, 294 tests passed.
+- Review status: Reviewed by Charlie at `817e22a759b42e1192761632279e7e76ee7f5dcf`. Independent findings: the diff is `fold.js`, `session.js`, `use-active-session.js`, and `note.test.js`. No lockfile change, no secrets, no `node:` import. A non-string note, a note over 2000 characters, an unknown exercise, and a non-boolean pin are refused before append. A finished or discarded session falls through to `#append`, which refuses it. The fold leaves an omitted pin alone, clears a pin set to false, and deletes the note and the pin when the text is blank. Tests cover a duplicate event id, finish, and SQLite replay. The fixture text is a short phrase.
+
+### #77 — [Keep the session time zone so a killed overnight journal refuses a silent finish](https://github.com/michaelportale/openGym/pull/77)
+
+- Merged commit: `bbcbf31526b87f533604e3f098128fab3f4dfd99`
+- Resulting `native/phase-1` head: `8fb678a4d07eb245583cfb64eb3e0ef0517588db`
+- Lane: session (Charlie)
+- Summary: The zone the session started in is stored with the journal, so a later boot that passes UTC still treats a killed overnight session as overnight.
+- Tests claimed at merge: `npm run verify`, 38 files, 297 tests passed.
+- Review status: Reviewed by Charlie at `bbcbf31526b87f533604e3f098128fab3f4dfd99`. Independent findings: the diff stays in `native/src/session`. No lockfile change, no secrets, no `node:` import. The zone is stored as `_sessionTimeZone` and stripped by `readBase` and `toActive`. The test opens the next morning with UTC, expects the New York zone and `overnight`, refuses a finish with no end, and checks the saved workout has neither `_sessionTimeZone` nor `timeZone`. A journal stored before this field adopts the zone of the first boot that finds it. In this pull request, rewriting the base without a zone drops the stored zone. [#78](https://github.com/michaelportale/openGym/pull/78) keeps it.
+
+### #78 — [Keep the stored session time zone when the base is rewritten](https://github.com/michaelportale/openGym/pull/78)
+
+- Merged commit: `14af0bb48420c78b7d022771739b50a7e0cfa1d6`
+- Resulting `native/phase-1` head: `cd4388378be7f6772589888e2f4a4bd35cee3d65`
+- Lane: session (Charlie)
+- Summary: Rewriting the journal base without a time zone keeps the zone already stored. An explicit string replaces it, and an empty string clears it.
+- Tests claimed at merge: `npm run verify`, 38 files, 299 tests passed.
+- Review status: Reviewed by Charlie at `14af0bb48420c78b7d022771739b50a7e0cfa1d6`. Independent findings: the diff is `storage.js`, `sqlite-storage.js`, and the storage contract test. No lockfile change, no secrets, no `node:` import. Memory and SQLite both use `timeZoneForWrite`. The contract test rewrites the base with no options and still reads `America/New_York`. SQLite reads the old body and then writes the new one without a transaction. Charlie notes the controller queue serializes that access. This closes the #77 rewrite gap.
+
+### #79 — [Leave a short overnight gap out of session elapsed](https://github.com/michaelportale/openGym/pull/79)
+
+- Merged commit: `83b26f7a0797fd46c551bf7f851680b7bd1d67cf`
+- Resulting `native/phase-1` head: `8bfbf93e7ae36e7ea3817228d05773c9cae423a5`
+- Lane: session (Charlie)
+- Summary: A short return across local midnight no longer adds those idle hours to elapsed, including after a kill and after resume. A set logged across midnight still counts.
+- Tests claimed at merge: `npm run verify`, 38 files, 298 tests passed. That count is this branch's suite, not the combined head.
+- Review status: Reviewed by Charlie at `83b26f7a0797fd46c551bf7f851680b7bd1d67cf`. Independent findings: the diff is `timing.js`, `fold.js`, and `session.test.js`. No lockfile change, no secrets, no `node:` import. A resume stamp moves the high-water mark and adds nothing for the gap before it. Samples and the open tail drop a span that changes local date. A journal stamp that is not a resume still adds a gap of at most four hours, so the test's 23:40 to 00:10 set adds 30 minutes. The idle case, 23:10 to 01:10, stays at the elapsed time from before the gap, through a reopen and a resume. Ten minutes after resume are counted.
 
 ## Open pulls into `native/phase-1`
 
