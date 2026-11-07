@@ -628,3 +628,36 @@ test('an append queued behind a discard is refused and writes nothing', async ()
   expect(session.events).toEqual([])
   expect(session.view().status).toBe('discarded')
 })
+
+test('a commit queued behind removeSet reports unknown-set', async () => {
+  const { session, storage } = await opened()
+  const removed = session.removeSet({
+    eventId: 'remove-bench-1',
+    exerciseId: 'bench',
+    setId: bench1,
+  })
+  const committed = session.commitSet({
+    eventId: 'commit-bench-1',
+    exerciseId: 'bench',
+    setId: bench1,
+    fields: { w: 80, r: 5 },
+  })
+  const [removal, commit] = await Promise.all([removed, committed])
+  expect(removal).toEqual({ ok: true, saved: true })
+  expect(commit).toMatchObject({ ok: false, saved: false, error: { code: 'unknown-set' } })
+  expect(commit.unchanged).not.toBe(true)
+  expect((await storage.readAll()).map(event => event.type)).toEqual(['set.remove'])
+  expect(session.events.map(event => event.id)).toEqual(['remove-bench-1'])
+})
+
+test('an extend queued behind cancelRest reports no-rest', async () => {
+  const { session, storage } = await opened()
+  const started = await session.startRest({ eventId: 'rest', durationMs: 60_000 })
+  expect(started).toEqual({ ok: true, saved: true })
+  const cancelled = session.cancelRest({ eventId: 'cancel' })
+  const extended = session.extendRest({ eventId: 'extend', byMs: 15_000 })
+  const [cancel, extend] = await Promise.all([cancelled, extended])
+  expect(cancel).toEqual({ ok: true, saved: true })
+  expect(extend).toMatchObject({ ok: false, saved: false, error: { code: 'no-rest' } })
+  expect((await storage.readAll()).map(event => event.type)).toEqual(['rest.start', 'rest.cancel'])
+})
