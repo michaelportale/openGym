@@ -2,9 +2,9 @@
 
 Running log of pulls merged into `native/phase-1` on the night of 6 November 2026. This pull request is a log only. Do not merge it.
 
-- Last checked: 2026-11-06 21:57 EST
-- `native/phase-1` head: `f66609519231c03800aaec05faee11bc738f2fcf`
-- Native `npm test` at that head: 37 files, 281 passed, no failures
+- Last checked: 2026-11-06 22:06 EST
+- `native/phase-1` head: `8a71a1affebe78588e319d5ea0cf01673e68ed60`
+- Native `npm test` at `f66609519231c03800aaec05faee11bc738f2fcf`: 37 files, 281 passed, no failures. This check did not re-run the suite.
 - Window: merges after `aac6bcc` (the #48 session-adapter merge), from #49 through the head above
 - Lanes: session = Charlie, shell/screens = Gus, science = Bob
 - Independent review below is this log's reading of the diff. `NOT YET REVIEWED` means that diff was not read. `Self-authored, not independent` means this lane wrote the pull request, so the reading is not a review. Charlie's review line is his comment, not this reading.
@@ -223,6 +223,33 @@ The first pass of this log said the #59 Node-import gap and the #62 journal gap 
 - Summary: Removing the last exercise is refused, including when the journal is replayed. A workout with no completed sets can still finish.
 - Tests claimed at merge: `npm run verify`, 37 files, 278 tests passed.
 - Review status: Reviewed by Charlie at `c00a9a07a8423f17f8fe077267ff1596b1c343ec`. Independent findings: the diff is `session.js`, `fold.js`, and `exercise.test.js`. No lockfile change, no secrets, no `node:` import, no files outside `native/src/session`. `removeExercise` returns `last-exercise` before appending, and the fold ignores an `exercise.remove` that would leave no entries. The test checks that the refused event is not stored, and a smuggled event leaves the last exercise in place. Finishing with zero completed sets stays allowed.
+
+### #72 — [native: keep a failed discard from throwing the session away](https://github.com/michaelportale/openGym/pull/72)
+
+- Merged commit: `304b8fde1a31237e0a35ebe9916346dd618bbaad`
+- Resulting `native/phase-1` head: `bf57f13e9e8f750fe76e33f020bdc41d52e128af`
+- Lane: session (Charlie)
+- Summary: A discard whose `clear()` throws returns a storage failure and leaves the journal in place. Finishing a discarded session does not call the sender.
+- Tests claimed at merge: `npm run verify`, 37 files, 283 tests passed.
+- Review status: Reviewed by Charlie at `304b8fde1a31237e0a35ebe9916346dd618bbaad`. Independent findings: the diff is `session.js`, `session-controller.js`, and their tests. No lockfile change, no secrets, no `node:` import, no files outside `native/src/session`. In-memory events, drafts, and the base are cleared only after `clear()` resolves. The controller returns `discarded` before it builds a payload. A separate SQLite `clear()` could still delete one table and then throw. [#73](https://github.com/michaelportale/openGym/pull/73) puts those deletes in one transaction.
+
+### #73 — [native: clear the session journal in one SQLite transaction](https://github.com/michaelportale/openGym/pull/73)
+
+- Merged commit: `dc5e109bc140888daf41095d16e4333d33722310`
+- Resulting `native/phase-1` head: `f363420b7c2d032021827eff6dd179c2276df84c`
+- Lane: session (Charlie)
+- Summary: SQLite `clear()` runs `BEGIN`, the three deletes, and `COMMIT` as one script, and rolls back if that script throws.
+- Tests claimed at merge: `npm run verify`, 37 files, 284 tests passed.
+- Review status: Reviewed by Charlie at `dc5e109bc140888daf41095d16e4333d33722310`. Independent findings: the diff is `sqlite-storage.js` and `storage-contract.test.js` only. No lockfile change, no secrets, no `node:` import. The new test fails the drafts delete and checks that the event, the draft, and the base all remain, then a later append still works. The `catch` always runs `ROLLBACK` and then rethrows. If the script throws before a transaction exists, that `ROLLBACK` can itself throw and hide the original error. The in-memory driver does not throw on a bare `ROLLBACK`, so this suite does not show that case. Charlie left it as a follow-up. It is still in the code on this head.
+
+### #74 — [native: record a session note in the journal](https://github.com/michaelportale/openGym/pull/74)
+
+- Merged commit: `72810bca064ee6757858216bd85e7661f2081aa0`
+- Resulting `native/phase-1` head: `8a71a1affebe78588e319d5ea0cf01673e68ed60`
+- Lane: session (Charlie)
+- Summary: A session note is a journal event. The last note wins, a blank note clears it, and finish copies the note onto the workout.
+- Tests claimed at merge: `npm run verify`, 38 files, 287 tests passed.
+- Review status: Reviewed by Charlie at `72810bca064ee6757858216bd85e7661f2081aa0`. Independent findings: the diff is `fold.js`, `session.js`, `use-active-session.js`, and a new test. No lockfile change, no secrets, no `node:` import, no files outside `native/src/session`. A non-string note is refused with `bad-note` before append. `#append` still refuses a discarded or finished session. The fold ignores a non-string note and deletes `base.note` when the text is blank after trim. Tests cover a duplicate event id, SQLite replay, and the controller. The fixture notes are short phrases, not personal training data.
 
 ## Open pulls into `native/phase-1`
 
