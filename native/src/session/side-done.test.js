@@ -182,7 +182,7 @@ function plan(session, view, kind, next, ids) {
         id: exerciseId,
         target: { sets: 2, reps: 8 },
         sets: [
-          { id: `${exerciseId}-side`, ...source },
+          { ...source, id: `${exerciseId}-side` },
           { id: `${exerciseId}-plain`, w: 12, r: 10, done: true },
         ],
       },
@@ -194,6 +194,50 @@ function plan(session, view, kind, next, ids) {
     return () => session.removeExercise({ eventId: ids.event(kind), exerciseId })
   }
   return null
+}
+
+async function rejectExerciseCopies(session, storage, seed, step) {
+  const view = session.view()
+  const exerciseId = view.entries[0].id
+  const setId = view.entries[0].sets[0].setId
+  const before = (await storage.readAll()).map(event => event.id)
+  const knownExercise = await session.addExercise({
+    eventId: `${seed}-collide-ex-${step}`,
+    exerciseId,
+    entry: { sets: [{ id: `${seed}-fresh-${step}`, w: 1, r: 1 }] },
+  })
+  const knownSet = await session.addExercise({
+    eventId: `${seed}-collide-set-${step}`,
+    exerciseId: `${seed}-fresh-ex-${step}`,
+    entry: { sets: [{ id: setId, w: 1, r: 1 }, { id: `${seed}-other-${step}`, w: 2, r: 2 }] },
+  })
+  const knownPair = await session.addExercise({
+    eventId: `${seed}-collide-pair-${step}`,
+    exerciseId: `${seed}-pair-ex-${step}`,
+    entry: {
+      sets: [
+        { id: `${seed}-pair-${step}`, w: 1, r: 1 },
+        { id: `${seed}-pair-${step}`, w: 2, r: 2 },
+      ],
+    },
+  })
+  const where = `seed ${seed} step ${step}`
+  expect(knownExercise, `${where} addExercise known-exercise`).toMatchObject({
+    ok: false,
+    saved: false,
+    error: { code: 'known-exercise' },
+  })
+  expect(knownSet, `${where} addExercise known-set`).toMatchObject({
+    ok: false,
+    saved: false,
+    error: { code: 'known-set' },
+  })
+  expect(knownPair, `${where} addExercise duplicate set`).toMatchObject({
+    ok: false,
+    saved: false,
+    error: { code: 'known-set' },
+  })
+  expect((await storage.readAll()).map(event => event.id), where).toEqual(before)
 }
 
 async function check(session, storage, seed, step, label) {
@@ -240,6 +284,7 @@ test('per-side row.done follows both ticks on the base and after every seeded co
       }
       expect(ran, `seed ${seed} step ${step} had no command`).not.toBeNull()
       covered.add(ran)
+      await rejectExerciseCopies(session, storage, seed, step)
       await check(session, storage, seed, step, ran)
     }
   }
