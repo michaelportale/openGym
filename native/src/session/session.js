@@ -67,7 +67,7 @@ class SessionLog {
 
   getDraft(setId) {
     const value = this.drafts[setId]
-    return value == null ? null : structuredClone(value)
+    return value == null ? null : JSON.parse(JSON.stringify(value))
   }
 
   async putDraft(setId, fields) {
@@ -79,7 +79,7 @@ class SessionLog {
       return failure('storage', error?.message || 'draft failed')
     }
     if (fields == null) delete this.drafts[setId]
-    else this.drafts[setId] = structuredClone(fields)
+    else this.drafts[setId] = JSON.parse(JSON.stringify(fields))
     return { ok: true, saved: true }
   }
 

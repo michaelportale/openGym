@@ -6,7 +6,8 @@ const { buildCompletedWorkout, sessionEnd } = finishWorkout
 const { hasCompletedWork, isSideSet } = workoutModel
 
 function clone(value) {
-  return value == null ? value : structuredClone(value)
+  // Plain JSON only. Hermes on device may not provide structuredClone.
+  return value == null ? value : JSON.parse(JSON.stringify(value))
 }
 
 export function activityAt(model) {

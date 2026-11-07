@@ -1,6 +1,9 @@
 import { expect, test } from 'vitest'
 import { openSession, plannedSetId } from './session.js'
 import { createMemoryStorage } from './storage.js'
+import { createSqliteSessionStorage } from './sqlite-storage.js'
+import { createSqliteFinishedWorkouts } from './finished-workouts.js'
+import { createFakeSqliteDb } from './fake-sqlite.js'
 import { createSessionController } from './session-controller.js'
 import { toWorkoutPayload } from './finish.js'
 
@@ -151,25 +154,67 @@ test('a phase warm-up stays on the set and is left out of top weight and volume'
   expect(payload.workout.vol).toBe(250)
 })
 
-test('the payload is built when structuredClone is missing', async () => {
-  const finished = await sealed(baseWorkout(), async (session) => {
-    await session.commitSet({
-      eventId: 'bench-0',
-      exerciseId: 'bench',
-      setId: plannedSetId('bench', 0),
-      fields: { w: 60, r: 5 },
-    })
-  })
+test('the session opens, drafts, commits, finishes, and reopens when structuredClone is missing', async () => {
+  const trainingSnapshot = { role: 'horizontal-press', primary: ['chest'], secondary: [], status: 'curated' }
+  const equipmentSnapshot = { stationId: 'bench-station', loadConvention: 'barbell-total', unit: 'kg', status: 'exact' }
   const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'structuredClone')
   delete globalThis.structuredClone
   try {
     expect(globalThis.structuredClone).toBeUndefined()
-    const payload = toWorkoutPayload(finished)
-    expect(payload.workout.id).toBe('session-1')
-    expect(payload.workout.vol).toBe(300)
-    expect(payload.workout.entries[0].sets[0].r).toBe(5)
-    payload.workout.entries[0].sets[0].r = 1
-    expect(finished.entries[0].sets[0].r).toBe(5)
+    const db = createFakeSqliteDb()
+    const base = baseWorkout()
+    base.entries[0].trainingSnapshot = trainingSnapshot
+    base.entries[0].equipmentSnapshot = equipmentSnapshot
+    const storage = createSqliteSessionStorage(db)
+    const finishedWorkouts = createSqliteFinishedWorkouts(db)
+    const active = createSessionController({
+      base,
+      storage,
+      finishedWorkouts,
+      now: () => T0 + 60_000,
+      timeZone: 'UTC',
+    })
+    const opened = await active.open()
+    expect(opened.status).toBe('ready')
+    expect(opened.view).not.toBeNull()
+
+    const setId = plannedSetId('bench', 0)
+    const drafted = await active.call('putDraft', setId, { w: 60, r: 5 })
+    expect(drafted).toMatchObject({ ok: true, saved: true })
+    expect(active.getState().view.entries[0].sets[0].draft).toEqual({ w: 60, r: 5 })
+
+    const committed = await active.call('commitSet', {
+      eventId: 'bench-0',
+      exerciseId: 'bench',
+      setId,
+      fields: { w: 60, r: 5 },
+    })
+    expect(committed).toMatchObject({ ok: true, saved: true })
+    expect(active.getState().view.totals).toMatchObject({ completedSets: 1, loadReps: 300 })
+
+    const finished = await active.finishSession({ sender: async () => ({ saved: true }) })
+    expect(finished).toMatchObject({ ok: true, saved: true })
+    expect(finished.payload.workout.id).toBe('session-1')
+    expect(finished.payload.workout.vol).toBe(300)
+    expect(finished.payload.workout.entries[0].sets[0].r).toBe(5)
+    expect(finished.payload.workout.entries[0].trainingSnapshot).toEqual(trainingSnapshot)
+    expect(finished.payload.workout.entries[0].equipmentSnapshot).toEqual(equipmentSnapshot)
+    finished.payload.workout.entries[0].sets[0].r = 1
+    finished.payload.workout.entries[0].trainingSnapshot.role = 'changed'
+    const stored = await finishedWorkouts.get('session-1')
+    expect(stored.entries[0].sets[0].r).toBe(5)
+    expect(stored.entries[0].trainingSnapshot).toEqual(trainingSnapshot)
+
+    const reopened = createSessionController({
+      base,
+      storage: createSqliteSessionStorage(db),
+      finishedWorkouts: createSqliteFinishedWorkouts(db),
+      now: () => T0 + 120_000,
+      timeZone: 'UTC',
+    })
+    const again = await reopened.open()
+    expect(again).toMatchObject({ status: 'saved', view: null })
+    expect(globalThis.structuredClone).toBeUndefined()
   } finally {
     if (descriptor) Object.defineProperty(globalThis, 'structuredClone', descriptor)
   }
