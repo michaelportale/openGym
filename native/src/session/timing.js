@@ -16,18 +16,22 @@
 // is 4 hours: long enough that a locked phone still counts as session time (the workout keeps
 // running in the background), and short enough that a multi-hour clock jump is not added.
 //
-// Leaving the session across a local midnight is not session time either, even under that
-// bound. The open tail and samples from this process drop a local-date change. A set logged
-// on the other side of midnight still counts: that gap sits between two journal events. Resume
-// moves the high-water mark to now and adds nothing for the gap that leads into it. Stamps are
-// epoch milliseconds. A number is a journal stamp. Resume is { at, resume: true }. A sample
-// from this process is { at, sample: true }.
+// Leaving the session across a local midnight is not session time when the gap is longer
+// than a rest. The open tail and samples from this process still count a local-date change
+// within REST_MAX_MS, so a set at 23:50 and a look at 00:05 keep the timer moving instead of
+// jumping back to the set. A longer overnight return stays out. Time already counted on the
+// earlier side of midnight stays counted: a later idle sample does not rewind the timer.
+// A set logged on the other side of midnight still counts, because that gap sits between two
+// journal events. Resume adds its gap only when that gap is within REST_MAX_MS. A longer
+// resume moves the high-water mark and adds nothing. Stamps are epoch milliseconds. A number
+// is a journal stamp. Resume is { at, resume: true }. A sample from this process is
+// { at, sample: true }.
 //
 // Overnight is a local-date change in the session's time zone, and only when `now` is actually
 // later than the last activity. Finishing that session requires an explicit end. The suggested
 // end comes from the shared sessionEnd helper, which already clips a forgotten gap to the last
 // logged work. Discard and resume are the other two choices. Resume appends an event so the
-// activity anchor moves to "now" without adding the gap to elapsed.
+// activity anchor moves to "now".
 
 // Matches frontend/src/lib/duration.js REST_MAX (15 minutes). Not imported: only
 // native/src/shared/training.js may import frontend/, and it does not re-export duration.js.
@@ -69,6 +73,10 @@ function crossesLocalDate(prev, next, timeZone) {
   return localDate(prev, timeZone) !== localDate(next, timeZone)
 }
 
+function idleOvernight(delta, prev, next, timeZone) {
+  return delta > REST_MAX_MS && crossesLocalDate(prev, next, timeZone)
+}
+
 export function elapsedMs(stamps, now, gap = DURATION_GAP_MS, timeZone) {
   let elapsed = 0
   let high = null
@@ -81,13 +89,15 @@ export function elapsedMs(stamps, now, gap = DURATION_GAP_MS, timeZone) {
     }
     const delta = at - high
     const resume = !!raw && raw.resume === true
-    const idleOvernight = !!raw && raw.sample === true && crossesLocalDate(high, at, timeZone)
-    if (!resume && !idleOvernight && delta > 0 && delta <= gap) elapsed += delta
+    const sample = !!raw && raw.sample === true
+    const dropResume = resume && delta > REST_MAX_MS
+    const dropSample = sample && idleOvernight(delta, high, at, timeZone)
+    if (!dropResume && !dropSample && delta > 0 && delta <= gap) elapsed += delta
     if (at > high) high = at
   }
   if (high != null && Number.isFinite(now)) {
     const tail = now - high
-    if (!crossesLocalDate(high, now, timeZone) && tail > 0 && tail <= gap) elapsed += tail
+    if (!idleOvernight(tail, high, now, timeZone) && tail > 0 && tail <= gap) elapsed += tail
   }
   return elapsed
 }
