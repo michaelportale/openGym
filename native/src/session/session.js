@@ -61,6 +61,7 @@ export async function openSession({ base, storage, now, timeZone = 'UTC' } = {})
 class SessionLog {
   #seenChain = Promise.resolve()
   #queuedSeen = null
+  #fold = null
 
   constructor({ base, events, drafts, storage, now, timeZone, seenAt, seenTrail }) {
     this.base = base
@@ -70,6 +71,7 @@ class SessionLog {
     this.now = now
     this.timeZone = timeZone
     this.discarded = false
+    this.#fold = workoutFold(this.base, this.events)
     // Counted instants from a previous process. The last one alone is not enough:
     // the hop from the last set to that instant can be an idle overnight gap even
     // when the steps in between were counted.
@@ -438,6 +440,7 @@ class SessionLog {
     this.drafts = {}
     this.base = null
     this.discarded = true
+    this.#fold = null
     return { ok: true, saved: true }
   }
 
@@ -468,10 +471,12 @@ class SessionLog {
     }
     // A saved event has to change the workout a reopen folds. resume is the
     // exception: it only leaves a stamp so the timer can cross midnight.
+    // #fold is that workout from open or the last successful append, so this
+    // folds the candidate once.
+    let nextFold = null
     if (stored.type !== 'session.resume') {
-      const before = workoutFold(this.base, this.events)
-      const after = workoutFold(this.base, this.events.concat([stored]))
-      if (before === after) return unchanged()
+      nextFold = workoutFold(this.base, this.events.concat([stored]))
+      if (this.#fold === nextFold) return unchanged()
     }
     try {
       const result = await this.storage.append(stored)
@@ -480,6 +485,7 @@ class SessionLog {
       return failure('storage', error?.message || 'append failed')
     }
     this.events.push(stored)
+    if (nextFold != null) this.#fold = nextFold
     return { ok: true, saved: true }
   }
 }

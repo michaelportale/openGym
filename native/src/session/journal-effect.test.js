@@ -538,3 +538,31 @@ test('a saved journal command changes the reopened fold, and a rejected one leav
   expect(breaks, breaks.join('\n')).toEqual([])
   expect(sawUnchanged).toBe(true)
 })
+
+test('a long journal still saves a real commit and reports a same-value edit as unchanged', async () => {
+  const { session } = await opened()
+  for (let i = 0; i < 300; i += 1) {
+    const added = await session.addSet({
+      eventId: `add-${i}`,
+      exerciseId: 'row',
+      setId: `extra-${i}`,
+      fields: { w: 40 + (i % 5), r: 8 },
+    })
+    expect(added, `add ${i}`).toEqual({ ok: true, saved: true })
+  }
+  const commit = await session.commitSet({
+    eventId: 'commit-late',
+    exerciseId: 'bench',
+    setId: bench0,
+    fields: { w: 80, r: 5 },
+  })
+  expect(commit).toEqual({ ok: true, saved: true })
+  const edit = await session.editSet({
+    eventId: 'edit-same',
+    exerciseId: 'bench',
+    setId: bench0,
+    fields: { w: 80, r: 5 },
+  })
+  expect(edit).toEqual({ ok: true, saved: false, unchanged: true })
+  expect(session.view().entries[0].sets[0].row).toMatchObject({ w: 80, r: 5, done: true })
+})
