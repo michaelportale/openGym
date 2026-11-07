@@ -47,3 +47,5 @@ The PRD evidence list does not say who was studied. A title that names a lift, s
 ## Still needs a source
 
 A weekly set target and the audit of deload, estimated 1RM, rest, and increments are still not started. Each one needs a reviewed source, so this lane does not fill them in. Kilogram and pound rounding, the bar boundary, reps-left bounds, and a second migration call are specified in [Decisions](decisions.md).
+
+The current value, the file that owns it, the question a source must answer, and what would change are in [Sources needed](sources-needed.md). That list does not cite a study.

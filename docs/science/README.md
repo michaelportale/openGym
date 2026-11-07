@@ -14,7 +14,8 @@ Each has its own entry so a later audit can accept or replace one number without
 
 Defaults for the open questions on the science PR are in [Decisions](decisions.md). They follow the PRD
 and can be overridden. What is done, what is still open, and which populations still need a source
-are in [Phase 4 status](phase-4-status.md).
+are in [Phase 4 status](phase-4-status.md). Defaults that still need a reviewed source are in
+[Sources needed](sources-needed.md).
 
 ## Fields
 
