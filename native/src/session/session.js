@@ -366,10 +366,13 @@ class SessionLog {
   async #append(event) {
     if (this.discarded) return failure('discarded')
     const id = event.id != null ? event.id : createEventId()
-    const stored = { ...event, id }
     if (this.#seen(id)) return duplicate()
     if (this.#isFinished()) return failure('finished')
+    // The journal is JSON. NaN becomes null and undefined keys disappear on write.
+    // Fold that same document now, so a restart cannot show a different row.
+    let stored
     try {
+      stored = JSON.parse(JSON.stringify({ ...event, id }))
       const result = await this.storage.append(stored)
       if (result?.duplicate) return duplicate()
     } catch (error) {
