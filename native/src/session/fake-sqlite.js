@@ -124,6 +124,13 @@ export function createFakeSqliteDb() {
       const next = JSON.parse(params[0])
       if (current._sessionLastSeen != null) next._sessionLastSeen = current._sessionLastSeen
       else delete next._sessionLastSeen
+      if (!Object.prototype.hasOwnProperty.call(next, '_sessionTimeZone')) {
+        if (typeof current._sessionTimeZone === 'string' && current._sessionTimeZone) {
+          next._sessionTimeZone = current._sessionTimeZone
+        } else {
+          delete next._sessionTimeZone
+        }
+      }
       if (current._sessionSeenTrail != null) {
         // A bare json_extract is TEXT. json_set stores that as a quoted string.
         // json() or -> is what keeps the trail an array.

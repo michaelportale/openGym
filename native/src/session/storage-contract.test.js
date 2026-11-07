@@ -213,6 +213,20 @@ test('writeBase keeps a last seen saved while the base replace is in flight', as
   expect(kept).toEqual(laterTrail)
 })
 
+test('writeBase keeps a time zone saved while the base replace is in flight', async () => {
+  const db = createFakeSqliteDb()
+  const storage = createSqliteSessionStorage(db)
+  await storage.writeBase({ id: 'w1', title: 'before' }, { timeZone: 'UTC' })
+  db.holdNext(/ON CONFLICT\(id\) DO UPDATE/)
+  const pending = storage.writeBase({ id: 'w1', title: 'after' })
+  await db.held()
+  await storage.writeBase({ id: 'w1', title: 'mid' }, { timeZone: 'America/New_York' })
+  db.release()
+  await pending
+  expect(await storage.readBase()).toEqual({ id: 'w1', title: 'after' })
+  expect(await storage.readTimeZone()).toBe('America/New_York')
+})
+
 test('sqlite storage requires an injected db handle', () => {
   expect(() => createSqliteSessionStorage()).toThrow(/expo-sqlite/)
 })
