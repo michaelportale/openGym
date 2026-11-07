@@ -207,6 +207,43 @@ test('restoring from storage after termination reproduces the same view', async 
   expect(restored.getDraft(bench1)).toEqual({ w: 62.5, r: 5 })
 })
 
+test('a move with a non-integer index is not written', async () => {
+  const storage = createMemoryStorage()
+  const { session } = await started({ storage })
+  const order = () => session.view().entries.map(entry => entry.id)
+
+  const fractional = await session.moveExercise({ eventId: 'move-fraction', exerciseId: 'row', toIndex: 1.5 })
+  const missing = await session.moveExercise({ eventId: 'move-missing', exerciseId: 'row' })
+  const nan = await session.moveExercise({ eventId: 'move-nan', exerciseId: 'row', toIndex: NaN })
+  const text = await session.moveExercise({ eventId: 'move-text', exerciseId: 'row', toIndex: '0' })
+  expect(fractional).toMatchObject({ ok: false, saved: false, error: { code: 'bad-index' } })
+  expect(missing).toMatchObject({ ok: false, saved: false, error: { code: 'bad-index' } })
+  expect(nan).toMatchObject({ ok: false, saved: false, error: { code: 'bad-index' } })
+  expect(text).toMatchObject({ ok: false, saved: false, error: { code: 'bad-index' } })
+  expect(order()).toEqual(['bench', 'row'])
+  expect(await storage.readAll()).toEqual([])
+
+  const moved = await session.moveExercise({ eventId: 'move-ok', exerciseId: 'row', toIndex: 0 })
+  expect(moved).toMatchObject({ ok: true, saved: true })
+  expect(order()).toEqual(['row', 'bench'])
+
+  await session.finish({ eventId: 'finish-1' })
+  const before = (await storage.readAll()).map(event => event.id)
+  const finished = await session.moveExercise({ eventId: 'move-finished', exerciseId: 'row', toIndex: 1.5 })
+  expect(finished).toMatchObject({ ok: false, saved: false, error: { code: 'bad-index' } })
+  expect((await storage.readAll()).map(event => event.id)).toEqual(before)
+
+  const discardedStorage = createMemoryStorage()
+  const discarded = (await started({ storage: discardedStorage })).session
+  await discarded.discard()
+  const afterDiscard = await discarded.moveExercise({ eventId: 'move-discarded', exerciseId: 'row', toIndex: NaN })
+  expect(afterDiscard).toMatchObject({ ok: false, saved: false, error: { code: 'bad-index' } })
+  expect(await discardedStorage.readAll()).toEqual([])
+
+  const restored = await openSession({ storage, now: () => T0 + 60_000, timeZone: 'UTC' })
+  expect(restored.view().entries.map(entry => entry.id)).toEqual(['row', 'bench'])
+})
+
 test('locking during rest reports the deadline remainder, and expiry does not start the next set', async () => {
   const clock = createClock(T0)
   const { session } = await started({ clock })
