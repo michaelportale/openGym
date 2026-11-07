@@ -252,6 +252,33 @@ test('pause freezes remaining across a background gap and extend writes a new de
   expect(session.view().rest).toMatchObject({ status: 'paused', remainingMs: 65_000 })
 })
 
+test('an extend that cannot grow a full rest is not written', async () => {
+  const storage = createMemoryStorage()
+  const { session } = await started({ storage })
+  await session.startRest({ eventId: 'rest-1', durationMs: 1_000, totalMs: REST_MAX_MS })
+  expect(session.view().rest.totalMs).toBe(REST_MAX_MS)
+
+  const full = await session.extendRest({ eventId: 'extend-full', byMs: 1_000 })
+  expect(full).toMatchObject({ ok: false, saved: false, error: { code: 'bad-extend' } })
+  expect(session.view().rest.totalMs).toBe(REST_MAX_MS)
+  expect((await storage.readAll()).map(event => event.type)).toEqual(['rest.start'])
+
+  const shrink = await session.extendRest({ eventId: 'extend-shrink', byMs: -1_000 })
+  expect(shrink).toMatchObject({ ok: true, saved: true })
+  expect(session.view().rest.totalMs).toBe(REST_MAX_MS - 1_000)
+
+  const grow = await session.extendRest({ eventId: 'extend-grow', byMs: REST_MAX_MS })
+  expect(grow).toMatchObject({ ok: true, saved: true })
+  expect(session.view().rest.totalMs).toBe(REST_MAX_MS)
+
+  const again = await session.extendRest({ eventId: 'extend-full', byMs: 5_000 })
+  expect(again).toMatchObject({ ok: false, saved: false, error: { code: 'bad-extend' } })
+
+  const restored = await openSession({ storage, now: () => T0 + 60_000, timeZone: 'UTC' })
+  expect(restored.view().rest.totalMs).toBe(REST_MAX_MS)
+  expect((await storage.readAll()).map(event => event.id)).toEqual(['rest-1', 'extend-shrink', 'extend-grow'])
+})
+
 test('a repeated pause, cancel, or resume id is a duplicate once its precondition is gone', async () => {
   const clock = createClock(T0)
   const storage = createMemoryStorage()
