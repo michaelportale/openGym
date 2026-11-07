@@ -74,6 +74,18 @@ function clearDone(row) {
   return next
 }
 
+// A per-side row is done only when both sides are. The fold applies this after every
+// set event, so commit, edit, undo, and add do not each keep their own copy.
+function syncSideDone(model) {
+  for (const entry of model.entries) {
+    for (const slot of entry.sets) {
+      const row = slot.row
+      if (!isSideSet(row)) continue
+      row.done = row.sides.L?.done === true && row.sides.R?.done === true
+    }
+  }
+}
+
 function applyRestStart(model, event) {
   const deadline = Number(event.deadline)
   if (!Number.isFinite(deadline)) return
@@ -139,8 +151,9 @@ function applyEvent(model, event) {
           L: { ...row.sides.L, done: true },
           R: { ...row.sides.R, done: true },
         }
+      } else if (!isSideSet(row)) {
+        row.done = true
       }
-      row.done = isSideSet(row) ? row.sides.L?.done === true && row.sides.R?.done === true : true
       row.at = event.at
       slot.row = row
       return
@@ -148,9 +161,7 @@ function applyEvent(model, event) {
     case 'set.edit': {
       const slot = findSlot(model, event.exerciseId, event.setId)
       if (!slot) return
-      const row = mergeFields(slot.row, event.fields)
-      if (isSideSet(row)) row.done = row.sides.L?.done === true && row.sides.R?.done === true
-      slot.row = row
+      slot.row = mergeFields(slot.row, event.fields)
       return
     }
     case 'set.undo': {
@@ -260,6 +271,7 @@ export function foldJournal(base, events) {
     seen.add(event.id)
     if (model.finished) continue
     applyEvent(model, event)
+    if (typeof event.type === 'string' && event.type.startsWith('set.')) syncSideDone(model)
     if (Number.isFinite(event.at)) {
       model.stamps.push(event.type === 'session.resume' ? { at: event.at, resume: true } : event.at)
     }
