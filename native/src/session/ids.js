@@ -3,7 +3,7 @@ export function plannedSetId(exerciseId, index) {
 }
 
 export function createEventId() {
-  const crypto = globalThis.crypto
-  if (crypto && typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+  const id = globalThis.crypto?.randomUUID?.()
+  if (typeof id === 'string' && id) return id
   return `evt-${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
