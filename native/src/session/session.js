@@ -1,6 +1,6 @@
 import { finishWorkout } from '../shared/training.js'
-import { activityAt, entryExists, foldJournal, projectSession, slotExists, toActive } from './fold.js'
-import { isOvernight } from './timing.js'
+import { activityAt, elapsedStamps, entryExists, foldJournal, projectSession, slotExists, toActive } from './fold.js'
+import { DURATION_GAP_MS, isOvernight, shownThrough } from './timing.js'
 import { createEventId } from './ids.js'
 
 const { sessionEnd } = finishWorkout
@@ -28,6 +28,7 @@ export async function openSession({ base, storage, now, timeZone = 'UTC' } = {})
   const callerZone = typeof timeZone === 'string' && timeZone ? timeZone : 'UTC'
   let zone = typeof storage.readTimeZone === 'function' ? await storage.readTimeZone() : ''
   if (typeof zone !== 'string' || !zone) zone = ''
+  const seenAt = typeof storage.readLastSeen === 'function' ? await storage.readLastSeen() : null
   if (!resolved && base) {
     await storage.writeBase(base, { timeZone: callerZone })
     resolved = await storage.readBase()
@@ -43,11 +44,15 @@ export async function openSession({ base, storage, now, timeZone = 'UTC' } = {})
     storage,
     now: typeof now === 'function' ? now : Date.now,
     timeZone: zone || callerZone,
+    seenAt,
   })
 }
 
 class SessionLog {
-  constructor({ base, events, drafts, storage, now, timeZone }) {
+  #seenChain = Promise.resolve()
+  #queuedSeen = null
+
+  constructor({ base, events, drafts, storage, now, timeZone, seenAt }) {
     this.base = base
     this.events = events || []
     this.drafts = drafts || {}
@@ -55,9 +60,10 @@ class SessionLog {
     this.now = now
     this.timeZone = timeZone
     this.discarded = false
-    // now() values already shown in this process. Elapsed keeps them so a later clock step
-    // cannot erase time the live view already reported. Not written to storage.
-    this.samples = []
+    // In-process samples plus the last counted instant from a previous process.
+    // A later clock step cannot erase time the timer already counted.
+    this.samples = Number.isFinite(seenAt) ? [seenAt] : []
+    if (Number.isFinite(seenAt)) this.#queuedSeen = seenAt
   }
 
   view({ timeZone = this.timeZone } = {}) {
@@ -67,7 +73,26 @@ class SessionLog {
       return projectSession(foldJournal(null, []), { now, timeZone, drafts: {}, discarded: true, samples: this.samples })
     }
     const model = foldJournal(this.base, this.events)
-    return projectSession(model, { now, timeZone, drafts: this.drafts, discarded: false, samples: this.samples })
+    const projected = projectSession(model, { now, timeZone, drafts: this.drafts, discarded: false, samples: this.samples })
+    const clockEnd = model.finished ? model.finished.end : now
+    this.#persistSeen(shownThrough(elapsedStamps(model, this.samples), clockEnd, DURATION_GAP_MS, timeZone))
+    return projected
+  }
+
+  async flushSeen() {
+    await this.#seenChain
+  }
+
+  #persistSeen(at) {
+    if (!Number.isFinite(at) || at === this.#queuedSeen) return
+    if (typeof this.storage.putLastSeen !== 'function') return
+    this.#queuedSeen = at
+    this.#seenChain = this.#seenChain
+      .catch(() => {})
+      .then(() => this.storage.putLastSeen(at))
+      .catch(() => {
+        if (this.#queuedSeen === at) this.#queuedSeen = null
+      })
   }
 
   #sample(now) {
@@ -340,6 +365,7 @@ class SessionLog {
     if (this.discarded) return duplicate()
     if (this.#isFinished()) return failure('finished')
     try {
+      await this.flushSeen()
       await this.storage.clear()
     } catch (error) {
       return failure('storage', error?.message || 'clear failed')

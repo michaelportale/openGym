@@ -77,14 +77,18 @@ function idleOvernight(delta, prev, next, timeZone) {
   return delta > REST_MAX_MS && crossesLocalDate(prev, next, timeZone)
 }
 
-export function elapsedMs(stamps, now, gap = DURATION_GAP_MS, timeZone) {
+function walkElapsed(stamps, now, gap, timeZone) {
   let elapsed = 0
   let high = null
+  // Last instant that actually added to the timer. A later sample that is dropped
+  // (an idle overnight look) must not replace it, or a restart would rewind.
+  let shown = null
   for (const raw of stamps) {
     const at = stampAt(raw)
     if (at == null) continue
     if (high == null) {
       high = at
+      shown = at
       continue
     }
     const delta = at - high
@@ -92,14 +96,28 @@ export function elapsedMs(stamps, now, gap = DURATION_GAP_MS, timeZone) {
     const sample = !!raw && raw.sample === true
     const dropResume = resume && delta > REST_MAX_MS
     const dropSample = sample && idleOvernight(delta, high, at, timeZone)
-    if (!dropResume && !dropSample && delta > 0 && delta <= gap) elapsed += delta
+    if (!dropResume && !dropSample && delta > 0 && delta <= gap) {
+      elapsed += delta
+      shown = at
+    }
     if (at > high) high = at
   }
   if (high != null && Number.isFinite(now)) {
     const tail = now - high
-    if (!idleOvernight(tail, high, now, timeZone) && tail > 0 && tail <= gap) elapsed += tail
+    if (!idleOvernight(tail, high, now, timeZone) && tail > 0 && tail <= gap) {
+      elapsed += tail
+      shown = now
+    }
   }
-  return elapsed
+  return { elapsed, shown }
+}
+
+export function elapsedMs(stamps, now, gap = DURATION_GAP_MS, timeZone) {
+  return walkElapsed(stamps, now, gap, timeZone).elapsed
+}
+
+export function shownThrough(stamps, now, gap = DURATION_GAP_MS, timeZone) {
+  return walkElapsed(stamps, now, gap, timeZone).shown
 }
 
 export function projectRest(rest, now) {

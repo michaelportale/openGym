@@ -1,5 +1,7 @@
 import { expect, test } from 'vitest'
 import { createMemoryStorage } from './storage.js'
+import { createFakeSqliteDb } from './fake-sqlite.js'
+import { createSqliteSessionStorage } from './sqlite-storage.js'
 import { openSession, plannedSetId } from './session.js'
 import { REST_MAX_MS } from './timing.js'
 
@@ -424,6 +426,56 @@ test('a rest across midnight keeps counting and does not fall back to the last s
   const pastLogged = longer.session.view().elapsedMs
   pastRest.set(Date.parse('2026-11-08T00:06:00.000Z'))
   expect(longer.session.view().elapsedMs).toBe(pastLogged)
+})
+
+test('a kill after a shown rest across midnight does not rewind elapsed', async () => {
+  const setAt = Date.parse('2026-11-07T23:50:00.000Z')
+  const seenAt = Date.parse('2026-11-08T00:05:00.000Z')
+  const reopenAt = Date.parse('2026-11-08T00:30:00.000Z')
+
+  const stores = [
+    { storage: createMemoryStorage(), reopen: storage => storage },
+    await (async () => {
+      const db = createFakeSqliteDb()
+      return {
+        storage: createSqliteSessionStorage(db),
+        reopen: () => createSqliteSessionStorage(db),
+      }
+    })(),
+  ]
+
+  for (const { storage, reopen } of stores) {
+    const clock = createClock(setAt)
+    const base = { ...baseWorkout(), start: setAt }
+    const { session } = await started({ clock, storage, base, timeZone: 'UTC' })
+    await session.commitSet({ eventId: 'c1', exerciseId: 'bench', setId: bench0, fields: { w: 60, r: 5 } })
+    clock.set(seenAt)
+    const shown = session.view()
+    expect(shown.overnight).toBe(true)
+    expect(shown.elapsedMs).toBe(REST_MAX_MS)
+    if (typeof session.flushSeen === 'function') await session.flushSeen()
+
+    const reopened = await openSession({ storage: reopen(storage), now: () => reopenAt, timeZone: 'UTC' })
+    const revived = reopened.view()
+    expect(revived.overnight).toBe(true)
+    expect(revived.elapsedMs).toBe(shown.elapsedMs + (reopenAt - seenAt))
+    expect(await storage.readBase()).not.toHaveProperty('_sessionLastSeen')
+  }
+
+  const idleClock = createClock(setAt)
+  const idleStorage = createMemoryStorage()
+  const idle = await started({
+    clock: idleClock,
+    storage: idleStorage,
+    base: { ...baseWorkout(), start: setAt },
+    timeZone: 'UTC',
+  })
+  await idle.session.commitSet({ eventId: 'c1', exerciseId: 'bench', setId: bench0, fields: { w: 60, r: 5 } })
+  const idleLogged = idle.session.view().elapsedMs
+  if (typeof idle.session.flushSeen === 'function') await idle.session.flushSeen()
+  const idleOpened = await openSession({ storage: idleStorage, now: () => reopenAt, timeZone: 'UTC' })
+  expect(idleOpened.view().overnight).toBe(true)
+  expect(idleOpened.view().elapsedMs).toBe(idleLogged)
 })
 
 test('discard drops an overnight session instead of logging it', async () => {

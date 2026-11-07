@@ -131,6 +131,7 @@ export function createSessionController({ base, storage, finishedWorkouts, now, 
     }
 
     try {
+      await session.flushSeen()
       await storage.clear()
     } catch (error) {
       const failure = { code: 'storage', message: error?.message || 'clear failed' }
