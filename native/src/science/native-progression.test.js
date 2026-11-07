@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
 import { progression } from '../shared/training.js'
-import { nativePrescription, nativeProgressionWhy, nativeRepPolicy } from './native-progression.js'
+import { NATIVE_REP_POLICY, nativePrescription, nativeProgressionWhy, nativeRepPolicy } from './native-progression.js'
 
 const id = '0025'
 const cfg = { id, sets: 3, reps: 12, repsMin: 8, weight: 40 }
@@ -20,7 +20,8 @@ function hist(rows, target = { sets: 3, reps: 12, weight: rows[0][0] }) {
 }
 
 test('reps with no named policy use double progression and the one-session trigger', () => {
-  expect(nativeRepPolicy(cfg, null)).toBe('double')
+  expect(NATIVE_REP_POLICY).toBe('double')
+  expect(nativeRepPolicy(cfg, null)).toBe(NATIVE_REP_POLICY)
   const p = nativePrescription(hist([[40, 12, 12, 12]]), cfg)
   expect(p).toMatchObject({ policy: 'double', kind: 'up', weight: 42.5, reps: 8 })
 })

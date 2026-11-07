@@ -1,9 +1,9 @@
 import { readFileSync } from 'node:fs'
 import { expect, test } from 'vitest'
 import { effort } from '../shared/training.js'
-import { effortProgressionNote, effortWhy, validateRir, withEffortNote } from './effort.js'
+import { FAR_FROM_FAILURE, effortProgressionNote, effortWhy, validateRir, withEffortNote } from './effort.js'
 
-const FAR = 'This looks far from failure.'
+const FAR = FAR_FROM_FAILURE
 
 test('a new log accepts a whole number of reps left from 0 to 10, or nothing', () => {
   expect(validateRir(undefined)).toEqual({ ok: true, rir: null })
