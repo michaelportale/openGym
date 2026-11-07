@@ -2,7 +2,7 @@
 
 Running log of pulls merged into `native/phase-1` on the night of 6 November 2026. This pull request is a log only. Do not merge it.
 
-- Last checked: 2026-11-06 21:49 EST
+- Last checked: 2026-11-06 21:52 EST
 - `native/phase-1` head: `b973478fe795507e65f90dd5cfaaba39f215681f`
 - Window: merges after `aac6bcc` (the #48 session-adapter merge), from #49 through the head above
 - Lanes: session = Charlie, shell/screens = Gus, science = Bob
@@ -191,3 +191,4 @@ The first pass of this log said the #59 Node-import gap and the #62 journal gap 
 
 - [#65](https://github.com/michaelportale/openGym/pull/65) — draft, `docs: overnight PR audit for November 6–7`. Not merged. The F001 and F002 entries above are taken from that audit. The rest of its ledger is not this log's review.
 - [#67](https://github.com/michaelportale/openGym/pull/67) — draft, this log. Not merged. Do not merge it.
+- [#68](https://github.com/michaelportale/openGym/pull/68) — draft, `native: correct the standup warm-up bar example`. Docs only. Changes the 80 lb example so a 5 lb step with a 45 lb bar is 45 and 60. Not merged. Self-authored, not independent.
