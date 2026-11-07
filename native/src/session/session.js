@@ -226,6 +226,7 @@ class SessionLog {
   }
 
   async addSet({ eventId, exerciseId, setId, fields } = {}) {
+    if (this.#seen(eventId)) return duplicate()
     const model = this.#model()
     if (!this.discarded && !this.#isFinished() && !entryExists(model, exerciseId)) return failure('unknown-exercise')
     return this.#append({
