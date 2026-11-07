@@ -113,18 +113,21 @@ export function createSqliteSessionStorage(db) {
       }
       // Stamp, trail, and zone are copied from the current row inside this statement.
       // json() keeps the trail an array. A bare json_extract is TEXT, and json_set
-      // would store it as a quoted string.
+      // would store it as a quoted string. json_patch drops a null member, so a key
+      // neither row has is left out instead of stored as JSON null.
       // On-device JSON1 checklist: the trail copy must stay json()-wrapped.
       const seen = `'$.${SESSION_LAST_SEEN_KEY}'`
       const trail = `'$.${SESSION_SEEN_TRAIL_KEY}'`
       const zone = `'$.${SESSION_TIME_ZONE_KEY}'`
       await db.run(
         `INSERT INTO session_base (id, body) VALUES (1, ?)
-         ON CONFLICT(id) DO UPDATE SET body = json_set(
+         ON CONFLICT(id) DO UPDATE SET body = json_patch(
            excluded.body,
-           ${seen}, COALESCE(json_extract(session_base.body, ${seen}), json_extract(excluded.body, ${seen})),
-           ${trail}, json(COALESCE(json_extract(session_base.body, ${trail}), json_extract(excluded.body, ${trail}))),
-           ${zone}, COALESCE(NULLIF(json_extract(session_base.body, ${zone}), ''), NULLIF(json_extract(excluded.body, ${zone}), ''))
+           json_object(
+             '${SESSION_LAST_SEEN_KEY}', COALESCE(json_extract(session_base.body, ${seen}), json_extract(excluded.body, ${seen})),
+             '${SESSION_SEEN_TRAIL_KEY}', json(COALESCE(json_extract(session_base.body, ${trail}), json_extract(excluded.body, ${trail}))),
+             '${SESSION_TIME_ZONE_KEY}', COALESCE(NULLIF(json_extract(session_base.body, ${zone}), ''), NULLIF(json_extract(excluded.body, ${zone}), ''))
+           )
          )`,
         [JSON.stringify(body)],
       )
