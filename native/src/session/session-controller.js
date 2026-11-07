@@ -45,7 +45,10 @@ export function createSessionController({ base, storage, finishedWorkouts, now, 
       state = recovered.status === 'saved'
         ? { status: 'saved', error: null, view: null }
         : { status: 'ready', error: null, view: session.view() }
-      if (session && state.status === 'ready') await session.noteSeen()
+      if (session && state.status === 'ready') {
+        const checkpoint = await session.noteSeen()
+        if (checkpoint?.ok === false) state.error = checkpoint.error
+      }
     } catch (error) {
       session = null
       state = {
@@ -73,7 +76,11 @@ export function createSessionController({ base, storage, finishedWorkouts, now, 
       return { ok: false, saved: false, error: { code: 'sender', message: 'sender is required' } }
     }
 
-    await session.flushSeen()
+    const checkpoint = await session.flushSeen()
+    if (checkpoint?.ok === false) {
+      state = { status: 'ready', error: checkpoint.error, view: session.view() }
+      return checkpoint
+    }
     const current = session.view()
     if (current.status === 'discarded') {
       const error = { code: 'discarded', message: 'discarded' }
@@ -133,7 +140,11 @@ export function createSessionController({ base, storage, finishedWorkouts, now, 
     }
 
     try {
-      await session.flushSeen()
+      const checkpoint = await session.flushSeen()
+      if (checkpoint?.ok === false) {
+        state = { status: 'ready', error: checkpoint.error, view: session.view() }
+        return { ...checkpoint, saved: true, payload }
+      }
       await storage.clear()
     } catch (error) {
       const failure = { code: 'storage', message: error?.message || 'clear failed' }
@@ -160,7 +171,14 @@ export function createSessionController({ base, storage, finishedWorkouts, now, 
       view,
       error: result && result.ok === false ? (result.error || { code: 'failed', message: 'request failed' }) : null,
     }
-    if (view.status !== 'discarded') await session.noteSeen()
+    if (view.status !== 'discarded') {
+      const checkpoint = await session.noteSeen()
+      if (checkpoint?.ok === false) {
+        state.error = state.error || checkpoint.error
+        // The command may already be durable; keep its save result distinct.
+        return { ...result, checkpointError: checkpoint.error }
+      }
+    }
     return result
   }
 
