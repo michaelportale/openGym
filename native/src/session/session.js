@@ -278,6 +278,25 @@ class SessionLog {
     })
   }
 
+  async setExerciseNote({ eventId, exerciseId, note, notePin } = {}) {
+    if (this.#seen(eventId)) return duplicate()
+    if (!this.discarded && !this.#isFinished()) {
+      if (typeof note !== 'string') return failure('bad-note')
+      if (note.length > 2000) return failure('note-too-long')
+      if (!entryExists(this.#model(), exerciseId)) return failure('unknown-exercise')
+      if (notePin != null && typeof notePin !== 'boolean') return failure('bad-note')
+    }
+    const event = {
+      id: eventId,
+      type: 'exercise.note',
+      at: this.now(),
+      exerciseId,
+      note: typeof note === 'string' ? note : '',
+    }
+    if (typeof notePin === 'boolean') event.notePin = notePin
+    return this.#append(event)
+  }
+
   async resume({ eventId } = {}) {
     if (this.discarded) return failure('discarded')
     if (this.#isFinished()) return failure('finished')
