@@ -28,11 +28,17 @@ export function useActiveSession(options) {
   const liveRef = useRef(true)
   const actionsRef = useRef(null)
   if (actionsRef.current == null) {
-    actionsRef.current = Object.fromEntries(ACTIONS.map(name => [name, async (...args) => {
+    const actions = Object.fromEntries(ACTIONS.map(name => [name, async (...args) => {
       const result = await controller.call(name, ...args)
       if (liveRef.current) setState(controller.getState())
       return result
     }]))
+    actions.finishSession = async (input) => {
+      const result = await controller.finishSession(input)
+      if (liveRef.current) setState(controller.getState())
+      return result
+    }
+    actionsRef.current = actions
   }
 
   useEffect(() => {
