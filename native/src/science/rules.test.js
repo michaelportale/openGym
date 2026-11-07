@@ -134,6 +134,28 @@ test('whyThis returns the rule id, the plain-language reason, and the source', (
   expect(whyThis('weekly-volume')).not.toHaveProperty('population')
 })
 
+test('phase 4 status marks every done-when item done, not started, or blocked', () => {
+  const status = readFileSync(join(DOCS, 'phase-4-status.md'), 'utf8')
+  const items = [
+    ['`docs/science/` register', '#43'],
+    ['Warm-up prompt', '#46'],
+    ['Progression', '#46'],
+    ['Effort', '#47'],
+    ['"Why this?" sheet', '#49'],
+    ['Rule audit', '#43'],
+    ['Rep ranges', '#49'],
+    ['Weekly volume', '#43']
+  ]
+  for (const [item, pr] of items) {
+    const line = status.split('\n').find(row => row.includes(item))
+    expect(line, item).toBeTruthy()
+    expect(line).toMatch(/Done|Not started|Blocked/)
+    expect(line).toContain(pr)
+  }
+  expect(status).toMatch(/not started/)
+  expect(status).toMatch(/blocked/)
+})
+
 test('a TODO population stays in the register, off the payload, and on the source list', () => {
   const status = readFileSync(join(DOCS, 'phase-4-status.md'), 'utf8')
   const waiting = Object.values(RULES).filter(rule => rule.population === 'TODO')
