@@ -266,7 +266,10 @@ class SessionLog {
 
   async setNote({ eventId, note } = {}) {
     if (this.#seen(eventId)) return duplicate()
-    if (!this.discarded && !this.#isFinished() && typeof note !== 'string') return failure('bad-note')
+    if (!this.discarded && !this.#isFinished()) {
+      if (typeof note !== 'string') return failure('bad-note')
+      if (note.length > 2000) return failure('note-too-long')
+    }
     return this.#append({
       id: eventId,
       type: 'session.note',

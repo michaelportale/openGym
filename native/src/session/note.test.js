@@ -79,6 +79,20 @@ test('a blank session note is omitted from the finished workout', async () => {
   expect(session.view().finished.note).toBeUndefined()
 })
 
+test('a session note longer than 2000 characters is refused', async () => {
+  const storage = createMemoryStorage()
+  const session = await started(storage)
+  const exact = 'a'.repeat(2000)
+  const saved = await session.setNote({ eventId: 'note-max', note: exact })
+  expect(saved).toMatchObject({ ok: true, saved: true })
+  expect(session.view().note).toBe(exact)
+
+  const tooLong = await session.setNote({ eventId: 'note-long', note: `${exact}b` })
+  expect(tooLong).toMatchObject({ ok: false, saved: false, error: { code: 'note-too-long' } })
+  expect(session.view().note).toBe(exact)
+  expect((await storage.readAll()).some(event => event.id === 'note-long')).toBe(false)
+})
+
 test('a session note survives replay', async () => {
   const db = createFakeSqliteDb()
   const session = await started(createSqliteSessionStorage(db))
