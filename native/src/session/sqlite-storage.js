@@ -40,7 +40,9 @@ export function createSqliteSessionStorage(db) {
         'INSERT OR IGNORE INTO session_events (id, at, type, body) VALUES (?, ?, ?, ?)',
         [String(event.id), Number.isFinite(event.at) ? event.at : 0, event.type == null ? '' : String(event.type), JSON.stringify(event)],
       )
-      if (!result || result.changes === 0) return { duplicate: true }
+      // changes === 0 is INSERT OR IGNORE skipping an id already stored. A driver that
+      // omits changes did not report a skip, so the append still counts as saved.
+      if (result && result.changes === 0) return { duplicate: true }
       return { ok: true }
     },
 

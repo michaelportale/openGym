@@ -99,6 +99,25 @@ test('sqlite storage applies SQLITE_SESSION_SCHEMA and rolls clear back when a d
   expect(await storage.readBase()).toEqual({ id: 'w1' })
 })
 
+test('sqlite append stays saved when the driver does not report a change count', async () => {
+  const db = createFakeSqliteDb()
+  const run = db.run.bind(db)
+  db.run = async (sql, params) => {
+    const result = await run(sql, params)
+    if (/INSERT OR IGNORE INTO session_events/.test(squeeze(sql))) return {}
+    return result
+  }
+  const storage = createSqliteSessionStorage(db)
+  const saved = await storage.append(event('a', 1))
+  expect(saved.ok).toBe(true)
+  expect(saved.duplicate).toBeUndefined()
+  expect((await storage.readAll()).map(row => row.id)).toEqual(['a'])
+})
+
+function squeeze(sql) {
+  return String(sql).replace(/\s+/g, ' ')
+}
+
 test('sqlite storage requires an injected db handle', () => {
   expect(() => createSqliteSessionStorage()).toThrow(/expo-sqlite/)
 })
