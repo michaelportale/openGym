@@ -103,6 +103,24 @@ test('rapid complete then undo leaves the set uncounted, and a second undo stays
   expect(redone.entries[0].sets[0].row.w).toBe(80)
 })
 
+test('replay shows the same row a non-JSON commit field produced live', async () => {
+  const storage = createMemoryStorage()
+  const { session } = await started({ storage })
+  const committed = await session.commitSet({
+    eventId: 'c1',
+    exerciseId: 'bench',
+    setId: bench0,
+    fields: { w: NaN, r: 5, bar: undefined },
+  })
+  expect(committed).toMatchObject({ ok: true, saved: true })
+  const live = session.view()
+  const restored = await openSession({ storage, now: () => T0 + 60_000, timeZone: 'UTC' })
+  const replayed = restored.view()
+  expect(replayed.entries[0].sets[0].row.w).toBe(live.entries[0].sets[0].row.w)
+  expect(replayed.entries[0].sets[0].row.bar).toBe(live.entries[0].sets[0].row.bar)
+  expect(replayed.totals.loadReps).toBe(live.totals.loadReps)
+})
+
 test('an edit after finish is refused and does not change the finished document', async () => {
   const { session, storage, clock } = await started()
   await session.commitSet({ eventId: 'c1', exerciseId: 'bench', setId: bench0, fields: { w: 60, r: 5 } })
