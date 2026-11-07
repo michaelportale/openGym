@@ -2,11 +2,35 @@
 
 Running log of pulls merged into `native/phase-1` on the night of 6 November 2026. This pull request is a log only. Do not merge it.
 
-- Last checked: 2026-11-06 21:45 EST
-- `native/phase-1` head: `946f9f4b43357d049727874725aa297a9fe6c066`
+- Last checked: 2026-11-06 21:49 EST
+- `native/phase-1` head: `b973478fe795507e65f90dd5cfaaba39f215681f`
 - Window: merges after `aac6bcc` (the #48 session-adapter merge), from #49 through the head above
 - Lanes: session = Charlie, shell/screens = Gus, science = Bob
-- Independent review below is this log's reading of the diff. `NOT YET REVIEWED` means that diff was not read for this entry. Charlie's review line is his comment on the pull request, not this reading.
+- Independent review below is this log's reading of the diff. `NOT YET REVIEWED` means that diff was not read. `Self-authored, not independent` means this lane wrote the pull request, so the reading is not a review. Charlie's review line is his comment, not this reading.
+
+## Open findings
+
+The first pass of this log said the #59 Node-import gap and the #62 journal gap were closed on the head at that time. Both of those are still closed. That is not a claim that nothing is open in Charlie's session lane. Two findings from Codex's audit [#65](https://github.com/michaelportale/openGym/pull/65) are open. Each stays `OPEN` until a fix pull request merges. When one does, link it here.
+
+### F001 — finish can save without a set write that is still in flight
+
+- Status: OPEN
+- Severity: P1
+- Lane: session (Charlie)
+- Traces to: [#48](https://github.com/michaelportale/openGym/pull/48) (the public command wrapper) and [#54](https://github.com/michaelportale/openGym/pull/54) (finish)
+- What Codex reproduced at `018621ed`: hold a set append, start `finishSession`, let the sender confirm, then release the append. Finish returns saved with that set missing, the journal is cleared, and the pending command then fails because the session is already null. The event is left behind.
+- Still true on `b973478fe795507e65f90dd5cfaaba39f215681f`. `finishSession` does not share a queue with `call`. [#57](https://github.com/michaelportale/openGym/pull/57), [#62](https://github.com/michaelportale/openGym/pull/62), [#63](https://github.com/michaelportale/openGym/pull/63), [#64](https://github.com/michaelportale/openGym/pull/64), and [#66](https://github.com/michaelportale/openGym/pull/66) do not add one.
+- Fix: none yet
+
+### F002 — opening a session without `structuredClone` still fails
+
+- Status: OPEN
+- Severity: P2
+- Lane: session (Charlie)
+- Traces to: [#42](https://github.com/michaelportale/openGym/pull/42) (the journal fold) and [#54](https://github.com/michaelportale/openGym/pull/54) (the payload-only test)
+- What Codex reproduced at `018621ed`: delete `globalThis.structuredClone` before opening a populated session. Open returns an error. `fold.js` clones with `structuredClone`. The #54 test removes the global only after the session is already opened, committed, and finished, then checks `toWorkoutPayload`.
+- Still true on `b973478fe795507e65f90dd5cfaaba39f215681f`. `native/src/session/fold.js` still calls `structuredClone`. [#66](https://github.com/michaelportale/openGym/pull/66) uses that clone when an exercise is added.
+- Fix: none yet
 
 ## Merges
 
@@ -17,7 +41,7 @@ Running log of pulls merged into `native/phase-1` on the night of 6 November 202
 - Lane: science (Bob)
 - Summary: A TODO or blank population is left off the Why-this payload and sheet, and `programRepRange` keeps the stored range instead of filling 8-12.
 - Tests claimed at merge: native `npm test`, 20 files, 178 passed (body predates the rep-range commit).
-- Review status: Reviewed by Charlie at `ff5314246abd96d03a256faa082be36f8682dc95`. Independent review: NOT YET REVIEWED
+- Review status: Reviewed by Charlie at `ff5314246abd96d03a256faa082be36f8682dc95`. Self-authored, not independent
 
 ### #51 — [native: cite a PR on every Phase 4 status row](https://github.com/michaelportale/openGym/pull/51)
 
@@ -26,7 +50,7 @@ Running log of pulls merged into `native/phase-1` on the night of 6 November 202
 - Lane: science (Bob)
 - Summary: The Phase 4 status checklist names a PR on every done-when row.
 - Tests claimed at merge: native `npm test`, 29 files, 228 passed.
-- Review status: Reviewed by Charlie at `936450a6625779cb414e3e54bcfa91a355675cbd`. Independent review: NOT YET REVIEWED
+- Review status: Reviewed by Charlie at `936450a6625779cb414e3e54bcfa91a355675cbd`. Self-authored, not independent
 
 ### #53 — [native: ship no weekly set target](https://github.com/michaelportale/openGym/pull/53)
 
@@ -35,7 +59,7 @@ Running log of pulls merged into `native/phase-1` on the night of 6 November 202
 - Lane: science (Bob)
 - Summary: `weeklyVolumeTarget` returns null, so no weekly set count ships.
 - Tests claimed at merge: native `npm test`, 30 files, 229 passed.
-- Review status: Reviewed by Charlie at `91d34abdbd511413f1512df551702679b820a586`. Independent review: NOT YET REVIEWED
+- Review status: Reviewed by Charlie at `91d34abdbd511413f1512df551702679b820a586`. Self-authored, not independent
 
 ### #50 — [native: show a glyph when SF Symbols are not drawn](https://github.com/michaelportale/openGym/pull/50)
 
@@ -44,7 +68,7 @@ Running log of pulls merged into `native/phase-1` on the night of 6 November 202
 - Lane: shell/screens (Gus)
 - Summary: Off iOS, symbol buttons draw a text glyph instead of an empty SF Symbol.
 - Tests claimed at merge: native `npm test` on `a89cbb6a`, 30 files, 231 tests, exit 0.
-- Review status: Reviewed by Charlie at `a89cbb6a749d7834e49143e32132316008dab7bb`. Independent review: NOT YET REVIEWED
+- Review status: Reviewed by Charlie at `a89cbb6a749d7834e49143e32132316008dab7bb`. Independent findings: the diff stays in `native/src/ui`, two workout rows, and the phase-1 decisions note. No lockfile change, no secrets, no `node:` import in app code (`node:fs` is only in the test). Unknown names throw on every platform, including iOS. [#59](https://github.com/michaelportale/openGym/pull/59) later lets iOS accept an unmapped name.
 
 ### #52 — [native: lock react-dom to 19.3.0](https://github.com/michaelportale/openGym/pull/52)
 
@@ -53,7 +77,7 @@ Running log of pulls merged into `native/phase-1` on the night of 6 November 202
 - Lane: native lockfile (not session, shell, or science)
 - Summary: `react-dom` in `native/package-lock.json` moves from 19.3.1 to 19.3.0 so it matches the pinned `react`.
 - Tests claimed at merge: native `npm test`, 29 files, 227 tests, exit 0.
-- Review status: Reviewed by Charlie at `7fe440582187a5715751a6dce5724c0b35d22e82`. Independent review: NOT YET REVIEWED
+- Review status: Reviewed by Charlie at `7fe440582187a5715751a6dce5724c0b35d22e82`. Independent findings: the only file is `native/package-lock.json`. `react-dom` moves from 19.3.1 to 19.3.0, the tarball is `registry.npmjs.org`, the integrity hash changes, and the peer range becomes `^19.3.0`. `package.json` is not in the diff. No secrets and no app source.
 
 ### #54 — [native: finish a session into the stored workout](https://github.com/michaelportale/openGym/pull/54)
 
@@ -62,7 +86,7 @@ Running log of pulls merged into `native/phase-1` on the night of 6 November 202
 - Lane: session (Charlie)
 - Summary: Finishing a session writes the workout through an injected sender and copies the payload with JSON so Hermes can run it.
 - Tests claimed at merge: `npm run verify`, 31 files, 238 tests passed.
-- Review status: Reviewed by Charlie at `a83bf3df57ade15298cd54de6f025c7000b7b42f` (an earlier review at `cc7f8dd9469ac51d3f8dcf2a6d2ecb97259a62f6` had asked for the JSON copy). Independent review: NOT YET REVIEWED
+- Review status: Reviewed by Charlie at `a83bf3df57ade15298cd54de6f025c7000b7b42f` (an earlier review at `cc7f8dd9469ac51d3f8dcf2a6d2ecb97259a62f6` had asked for the JSON copy). Independent findings: scope is `native/src/session` only. No lockfile change, no secrets, no `node:` import. The JSON copy is only in `toWorkoutPayload`. The test deletes `structuredClone` after the session is already sealed, so it does not cover open. See F002. `finishSession` does not wait for an in-flight `call`, so a set append still in flight can be left out of the save. See F001. If `storage.clear()` throws after the sender confirms, the session stays open and a later finish calls the sender again. The workout id is the same.
 
 ### #55 — [native: cover rounding, bar edges, RIR bounds, and migration idempotence](https://github.com/michaelportale/openGym/pull/55)
 
@@ -71,7 +95,7 @@ Running log of pulls merged into `native/phase-1` on the night of 6 November 202
 - Lane: science (Bob)
 - Summary: Tests lock kilogram versus pound warm-up rounding, the bar boundary, RIR 0 through 10, and a second migration call.
 - Tests claimed at merge: native `npm test`, 30 files, 233 passed.
-- Review status: Reviewed by Charlie at `ee0ac2191630d1182ccc5fa5f2d827fb1b6c48f7`. Independent review: NOT YET REVIEWED
+- Review status: Reviewed by Charlie at `ee0ac2191630d1182ccc5fa5f2d827fb1b6c48f7`. Self-authored, not independent
 
 ### #56 — [native: list science defaults that still need a source](https://github.com/michaelportale/openGym/pull/56)
 
@@ -80,7 +104,7 @@ Running log of pulls merged into `native/phase-1` on the night of 6 November 202
 - Lane: science (Bob)
 - Summary: `docs/science/sources-needed.md` lists weekly sets, deload, Epley, rest, and increments without citing a study.
 - Tests claimed at merge: native `npm test`, 32 files, 247 passed.
-- Review status: Reviewed by Charlie at `a60b614f615ebfc2fddd2cede1f4c114dff2cb81`. Independent review: NOT YET REVIEWED
+- Review status: Reviewed by Charlie at `a60b614f615ebfc2fddd2cede1f4c114dff2cb81`. Self-authored, not independent
 
 ### #58 — [native: science standup brief for 6 November](https://github.com/michaelportale/openGym/pull/58)
 
@@ -89,7 +113,7 @@ Running log of pulls merged into `native/phase-1` on the night of 6 November 202
 - Lane: science (Bob)
 - Summary: One-page standup brief of the science lane, including #56 as merged.
 - Tests claimed at merge: native `npm test`, 32 files, 247 passed.
-- Review status: Reviewed by Charlie at `e8db45ab978d3840299f9b815b7c1e43b07db4cd`. Independent review: NOT YET REVIEWED
+- Review status: Reviewed by Charlie at `e8db45ab978d3840299f9b815b7c1e43b07db4cd`. Self-authored, not independent. The brief says 80 lb on a 5 lb step is 30 and 60. The case tested in #55, with a 45 lb bar, is 45 and 60. 30 is under that bar. That sentence is still in `docs/science/overnight-2026-11-06.md` on this head.
 
 ### #57 — [native: store each finished workout by id and date](https://github.com/michaelportale/openGym/pull/57)
 
@@ -98,7 +122,7 @@ Running log of pulls merged into `native/phase-1` on the night of 6 November 202
 - Lane: session (Charlie)
 - Summary: Finished workouts are one SQLite row per id, upserted on conflict, with an index on the date.
 - Tests claimed at merge: `npm run verify`, 33 files, 250 tests passed.
-- Review status: Reviewed by Charlie at `4564a9a884a5de12ee61885dc2ed2d1a6f080ed9`. Independent review: NOT YET REVIEWED
+- Review status: Reviewed by Charlie at `4564a9a884a5de12ee61885dc2ed2d1a6f080ed9`. Independent findings: scope is `native/src/session` only. Statements are parameterized. The same id upserts. No `expo-sqlite` import, no lockfile change, no secrets. A crash after `put` and before `storage.clear()` leaves the journal in place. [#62](https://github.com/michaelportale/openGym/pull/62) later drops that journal when the finished row exists. Writing the row does not serialize finish with an in-flight set command. F001 stays open.
 
 ### #59 — [native: let iOS draw a symbol that has no text glyph](https://github.com/michaelportale/openGym/pull/59)
 
@@ -154,6 +178,16 @@ Running log of pulls merged into `native/phase-1` on the night of 6 November 202
 - Tests claimed at merge: `npm run verify`, 36 files, 274 tests passed.
 - Review status: Reviewed by Charlie at `f36421bfe361da786aefd9a9cbe71ed7890994c1`. Independent findings: edits stay in `native/src/session` (`fold.js`, `session.js`, `use-active-session.js`, and a new test). No Node imports, no lockfile change, no secrets. `removeSet` refuses an unknown id and the last set before appending. After finish, `#append` returns `finished`, and the test checks that refusal. A replay test keeps a removed set gone. The fold also ignores a remove that would empty an exercise.
 
+### #66 — [native: add and remove an exercise mid-session](https://github.com/michaelportale/openGym/pull/66)
+
+- Merged commit: `2d62bdc6e936c843fe982e0cc4219a0b3dc9c206`
+- Resulting `native/phase-1` head: `b973478fe795507e65f90dd5cfaaba39f215681f`
+- Lane: session (Charlie)
+- Summary: An exercise can be added or removed during the session. An added exercise starts with its sets unticked. Replay keeps both the add and the remove.
+- Tests claimed at merge: `npm run verify`, 37 files, 277 tests passed.
+- Review status: Reviewed by Charlie at `2d62bdc6e936c843fe982e0cc4219a0b3dc9c206`. Independent findings: the diff is `fold.js`, `session.js`, `use-active-session.js`, and a new test. No lockfile change, no secrets, no `node:` import, no files outside `native/src/session`. A duplicate id is refused, and a crafted `done: true` on the incoming sets is cleared by the fold. Removing the last exercise is allowed, and finish then saves an empty entry list. The test covers that. Charlie noted it as a follow-up. This pull request does not close F001 or F002.
+
 ## Open pulls into `native/phase-1`
 
-- [#65](https://github.com/michaelportale/openGym/pull/65) — draft, `docs: overnight PR audit for November 6–7`. Not merged. Independent review: NOT YET REVIEWED
+- [#65](https://github.com/michaelportale/openGym/pull/65) — draft, `docs: overnight PR audit for November 6–7`. Not merged. The F001 and F002 entries above are taken from that audit. The rest of its ledger is not this log's review.
+- [#67](https://github.com/michaelportale/openGym/pull/67) — draft, this log. Not merged. Do not merge it.
