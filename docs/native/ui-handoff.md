@@ -19,16 +19,16 @@ The Workout tab is still the preview in `native/src/app/(tabs)/workout.js`. A pr
 
 ## Still to check on the iPhone
 
-- SF Symbols
-- Liquid Glass labels
-- Focus
-- The native tab bar versus the dock
-- Dynamic Type
-- Reduced motion
-- Haptics
+Word for word:
+
+> the shell and symbol fixes are merged, but NO iPhone validation is claimed. Still to check on the iPhone: SF Symbols, Liquid Glass labels, focus, the native tab bar vs the dock, Dynamic Type, reduced motion, and haptics. A clean install and the Metro export passed earlier, but the export still needed `EXPO_NO_TYPESCRIPT_SETUP=1`.
+
+No iPhone validation is claimed. Do not write that any of those checks passed on a phone.
 
 ## What passed earlier
 
 A clean install passed earlier. The Metro export passed earlier. The export still needed `EXPO_NO_TYPESCRIPT_SETUP=1`.
+
+`native/package.json` has no export script. The environment variable is recorded. The export argv is not in this repo. Do not invent it.
 
 That is not iPhone validation. Device rendering was not checked for this handoff.
