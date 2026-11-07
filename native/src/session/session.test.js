@@ -279,6 +279,27 @@ test('an extend that cannot grow a full rest is not written', async () => {
   expect((await storage.readAll()).map(event => event.id)).toEqual(['rest-1', 'extend-shrink', 'extend-grow'])
 })
 
+test('a finished or discarded session rejects an empty extend and writes nothing', async () => {
+  const finishedStorage = createMemoryStorage()
+  const finished = (await started({ storage: finishedStorage })).session
+  await finished.finish({ eventId: 'finish-1' })
+  const beforeFinish = (await finishedStorage.readAll()).map(event => event.id)
+  const finishedZero = await finished.extendRest({ eventId: 'extend-zero', byMs: 0 })
+  const finishedNan = await finished.extendRest({ eventId: 'extend-nan', byMs: NaN })
+  expect(finishedZero).toMatchObject({ ok: false, saved: false, error: { code: 'bad-extend' } })
+  expect(finishedNan).toMatchObject({ ok: false, saved: false, error: { code: 'bad-extend' } })
+  expect((await finishedStorage.readAll()).map(event => event.id)).toEqual(beforeFinish)
+
+  const discardedStorage = createMemoryStorage()
+  const discarded = (await started({ storage: discardedStorage })).session
+  await discarded.discard()
+  const discardedZero = await discarded.extendRest({ eventId: 'extend-zero', byMs: 0 })
+  const discardedNan = await discarded.extendRest({ eventId: 'extend-nan', byMs: NaN })
+  expect(discardedZero).toMatchObject({ ok: false, saved: false, error: { code: 'bad-extend' } })
+  expect(discardedNan).toMatchObject({ ok: false, saved: false, error: { code: 'bad-extend' } })
+  expect(await discardedStorage.readAll()).toEqual([])
+})
+
 test('a repeated pause, cancel, or resume id is a duplicate once its precondition is gone', async () => {
   const clock = createClock(T0)
   const storage = createMemoryStorage()

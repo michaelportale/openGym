@@ -343,6 +343,7 @@ class SessionLog {
 
   async extendRest({ eventId, byMs } = {}) {
     if (this.#seen(eventId)) return duplicate()
+    if (!Number.isFinite(byMs) || byMs === 0) return failure('bad-extend')
     const rest = this.view().rest
     if (!this.discarded && !this.#isFinished()) {
       if (!rest) return failure('no-rest')
