@@ -122,6 +122,17 @@ test('a rollback that reports no transaction still rejects with the original cle
   await expect(storage.clear()).rejects.toThrow(/locked/)
 })
 
+test('clear rejects with the original error when rollback also fails', async () => {
+  const db = createFakeSqliteDb()
+  const storage = createSqliteSessionStorage(db)
+  await storage.append(event('a', 1))
+  await storage.putDraft('plan:bench:0', { r: 3 })
+  await storage.writeBase({ id: 'w1' })
+  db.failNext(/^DELETE FROM session_drafts$/, new Error('locked'))
+  db.failNext(/ROLLBACK/, new Error('rollback failed'))
+  await expect(storage.clear()).rejects.toThrow(/^locked$/)
+})
+
 test('sqlite storage applies SQLITE_SESSION_SCHEMA and rolls clear back when a delete fails', async () => {
   const db = createFakeSqliteDb()
   const storage = createSqliteSessionStorage(db)

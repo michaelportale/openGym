@@ -18,7 +18,7 @@ function cloneTables(tables) {
 export function createFakeSqliteDb() {
   const tables = { session_events: [], session_drafts: [], session_base: [], finished_workouts: [] }
   let snapshot = null
-  let pending = null
+  const failures = []
   const executed = []
 
   function restore(saved) {
@@ -31,9 +31,9 @@ export function createFakeSqliteDb() {
   async function run(sql, params = []) {
     const text = squeeze(sql)
     executed.push(text)
-    if (pending && pending.pattern.test(text)) {
-      const error = pending.error
-      pending = null
+    const hit = failures.findIndex(item => item.pattern.test(text))
+    if (hit >= 0) {
+      const [{ error }] = failures.splice(hit, 1)
       throw error
     }
     if (/^BEGIN$/i.test(text)) {
@@ -145,7 +145,7 @@ export function createFakeSqliteDb() {
     run,
     getAll,
     failNext(pattern, error) {
-      pending = { pattern, error }
+      failures.push({ pattern, error })
     },
   }
 }

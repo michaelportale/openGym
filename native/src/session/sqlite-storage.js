@@ -67,9 +67,9 @@ export function createSqliteSessionStorage(db) {
       } catch (error) {
         try {
           await db.exec('ROLLBACK')
-        } catch (rollbackError) {
-          // The driver already closed the transaction. Keep the original clear failure.
-          if (!/no transaction/i.test(String(rollbackError?.message || ''))) throw rollbackError
+        } catch {
+          // ROLLBACK can fail with "no transaction" or its own driver error.
+          // Neither one may replace the original clear failure.
         }
         throw error
       }
