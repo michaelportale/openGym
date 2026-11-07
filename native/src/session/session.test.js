@@ -298,6 +298,51 @@ test('a failed clear leaves the logged set and the draft in place', async () => 
   expect(await storage.readAll()).toHaveLength(1)
 })
 
+test('a short overnight gap stays out of elapsed through a kill and a resume', async () => {
+  const clock = createClock(Date.parse('2026-11-07T23:40:00.000Z'))
+  const across = createMemoryStorage()
+  const acrossBase = baseWorkout()
+  acrossBase.start = clock.now()
+  const first = await started({ clock, storage: across, base: acrossBase, timeZone: 'UTC' })
+  await first.session.commitSet({ eventId: 'c1', exerciseId: 'bench', setId: bench0, fields: { w: 60, r: 5 } })
+  const beforeMidnight = first.session.view().elapsedMs
+  clock.set(Date.parse('2026-11-08T00:10:00.000Z'))
+  await first.session.commitSet({ eventId: 'c2', exerciseId: 'bench', setId: bench1, fields: { w: 60, r: 5 } })
+  expect(first.session.view().elapsedMs - beforeMidnight).toBe(30 * 60 * 1000)
+
+  const idleClock = createClock(Date.parse('2026-11-07T23:10:00.000Z'))
+  const storage = createMemoryStorage()
+  const base = baseWorkout()
+  base.start = idleClock.now()
+  const { session } = await started({ clock: idleClock, storage, base, timeZone: 'UTC' })
+  await session.commitSet({ eventId: 'c1', exerciseId: 'bench', setId: bench0, fields: { w: 60, r: 5 } })
+  const logged = session.view().elapsedMs
+  idleClock.set(Date.parse('2026-11-08T01:10:00.000Z'))
+  const idle = session.view()
+  expect(idle.overnight).toBe(true)
+  expect(idle.elapsedMs).toBe(logged)
+
+  const killed = await openSession({
+    storage,
+    now: idleClock.now,
+    timeZone: 'UTC',
+  })
+  expect(killed.view().overnight).toBe(true)
+  expect(killed.view().elapsedMs).toBe(logged)
+
+  const resume = await session.resume({ eventId: 'resume-1' })
+  expect(resume).toMatchObject({ ok: true, saved: true })
+  expect(session.view().overnight).toBe(false)
+  expect(session.view().elapsedMs).toBe(logged)
+
+  idleClock.advance(10 * 60 * 1000)
+  expect(session.view().elapsedMs).toBe(logged + 10 * 60 * 1000)
+
+  const restored = await openSession({ storage, now: idleClock.now, timeZone: 'UTC' })
+  expect(restored.view().overnight).toBe(false)
+  expect(restored.view().elapsedMs).toBe(logged + 10 * 60 * 1000)
+})
+
 test('discard drops an overnight session instead of logging it', async () => {
   const clock = createClock(Date.parse('2026-11-07T23:10:00.000Z'))
   const storage = createMemoryStorage()

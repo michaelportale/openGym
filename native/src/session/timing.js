@@ -14,8 +14,14 @@
 // (delta <= 0) adds nothing and does not pull the high-water mark back, so elapsed cannot go
 // negative or shrink. A forward gap longer than DURATION_GAP_MS adds nothing either. The bound
 // is 4 hours: long enough that a locked phone still counts as session time (the workout keeps
-// running in the background), and short enough that a multi-hour clock jump or an overnight
-// return is not added. Time zones do not enter this math. Stamps are epoch milliseconds.
+// running in the background), and short enough that a multi-hour clock jump is not added.
+//
+// Leaving the session across a local midnight is not session time either, even under that
+// bound. The open tail and samples from this process drop a local-date change. A set logged
+// on the other side of midnight still counts: that gap sits between two journal events. Resume
+// moves the high-water mark to now and adds nothing for the gap that leads into it. Stamps are
+// epoch milliseconds. A number is a journal stamp. Resume is { at, resume: true }. A sample
+// from this process is { at, sample: true }.
 //
 // Overnight is a local-date change in the session's time zone, and only when `now` is actually
 // later than the last activity. Finishing that session requires an explicit end. The suggested
@@ -52,22 +58,36 @@ export function isOvernight(activityAt, now, timeZone) {
   return localDate(activityAt, timeZone) !== localDate(now, timeZone)
 }
 
-export function elapsedMs(stamps, now, gap = DURATION_GAP_MS) {
+export function stampAt(stamp) {
+  if (Number.isFinite(stamp)) return stamp
+  if (stamp && Number.isFinite(stamp.at)) return stamp.at
+  return null
+}
+
+function crossesLocalDate(prev, next, timeZone) {
+  if (!timeZone || !Number.isFinite(prev) || !Number.isFinite(next) || next <= prev) return false
+  return localDate(prev, timeZone) !== localDate(next, timeZone)
+}
+
+export function elapsedMs(stamps, now, gap = DURATION_GAP_MS, timeZone) {
   let elapsed = 0
   let high = null
   for (const raw of stamps) {
-    if (!Number.isFinite(raw)) continue
+    const at = stampAt(raw)
+    if (at == null) continue
     if (high == null) {
-      high = raw
+      high = at
       continue
     }
-    const delta = raw - high
-    if (delta > 0 && delta <= gap) elapsed += delta
-    if (raw > high) high = raw
+    const delta = at - high
+    const resume = !!raw && raw.resume === true
+    const idleOvernight = !!raw && raw.sample === true && crossesLocalDate(high, at, timeZone)
+    if (!resume && !idleOvernight && delta > 0 && delta <= gap) elapsed += delta
+    if (at > high) high = at
   }
   if (high != null && Number.isFinite(now)) {
     const tail = now - high
-    if (tail > 0 && tail <= gap) elapsed += tail
+    if (!crossesLocalDate(high, now, timeZone) && tail > 0 && tail <= gap) elapsed += tail
   }
   return elapsed
 }

@@ -1,5 +1,5 @@
 import { finishWorkout, workoutModel } from '../shared/training.js'
-import { DURATION_GAP_MS, REST_MAX_MS, clampMs, elapsedMs, isOvernight, projectRest } from './timing.js'
+import { DURATION_GAP_MS, REST_MAX_MS, clampMs, elapsedMs, isOvernight, projectRest, stampAt } from './timing.js'
 import { plannedSetId } from './ids.js'
 import { SESSION_TIME_ZONE_KEY } from './storage.js'
 
@@ -13,7 +13,8 @@ function clone(value) {
 
 export function activityAt(model) {
   for (let i = model.stamps.length - 1; i >= 0; i -= 1) {
-    if (Number.isFinite(model.stamps[i])) return model.stamps[i]
+    const at = stampAt(model.stamps[i])
+    if (at != null) return at
   }
   return Number.isFinite(model.start) ? model.start : null
 }
@@ -252,7 +253,9 @@ export function foldJournal(base, events) {
     seen.add(event.id)
     if (model.finished) continue
     applyEvent(model, event)
-    if (Number.isFinite(event.at)) model.stamps.push(event.at)
+    if (Number.isFinite(event.at)) {
+      model.stamps.push(event.type === 'session.resume' ? { at: event.at, resume: true } : event.at)
+    }
   }
   return model
 }
@@ -354,10 +357,13 @@ export function projectSession(model, { now, timeZone, drafts, discarded, sample
   const stamps = []
   if (Number.isFinite(model.start)) stamps.push(model.start)
   for (const stamp of model.stamps) {
-    if (!finished || stamp <= finished.end) stamps.push(stamp)
+    const at = stampAt(stamp)
+    if (at == null) continue
+    if (!finished || at <= finished.end) stamps.push(stamp)
   }
   for (const sample of samples || []) {
-    if (!finished || sample <= finished.end) stamps.push(sample)
+    if (!Number.isFinite(sample)) continue
+    if (!finished || sample <= finished.end) stamps.push({ at: sample, sample: true })
   }
 
   let completedSets = 0
@@ -387,7 +393,7 @@ export function projectSession(model, { now, timeZone, drafts, discarded, sample
     status: finished ? 'finished' : 'active',
     timeZone,
     startedAt: Number.isFinite(model.start) ? model.start : null,
-    elapsedMs: elapsedMs(stamps, clockEnd, DURATION_GAP_MS),
+    elapsedMs: elapsedMs(stamps, clockEnd, DURATION_GAP_MS, timeZone),
     overnight,
     disposition: finished
       ? { kind: 'finished', actions: [], suggestedEnd: null }
