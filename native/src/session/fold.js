@@ -1,6 +1,7 @@
 import { finishWorkout, workoutModel } from '../shared/training.js'
 import { DURATION_GAP_MS, REST_MAX_MS, clampMs, elapsedMs, isOvernight, projectRest } from './timing.js'
 import { plannedSetId } from './ids.js'
+import { SESSION_TIME_ZONE_KEY } from './storage.js'
 
 const { buildCompletedWorkout, sessionEnd } = finishWorkout
 const { hasCompletedWork, isSideSet } = workoutModel
@@ -258,6 +259,7 @@ export function foldJournal(base, events) {
 
 export function toActive(model) {
   const base = clone(model.base || {})
+  delete base[SESSION_TIME_ZONE_KEY]
   const entries = model.entries.map(entry => {
     const src = clone(entry.source || {})
     delete src.sets

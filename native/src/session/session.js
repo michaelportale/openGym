@@ -21,9 +21,20 @@ export async function openSession({ base, storage, now, timeZone = 'UTC' } = {})
   const events = await storage.readAll()
   const drafts = await storage.readDrafts()
   let resolved = storedBase
+  // Overnight is a local date in the zone the session started in. A later boot often
+  // passes UTC, which can put last night and this morning on the same calendar day.
+  // The zone is written with the base and reused. A journal from before this was
+  // stored takes the zone of the boot that first finds it.
+  const callerZone = typeof timeZone === 'string' && timeZone ? timeZone : 'UTC'
+  let zone = typeof storage.readTimeZone === 'function' ? await storage.readTimeZone() : ''
+  if (typeof zone !== 'string' || !zone) zone = ''
   if (!resolved && base) {
-    await storage.writeBase(base)
+    await storage.writeBase(base, { timeZone: callerZone })
     resolved = await storage.readBase()
+    zone = callerZone
+  } else if (resolved && !zone) {
+    await storage.writeBase(resolved, { timeZone: callerZone })
+    zone = callerZone
   }
   return new SessionLog({
     base: resolved,
@@ -31,7 +42,7 @@ export async function openSession({ base, storage, now, timeZone = 'UTC' } = {})
     drafts,
     storage,
     now: typeof now === 'function' ? now : Date.now,
-    timeZone,
+    timeZone: zone || callerZone,
   })
 }
 
