@@ -295,6 +295,23 @@ export function foldJournal(base, events) {
   return model
 }
 
+// The workout a reopen would show, without stamps. Every finite-at event pushes a
+// stamp, including one applyEvent ignores, so the stamp cannot count as a change.
+export function workoutFold(base, events) {
+  const model = foldJournal(base, events)
+  return JSON.stringify({
+    entries: model.entries.map(entry => ({
+      id: entry.id,
+      note: typeof entry.source?.note === 'string' ? entry.source.note : null,
+      notePin: entry.source?.notePin === true,
+      sets: entry.sets.map(slot => ({ setId: slot.setId, row: slot.row })),
+    })),
+    rest: model.rest,
+    note: typeof model.base?.note === 'string' ? model.base.note : null,
+    finished: model.finished,
+  })
+}
+
 export function toActive(model) {
   const base = clone(model.base || {})
   delete base[SESSION_TIME_ZONE_KEY]

@@ -1,5 +1,5 @@
 import { finishWorkout } from '../shared/training.js'
-import { activityAt, elapsedStamps, entryExists, exerciseSetIds, extendBy, foldJournal, projectSession, slotExists, toActive } from './fold.js'
+import { activityAt, elapsedStamps, entryExists, exerciseSetIds, extendBy, foldJournal, projectSession, slotExists, toActive, workoutFold } from './fold.js'
 import { DURATION_GAP_MS, compactSeen, isOvernight, shownThrough } from './timing.js'
 import { createEventId } from './ids.js'
 
@@ -459,6 +459,17 @@ class SessionLog {
     let stored
     try {
       stored = JSON.parse(JSON.stringify({ ...event, id }))
+    } catch (error) {
+      return failure('storage', error?.message || 'append failed')
+    }
+    // A saved event has to change the workout a reopen folds. resume is the
+    // exception: it only leaves a stamp so the timer can cross midnight.
+    if (stored.type !== 'session.resume') {
+      const before = workoutFold(this.base, this.events)
+      const after = workoutFold(this.base, this.events.concat([stored]))
+      if (before === after) return failure('unchanged')
+    }
+    try {
       const result = await this.storage.append(stored)
       if (result?.duplicate) return duplicate()
     } catch (error) {
