@@ -46,7 +46,7 @@ test('the registry has one entry per PRD rule and every entry is complete', () =
 })
 
 test('each registry entry matches its docs/science register file', () => {
-  const extra = new Set(['README.md', 'decisions.md', 'phase-4-status.md', 'sources-needed.md'])
+  const extra = new Set(['README.md', 'decisions.md', 'phase-4-status.md', 'sources-needed.md', 'overnight-2026-11-06.md'])
   const files = readdirSync(DOCS).filter(name => name.endsWith('.md') && !extra.has(name)).sort()
   expect(files).toEqual(PRD_RULE_IDS.map(id => `${id}.md`).sort())
   for (const file of files) {
@@ -62,6 +62,7 @@ test('each registry entry matches its docs/science register file', () => {
   expect(readme).toContain('(decisions.md)')
   expect(readme).toContain('(phase-4-status.md)')
   expect(readme).toContain('(sources-needed.md)')
+  expect(readme).toContain('(overnight-2026-11-06.md)')
 })
 
 test('standup decisions record a PRD default for each open question', () => {
