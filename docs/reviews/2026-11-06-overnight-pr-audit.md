@@ -5,7 +5,7 @@
 **Repository:** michaelportale/openGym, across every target branch.
 **Cadence:** every half hour, with a final 7:30 a.m. reconciliation.
 **Status:** in progress. This is a rolling handoff for the coding agents, not an assertion that all listed PRs are safe.
-**Latest discovery:** 62 merged PRs through #105 (November 7, 00:26:08 EST), from an exhausted 107-PR inventory (pages of 100 and 7, closing snapshot approximately 00:35 EST). This pass reconciled merged #101 and reviewed #104/#105. All discovered merged PRs have source reviews; historical V001 installation limits and device validation remain unresolved. F004 still reproduces on the current integration commit; draft #107 contains an independently validated candidate fix. New N002 identifies an inconsistent acceptance test in open documentation PR #106. No audit merge was performed.
+**Latest discovery:** 62 merged PRs through #105 (November 7, 00:26:08 EST), unchanged in the 01:02 EST refresh. Exhaustive inventory still contains 107 PRs (pages of 100 and 7), with no new merges or reviewed-head revisions. All discovered merged PRs have source reviews; historical V001 installation limits and device validation remain unresolved. F004 remains open on integration: its validated candidate #107 is still draft. N002 remains open on unchanged documentation PR #106. No audit merge was performed.
 **Audit PR:** [#65](https://github.com/michaelportale/openGym/pull/65), kept draft for rolling documentation updates.
 
 ## Agent action queue
@@ -449,6 +449,24 @@ Probe fixture correction: the first retry probe expected exactly 15 minutes at 0
 **Acceptance:** the delayed draft-first/clear-second test ends with empty persisted and in-memory draft state; an accepted later draft retains its supplied values. No source change or product-policy decision was made by this audit.
 
 **If skipped:** an agent can implement the requested queue correctly and still fail the stated test, or add an undocumented rule that drops newer user input to make it pass. Independent probe: `/private/tmp/opengym-N002-0530-probe.mjs`; output `/private/tmp/opengym-0530-merge105-N002.log`.
+
+## 1:00 a.m. unchanged-head refresh
+
+**Inventory:** this 06:01Z heartbeat exhausted the all-state, created-order REST inventory again (100 + 7 records), across all base branches. All 62 actual in-window merges are still represented below; their submitted head, recorded base, actual merge SHA and merge time match the previous inventory. Historical parent pairs were rechecked. No new PR, merge or source revision was discovered.
+
+**Integration and open PRs:** `native/phase-1` still exists at `ed4fdc288601dde5504246eeb2131a53b19b69d7`. Open #65/#67/#106/#107 remain drafts. #65 is this excluded audit PR. The others are unchanged:
+
+| PR | Head | Recorded PR base | Current disposition |
+| --- | --- | --- | --- |
+| [#67](https://github.com/michaelportale/openGym/pull/67) | `8719eb8c1d2bc3460686086cb8586328d34236ca` | `5f8bfd1f0888a617d10f9523093023194763bc96` | Running-log draft; preserve |
+| [#106](https://github.com/michaelportale/openGym/pull/106) | `f7a1ae2f33dae83886c3f530a039119a98da58b6` | `ccf975cae4b268e08c04d19bbf3a4aa5f85cdda7` | N002 acceptance correction still pending |
+| [#107](https://github.com/michaelportale/openGym/pull/107) | `af260fb438fc459992590867c24c3186f1636ce6` | `ed4fdc288601dde5504246eeb2131a53b19b69d7` | F004 candidate validated previously; still draft, not merged |
+
+Current metadata, discussions, review submissions, unresolved-thread lists, check runs and commit statuses were refreshed. No new review or author response appeared; no unresolved inline threads were returned. All three non-audit open PRs are reported mergeable, but draft status prevents merging. Their checks still have zero runs and zero statuses, with a pending aggregate. Authenticated repository settings still show Actions disabled, classic `native/phase-1` protection “not protected,” and no rulesets. Missing CI remains missing evidence.
+
+**Evidence reuse:** no source or base moved, so no local test was repeated in this pass. The previous independent evidence remains tied to the same commits: actual merge #105 has 348 native tests/shared checks; #107 head has 361, its generated preview `d39859dba71b4dac050059a6d8cabe3cf91e4a3c` has 363, and the failure/retry probes passed at the candidate head and preview. None of those preview checks establishes an actual merged fix. Frontend/API/MCP evidence remains attributed to merge #85, and historical V001 and device/Expo SQLite limitations remain visible.
+
+F004 and N002 stay open. [Existing #106 feedback](https://github.com/michaelportale/openGym/pull/106#issuecomment-6702889244) and [#107 verification](https://github.com/michaelportale/openGym/pull/107#issuecomment-6702891847) were read back and not duplicated. No application file was changed and no PR was merged by this audit.
 
 ## Coverage ledger
 
