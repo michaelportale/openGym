@@ -10,10 +10,12 @@ const TEXT = Object.assign(Object.create(null), {
 })
 
 export function symbolPresentation(name, os) {
-  if (typeof name !== 'string' || !Object.hasOwn(TEXT, name)) {
-    throw new Error(`No visible fallback for symbol: ${name}`)
+  if (typeof name !== 'string' || name.length === 0) {
+    throw new Error(`Symbol name is required: ${name}`)
   }
+  // iOS draws the SF Symbol itself. The text map is only the other platforms.
   if (os === 'ios') return { kind: 'sf-symbol', name }
+  if (!Object.hasOwn(TEXT, name)) throw new Error(`No visible fallback for symbol: ${name}`)
   const text = TEXT[name]
   if (typeof text !== 'string' || text.length === 0) {
     throw new Error(`No visible fallback for symbol: ${name}`)

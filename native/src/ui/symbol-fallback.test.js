@@ -24,11 +24,16 @@ test('other platforms get a visible glyph and do not receive the SF Symbol name'
   expect(symbolPresentation('plus', 'web').text).toBe('+')
 })
 
-test('an unknown symbol fails instead of rendering blank', () => {
-  expect(() => symbolPresentation('', 'web')).toThrow('No visible fallback')
+test('iOS accepts an SF Symbol that has no text glyph', () => {
+  expect(symbolPresentation('gear', 'ios')).toEqual({ kind: 'sf-symbol', name: 'gear' })
+})
+
+test('an unknown symbol stays blank nowhere except iOS', () => {
+  expect(() => symbolPresentation('gear', 'web')).toThrow('No visible fallback')
+  expect(() => symbolPresentation('gear', 'android')).toThrow('No visible fallback')
+  expect(() => symbolPresentation('', 'ios')).toThrow('Symbol name is required')
   expect(() => symbolPresentation('constructor', 'web')).toThrow('No visible fallback')
-  expect(() => symbolPresentation('gear', 'ios')).toThrow('No visible fallback')
-  expect(() => symbolPresentation(undefined, 'web')).toThrow('No visible fallback')
+  expect(() => symbolPresentation(undefined, 'web')).toThrow('Symbol name is required')
 })
 
 test('call sites draw the shared symbol, not a string-only SymbolView', () => {

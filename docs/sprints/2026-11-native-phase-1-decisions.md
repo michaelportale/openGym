@@ -146,6 +146,26 @@ accessible names. The glyph is decorative.
 Revisit if. `expo-symbols` draws SF Symbol strings off iOS, or a device
 check prefers the Material set to these glyphs.
 
+## Unmapped symbol names
+
+Context. The text map rejected every name it did not contain, including on
+iOS, and it did that before looking at the platform. iOS can draw an SF
+Symbol that has no text glyph. A missing glyph on the web is still a blank
+control.
+
+Options. Keep the throw on every platform. Or warn in development and
+render nothing. Or let iOS accept any non-empty name, keep the throw off
+iOS, and fail the test unless every name that can reach the symbol is a
+literal or a closed object.
+
+Why. The throw on iOS rejects a symbol the platform can draw. A development
+warning would still ship a blank web control. The test walks the source. A
+spread, a computed name, or a prop it cannot follow fails the test, so a
+dynamic name cannot skip the map.
+
+Revisit if. A symbol name is chosen at runtime from outside this tree. The
+web throw remains until that source is a closed set the test can see.
+
 ## Header action
 
 The ellipsis opens the existing diagnostics screen. It is not a workout action. Its hint
