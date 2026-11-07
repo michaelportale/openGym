@@ -13,6 +13,7 @@ const ACTIONS = [
   'addExercise',
   'removeExercise',
   'moveExercise',
+  'setNote',
   'startRest',
   'pauseRest',
   'extendRest',

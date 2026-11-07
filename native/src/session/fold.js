@@ -212,6 +212,11 @@ function applyEvent(model, event) {
     case 'rest.cancel':
       model.rest = null
       return
+    case 'session.note':
+      if (typeof event.note !== 'string') return
+      if (event.note.trim()) model.base.note = event.note
+      else delete model.base.note
+      return
     case 'session.resume':
       return
     case 'session.finish':
@@ -314,6 +319,7 @@ export function projectSession(model, { now, timeZone, drafts, discarded, sample
       elapsedMs: 0,
       overnight: false,
       disposition: { kind: 'discarded', actions: [], suggestedEnd: null },
+      note: '',
       rest: null,
       entries: [],
       totals: { completedSets: 0, reps: 0, loadReps: 0, warmupSets: 0 },
@@ -374,6 +380,7 @@ export function projectSession(model, { now, timeZone, drafts, discarded, sample
         suggestedEnd: Number.isFinite(suggested) ? suggested : null,
       },
     rest: finished ? null : projectRest(model.rest, now),
+    note: typeof model.base?.note === 'string' ? model.base.note : '',
     entries,
     totals: { completedSets, reps, loadReps, warmupSets },
     finished,
