@@ -1,5 +1,5 @@
-// Storage boundary for the active session. The phone adapter is SQLite; this phase ships the
-// interface and an in-memory fake. Tests and the pure session log talk only to these methods.
+// Storage boundary for the active session. createMemoryStorage is the in-memory fake.
+// createSqliteSessionStorage lives in sqlite-storage.js and takes an injected db handle.
 // A failed append must throw. Callers are not allowed to treat a thrown append as a saved set.
 
 /**
@@ -30,9 +30,7 @@ CREATE TABLE IF NOT EXISTS session_base (
 );
 `.trim()
 
-export function createSqliteSessionStorage() {
-  throw new Error('SQLite session storage is not implemented. Phase 2 ships the interface and the in-memory fake only.')
-}
+export { createSqliteSessionStorage } from './sqlite-storage.js'
 
 function clone(value) {
   return value == null ? value : structuredClone(value)
