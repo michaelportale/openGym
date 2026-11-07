@@ -2,8 +2,8 @@
 
 Running log of pulls merged into `native/phase-1` on the night of 6 November 2026. This pull request is a log only. Do not merge it.
 
-- Last checked: 2026-11-06 23:42 EST (~11:42 PM ET)
-- `native/phase-1` head: `5fb455fc2d8f3acd86ee536c1dec892c855b01c5`
+- Last checked: 2026-11-07 00:08 EST (~12:08 AM ET)
+- `native/phase-1` head: `5f8bfd1f0888a617d10f9523093023194763bc96`
 - Native `npm test` at `f66609519231c03800aaec05faee11bc738f2fcf`: 37 files, 281 passed, no failures. This check did not re-run the suite.
 - Window: merges after `aac6bcc` (the #48 session-adapter merge), from #49 through the head above
 - Lanes: session = Charlie, shell/screens = Gus, science = Bob
@@ -14,6 +14,8 @@ Running log of pulls merged into `native/phase-1` on the night of 6 November 202
 The first pass of this log said the #59 Node-import gap and the #62 journal gap were closed on the head at that time. Both of those are still closed. F001 and F002, from Codex's audit [#65](https://github.com/michaelportale/openGym/pull/65), were open in Charlie's session lane. Both were checked again on `f66609519231c03800aaec05faee11bc738f2fcf` and are closed. On that head, `open`, `call`, and `finishSession` still return `enqueue(...)`, and `native/src/session` still has no `structuredClone(` call. This pass did not re-read the controller.
 
 Codex updated [#65](https://github.com/michaelportale/openGym/pull/65) twice after the previous line of this log. `2e25de35` at 23:10 EST audits through merge #88 and adds N001. `9048c1b1` at 23:38 EST audits through merge #97, marks F003 fixed by [#91](https://github.com/michaelportale/openGym/pull/91), and leaves N001 open. No new audit file is on `native/phase-1`. The new Codex comment is on [#86](https://github.com/michaelportale/openGym/pull/86) at 23:11 EST and is N001. Comments on #89 through #98 are Charlie's, plus an overnight review on #98 that names no finding id. The 23:38 pass adds no new finding id. #98 merged at 23:40 EST, after that pass.
+
+This pass, at 00:08 EST, found no newer commit on [#65](https://github.com/michaelportale/openGym/pull/65). The head is still `9048c1b1`. No new audit file is on `native/phase-1`. Comments and reviews on #99, #100, #101, #102, and #103 are Charlie's and name no new finding id. [#102](https://github.com/michaelportale/openGym/pull/102) closes N001.
 
 ### F001 — finish can save without a set write that is still in flight
 
@@ -58,13 +60,14 @@ Codex updated [#65](https://github.com/michaelportale/openGym/pull/65) twice aft
 
 ### N001 — the SQLite fake treats a JSON array extract as text
 
-- Status: OPEN, partly addressed
+- Status: CLOSED
 - Severity: P3
 - Lane: session (Charlie), test double
 - Traces to: [#86](https://github.com/michaelportale/openGym/pull/86)
 - What Codex reported: the fake and the comments say a bare `json_extract` is text and `json_set` stores it as a quoted string, so only an extra `json()` wrap keeps the trail an array. Codex ran the pre-wrapper upsert at `1a3a0ed7` on SQLite 3.50.0 and the trail stayed an array. The comment on [#86](https://github.com/michaelportale/openGym/pull/86) at 23:11 EST is this finding. The 23:38 pass says real SQLite contract tests now pass, and the fake and the comments are still wrong. It also says this log repeated the quoting claim.
-- Checked on `5fb455fc2d8f3acd86ee536c1dec892c855b01c5`. Confirmed. `fake-sqlite.js` still stringifies an array trail unless the SQL text matches a `json()` wrap. The comments in that file and in `sqlite-storage.js` still say a bare extract is text. Node's SQLite 3.53.4 on this machine evaluates `json_set('{}', '$.trail', json_extract('{"trail":[10,20]}', '$.trail'))` to `{"trail":[10,20]}` with JSON type array. The same call with bound text `'[10,20]'` stores a JSON string. [#90](https://github.com/michaelportale/openGym/pull/90) and [#93](https://github.com/michaelportale/openGym/pull/93) keep the `json()` wrap and the comment. Neither changes the fake's unwrapped case. The #86 entry below used to state the quoting claim as fact. That sentence now points here. The wrapped production statement is not a demonstrated failure. N001 stays open.
-- Fix: none yet
+- Checked on `5fb455fc2d8f3acd86ee536c1dec892c855b01c5`. Confirmed at that head. `fake-sqlite.js` still stringified an array trail unless the SQL text matched a `json()` wrap. The comments in that file and in `sqlite-storage.js` still said a bare extract is text. Node's SQLite 3.53.4 on this machine evaluates `json_set('{}', '$.trail', json_extract('{"trail":[10,20]}', '$.trail'))` to `{"trail":[10,20]}` with JSON type array. The same call with bound text `'[10,20]'` stores a JSON string. [#90](https://github.com/michaelportale/openGym/pull/90) and [#93](https://github.com/michaelportale/openGym/pull/93) keep the `json()` wrap. Neither changes the fake's unwrapped case. The #86 entry below used to state the quoting claim as fact. That sentence now points here.
+- Checked again on `5f8bfd1f0888a617d10f9523093023194763bc96`. Closed. The fake copies the trail value through. The comments now say SQLite 3.53.4 keeps a `json_extract` array as an array, and the `json()` wrap stays so the copy does not depend on that. The new contract test runs the bare copy and `writeBase` on Node SQLite and on the fake and expects the same array. This pass read that diff and the head. It did not re-run the test.
+- Fix: [#102](https://github.com/michaelportale/openGym/pull/102)
 
 ## Merges
 
@@ -489,7 +492,7 @@ Codex updated [#65](https://github.com/michaelportale/openGym/pull/65) twice aft
 - Lane: session (Charlie)
 - Summary: `addSet` refuses a missing or blank id, and an id already used on any exercise, before it appends.
 - Tests claimed at merge: `npm run verify`, 41 files, 333 tests, `check:shared` clean.
-- Review status: Reviewed by Charlie at `a4aed3d909fbeb14a8d8709ff54940f7dbc3bbe2`. Independent findings: the diff is `session.js` and `session.test.js`. No lockfile change, no secrets, no `node:` import. The seen-id check stays first. A missing id and `''` return `unknown-set`. An id already on any exercise returns `known-set`. The test checks that those events are not stored, that an id freed by `removeSet` can be added, and that a replay of a stored add is a duplicate. A set id of a single space is still a non-empty string, so this check allows it. The comment says the fold would drop a taken id. The fold drops a duplicate only on the same exercise. A taken id on a different exercise would still apply if the event were already stored. `addExercise` does not use this check. [#98](https://github.com/michaelportale/openGym/pull/98) adds that check. Draft writes stay keyed by set id.
+- Review status: Reviewed by Charlie at `a4aed3d909fbeb14a8d8709ff54940f7dbc3bbe2`. Independent findings: the diff is `session.js` and `session.test.js`. No lockfile change, no secrets, no `node:` import. The seen-id check stays first. A missing id and `''` return `unknown-set`. An id already on any exercise returns `known-set`. The test checks that those events are not stored, that an id freed by `removeSet` can be added, and that a replay of a stored add is a duplicate. A set id of a single space is still a non-empty string, so this check allows it. The comment says the fold would drop a taken id. The fold drops a duplicate only on the same exercise. A taken id on a different exercise would still apply if the event were already stored. `addExercise` does not use this check. [#98](https://github.com/michaelportale/openGym/pull/98) adds that check. [#103](https://github.com/michaelportale/openGym/pull/103) drops a replayed add that reuses a set id on any exercise. Draft writes stay keyed by set id.
 
 ### #98 — [Refuse a copied exercise that reuses a set id](https://github.com/michaelportale/openGym/pull/98)
 
@@ -498,10 +501,54 @@ Codex updated [#65](https://github.com/michaelportale/openGym/pull/65) twice aft
 - Lane: session (Charlie)
 - Summary: `addExercise` refuses a copied set id that the session already has, or that the new entry repeats. The id list is the one the fold stores.
 - Tests claimed at merge: `npm run verify`, 41 files, 334 tests, `check:shared` clean.
-- Review status: Reviewed by Charlie at `a5a44caca2844a05de67230f139a559b32b6d6fd`. An overnight review at the same commit names no finding id. Independent findings: the diff is `fold.js`, `session.js`, `session.test.js`, and `side-done.test.js`. No lockfile change, no secrets, no `node:` import. `exerciseSetIds` is shared. A missing id becomes `plan:<exercise>:<index>`. A numeric id is stored with `String`, so `0` and `"0"` are one id. The seen-event check stays first. A known exercise still returns `known-exercise`. A taken id or a repeated id inside the copy returns `known-set` and does not append. `exercise.add` still runs `clearDone`, so F003 stays closed. The fold itself does not refuse a smuggled event that reuses an id. The command is what stops it. This pull request does not change `extendRest`. The full-rest extend in [#99](https://github.com/michaelportale/openGym/pull/99) is still open.
+- Review status: Reviewed by Charlie at `a5a44caca2844a05de67230f139a559b32b6d6fd`. An overnight review at the same commit names no finding id. Independent findings: the diff is `fold.js`, `session.js`, `session.test.js`, and `side-done.test.js`. No lockfile change, no secrets, no `node:` import. `exerciseSetIds` is shared. A missing id becomes `plan:<exercise>:<index>`. A numeric id is stored with `String`, so `0` and `"0"` are one id. The seen-event check stays first. A known exercise still returns `known-exercise`. A taken id or a repeated id inside the copy returns `known-set` and does not append. `exercise.add` still runs `clearDone`, so F003 stays closed. The fold itself does not refuse a smuggled event that reuses an id. The command is what stops it. [#103](https://github.com/michaelportale/openGym/pull/103) teaches the fold the same refusal. This pull request does not change `extendRest`. [#99](https://github.com/michaelportale/openGym/pull/99) refuses a grow that a full rest cannot apply.
+
+### #99 — [Do not record an extend a full rest cannot apply](https://github.com/michaelportale/openGym/pull/99)
+
+- Merged commit: `6aa341b5a53c5557395833d4819e77a2ae2dc753`
+- Resulting `native/phase-1` head: `cc38d1e821a855af71a661555a0c72b22359ae5a`
+- Lane: session (Charlie)
+- Summary: A grow that cannot change a rest already at the cap is `bad-extend` and is not written. A non-finite or zero `byMs` is refused in every state.
+- Tests claimed at merge: `npm run verify`, 41 files, 336 tests, `check:shared` clean.
+- Review status: Reviewed by Charlie at `6aa341b5a53c5557395833d4819e77a2ae2dc753`. An earlier review at `313c914` held the branch. Independent findings: the diff is `fold.js`, `session.js`, and `session.test.js`. No lockfile change, no secrets, no `node:` import. `extendBy` is shared. The command refuses a non-finite or zero `byMs` before the active-session guard, then refuses a full rest whose grow would apply nothing. Shrink and a grow with room still append. The tests cover a full rest, a shrink, a grow back to the cap, and `0` and `NaN` on a finished session and a discarded one. A negative `byMs` larger than the current total is still written. The fold clamps `totalMs` and `remainingMs` at 0. `projectRest` also clamps remaining to the total, so the screen does not show a negative rest.
+
+### #100 — [Do not record a move with a non-integer index](https://github.com/michaelportale/openGym/pull/100)
+
+- Merged commit: `8bcf34414bbd7a88c7c05e188a0621f0dcc06e09`
+- Resulting `native/phase-1` head: `1cb773caf024534f7add237150e3a681e6caf476`
+- Lane: session (Charlie)
+- Summary: `moveExercise` refuses a non-integer `toIndex` in every state and writes nothing.
+- Tests claimed at merge: `npm run verify`, 41 files, 335 tests, `check:shared` clean. That count is this branch's suite. It is one test under the #99 claim.
+- Review status: Reviewed by Charlie at `8bcf34414bbd7a88c7c05e188a0621f0dcc06e09`. Independent findings: the diff is `session.js` and `session.test.js`. No lockfile change, no secrets, no `node:` import. The check is `Number.isInteger` and it runs before the unknown-exercise check, including after finish and discard. The test covers `1.5`, a missing index, `NaN`, and `'0'`, and checks the journal is unchanged. A negative integer is still written. The fold clamps it into range, so the move does change the order. An index past the end is also written and clamped. [#101](https://github.com/michaelportale/openGym/pull/101) later treats a move that lands on the same index as unchanged.
+
+### #102 — [native: keep a copied seen trail as an array](https://github.com/michaelportale/openGym/pull/102)
+
+- Merged commit: `5373fa0a0494d1a981f005c8e9fbd487551396de`
+- Resulting `native/phase-1` head: `4a6650b62f62cc3ed2d712f7c938892afb76ad4b`
+- Lane: session (Charlie)
+- Summary: The SQLite fake keeps a copied seen trail as an array, matching Node SQLite 3.53.4. The comments no longer say a bare extract is text.
+- Tests claimed at merge: `npm run verify`, 41 files, 338 tests, `check:shared` clean.
+- Review status: Reviewed by Charlie at `5373fa0a0494d1a981f005c8e9fbd487551396de`. Independent findings: the diff is `fake-sqlite.js`, `sqlite-storage.js`, and the storage contract test. No lockfile change, no secrets, no `node:` import in app code. The fake assigns the trail value through. Production still wraps the copy in `json()`. The new test runs that statement without the wrap on Node SQLite and on the fake, then runs `writeBase` on both, and expects the same array. This closes N001. Charlie notes the device JSON1 check stays on the standup list because `expo-sqlite` can ship a different SQLite than Node. This pass did not re-run the test.
+
+### #103 — [native: drop a replayed add that reuses a set id](https://github.com/michaelportale/openGym/pull/103)
+
+- Merged commit: `8f94b5523fcf73d6f5244c5f114de246588eb81d`
+- Resulting `native/phase-1` head: `cd34129048aee027ad36259f0effd664731a1121`
+- Lane: session (Charlie)
+- Summary: On replay, `set.add` and `exercise.add` refuse the same set ids the live commands refuse, including an id taken on another exercise.
+- Tests claimed at merge: `npm run verify`, 42 files, 339 tests, `check:shared` clean.
+- Review status: Reviewed by Charlie at `8f94b5523fcf73d6f5244c5f114de246588eb81d`. Independent findings: the diff is `fold.js` and a new `fold-add.test.js`. No lockfile change, no secrets, no `node:` import. `set.add` compares ids with `String` across every exercise. `exercise.add` uses `exerciseSetIds` and drops the whole copy when an id is taken or repeated inside the entry. The tests cover a cross-exercise reuse, a same-exercise reuse, a copied taken id, a copied pair, `0` against `"0"`, a planned-id collision, and a fresh add that is kept. `clearDone` still runs on a kept row, so F003 stays closed. This closes the replay gap left in #97 and #98.
+
+### #101 — [native: refuse a journal event the fold does not change](https://github.com/michaelportale/openGym/pull/101)
+
+- Merged commit: `e8846fe858f0bcf2ae8715ae9ebefc5472d2c254`
+- Resulting `native/phase-1` head: `5f8bfd1f0888a617d10f9523093023194763bc96`
+- Lane: session (Charlie)
+- Summary: A saved event has to change the workout a reopen folds. A repeat that would not change it returns `unchanged` and is not written. `resume` is the one saved stamp-only event.
+- Tests claimed at merge: `npm run verify`, 43 files, 344 tests, `check:shared` clean.
+- Review status: Reviewed by Charlie at `e8846fe858f0bcf2ae8715ae9ebefc5472d2c254`. Two earlier reviews held the branch. Independent findings: the diff is `fold.js`, `session.js`, `journal-effect.test.js`, `session-controller.test.js`, and `side-done.test.js`. No lockfile change, no secrets, no `node:` import. `#append` is one private chain. A rejection does not drop the later command. The duplicate check runs before the fold check. The fold check, the storage write, the push, and the cache update run one command at a time. `workoutFold` compares entries, set rows, rest, the session note, and the finish, and it ignores stamps. The effect test walks every `eventId` command in the active, finished, and discarded states. A same-value edit returns `{ ok: true, saved: false, unchanged: true }`, and the controller leaves the screen without an error. The compared document leaves out source fields other than `note` and `notePin`. The only source writes in the fold are those two fields, and a new exercise changes the entry list, so a current command is still visible.
 
 ## Open pulls into `native/phase-1`
 
-- [#65](https://github.com/michaelportale/openGym/pull/65) — draft, `docs: overnight PR audit for November 6–7`. Not merged. Updated at 23:38 EST (`9048c1b1`) through merge #97. F003 is marked fixed by [#91](https://github.com/michaelportale/openGym/pull/91). N001 stays open. The ledger lists #89 through #97. #91 and #95 are marked reviewed there. #89, #90, #92, #93, #94, #96, and #97 are queued. #98 merged after that snapshot. No new audit file is on `native/phase-1`.
+- [#65](https://github.com/michaelportale/openGym/pull/65) — draft, `docs: overnight PR audit for November 6–7`. Not merged. Still at 23:38 EST (`9048c1b1`), which audits through merge #97. F003 is marked fixed by [#91](https://github.com/michaelportale/openGym/pull/91). That snapshot still leaves N001 open. [#102](https://github.com/michaelportale/openGym/pull/102) closes it after the snapshot. No new audit file is on `native/phase-1`. No new finding id since `9048c1b1`.
 - [#67](https://github.com/michaelportale/openGym/pull/67) — draft, this log. Not merged. Do not merge it.
-- [#99](https://github.com/michaelportale/openGym/pull/99) — draft, `Do not record an extend a full rest cannot apply`. Not merged. Opened after the 23:38 audit snapshot. No review comment yet. On this head, `extendRest` appends any finite non-zero `byMs`. `applyExtend` then returns without a change when the rest is already at `REST_MAX_MS`, so the journal keeps an extend the timer does not apply.
