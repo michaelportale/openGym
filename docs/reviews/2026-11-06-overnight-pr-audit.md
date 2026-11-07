@@ -5,14 +5,14 @@
 **Repository:** michaelportale/openGym, across every target branch.
 **Cadence:** every half hour, with a final 7:30 a.m. reconciliation.
 **Status:** in progress. This is a rolling handoff for the coding agents, not an assertion that all listed PRs are safe.
-**Latest discovery:** 23 merged PRs, through #64 (merged 9:43:59 p.m. EST). Initial tests remain tied to #63's merge commit; #64 was discovered afterward. This document will expand as more PRs merge.
+**Latest discovery:** 29 merged PRs through #72 (merged 9:59:44 p.m. EST). The 10:00 p.m. pass reviewed the fixes and additional session changes, with independent validation at merge #72. Queued entries remain unfinished.
 **Audit PR:** [#65](https://github.com/michaelportale/openGym/pull/65), kept draft for rolling documentation updates.
 
 ## Agent action queue
 
-1. **F001 — Must fix / P1: serialize session commands with finish.** A set write in progress can be omitted from the saved workout.
-2. **F002 — Should fix / P2: exercise the entire session path without structuredClone.** The compatibility regression test added in #54 starts after the failing path.
-3. Continue the queued per-PR reviews below. Do not interpret a passing aggregate test suite or an author's earlier review as independent review completion.
+1. **F003 — Must fix / P2: copied per-side sets arrive already completed.** Clear both limb completion flags when adding a set or exercise; reuse `clearDone`.
+2. **F001 is fixed by #69; F002 is fixed by #70.** Both were independently checked at their fixing head commits and again in the merged integration state. Historical reproduction evidence is retained below.
+3. Continue queued per-PR reviews, beginning with #43 and the unfinished portion of #42. Integrated test success does not turn queued code reviews into approvals.
 
 ## What the initial change set does
 
@@ -20,7 +20,7 @@ The overnight PRs add native workout journals, SQLite adapters, finish/recovery 
 
 ### F001 — Must fix: finishing can overtake a pending set write
 
-**Status:** open; reproduced at integration commit [`018621ed6905d36e52baccfb18353bb813d88272`](https://github.com/michaelportale/openGym/commit/018621ed6905d36e52baccfb18353bb813d88272). The unsafe finish path was added in [#54](https://github.com/michaelportale/openGym/pull/54), with the public command wrapper from [#48](https://github.com/michaelportale/openGym/pull/48). Later finished-workout persistence and recovery do not serialize it.
+**Status:** **fixed by [#69](https://github.com/michaelportale/openGym/pull/69)**. Six controller tests pass at fixing head `549db024a8c1ece2376dee13be9e06bf84ca9a17`; the original held-append case and concurrent finish case also pass independently at merge #72. The changed controller files match the #69 merge result. Historical failure was reproduced at integration commit [`018621ed6905d36e52baccfb18353bb813d88272`](https://github.com/michaelportale/openGym/commit/018621ed6905d36e52baccfb18353bb813d88272). The unsafe finish path was added in [#54](https://github.com/michaelportale/openGym/pull/54), with the public command wrapper from [#48](https://github.com/michaelportale/openGym/pull/48). At that historical commit, finished-workout persistence and recovery did not serialize it; #69 now puts open, call and finish on one controller queue.
 
 **What this is:** The controller exposes asynchronous set commands and a separate finish-and-save command. The React hook forwards both without an in-flight guard.
 
@@ -77,7 +77,7 @@ Observed: finish true; pending action errors; saved set count 0; base null; orph
 
 ### F002 — Should fix: the no-structuredClone regression test skips session initialization
 
-**Status:** open; reproduced at the same integration commit with the SQLite session adapter and its injected database double. Original calls are in [#42](https://github.com/michaelportale/openGym/pull/42); [#54](https://github.com/michaelportale/openGym/pull/54) deliberately added no-`structuredClone` compatibility to the final payload path.
+**Status:** **fixed by [#70](https://github.com/michaelportale/openGym/pull/70)**. Eight finish tests pass at fixing head `dbd045e60aea1e6aa732ef0e8294cb031ad4771c`; independent open/draft/commit/finish/reopen with snapshots and no global clone passes at merge #72. The relevant changed files match the #70 merge result. Historical failure was reproduced at the initial integration commit with the SQLite session adapter and its injected database double. Original calls are in [#42](https://github.com/michaelportale/openGym/pull/42); [#54](https://github.com/michaelportale/openGym/pull/54) deliberately added no-`structuredClone` compatibility to the final payload path.
 
 **What this is:** #54's regression test deletes `globalThis.structuredClone` only after it has already opened, committed and finished the session.
 
@@ -91,9 +91,45 @@ Observed: finish true; pending action errors; saved set count 0; base null; orph
 
 **If skipped:** The compatibility case explicitly addressed by #54 still fails before its payload fix can run. Actual on-device availability in this Expo/Hermes build has **not** been measured; this finding proves the unsupported fallback path, not that every current iPhone runtime lacks the API.
 
+### F003 — Must fix / P2: copied per-side sets are logged before any commit
+
+**Status:** open, reproduced at [`bf57f13e9e8f750fe76e33f020bdc41d52e128af`](https://github.com/michaelportale/openGym/commit/bf57f13e9e8f750fe76e33f020bdc41d52e128af). Affects [#66](https://github.com/michaelportale/openGym/pull/66)'s `exercise.add` and the existing `set.add` path from #42.
+
+**What this is:** Adding an exercise or set is supposed to create unlogged rows, even when the input is copied from a completed workout. Per-side sets keep a separate done flag on each limb.
+
+**Problem:** Both add paths set only `row.done = false`. If `sides.L.done` or `sides.R.done` is still true, shared `hasCompletedWork` reads that limb flag and treats the new set as completed. Adding a curl with both limbs at 20 × 5 immediately reports **1 completed set, 10 reps and 200 load-reps**, without any `set.commit` event. Finishing persists the curl in history. The same input reproduces through `addSet`.
+
+**Locations:** [set.add, fold lines 159–164](https://github.com/michaelportale/openGym/blob/bf57f13e9e8f750fe76e33f020bdc41d52e128af/native/src/session/fold.js#L159-L164), [exercise.add, lines 176–183](https://github.com/michaelportale/openGym/blob/bf57f13e9e8f750fe76e33f020bdc41d52e128af/native/src/session/fold.js#L176-L183). [The existing clearDone helper, lines 64–72](https://github.com/michaelportale/openGym/blob/bf57f13e9e8f750fe76e33f020bdc41d52e128af/native/src/session/fold.js#L64-L72) already resets both limb flags correctly for undo.
+
+**Smallest fix:** Reuse `clearDone` when creating rows in both add paths. Do not change shared `hasCompletedWork`, which correctly counts actual one-limb work elsewhere.
+
+**Acceptance test:** Supply a copied per-side row with both flags true, then another with only one limb true. For both `addExercise` and `addSet`, assert zero completed sets/reps/load-reps before a commit and after journal replay. Finishing before a commit must not add that exercise to completed history. Then commit actual limb work and verify it counts.
+
+**If skipped:** Copying a previous exercise can fabricate completed workout history. This is a confirmed session-library defect; the current workout preview has not yet been wired to this hook.
+
+Minimal reproduction after opening a session with an ordinary uncompleted bench set:
+
+```js
+await session.addExercise({
+  eventId: 'add-curl', exerciseId: 'curl',
+  entry: { id: 'curl', sets: [{
+    done: true,
+    sides: {
+      L: { w: 20, r: 5, done: true },
+      R: { w: 20, r: 5, done: true },
+    },
+  }] },
+})
+console.log(session.view().totals)
+// Actual: completedSets: 1, reps: 10, loadReps: 200.
+// Expected: all zero; no set.commit has happened.
+await session.finish({ eventId: 'finish' })
+// Actual: finished.entries contains curl.
+```
+
 ### Previously reported recovery issue
 
-[#62](https://github.com/michaelportale/openGym/pull/62)'s review noted that an unfinished stored journal could be hidden by a different, already-finished incoming base. [#63](https://github.com/michaelportale/openGym/pull/63) changes that branch so the unfinished journal wins and adds a regression test. The diff and connected recovery/controller path were inspected; the aggregate tests below include the new test. This specific issue is fixed in #63. It does not clear F001 or F002.
+[#62](https://github.com/michaelportale/openGym/pull/62)'s review noted that an unfinished stored journal could be hidden by a different, already-finished incoming base. [#63](https://github.com/michaelportale/openGym/pull/63) changes that branch so the unfinished journal wins and adds a regression test. The diff and connected recovery/controller path were inspected; the aggregate tests below include the new test. This specific issue is fixed in #63. F001 and F002 were separately fixed later by #69 and #70.
 
 ## Independent validation so far
 
@@ -112,6 +148,33 @@ Tested exact integration/merge commit: `018621ed6905d36e52baccfb18353bb813d88272
 
 Existing native verification emits module-format warnings. They were not suppressed. No application source changes or PR merges were performed by this audit.
 
+## 10:00 p.m. independent follow-up
+
+What these changes do: #69 serializes controller operations so finish waits for earlier commands; #70 removes the unavailable-clone dependency through the entire session lifecycle, including shared snapshot copying. #64/#66 add set/exercise editing, #71 guards the last exercise, and #72 preserves the session when discard fails.
+
+**Exact integration tested:** [`bf57f13e9e8f750fe76e33f020bdc41d52e128af`](https://github.com/michaelportale/openGym/commit/bf57f13e9e8f750fe76e33f020bdc41d52e128af) (merge #72), Node 22.17.0, clean isolated worktree. All four package suites and their applicable source checks passed. Historical PR heads were not each given all four suites; the two fixing heads received the separate focused runs listed below.
+
+| Check | Independent result |
+| --- | --- |
+| Native `npm run verify` | 37 files / 283 tests pass; shared bare-Node load and boundary scan pass (34 shared / 67 native files) |
+| Frontend `npm ci`, tests and production build | 462 files / 5,768 tests pass; production build passes |
+| Locales and source-string check | 18 locales × 2,586 keys in sync; all 2,050 detected source strings present |
+| Fatigue probes | 108,000 monotonic comparisons pass, largest increase 0; 1,800 history-edit comparisons pass |
+| API `npm ci --omit=optional`, tests, generated assets, core loadability | 628 tests pass; generated catalogue/prompts in sync; bare-Node core loads |
+| MCP `npm ci`, tests and Node-loadability | 95 tests pass; full MCP import graph loads under bare Node |
+| #69 exact head `549db024a8c1ece2376dee13be9e06bf84ca9a17` | Controller regression file: 6 tests pass |
+| #70 exact head `dbd045e60aea1e6aa732ef0e8294cb031ad4771c` | Finish regression file: 8 tests pass |
+| Independent F001 and F002 probes at merge #72 | Both pass; one saved set/volume 300/one send/no orphan; complete lifecycle without global clone |
+| Independent F003 probes at merge #72 | Both add paths reproduce fabricated completed work |
+| CI at merge #72 | Zero check runs and zero statuses; pending aggregate is not passing CI |
+| Docker and device checks | Not run: no image/runtime packaging changes in reviewed fixes; actual device/Expo SQLite remain unverified |
+
+The connector cannot read the Actions permissions endpoint, so its enabled/disabled setting was not independently re-confirmed; current `CLAUDE.md` says disabled and the tested commit has no CI results. Build/module-format warnings were left visible. Only documentation was pushed by this audit.
+
+Reviewed full diffs and connected paths this pass: **#45, #64, #66, #69, #70, #71, #72**. Existing review comments and inline thread states were checked (no unresolved inline threads on these PRs). F003 blocks #66's added-row behavior. #71 fixes #66's earlier last-exercise-removal issue. PRs #65 and #67 are draft running-document PRs; #73 was still draft at the last inventory, so no PR was eligible for an automatic merge.
+
+Verdict: F001 and F002 resolved; fix F003 before treating copied-set initialization as correct. Remaining queued reviews are not approvals.
+
 ## Coverage ledger
 
 Every discovered merged PR in the time window appears here, including PRs merged before #62. A queued or partial entry is **not reviewed/approved**. Listed head/merge IDs identify the review target, not a claim that both have been independently tested.
@@ -119,8 +182,8 @@ Every discovered merged PR in the time window appears here, including PRs merged
 | PR and title | Merged EST, Nov 6 | Base | Head / merge commit | Review status |
 | --- | --- | --- | --- | --- |
 | [#43](https://github.com/michaelportale/openGym/pull/43) native: science register, Why this, and warm-up exclusion | 21:00:44 | `native/phase-1` | [`80d9eca`](https://github.com/michaelportale/openGym/commit/80d9eca91cbc08a3e69c01facd9aad905c743f35) / [`db01387`](https://github.com/michaelportale/openGym/commit/db013879bb60224fec70439bc817a8ff5db67c5d) | Queued — not independently reviewed |
-| [#42](https://github.com/michaelportale/openGym/pull/42) native: durable workout journal (phase 2) | 21:00:52 | `native/phase-1` | [`e1d93df`](https://github.com/michaelportale/openGym/commit/e1d93df0a4de3b4cf0018e0370d6b2669978ac10) / [`9545119`](https://github.com/michaelportale/openGym/commit/95451197b11ca6df1d15f15d9f668e68982d66fd) | Blocked: F002; broader review queued |
-| [#45](https://github.com/michaelportale/openGym/pull/45) native: phase 2 follow-up on merged phase-1 | 21:05:07 | `native/phase-1` | [`9e9fc5c`](https://github.com/michaelportale/openGym/commit/9e9fc5c0fd5649f845c3d72f98e325a979dd18f7) / [`5803e7a`](https://github.com/michaelportale/openGym/commit/5803e7acd57470d19174589fbef338abfdac13ce) | Queued — not independently reviewed |
+| [#42](https://github.com/michaelportale/openGym/pull/42) native: durable workout journal (phase 2) | 21:00:52 | `native/phase-1` | [`e1d93df`](https://github.com/michaelportale/openGym/commit/e1d93df0a4de3b4cf0018e0370d6b2669978ac10) / [`9545119`](https://github.com/michaelportale/openGym/commit/95451197b11ca6df1d15f15d9f668e68982d66fd) | Blocked: F003; F002 fixed by #70; broader review queued |
+| [#45](https://github.com/michaelportale/openGym/pull/45) native: phase 2 follow-up on merged phase-1 | 21:05:07 | `native/phase-1` | [`9e9fc5c`](https://github.com/michaelportale/openGym/commit/9e9fc5c0fd5649f845c3d72f98e325a979dd18f7) / [`5803e7a`](https://github.com/michaelportale/openGym/commit/5803e7acd57470d19174589fbef338abfdac13ce) | Reviewed — UUID/fallback and callers; integrated tests at bf57f13 |
 | [#46](https://github.com/michaelportale/openGym/pull/46) native: 40/80 warm-ups and double progression | 21:07:15 | `native/phase-1` | [`4067e19`](https://github.com/michaelportale/openGym/commit/4067e1963669738061baefb2d7e190b2e8f29372) / [`d650088`](https://github.com/michaelportale/openGym/commit/d6500889e46b87d629e4da8ab537dfeed674146e) | Queued — not independently reviewed |
 | [#47](https://github.com/michaelportale/openGym/pull/47) native: effort, Why-this sheet, and opt-in linear migration | 21:12:31 | `native/phase-1` | [`5c786a3`](https://github.com/michaelportale/openGym/commit/5c786a36e00d5185a62929ff18b5749ed88fec88) / [`0048ee5`](https://github.com/michaelportale/openGym/commit/0048ee54cfb48a5f5eb6f39f3a374db4af1cb023) | Queued — not independently reviewed |
 | [#44](https://github.com/michaelportale/openGym/pull/44) native: lock the five-tab shell and Workout preview | 21:13:35 | `native/phase-1` | [`c4ad23f`](https://github.com/michaelportale/openGym/commit/c4ad23fa4dc8993998b90d3fb9c8635ff0932997) / [`bd904da`](https://github.com/michaelportale/openGym/commit/bd904da7fd6ec698d94978fc61e7643744c7621b) | Queued — not independently reviewed |
@@ -130,7 +193,7 @@ Every discovered merged PR in the time window appears here, including PRs merged
 | [#53](https://github.com/michaelportale/openGym/pull/53) native: ship no weekly set target | 21:21:42 | `native/phase-1` | [`91d34ab`](https://github.com/michaelportale/openGym/commit/91d34abdbd511413f1512df551702679b820a586) / [`798e337`](https://github.com/michaelportale/openGym/commit/798e33731d2ac721a35b73cd4020449220d9332d) | Queued — not independently reviewed |
 | [#50](https://github.com/michaelportale/openGym/pull/50) native: show a glyph when SF Symbols are not drawn | 21:23:35 | `native/phase-1` | [`a89cbb6`](https://github.com/michaelportale/openGym/commit/a89cbb6a749d7834e49143e32132316008dab7bb) / [`3ce543c`](https://github.com/michaelportale/openGym/commit/3ce543c29789a1357395d8710bad5757398f9791) | Queued — not independently reviewed |
 | [#52](https://github.com/michaelportale/openGym/pull/52) native: lock react-dom to 19.3.0 | 21:23:37 | `native/phase-1` | [`7fe4405`](https://github.com/michaelportale/openGym/commit/7fe440582187a5715751a6dce5724c0b35d22e82) / [`6d53231`](https://github.com/michaelportale/openGym/commit/6d53231c943ec63bea07f4ea69a42603fbe7cb10) | Queued — not independently reviewed |
-| [#54](https://github.com/michaelportale/openGym/pull/54) native: finish a session into the stored workout | 21:24:28 | `native/phase-1` | [`a83bf3d`](https://github.com/michaelportale/openGym/commit/a83bf3df57ade15298cd54de6f025c7000b7b42f) / [`89896e2`](https://github.com/michaelportale/openGym/commit/89896e2f7cbd5947c67a9332979a16a26197a7da) | Blocked: F001, F002 |
+| [#54](https://github.com/michaelportale/openGym/pull/54) native: finish a session into the stored workout | 21:24:28 | `native/phase-1` | [`a83bf3d`](https://github.com/michaelportale/openGym/commit/a83bf3df57ade15298cd54de6f025c7000b7b42f) / [`89896e2`](https://github.com/michaelportale/openGym/commit/89896e2f7cbd5947c67a9332979a16a26197a7da) | F001/F002 fixed by #69/#70; broader review queued |
 | [#55](https://github.com/michaelportale/openGym/pull/55) native: cover rounding, bar edges, RIR bounds, and migration idempotence | 21:25:10 | `native/phase-1` | [`ee0ac21`](https://github.com/michaelportale/openGym/commit/ee0ac2191630d1182ccc5fa5f2d827fb1b6c48f7) / [`bc048de`](https://github.com/michaelportale/openGym/commit/bc048de7f6d13b592ddfc6fb043fa5f6c932ca4f) | Queued — not independently reviewed |
 | [#56](https://github.com/michaelportale/openGym/pull/56) native: list science defaults that still need a source | 21:27:04 | `native/phase-1` | [`a60b614`](https://github.com/michaelportale/openGym/commit/a60b614f615ebfc2fddd2cede1f4c114dff2cb81) / [`cedf787`](https://github.com/michaelportale/openGym/commit/cedf78762265239573a70af344c3b946f81bdfcc) | Queued — not independently reviewed |
 | [#58](https://github.com/michaelportale/openGym/pull/58) native: science standup brief for 6 November | 21:29:10 | `native/phase-1` | [`e8db45a`](https://github.com/michaelportale/openGym/commit/e8db45ab978d3840299f9b815b7c1e43b07db4cd) / [`f1ce4da`](https://github.com/michaelportale/openGym/commit/f1ce4da256de41574759f9530f414ff434be9923) | Queued — not independently reviewed |
@@ -140,7 +203,13 @@ Every discovered merged PR in the time window appears here, including PRs merged
 | [#61](https://github.com/michaelportale/openGym/pull/61) native: keep the symbol scanner out of the app tree | 21:34:21 | `native/phase-1` | [`4884129`](https://github.com/michaelportale/openGym/commit/488412950a387c33b094115c990b1af0c0e1973b) / [`5b658da`](https://github.com/michaelportale/openGym/commit/5b658dab174248f942233718021b245946fd7b32) | Queued — not independently reviewed |
 | [#62](https://github.com/michaelportale/openGym/pull/62) native: replay an open journal and skip a finished one | 21:37:43 | `native/phase-1` | [`7a7bd37`](https://github.com/michaelportale/openGym/commit/7a7bd371e8f0217396e0290f9a70d2d2b9828242) / [`b7d2d24`](https://github.com/michaelportale/openGym/commit/b7d2d249645787d27b620a2bf96711aa892b7069) | Recovery follow-up fixed by #63; broader review queued |
 | [#63](https://github.com/michaelportale/openGym/pull/63) native: restore an unfinished journal ahead of a finished base | 21:41:19 | `native/phase-1` | [`259de62`](https://github.com/michaelportale/openGym/commit/259de62280a20ad5323e84d5caa42281a0ce85df) / [`018621e`](https://github.com/michaelportale/openGym/commit/018621ed6905d36e52baccfb18353bb813d88272) | Focused recovery review; broader review queued |
-| [#64](https://github.com/michaelportale/openGym/pull/64) native: edit and delete a committed set | 21:43:59 | `native/phase-1` | [`f36421b`](https://github.com/michaelportale/openGym/commit/f36421bfe361da786aefd9a9cbe71ed7890994c1) / [`946f9f4`](https://github.com/michaelportale/openGym/commit/946f9f4b43357d049727874725aa297a9fe6c066) | Queued — diff inventoried; no independent run at this commit |
+| [#64](https://github.com/michaelportale/openGym/pull/64) native: edit and delete a committed set | 21:43:59 | `native/phase-1` | [`f36421b`](https://github.com/michaelportale/openGym/commit/f36421bfe361da786aefd9a9cbe71ed7890994c1) / [`946f9f4`](https://github.com/michaelportale/openGym/commit/946f9f4b43357d049727874725aa297a9fe6c066) | Reviewed — edit/delete/replay guards; integrated tests at bf57f13 |
+| [#66](https://github.com/michaelportale/openGym/pull/66) native: add and remove an exercise mid-session | 21:48:12 | `native/phase-1` | [`2d62bdc`](https://github.com/michaelportale/openGym/commit/2d62bdc6e936c843fe982e0cc4219a0b3dc9c206) / [`b973478`](https://github.com/michaelportale/openGym/commit/b973478fe795507e65f90dd5cfaaba39f215681f) | Blocked: F003; last-exercise issue fixed by #71 |
+| [#68](https://github.com/michaelportale/openGym/pull/68) native: correct the standup warm-up bar example | 21:53:14 | `native/phase-1` | [`bb24868`](https://github.com/michaelportale/openGym/commit/bb2486889304d6e835b9a96028b41b9ab1022dbc) / [`d053d46`](https://github.com/michaelportale/openGym/commit/d053d46a271e0dcca9dde578dc233a78b0ae9662) | Queued — not independently reviewed |
+| [#69](https://github.com/michaelportale/openGym/pull/69) native: serialize session commands ahead of finish | 21:56:24 | `native/phase-1` | [`549db02`](https://github.com/michaelportale/openGym/commit/549db024a8c1ece2376dee13be9e06bf84ca9a17) / [`3c4e769`](https://github.com/michaelportale/openGym/commit/3c4e769f2fc711848d8da72e4d4f3193ca8f1434) | Reviewed — F001 fixed; exact-head controller tests pass (6) |
+| [#70](https://github.com/michaelportale/openGym/pull/70) native: copy session documents without structuredClone | 21:56:31 | `native/phase-1` | [`dbd045e`](https://github.com/michaelportale/openGym/commit/dbd045e60aea1e6aa732ef0e8294cb031ad4771c) / [`ba2da91`](https://github.com/michaelportale/openGym/commit/ba2da913b9d64f62bc85842b569d983a0a9f3311) | Reviewed — F002 fixed; exact-head finish tests pass (8) |
+| [#71](https://github.com/michaelportale/openGym/pull/71) native: keep at least one exercise in a live session | 21:56:39 | `native/phase-1` | [`c00a9a0`](https://github.com/michaelportale/openGym/commit/c00a9a07a8423f17f8fe077267ff1596b1c343ec) / [`f666095`](https://github.com/michaelportale/openGym/commit/f66609519231c03800aaec05faee11bc738f2fcf) | Reviewed — last-exercise guard/replay; integrated tests at bf57f13 |
+| [#72](https://github.com/michaelportale/openGym/pull/72) native: keep a failed discard from throwing the session away | 21:59:44 | `native/phase-1` | [`304b8fd`](https://github.com/michaelportale/openGym/commit/304b8fde1a31237e0a35ebe9916346dd618bbaad) / [`bf57f13`](https://github.com/michaelportale/openGym/commit/bf57f13e9e8f750fe76e33f020bdc41d52e128af) | Reviewed — failed discard preserves data; integrated tests at bf57f13 |
 
 ## Operating rules for subsequent runs
 
