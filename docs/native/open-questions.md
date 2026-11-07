@@ -12,9 +12,11 @@ Should native keep importing the shared file, or fork or copy it into `native/sr
 
 `timing.js` already copies `REST_MAX_MS` instead of importing `frontend/src/lib/duration.js`. That copy is a local constant, not a decision to fork `finish-workout.js`.
 
-## main waits for a phone check
+## Who reviews, and main
 
-Do not push to `main` and do not commit on it. `main` waits for Michael's phone check. Work lands on `native/phase-1` as draft PRs. Charlie reviews every PR, including security. Merge commits only. No rebase and no force-push.
+Do not push to `main` and do not commit on it. `main` waits for Michael's phone check. Work lands on `native/phase-1` as draft PRs. Merge commits only. No rebase and no force-push.
+
+`docs/sprints/2026-10-30-native-workout-prd.md` says the owner reviews and merges. `docs/science/decisions.md` uses the name Charlie for a later caller of the effort helpers and of `migrateLinearRoutines`. It does not say Charlie is the GitHub reviewer. This handoff was also told that Charlie reviews every PR, including security. Those sources do not name the same person. Agents do not merge while that is unresolved. The PRD states the same question.
 
 ## F004 is still open in the code
 
