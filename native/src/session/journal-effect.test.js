@@ -475,6 +475,13 @@ async function checkAttempt(name, attempt, state) {
   const result = await attempt.call(session, eventId, clock)
   const after = await storage.readAll()
   const afterBytes = JSON.stringify(after)
+  if (result && result.unchanged === true) {
+    if (result.ok !== true || result.saved !== false || result.error) {
+      return `unchanged result is not benign: ${JSON.stringify(result)}`
+    }
+    if (afterBytes !== beforeBytes) return 'unchanged but journal changed'
+    return 'unchanged'
+  }
   if (result && result.saved === true) {
     if (result.ok === false) return 'saved: true and ok: false'
     if (after.length !== before.length + 1) {
@@ -513,13 +520,15 @@ test('a saved journal command changes the reopened fold, and a rejected one leav
   expect(unknownNoop, `stamp-only list names an unknown command: ${unknownNoop.join(', ')}`).toEqual([])
 
   const breaks = []
+  let sawUnchanged = false
   for (const name of names) {
     for (const attempt of attempts[name]) {
       for (const state of attempt.states || STATES) {
         const where = `${name} ${state} ${attempt.label}`
         try {
           const reason = await checkAttempt(name, attempt, state)
-          if (reason) breaks.push(`${where}: ${reason}`)
+          if (reason === 'unchanged') sawUnchanged = true
+          else if (reason) breaks.push(`${where}: ${reason}`)
         } catch (error) {
           breaks.push(`${where}: threw ${error.message}`)
         }
@@ -527,4 +536,5 @@ test('a saved journal command changes the reopened fold, and a rejected one leav
     }
   }
   expect(breaks, breaks.join('\n')).toEqual([])
+  expect(sawUnchanged).toBe(true)
 })

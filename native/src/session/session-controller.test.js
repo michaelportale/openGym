@@ -57,6 +57,23 @@ test('a call notes the timer once it has moved 15 seconds', async () => {
   expect(await storage.readLastSeen()).toBe(T0 + SEEN_PERSIST_MS)
 })
 
+test('an unchanged edit leaves the screen without an error', async () => {
+  const storage = createMemoryStorage()
+  const active = controller(storage)
+  await active.open()
+  const result = await active.call('editSet', {
+    eventId: 'same',
+    exerciseId: 'bench',
+    setId: plannedSetId('bench', 0),
+    fields: { w: 60, r: 5 },
+  })
+  expect(result).toEqual({ ok: true, saved: false, unchanged: true })
+  const state = active.getState()
+  expect(state.error).toBeNull()
+  expect(state.status).toBe('ready')
+  expect(await storage.readAll()).toEqual([])
+})
+
 test('a storage failure is surfaced and the set is not saved', async () => {
   const storage = createMemoryStorage()
   const active = controller(storage)

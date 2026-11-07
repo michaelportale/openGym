@@ -19,6 +19,10 @@ function duplicate() {
   return { ok: true, saved: false, duplicate: true }
 }
 
+function unchanged() {
+  return { ok: true, saved: false, unchanged: true }
+}
+
 export async function openSession({ base, storage, now, timeZone = 'UTC' } = {}) {
   if (!storage) throw new Error('openSession requires a storage')
   const storedBase = await storage.readBase()
@@ -467,7 +471,7 @@ class SessionLog {
     if (stored.type !== 'session.resume') {
       const before = workoutFold(this.base, this.events)
       const after = workoutFold(this.base, this.events.concat([stored]))
-      if (before === after) return failure('unchanged')
+      if (before === after) return unchanged()
     }
     try {
       const result = await this.storage.append(stored)

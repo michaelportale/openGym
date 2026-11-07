@@ -278,8 +278,8 @@ test('per-side row.done follows both ticks on the base and after every seeded co
         const command = plan(session, view, kind, next, ids)
         if (!command) continue
         const result = await command()
-        // A repeat that would not change the fold is refused. Try the next kind.
-        if (result?.error?.code === 'unchanged') continue
+        // A repeat that would not change the fold is benign. Try the next kind.
+        if (result?.unchanged === true) continue
         expect(result, `seed ${seed} step ${step} ${kind}`).toMatchObject({ ok: true, saved: true })
         ran = kind
         break
