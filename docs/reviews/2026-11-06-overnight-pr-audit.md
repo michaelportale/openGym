@@ -1,6 +1,7 @@
 # Overnight PR audit — November 6–7, 2026
 
-**Window:** November 6, 2026, 9:00 p.m. through November 7, 2026, 7:30 a.m., America/New_York (EST, UTC−05:00). Tonight only.
+**Window:** November 6, 2026, 8:30 p.m. through November 7, 2026, 7:30 a.m., America/New_York (EST, UTC−05:00). Tonight only.
+**Scope correction:** Start moved back from 9:00 p.m. to 8:30 p.m. EST. A complete GitHub closed-PR enumeration found no additional merges between 8:30 and 9:00 p.m.; all 23 in-window merges through #64 remain in the ledger. Subsequent runs must use the expanded start (UTC 2026-11-07T01:30:00Z).
 **Repository:** michaelportale/openGym, across every target branch.
 **Cadence:** every half hour, with a final 7:30 a.m. reconciliation.
 **Status:** in progress. This is a rolling handoff for the coding agents, not an assertion that all listed PRs are safe.
