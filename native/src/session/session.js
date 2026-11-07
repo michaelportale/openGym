@@ -1,5 +1,5 @@
 import { finishWorkout } from '../shared/training.js'
-import { activityAt, elapsedStamps, entryExists, exerciseSetIds, extendBy, foldJournal, projectSession, slotExists, toActive } from './fold.js'
+import { activityAt, elapsedStamps, entryExists, exerciseSetIds, extendBy, foldJournal, projectSession, slotExists, toActive, workoutFold } from './fold.js'
 import { DURATION_GAP_MS, compactSeen, isOvernight, shownThrough } from './timing.js'
 import { createEventId } from './ids.js'
 
@@ -17,6 +17,10 @@ function failure(code, message) {
 
 function duplicate() {
   return { ok: true, saved: false, duplicate: true }
+}
+
+function unchanged() {
+  return { ok: true, saved: false, unchanged: true }
 }
 
 export async function openSession({ base, storage, now, timeZone = 'UTC' } = {}) {
@@ -56,7 +60,9 @@ export async function openSession({ base, storage, now, timeZone = 'UTC' } = {})
 
 class SessionLog {
   #seenChain = Promise.resolve()
+  #appendChain = Promise.resolve()
   #queuedSeen = null
+  #fold = null
 
   constructor({ base, events, drafts, storage, now, timeZone, seenAt, seenTrail }) {
     this.base = base
@@ -66,6 +72,7 @@ class SessionLog {
     this.now = now
     this.timeZone = timeZone
     this.discarded = false
+    this.#fold = workoutFold(this.base, this.events)
     // Counted instants from a previous process. The last one alone is not enough:
     // the hop from the last set to that instant can be an idle overnight gap even
     // when the steps in between were counted.
@@ -434,6 +441,7 @@ class SessionLog {
     this.drafts = {}
     this.base = null
     this.discarded = true
+    this.#fold = null
     return { ok: true, saved: true }
   }
 
@@ -449,7 +457,18 @@ class SessionLog {
     return this.events.some(event => event.type === 'session.finish')
   }
 
+  // One queue. The fold check reads this.events and #fold, then the storage
+  // write and the cache update run later. A second command waits until both
+  // are stored. A rejection here must not drop the rest of the queue.
   async #append(event) {
+    const run = this.#appendChain
+      .catch(() => {})
+      .then(() => this.#appendNow(event))
+    this.#appendChain = run.catch(() => {})
+    return run
+  }
+
+  async #appendNow(event) {
     if (this.discarded) return failure('discarded')
     const id = event.id != null ? event.id : createEventId()
     if (this.#seen(id)) return duplicate()
@@ -459,12 +478,26 @@ class SessionLog {
     let stored
     try {
       stored = JSON.parse(JSON.stringify({ ...event, id }))
+    } catch (error) {
+      return failure('storage', error?.message || 'append failed')
+    }
+    // A saved event has to change the workout a reopen folds. resume is the
+    // exception: it only leaves a stamp so the timer can cross midnight.
+    // #fold is that workout from open or the last successful append, so this
+    // folds the candidate once.
+    let nextFold = null
+    if (stored.type !== 'session.resume') {
+      nextFold = workoutFold(this.base, this.events.concat([stored]))
+      if (this.#fold === nextFold) return unchanged()
+    }
+    try {
       const result = await this.storage.append(stored)
       if (result?.duplicate) return duplicate()
     } catch (error) {
       return failure('storage', error?.message || 'append failed')
     }
     this.events.push(stored)
+    if (nextFold != null) this.#fold = nextFold
     return { ok: true, saved: true }
   }
 }
