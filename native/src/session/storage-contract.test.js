@@ -85,6 +85,28 @@ storageContract('sqlite storage', async () => {
   }
 })
 
+test('sqlite clear is one transaction, so a failure partway through removes nothing', async () => {
+  const db = createFakeSqliteDb()
+  const storage = createSqliteSessionStorage(db)
+  await storage.append(event('a', 1))
+  await storage.putDraft('plan:bench:0', { r: 3 })
+  await storage.writeBase({ id: 'w1', name: 'Push' })
+  db.failNext(/^DELETE FROM session_drafts$/, new Error('locked'))
+  await expect(storage.clear()).rejects.toThrow(/locked/)
+  expect(db.executed.some(sql =>
+    /BEGIN/i.test(sql)
+    && /DELETE FROM session_events/i.test(sql)
+    && /DELETE FROM session_drafts/i.test(sql)
+    && /DELETE FROM session_base/i.test(sql)
+    && /COMMIT/i.test(sql)
+  )).toBe(true)
+  expect((await storage.readAll()).map(row => row.id)).toEqual(['a'])
+  expect(await storage.getDraft('plan:bench:0')).toEqual({ r: 3 })
+  expect(await storage.readBase()).toEqual({ id: 'w1', name: 'Push' })
+  expect(await storage.append(event('b', 2))).toMatchObject({ ok: true })
+  expect((await storage.readAll()).map(row => row.id)).toEqual(['a', 'b'])
+})
+
 test('sqlite storage applies SQLITE_SESSION_SCHEMA and rolls clear back when a delete fails', async () => {
   const db = createFakeSqliteDb()
   const storage = createSqliteSessionStorage(db)
