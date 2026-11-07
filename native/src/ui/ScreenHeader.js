@@ -9,9 +9,11 @@ export default function ScreenHeader({ title, subtitle }) {
   return (
     <View style={styles.wrap}>
       <View style={styles.bar}>
-        <AppText variant="wordmark">openGym</AppText>
+        <AppText variant="wordmark">
+          open<AppText variant="wordmarkStrong">Gym</AppText>
+        </AppText>
         <IconButton
-          symbol="ellipsis.circle"
+          symbol="ellipsis"
           accessibilityLabel="More"
           onPress={() => router.push('/diagnostics')}
         />

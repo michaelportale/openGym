@@ -8,7 +8,13 @@ const pinned = value => DynamicColorIOS({ dark: value, light: value })
 const TABS = [
   { name: 'index', label: 'Home', sf: { default: 'house', selected: 'house.fill' } },
   { name: 'plan', label: 'Plan', sf: { default: 'calendar', selected: 'calendar' } },
-  { name: 'workout', label: 'Workout', sf: { default: 'dumbbell', selected: 'dumbbell.fill' } },
+  // Workout pins its dock above the tab bar, so it applies its own insets with SafeAreaView.
+  {
+    name: 'workout',
+    label: 'Workout',
+    sf: { default: 'dumbbell', selected: 'dumbbell.fill' },
+    disableAutomaticContentInsets: true
+  },
   { name: 'progress', label: 'Progress', sf: { default: 'chart.bar', selected: 'chart.bar.fill' } },
   {
     name: 'exercises',
@@ -25,7 +31,11 @@ export default function TabsLayout() {
       labelStyle={{ color: pinned(color.textSecondary) }}
     >
       {TABS.map(t => (
-        <NativeTabs.Trigger key={t.name} name={t.name}>
+        <NativeTabs.Trigger
+          key={t.name}
+          name={t.name}
+          disableAutomaticContentInsets={t.disableAutomaticContentInsets}
+        >
           <NativeTabs.Trigger.Icon sf={t.sf} />
           <NativeTabs.Trigger.Label>{t.label}</NativeTabs.Trigger.Label>
         </NativeTabs.Trigger>

@@ -10,12 +10,16 @@ export const radius = { sm: 8, md: 12, lg: 16 }
 export const touch = { min: 44, primary: 56 }
 export const type = {
   wordmark: { fontSize: 20, fontWeight: '400' },
+  wordmarkStrong: { fontSize: 20, fontWeight: '700' },
   title: { fontSize: 28, fontWeight: '700' },
   timer: { fontSize: 44, fontWeight: '700', fontVariant: ['tabular-nums'] },
   value: { fontSize: 17, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  heading: { fontSize: 17, fontWeight: '600' },
   body: { fontSize: 15, fontWeight: '400' },
   label: { fontSize: 11, fontWeight: '500', letterSpacing: 0.8, textTransform: 'uppercase' },
   button: { fontSize: 17, fontWeight: '700' }
 }
 export const fontScale = { value: 1.3, timer: 1.3, label: 1.5 }
 export const motion = { press: 120, progress: 300 }
+export const pressScale = 0.97
+export const size = { icon: 22, marker: 24, progress: 6, stroke: 1 }
