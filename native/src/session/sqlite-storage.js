@@ -54,12 +54,16 @@ export function createSqliteSessionStorage(db) {
 
     async clear() {
       await ready()
-      await db.exec('BEGIN')
+      // One script, so a driver that commits each run() cannot drop events and then fail on
+      // drafts or the base. A throw leaves the transaction open; roll it back before rethrowing.
       try {
-        await db.run('DELETE FROM session_events')
-        await db.run('DELETE FROM session_drafts')
-        await db.run('DELETE FROM session_base')
-        await db.exec('COMMIT')
+        await db.exec(`
+          BEGIN;
+          DELETE FROM session_events;
+          DELETE FROM session_drafts;
+          DELETE FROM session_base;
+          COMMIT;
+        `)
       } catch (error) {
         await db.exec('ROLLBACK')
         throw error
