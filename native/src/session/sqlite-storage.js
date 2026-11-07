@@ -112,9 +112,12 @@ export function createSqliteSessionStorage(db) {
       if (zone) body[SESSION_TIME_ZONE_KEY] = zone
       // Stamp and trail are copied from the current row inside the statement, and only
       // when that key is present. Values read above would be stale if putLastSeen
-      // committed before this replace.
+      // committed before this replace. json() keeps the trail an array. A bare
+      // json_extract is TEXT, and json_set would store it as a quoted string.
+      // On-device JSON1 checklist: this copy must stay json()-wrapped.
       const seen = `'$.${SESSION_LAST_SEEN_KEY}'`
       const trail = `'$.${SESSION_SEEN_TRAIL_KEY}'`
+      const trailJson = `json(json_extract(session_base.body, ${trail}))`
       await db.run(
         `INSERT INTO session_base (id, body) VALUES (1, ?)
          ON CONFLICT(id) DO UPDATE SET body = CASE
@@ -124,8 +127,8 @@ export function createSqliteSessionStorage(db) {
                ELSE json_set(excluded.body, ${seen}, json_extract(session_base.body, ${seen}))
              END
            WHEN json_extract(session_base.body, ${seen}) IS NULL THEN
-             json_set(excluded.body, ${trail}, json_extract(session_base.body, ${trail}))
-           ELSE json_set(excluded.body, ${seen}, json_extract(session_base.body, ${seen}), ${trail}, json_extract(session_base.body, ${trail}))
+             json_set(excluded.body, ${trail}, ${trailJson})
+           ELSE json_set(excluded.body, ${seen}, json_extract(session_base.body, ${seen}), ${trail}, ${trailJson})
          END`,
         [JSON.stringify(body)],
       )

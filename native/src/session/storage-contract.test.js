@@ -208,7 +208,9 @@ test('writeBase keeps a last seen saved while the base replace is in flight', as
   expect(await storage.readBase()).toEqual({ id: 'w1', title: 'after' })
   expect(await storage.readTimeZone()).toBe('UTC')
   expect(await storage.readLastSeen()).toBe(later)
-  expect(await storage.readSeenTrail()).toEqual(laterTrail)
+  const kept = await storage.readSeenTrail()
+  expect(Array.isArray(kept)).toBe(true)
+  expect(kept).toEqual(laterTrail)
 })
 
 test('sqlite storage requires an injected db handle', () => {
