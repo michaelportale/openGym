@@ -1,5 +1,8 @@
+import { destinationCopy } from '../../shell/destinations'
 import UnbuiltScreen from '../../ui/UnbuiltScreen'
 
+const copy = destinationCopy('home')
+
 export default function Home() {
-  return <UnbuiltScreen title="Home" phase={2} summary="Your next session, with start and resume. The nutrition summary follows in Phase 7." />
+  return <UnbuiltScreen title={copy.title} phaseLabel={copy.phaseLabel} summary={copy.summary} status={copy.status} />
 }

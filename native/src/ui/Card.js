@@ -1,8 +1,8 @@
 import { StyleSheet, View } from 'react-native'
 import { color, radius } from '../theme/tokens'
 
-export default function Card({ style, children }) {
-  return <View style={[styles.card, style]}>{children}</View>
+export default function Card({ style, children, ...rest }) {
+  return <View {...rest} style={[styles.card, style]}>{children}</View>
 }
 
 const styles = StyleSheet.create({

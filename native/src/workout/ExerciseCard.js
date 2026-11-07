@@ -5,7 +5,7 @@ import Card from '../ui/Card'
 import IconButton from '../ui/IconButton'
 import SetRow, { SetTableHeader } from './SetRow'
 
-export default function ExerciseCard({ category, name, lastSession, sets }) {
+export default function ExerciseCard({ category, name, lastSession, sets, onAddSet, addSetHint }) {
   return (
     <Card style={styles.card}>
       <View style={styles.heading}>
@@ -16,7 +16,7 @@ export default function ExerciseCard({ category, name, lastSession, sets }) {
       <SetTableHeader />
       {sets.map(set => <SetRow key={set.number} {...set} />)}
       <View style={styles.addRow}>
-        <IconButton symbol="plus" accessibilityLabel="Add set" />
+        <IconButton symbol="plus" accessibilityLabel="Add set" accessibilityHint={addSetHint} onPress={onAddSet} />
         <AppText variant="body" color={color.textSecondary} accessibilityElementsHidden style={styles.addLabel}>
           Add set
         </AppText>

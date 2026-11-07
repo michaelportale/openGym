@@ -1,5 +1,8 @@
+import { destinationCopy } from '../../shell/destinations'
 import UnbuiltScreen from '../../ui/UnbuiltScreen'
 
+const copy = destinationCopy('progress')
+
 export default function Progress() {
-  return <UnbuiltScreen title="Progress" phase={7} summary="Body weight, lift history and e1RM, measurements and nutrition. WHOOP follows in Phase 8." />
+  return <UnbuiltScreen title={copy.title} phaseLabel={copy.phaseLabel} summary={copy.summary} status={copy.status} />
 }

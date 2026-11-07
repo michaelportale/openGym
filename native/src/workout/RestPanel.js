@@ -4,7 +4,7 @@ import AppText from '../ui/AppText'
 import IconButton from '../ui/IconButton'
 import ProgressBar from '../ui/ProgressBar'
 
-export default function RestPanel({ remainingText, progress, onAddTime, onPause }) {
+export default function RestPanel({ remainingText, progress, onAddTime, onPause, addTimeHint, pauseHint }) {
   return (
     <View style={styles.panel}>
       <View style={styles.row}>
@@ -13,8 +13,8 @@ export default function RestPanel({ remainingText, progress, onAddTime, onPause 
           <AppText variant="timer">{remainingText}</AppText>
         </View>
         <View style={styles.controls}>
-          <IconButton label="+30s" accessibilityLabel="Add 30 seconds" onPress={onAddTime} />
-          <IconButton symbol="pause.fill" accessibilityLabel="Pause rest" onPress={onPause} />
+          <IconButton label="+30s" accessibilityLabel="Add 30 seconds" accessibilityHint={addTimeHint} onPress={onAddTime} />
+          <IconButton symbol="pause.fill" accessibilityLabel="Pause rest" accessibilityHint={pauseHint} onPress={onPause} />
         </View>
       </View>
       <ProgressBar value={progress} />
