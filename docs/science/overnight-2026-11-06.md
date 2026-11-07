@@ -19,7 +19,7 @@ Brief for standup. Facts below are the merged pull requests on `native/phase-1` 
 
 From `docs/science/decisions.md` on that commit:
 
-- Warm-ups: 6 reps at 40% and 80%, rounded down on the unit step, never under the bar, never over the work weight. At or under the bar, no sets. 80 lb on a 5 lb step is 30 and 60.
+- Warm-ups: 6 reps at 40% and 80%, rounded down on the unit step, never under the bar, never over the work weight. At or under the bar, no sets. 80 lb on a 5 lb step with a 45 lb bar is 45 and 60.
 - Reps with no named policy: double progression. One session at the top of the range raises the weight and returns to the bottom. That trigger is convention. An explicit policy, including linear and Greyskull, is kept. The shared web default stays linear.
 - Prompt: first catalogue body part in the session only.
 - Rep range: the program's stored `reps` and `repsMin`. 8-12 is not labeled optimal. A missing range is not filled.
