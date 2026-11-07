@@ -43,3 +43,7 @@ The PRD evidence list does not say who was studied. A title that names a lift, s
 - `weekly-volume`
 
 `warmup-accounting`, `deload-after-misses`, `e1rm-formula`, `rest-defaults`, and `load-increments` are `Not a study`. They are not waiting on a population. The sheet can show that label. It does not show `TODO`.
+
+## Still needs a source
+
+A weekly set target and the audit of deload, estimated 1RM, rest, and increments are still not started. Each one needs a reviewed source, so this lane does not fill them in. Kilogram and pound rounding, the bar boundary, reps-left bounds, and a second migration call are specified in [Decisions](decisions.md).

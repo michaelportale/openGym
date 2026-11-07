@@ -36,6 +36,19 @@ test('a stored linear routine stays linear until the helper is called', () => {
   expect(nativeRepPolicy({ ...cfg, prog: 'linear' }, next)).toBe('linear')
 })
 
+test('a second call leaves an already migrated routine as the same object', () => {
+  const routine = { id: 'push', prog: 'linear', exercises: [{ id, prog: 'linear' }] }
+  const doubled = { prog: 'double', name: 'Pull' }
+  const once = migrateLinearRoutines([routine, doubled])
+  const twice = migrateLinearRoutines(once)
+  expect(once[0].prog).toBe('double')
+  expect(once[0].exercises[0].prog).toBe('linear')
+  expect(twice[0]).toBe(once[0])
+  expect(twice[1]).toBe(doubled)
+  expect(migrateLinearRoutines(twice)[0]).toBe(twice[0])
+  expect(twice[0].exercises[0].prog).toBe('linear')
+})
+
 test('other policies and unnamed routines are copied through unchanged', () => {
   const greyskull = { prog: 'greyskull' }
   const unnamed = { name: 'Push' }
