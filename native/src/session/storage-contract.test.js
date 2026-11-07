@@ -107,6 +107,21 @@ test('sqlite clear is one transaction, so a failure partway through removes noth
   expect((await storage.readAll()).map(row => row.id)).toEqual(['a', 'b'])
 })
 
+test('a rollback that reports no transaction still rejects with the original clear error', async () => {
+  const db = createFakeSqliteDb()
+  const storage = createSqliteSessionStorage(db)
+  await storage.append(event('a', 1))
+  await storage.putDraft('plan:bench:0', { r: 3 })
+  await storage.writeBase({ id: 'w1' })
+  const exec = db.exec.bind(db)
+  db.exec = async sql => {
+    if (/^\s*ROLLBACK\b/i.test(sql)) throw new Error('no transaction')
+    return exec(sql)
+  }
+  db.failNext(/^DELETE FROM session_drafts$/, new Error('locked'))
+  await expect(storage.clear()).rejects.toThrow(/locked/)
+})
+
 test('sqlite storage applies SQLITE_SESSION_SCHEMA and rolls clear back when a delete fails', async () => {
   const db = createFakeSqliteDb()
   const storage = createSqliteSessionStorage(db)
