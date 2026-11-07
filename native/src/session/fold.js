@@ -161,8 +161,7 @@ function applyEvent(model, event) {
     case 'set.add': {
       const entry = findEntry(model, event.exerciseId)
       if (!entry || entry.sets.some(slot => slot.setId === event.setId)) return
-      const row = mergeFields({}, event.fields)
-      row.done = false
+      const row = clearDone(mergeFields({}, event.fields))
       entry.sets.push({ setId: event.setId, row })
       return
     }
@@ -176,9 +175,8 @@ function applyEvent(model, event) {
       const rawSets = Array.isArray(src.sets) && src.sets.length ? src.sets : [{}]
       delete src.sets
       const sets = rawSets.map((set, index) => {
-        const row = set && typeof set === 'object' ? clone(set) : {}
+        const row = clearDone(set && typeof set === 'object' ? clone(set) : {})
         delete row.id
-        row.done = false
         return {
           setId: set && set.id != null ? String(set.id) : plannedSetId(id, index),
           row,

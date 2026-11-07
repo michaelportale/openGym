@@ -74,6 +74,43 @@ test('an exercise added mid-session starts unlogged and can be committed', async
   expect(saved.sets[0]).toMatchObject({ w: 20, r: 10, done: true })
 })
 
+test('a copied per-side set starts undone on the row and both sides', async () => {
+  const storage = createMemoryStorage()
+  const session = await started(storage)
+  const copied = {
+    w: 20,
+    r: 16,
+    done: true,
+    sides: {
+      L: { w: 20, r: 8, done: true },
+      R: { w: 18, r: 8, done: true },
+    },
+  }
+  await session.addSet({ eventId: 'add-side', exerciseId: 'bench', setId: 'extra-side', fields: copied })
+  await session.addExercise({
+    eventId: 'add-side-ex',
+    exerciseId: 'curl',
+    entry: { id: 'curl', target: { sets: 1, reps: 8 }, sets: [copied] },
+  })
+
+  function expectUndone(slot) {
+    expect(slot.completed).toBe(false)
+    expect(slot.row.done).toBe(false)
+    expect(slot.row.sides.L).toMatchObject({ w: 20, r: 8, done: false })
+    expect(slot.row.sides.R).toMatchObject({ w: 18, r: 8, done: false })
+  }
+
+  const live = session.view()
+  expectUndone(live.entries.find(entry => entry.id === 'bench').sets.find(set => set.setId === 'extra-side'))
+  expectUndone(live.entries.find(entry => entry.id === 'curl').sets[0])
+
+  const restored = await openSession({ storage, now: () => T0 + 60_000, timeZone: 'UTC' })
+  const replayed = restored.view()
+  expectUndone(replayed.entries.find(entry => entry.id === 'bench').sets.find(set => set.setId === 'extra-side'))
+  expectUndone(replayed.entries.find(entry => entry.id === 'curl').sets[0])
+  expect(replayed.totals.completedSets).toBe(0)
+})
+
 test('removing an exercise drops its logged work and clears its draft', async () => {
   const storage = createMemoryStorage()
   const session = await started(storage)
