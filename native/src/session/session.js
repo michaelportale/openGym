@@ -132,6 +132,33 @@ class SessionLog {
     })
   }
 
+  // A live exercise keeps at least one set. Undo clears the tick; remove drops the row.
+  async removeSet({ eventId, exerciseId, setId } = {}) {
+    if (this.#seen(eventId)) return duplicate()
+    if (!this.discarded && !this.#isFinished()) {
+      const model = this.#model()
+      if (!slotExists(model, exerciseId, setId)) return failure('unknown-set')
+      const entry = model.entries.find(item => item.id === exerciseId)
+      if (!entry || entry.sets.length <= 1) return failure('last-set')
+    }
+    const result = await this.#append({
+      id: eventId,
+      type: 'set.remove',
+      at: this.now(),
+      exerciseId,
+      setId,
+    })
+    if (result.saved) {
+      try {
+        await this.storage.putDraft(setId, null)
+      } catch (error) {
+        return { ok: true, saved: true, draftError: { code: 'storage', message: error?.message || 'draft clear failed' } }
+      }
+      delete this.drafts[setId]
+    }
+    return result
+  }
+
   async addSet({ eventId, exerciseId, setId, fields } = {}) {
     const model = this.#model()
     if (!this.discarded && !this.#isFinished() && !entryExists(model, exerciseId)) return failure('unknown-exercise')
