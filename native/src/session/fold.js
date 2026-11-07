@@ -186,6 +186,7 @@ function applyEvent(model, event) {
       return
     }
     case 'exercise.remove': {
+      if (model.entries.length <= 1) return
       const index = model.entries.findIndex(entry => entry.id === event.exerciseId)
       if (index < 0) return
       model.entries.splice(index, 1)

@@ -187,12 +187,17 @@ class SessionLog {
     })
   }
 
+  // A live session keeps at least one exercise, same as a live exercise keeps one set.
+  // Finishing with no completed sets stays allowed: that is a skipped workout, not an
+  // empty plan. Discard is how the session goes away.
   async removeExercise({ eventId, exerciseId } = {}) {
     if (this.#seen(eventId)) return duplicate()
     let setIds = []
     if (!this.discarded && !this.#isFinished()) {
-      const entry = this.#model().entries.find(item => item.id === exerciseId)
+      const model = this.#model()
+      const entry = model.entries.find(item => item.id === exerciseId)
       if (!entry) return failure('unknown-exercise')
+      if (model.entries.length <= 1) return failure('last-exercise')
       setIds = entry.sets.map(slot => slot.setId)
     }
     const result = await this.#append({
