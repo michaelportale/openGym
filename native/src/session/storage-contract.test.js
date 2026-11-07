@@ -317,6 +317,19 @@ function baseRaceTests(title, createDb) {
 baseRaceTests('fake sqlite', createFakeSqliteDb)
 baseRaceTests('node sqlite', createNodeSqliteDb)
 
+test('node sqlite: writeBase leaves stamp, trail, and zone out of the body when neither row has them', async () => {
+  const db = createNodeSqliteDb()
+  const storage = createSqliteSessionStorage(db)
+  await storage.writeBase({ id: 'w1', title: 'before' })
+  await storage.writeBase({ id: 'w1', title: 'after' })
+  const rows = await db.getAll('SELECT body FROM session_base WHERE id = ?', [1])
+  const body = JSON.parse(rows[0].body)
+  expect(body).toEqual({ id: 'w1', title: 'after' })
+  expect(body).not.toHaveProperty('_sessionLastSeen')
+  expect(body).not.toHaveProperty('_sessionSeenTrail')
+  expect(body).not.toHaveProperty('_sessionTimeZone')
+})
+
 test('sqlite storage requires an injected db handle', () => {
   expect(() => createSqliteSessionStorage()).toThrow(/expo-sqlite/)
 })
