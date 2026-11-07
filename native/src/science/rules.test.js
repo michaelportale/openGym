@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, test } from 'vitest'
-import { REQUIRED_FIELDS, RULES, registryProblems } from './rules.js'
+import { REQUIRED_FIELDS, RULES, registryProblems, whyThis } from './rules.js'
 
 // The training rules named in docs/sprints/2026-10-30-native-workout-prd.md.
 // The last table row names four inherited rules; each gets its own entry.
@@ -99,6 +99,22 @@ const PRD_URLS = [
   'https://x-mol.com/paper/1810175950090465280',
   'https://sponet.de/sponet/Record/4097139?lng=en'
 ]
+
+test('whyThis returns the rule id, the plain-language reason, and the source', () => {
+  const rule = RULES['warmup-accounting']
+  expect(whyThis('warmup-accounting')).toEqual({
+    ruleId: 'warmup-accounting',
+    reason: rule.reason,
+    source: rule.source
+  })
+  expect(whyThis('weekly-volume').source).toContain('https://sponet.de/sponet/Record/4097139?lng=en')
+  expect(whyThis('weekly-volume').reason.toLowerCase()).toContain('no weekly')
+})
+
+test('whyThis fails when the rule id has no register entry', () => {
+  expect(() => whyThis('not-a-rule')).toThrow(/not-a-rule/)
+  expect(() => whyThis('')).toThrow(/register entry/)
+})
 
 test('entry urls are only the ones named in the PRD evidence list', () => {
   const urls = []

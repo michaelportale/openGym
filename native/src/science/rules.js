@@ -182,6 +182,20 @@ export const RULES = Object.freeze({
   })
 })
 
+/**
+ * @typedef {Object} WhyThis
+ * @property {string} ruleId
+ * @property {string} reason
+ * @property {string} source
+ */
+
+/** Plain-language explanation for one registered rule. */
+export function whyThis(ruleId) {
+  const rule = typeof ruleId === 'string' ? RULES[ruleId] : undefined
+  if (!rule) throw new Error(`No science register entry for rule "${ruleId}"`)
+  return { ruleId: rule.id, reason: rule.reason, source: rule.source }
+}
+
 /** @returns {string[]} Empty when every entry has the required fields. */
 export function registryProblems() {
   const problems = []
