@@ -228,7 +228,14 @@ class SessionLog {
   async addSet({ eventId, exerciseId, setId, fields } = {}) {
     if (this.#seen(eventId)) return duplicate()
     const model = this.#model()
-    if (!this.discarded && !this.#isFinished() && !entryExists(model, exerciseId)) return failure('unknown-exercise')
+    if (!this.discarded && !this.#isFinished()) {
+      if (!entryExists(model, exerciseId)) return failure('unknown-exercise')
+      // A missing id, or one already on any exercise, would append a row the fold drops.
+      // Replay would then disagree with the saved: true the caller already saw.
+      if (typeof setId !== 'string' || setId === '') return failure('unknown-set')
+      const taken = model.entries.some(entry => entry.sets.some(slot => slot.setId === setId))
+      if (taken) return failure('known-set')
+    }
     return this.#append({
       id: eventId,
       type: 'set.add',

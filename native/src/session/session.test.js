@@ -302,6 +302,53 @@ test('replaying an extend after the rest was cancelled is a duplicate', async ()
   expect((await storage.readAll()).filter(event => event.type === 'rest.extend')).toHaveLength(1)
 })
 
+test('an added set needs a new id, and a taken id never reaches the journal', async () => {
+  const storage = createMemoryStorage()
+  const { session } = await started({ storage })
+  const missing = await session.addSet({ eventId: 'add-missing', exerciseId: 'bench', fields: { w: 99, r: 9 } })
+  const blank = await session.addSet({ eventId: 'add-blank', exerciseId: 'bench', setId: '', fields: { w: 99, r: 9 } })
+  const planned = await session.addSet({
+    eventId: 'add-planned',
+    exerciseId: 'bench',
+    setId: bench0,
+    fields: { w: 99, r: 9 },
+  })
+  const otherExercise = await session.addSet({
+    eventId: 'add-other',
+    exerciseId: 'row',
+    setId: bench0,
+    fields: { w: 99, r: 9 },
+  })
+  expect(missing).toMatchObject({ ok: false, saved: false, error: { code: 'unknown-set' } })
+  expect(blank).toMatchObject({ ok: false, saved: false, error: { code: 'unknown-set' } })
+  expect(planned).toMatchObject({ ok: false, saved: false, error: { code: 'known-set' } })
+  expect(otherExercise).toMatchObject({ ok: false, saved: false, error: { code: 'known-set' } })
+  expect(session.view().entries[0].sets[0].row.w).toBe(60)
+  expect((await storage.readAll()).map(event => event.id)).toEqual([])
+
+  await session.removeSet({ eventId: 'remove-bench-1', exerciseId: 'bench', setId: bench1 })
+  const reused = await session.addSet({
+    eventId: 'add-reuse',
+    exerciseId: 'bench',
+    setId: bench1,
+    fields: { w: 70, r: 4 },
+  })
+  expect(reused).toMatchObject({ ok: true, saved: true })
+  const again = await session.addSet({
+    eventId: 'add-reuse',
+    exerciseId: 'bench',
+    setId: bench1,
+    fields: { w: 1, r: 1 },
+  })
+  expect(again).toMatchObject({ ok: true, saved: false, duplicate: true })
+
+  const restored = await openSession({ storage, now: () => T0 + 60_000, timeZone: 'UTC' })
+  const bench = restored.view().entries.find(entry => entry.id === 'bench')
+  expect(bench.sets.map(set => set.setId)).toEqual([bench0, bench1])
+  expect(bench.sets[1].row).toMatchObject({ w: 70, r: 4, done: false })
+  expect((await storage.readAll()).map(event => event.type)).toEqual(['set.remove', 'set.add'])
+})
+
 test('replaying an added set after the exercise is removed is a duplicate', async () => {
   const storage = createMemoryStorage()
   const { session } = await started({ storage })
