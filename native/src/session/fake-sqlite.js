@@ -114,6 +114,21 @@ export function createFakeSqliteDb() {
       else tables.session_base.push({ id, body })
       return { changes: 1 }
     }
+    if (/^INSERT INTO session_base \(id, body\) VALUES \(1, \?\) ON CONFLICT\(id\) DO UPDATE SET body = CASE WHEN json_extract\(session_base\.body, '\$\._sessionLastSeen'\) IS NULL THEN excluded\.body ELSE json_set\(excluded\.body, '\$\._sessionLastSeen', json_extract\(session_base\.body, '\$\._sessionLastSeen'\)\) END$/i.test(text)) {
+      const incoming = params[0]
+      const row = tables.session_base.find(item => item.id === 1)
+      if (!row) {
+        tables.session_base.push({ id: 1, body: incoming })
+        return { changes: 1 }
+      }
+      const current = JSON.parse(row.body)
+      const next = JSON.parse(incoming)
+      if (Object.prototype.hasOwnProperty.call(current, '_sessionLastSeen') && current._sessionLastSeen != null) {
+        next._sessionLastSeen = current._sessionLastSeen
+      }
+      row.body = JSON.stringify(next)
+      return { changes: 1 }
+    }
     if (/^DELETE FROM session_base$/i.test(text)) {
       const changes = tables.session_base.length
       tables.session_base = []

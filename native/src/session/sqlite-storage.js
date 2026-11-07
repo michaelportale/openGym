@@ -109,12 +109,17 @@ export function createSqliteSessionStorage(db) {
       const existingBody = rows.length ? parse(rows[0].body) : null
       const body = baseWithoutTimeZone(value)
       const zone = timeZoneForWrite(options, timeZoneFromBase(existingBody))
-      const seen = lastSeenFromBase(existingBody)
       if (zone) body[SESSION_TIME_ZONE_KEY] = zone
-      if (seen != null) body[SESSION_LAST_SEEN_KEY] = seen
+      // The stamp is copied from the row inside this statement. A value read above would
+      // be stale if putLastSeen committed before the replace.
+      const seen = `'$.${SESSION_LAST_SEEN_KEY}'`
       await db.run(
-        'INSERT OR REPLACE INTO session_base (id, body) VALUES (?, ?)',
-        [1, JSON.stringify(body)],
+        `INSERT INTO session_base (id, body) VALUES (1, ?)
+         ON CONFLICT(id) DO UPDATE SET body = CASE
+           WHEN json_extract(session_base.body, ${seen}) IS NULL THEN excluded.body
+           ELSE json_set(excluded.body, ${seen}, json_extract(session_base.body, ${seen}))
+         END`,
+        [JSON.stringify(body)],
       )
     },
 

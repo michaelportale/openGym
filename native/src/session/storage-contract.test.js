@@ -190,6 +190,24 @@ test('putLastSeen does not clobber a writeBase that lands while it is in flight'
   expect(await storage.readLastSeen()).toBe(stamp)
 })
 
+test('writeBase keeps a last seen saved while the base replace is in flight', async () => {
+  const db = createFakeSqliteDb()
+  const storage = createSqliteSessionStorage(db)
+  const earlier = Date.parse('2026-11-08T00:05:00.000Z')
+  const later = Date.parse('2026-11-08T00:30:00.000Z')
+  await storage.writeBase({ id: 'w1', title: 'before' }, { timeZone: 'UTC' })
+  await storage.putLastSeen(earlier)
+  db.holdNext(/INSERT OR REPLACE INTO session_base|ON CONFLICT\(id\) DO UPDATE/)
+  const pending = storage.writeBase({ id: 'w1', title: 'after' })
+  await db.held()
+  await storage.putLastSeen(later)
+  db.release()
+  await pending
+  expect(await storage.readBase()).toEqual({ id: 'w1', title: 'after' })
+  expect(await storage.readTimeZone()).toBe('UTC')
+  expect(await storage.readLastSeen()).toBe(later)
+})
+
 test('sqlite storage requires an injected db handle', () => {
   expect(() => createSqliteSessionStorage()).toThrow(/expo-sqlite/)
 })
