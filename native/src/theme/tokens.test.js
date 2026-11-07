@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { color, glass, touch } from './tokens.js'
+import { color, fontScale, glass, touch, type } from './tokens.js'
 
 const channels = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16))
 const linear = v => {
@@ -39,4 +39,19 @@ test.each(['text', 'textSecondary', 'textMuted', 'accent'])('%s stays readable o
 test('primary and minimum touch targets are comfortable', () => {
   expect(touch.min).toBeGreaterThanOrEqual(44)
   expect(touch.primary).toBeGreaterThan(touch.min)
+})
+test('selected accent stays readable on the dark background', () => {
+  expect(ratio(color.accent, color.bg)).toBeGreaterThanOrEqual(4.5)
+})
+test('text styles keep a size and a weight', () => {
+  for (const style of Object.values(type)) {
+    expect(style.fontSize).toBeGreaterThanOrEqual(11)
+    expect(String(style.fontWeight)).toMatch(/^[1-9]00$/)
+  }
+})
+test('dynamic type is capped where a row has to stay on screen', () => {
+  expect(fontScale.value).toBeGreaterThan(1)
+  expect(fontScale.timer).toBeGreaterThan(1)
+  expect(fontScale.label).toBeGreaterThan(1)
+  expect(fontScale.heading).toBeGreaterThanOrEqual(fontScale.label)
 })

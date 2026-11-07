@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { ScrollView, StyleSheet, View } from 'react-native'
+import { Platform, ScrollView, StyleSheet, View } from 'react-native'
 import { SafeAreaView } from 'react-native-screens/experimental'
+import { screenFrame } from '../../shell/tabs'
 import { color, space } from '../../theme/tokens'
 import AppText from '../../ui/AppText'
 import Card from '../../ui/Card'
@@ -9,15 +10,16 @@ import ProgressBar from '../../ui/ProgressBar'
 import ScreenHeader from '../../ui/ScreenHeader'
 import { dockFits } from '../../workout/dock-layout'
 import ExerciseCard from '../../workout/ExerciseCard'
+import { PREVIEW_HINT, PREVIEW_NOTICE, previewActionResult } from '../../workout/preview-actions'
 import { previewWorkout as preview } from '../../workout/preview-data'
 import RestPanel from '../../workout/RestPanel'
 import UpNextRow from '../../workout/UpNextRow'
 import WorkoutDock from '../../workout/WorkoutDock'
 
-const noop = () => {}
-
 export default function Workout() {
+  const [notice, setNotice] = useState(PREVIEW_NOTICE)
   const [measured, setMeasured] = useState({ screen: 0, head: 0, dock: 0 })
+  const pressPreview = id => () => setNotice(previewActionResult(id).message)
   const measure = part => event => {
     const { height } = event.nativeEvent.layout
     setMeasured(current => (current[part] === height ? current : { ...current, [part]: height }))
@@ -32,10 +34,8 @@ export default function Workout() {
         subtitle={`Exercise ${preview.exerciseNumber} of ${preview.exerciseCount}`}
       />
       <ProgressBar value={preview.exerciseNumber / preview.exerciseCount} style={styles.progress} />
-      <Card style={styles.banner}>
-        <AppText variant="body" color={color.textSecondary}>
-          Preview with sample data. Buttons do nothing and nothing is saved.
-        </AppText>
+      <Card accessibilityLiveRegion="polite" style={styles.banner}>
+        <AppText variant="body" color={color.textSecondary}>{notice}</AppText>
       </Card>
     </View>
   )
@@ -44,15 +44,17 @@ export default function Workout() {
       <RestPanel
         remainingText={preview.rest.remainingText}
         progress={preview.rest.progress}
-        onAddTime={noop}
-        onPause={noop}
+        onAddTime={pressPreview('addRest')}
+        onPause={pressPreview('pauseRest')}
+        addTimeHint={PREVIEW_HINT}
+        pauseHint={PREVIEW_HINT}
       />
-      <PrimaryButton label="Complete set" onPress={noop} />
+      <PrimaryButton label="Complete set" accessibilityHint={PREVIEW_HINT} onPress={pressPreview('completeSet')} />
     </WorkoutDock>
   )
 
   return (
-    <SafeAreaView edges={{ top: true, bottom: true }} onLayout={measure('screen')}>
+    <SafeAreaView edges={{ top: true, bottom: true }} onLayout={measure('screen')} style={screenFrame(Platform.OS)}>
       {pinned ? head : null}
       <ScrollView
         style={styles.scroll}
@@ -61,7 +63,7 @@ export default function Workout() {
       >
         {pinned ? null : head}
         <View style={styles.body}>
-          <ExerciseCard {...preview.exercise} />
+          <ExerciseCard {...preview.exercise} onAddSet={pressPreview('addSet')} addSetHint={PREVIEW_HINT} />
           <UpNextRow name={preview.upNext} />
         </View>
         {pinned ? null : dock}
