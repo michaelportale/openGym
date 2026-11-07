@@ -18,6 +18,16 @@ function confirmedSave(result) {
 export function createSessionController({ base, storage, finishedWorkouts, now, timeZone } = {}) {
   let session = null
   let state = { ...INITIAL }
+  // One queue for open, call, and finish. A set write that has already been accepted has to
+  // settle, including its view update, before finish reads the journal and clears it. Two
+  // finishes share that queue, so the second sees the saved session and does not send again.
+  let tail = Promise.resolve()
+
+  function enqueue(task) {
+    const run = tail.then(task, task)
+    tail = run.then(() => {}, () => {})
+    return run
+  }
 
   function snapshot() {
     return {
@@ -27,124 +37,136 @@ export function createSessionController({ base, storage, finishedWorkouts, now, 
     }
   }
 
-  return {
-    getState: snapshot,
+  async function openNow() {
+    try {
+      const recovered = await openRecovered({ base, storage, finishedWorkouts, now, timeZone })
+      session = recovered.session
+      state = recovered.status === 'saved'
+        ? { status: 'saved', error: null, view: null }
+        : { status: 'ready', error: null, view: session.view() }
+    } catch (error) {
+      session = null
+      state = {
+        status: 'error',
+        error: { code: 'storage', message: error?.message || 'open failed' },
+        view: null,
+      }
+    }
+    return snapshot()
+  }
 
-    async open() {
+  // Builds the workout the API already stores and hands it to the injected sender.
+  // The journal stays until that sender confirms the save. A second call after a
+  // confirmed save does not send again: the workout is already keyed by the session id.
+  async function finishNow({ sender, end, eventId, workouts } = {}) {
+    if (!session) {
+      if (state.status === 'saved') return { ok: true, saved: true, duplicate: true }
+      return {
+        ok: false,
+        saved: false,
+        error: state.error || { code: 'not-ready', message: 'session is not open' },
+      }
+    }
+    if (typeof sender !== 'function') {
+      return { ok: false, saved: false, error: { code: 'sender', message: 'sender is required' } }
+    }
+
+    const current = session.view()
+    if (current.status !== 'finished') {
+      let sealed
       try {
-        const recovered = await openRecovered({ base, storage, finishedWorkouts, now, timeZone })
-        session = recovered.session
-        state = recovered.status === 'saved'
-          ? { status: 'saved', error: null, view: null }
-          : { status: 'ready', error: null, view: session.view() }
+        sealed = await session.finish({ eventId, end })
       } catch (error) {
-        session = null
-        state = {
-          status: 'error',
-          error: { code: 'storage', message: error?.message || 'open failed' },
-          view: null,
-        }
-      }
-      return snapshot()
-    },
-
-    // Builds the workout the API already stores and hands it to the injected sender.
-    // The journal stays until that sender confirms the save. A second call after a
-    // confirmed save does not send again: the workout is already keyed by the session id.
-    async finishSession({ sender, end, eventId, workouts } = {}) {
-      if (!session) {
-        if (state.status === 'saved') return { ok: true, saved: true, duplicate: true }
-        return {
-          ok: false,
-          saved: false,
-          error: state.error || { code: 'not-ready', message: 'session is not open' },
-        }
-      }
-      if (typeof sender !== 'function') {
-        return { ok: false, saved: false, error: { code: 'sender', message: 'sender is required' } }
-      }
-
-      const current = session.view()
-      if (current.status !== 'finished') {
-        let sealed
-        try {
-          sealed = await session.finish({ eventId, end })
-        } catch (error) {
-          const failure = { code: 'storage', message: error?.message || 'finish failed' }
-          state = { status: 'ready', error: failure, view: session.view() }
-          return { ok: false, saved: false, error: failure }
-        }
-        if (!sealed.ok) {
-          state = { status: 'ready', error: sealed.error || null, view: session.view() }
-          return { ...sealed, saved: false }
-        }
-      }
-
-      const finished = session.view().finished
-      let payload
-      try {
-        payload = toWorkoutPayload(finished, { workouts })
-      } catch (error) {
-        const failure = { code: 'payload', message: error?.message || 'payload failed' }
+        const failure = { code: 'storage', message: error?.message || 'finish failed' }
         state = { status: 'ready', error: failure, view: session.view() }
         return { ok: false, saved: false, error: failure }
       }
+      if (!sealed.ok) {
+        state = { status: 'ready', error: sealed.error || null, view: session.view() }
+        return { ...sealed, saved: false }
+      }
+    }
 
-      let confirmation
+    const finished = session.view().finished
+    let payload
+    try {
+      payload = toWorkoutPayload(finished, { workouts })
+    } catch (error) {
+      const failure = { code: 'payload', message: error?.message || 'payload failed' }
+      state = { status: 'ready', error: failure, view: session.view() }
+      return { ok: false, saved: false, error: failure }
+    }
+
+    let confirmation
+    try {
+      confirmation = await sender(payload)
+    } catch (error) {
+      const failure = { code: 'send', message: error?.message || 'send failed' }
+      state = { status: 'ready', error: failure, view: session.view() }
+      return { ok: false, saved: false, error: failure, payload }
+    }
+    if (!confirmedSave(confirmation)) {
+      const failure = { code: 'not-saved', message: 'sender did not confirm the save' }
+      state = { status: 'ready', error: failure, view: session.view() }
+      return { ok: false, saved: false, error: failure, payload }
+    }
+
+    // The local row is the folded workout. Write it before clearing the journal so a
+    // failed clear can be retried, and the retry replaces the same id. A refused save
+    // never reaches this write.
+    if (finishedWorkouts) {
       try {
-        confirmation = await sender(payload)
+        await finishedWorkouts.put(payload.workout)
       } catch (error) {
-        const failure = { code: 'send', message: error?.message || 'send failed' }
-        state = { status: 'ready', error: failure, view: session.view() }
-        return { ok: false, saved: false, error: failure, payload }
-      }
-      if (!confirmedSave(confirmation)) {
-        const failure = { code: 'not-saved', message: 'sender did not confirm the save' }
-        state = { status: 'ready', error: failure, view: session.view() }
-        return { ok: false, saved: false, error: failure, payload }
-      }
-
-      // The local row is the folded workout. Write it before clearing the journal so a
-      // failed clear can be retried, and the retry replaces the same id. A refused save
-      // never reaches this write.
-      if (finishedWorkouts) {
-        try {
-          await finishedWorkouts.put(payload.workout)
-        } catch (error) {
-          const failure = { code: 'storage', message: error?.message || 'finished workout was not stored' }
-          state = { status: 'ready', error: failure, view: session.view() }
-          return { ok: false, saved: true, error: failure, payload }
-        }
-      }
-
-      try {
-        await storage.clear()
-      } catch (error) {
-        const failure = { code: 'storage', message: error?.message || 'clear failed' }
+        const failure = { code: 'storage', message: error?.message || 'finished workout was not stored' }
         state = { status: 'ready', error: failure, view: session.view() }
         return { ok: false, saved: true, error: failure, payload }
       }
-      session = null
-      state = { status: 'saved', error: null, view: null }
-      return { ok: true, saved: true, payload }
+    }
+
+    try {
+      await storage.clear()
+    } catch (error) {
+      const failure = { code: 'storage', message: error?.message || 'clear failed' }
+      state = { status: 'ready', error: failure, view: session.view() }
+      return { ok: false, saved: true, error: failure, payload }
+    }
+    session = null
+    state = { status: 'saved', error: null, view: null }
+    return { ok: true, saved: true, payload }
+  }
+
+  async function callNow(name, args) {
+    if (!session || typeof session[name] !== 'function') {
+      return {
+        ok: false,
+        saved: false,
+        error: state.error || { code: 'not-ready', message: 'session is not open' },
+      }
+    }
+    const result = await session[name](...args)
+    const view = session.view()
+    state = {
+      status: view.status === 'discarded' ? 'discarded' : 'ready',
+      view,
+      error: result && result.ok === false ? (result.error || { code: 'failed', message: 'request failed' }) : null,
+    }
+    return result
+  }
+
+  return {
+    getState: snapshot,
+
+    open() {
+      return enqueue(openNow)
     },
 
-    async call(name, ...args) {
-      if (!session || typeof session[name] !== 'function') {
-        return {
-          ok: false,
-          saved: false,
-          error: state.error || { code: 'not-ready', message: 'session is not open' },
-        }
-      }
-      const result = await session[name](...args)
-      const view = session.view()
-      state = {
-        status: view.status === 'discarded' ? 'discarded' : 'ready',
-        view,
-        error: result && result.ok === false ? (result.error || { code: 'failed', message: 'request failed' }) : null,
-      }
-      return result
+    finishSession(options) {
+      return enqueue(() => finishNow(options))
+    },
+
+    call(name, ...args) {
+      return enqueue(() => callNow(name, args))
     },
   }
 }

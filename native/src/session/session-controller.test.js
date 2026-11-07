@@ -68,6 +68,146 @@ test('a storage failure is surfaced and the set is not saved', async () => {
   expect(await storage.readAll()).toEqual([])
 })
 
+function holdAppend(storage, eventId) {
+  const append = storage.append.bind(storage)
+  let release
+  let entered
+  const reached = new Promise(resolve => { entered = resolve })
+  const held = new Promise(resolve => { release = resolve })
+  storage.append = async event => {
+    if (event.id === eventId) {
+      entered()
+      await held
+    }
+    return append(event)
+  }
+  return { entered: reached, release: () => release() }
+}
+
+test('finish waits for a pending set commit before it saves and clears the journal', async () => {
+  const storage = createMemoryStorage()
+  const active = controller(storage, () => T0 + 60_000)
+  await active.open()
+  const gate = holdAppend(storage, 'set-1')
+  let rejected = false
+  const pending = active.call('commitSet', {
+    eventId: 'set-1',
+    exerciseId: 'bench',
+    setId: plannedSetId('bench', 0),
+    fields: { w: 60, r: 5 },
+  }).catch(error => {
+    rejected = true
+    return { thrown: error?.message || String(error) }
+  })
+  await gate.entered
+  let sent = 0
+  let payload = null
+  const finishing = active.finishSession({
+    sender: async next => {
+      sent += 1
+      payload = next
+      return { saved: true }
+    },
+  })
+  gate.release()
+  const [commit, finished] = await Promise.all([pending, finishing])
+
+  expect(rejected).toBe(false)
+  expect(commit).toMatchObject({ ok: true, saved: true })
+  expect(finished).toMatchObject({ ok: true, saved: true })
+  expect(sent).toBe(1)
+  expect(payload.workout.vol).toBe(300)
+  expect(payload.workout.entries.flatMap(entry => entry.sets)).toHaveLength(1)
+  expect(await storage.readBase()).toBeNull()
+  expect(await storage.readAll()).toEqual([])
+  expect(active.getState()).toMatchObject({ status: 'saved', view: null })
+})
+
+test('a second finish does not call the sender while the first is still saving', async () => {
+  const storage = createMemoryStorage()
+  const active = controller(storage, () => T0 + 60_000)
+  await active.open()
+  await active.call('commitSet', {
+    eventId: 'set-1',
+    exerciseId: 'bench',
+    setId: plannedSetId('bench', 0),
+    fields: { w: 60, r: 5 },
+  })
+  let sent = 0
+  let release
+  let entered
+  const reached = new Promise(resolve => { entered = resolve })
+  const held = new Promise(resolve => { release = resolve })
+  const sender = async () => {
+    sent += 1
+    entered()
+    await held
+    return { saved: true }
+  }
+  const first = active.finishSession({ sender })
+  const second = active.finishSession({ sender })
+  await reached
+  await Promise.resolve()
+  expect(sent).toBe(1)
+  release()
+  const results = await Promise.all([first, second])
+
+  expect(sent).toBe(1)
+  expect(results.filter(result => result.duplicate === true)).toHaveLength(1)
+  expect(results.every(result => result.ok === true && result.saved === true)).toBe(true)
+})
+
+test('a failed append settles before finish and leaves no orphan event', async () => {
+  const storage = createMemoryStorage()
+  const active = controller(storage, () => T0 + 60_000)
+  await active.open()
+  const append = storage.append.bind(storage)
+  let release
+  let entered
+  const reached = new Promise(resolve => { entered = resolve })
+  const held = new Promise(resolve => { release = resolve })
+  storage.append = async event => {
+    if (event.id === 'set-1') {
+      entered()
+      await held
+      throw new Error('disk full')
+    }
+    return append(event)
+  }
+  let rejected = false
+  const pending = active.call('commitSet', {
+    eventId: 'set-1',
+    exerciseId: 'bench',
+    setId: plannedSetId('bench', 0),
+    fields: { w: 60, r: 5 },
+  }).catch(error => {
+    rejected = true
+    return { thrown: error?.message || String(error) }
+  })
+  await reached
+  let sent = 0
+  const finishing = active.finishSession({
+    sender: async () => {
+      sent += 1
+      return { saved: true }
+    },
+  })
+  // Let an unqueued finish run to the end while the append is still held.
+  await new Promise(resolve => setTimeout(resolve, 0))
+  release()
+  const [commit, finished] = await Promise.all([pending, finishing])
+
+  expect(rejected).toBe(false)
+  expect(commit).toMatchObject({ ok: false, saved: false, error: { code: 'storage' } })
+  expect(commit.error.message).toContain('disk full')
+  expect(finished).toMatchObject({ ok: true, saved: true })
+  expect(sent).toBe(1)
+  expect(finished.payload.workout.vol).toBe(0)
+  expect(finished.payload.workout.entries).toEqual([])
+  expect(await storage.readBase()).toBeNull()
+  expect(await storage.readAll()).toEqual([])
+})
+
 test('a failed open does not let a later action report a saved set', async () => {
   const storage = createMemoryStorage()
   storage.readAll = async () => { throw new Error('unreadable') }
