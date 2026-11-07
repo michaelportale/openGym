@@ -112,10 +112,10 @@ export function createSqliteSessionStorage(db) {
         body[SESSION_TIME_ZONE_KEY] = options.timeZone
       }
       // Stamp, trail, and zone are copied from the current row inside this statement.
-      // json() keeps the trail an array. A bare json_extract is TEXT, and json_set
-      // would store it as a quoted string. json_patch drops a null member, so a key
-      // neither row has is left out instead of stored as JSON null.
-      // On-device JSON1 checklist: the trail copy must stay json()-wrapped.
+      // SQLite 3.53.4 keeps a json_extract array as an array inside json_set.
+      // The json() wrap stays so the trail copy does not depend on that.
+      // json_patch drops a null member, so a key neither row has is left out
+      // instead of stored as JSON null.
       const seen = `'$.${SESSION_LAST_SEEN_KEY}'`
       const trail = `'$.${SESSION_SEEN_TRAIL_KEY}'`
       const zone = `'$.${SESSION_TIME_ZONE_KEY}'`

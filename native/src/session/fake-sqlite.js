@@ -130,15 +130,10 @@ export function createFakeSqliteDb() {
       const zone = currentZone || incomingZone
       if (zone) next._sessionTimeZone = zone
       else delete next._sessionTimeZone
+      // SQLite 3.53.4 keeps a json_extract array as an array inside json_set.
       const trail = current._sessionSeenTrail != null ? current._sessionSeenTrail : next._sessionSeenTrail
-      if (trail != null) {
-        // A bare json_extract is TEXT. json_set stores that as a quoted string.
-        // json() around the extract keeps the trail an array.
-        const keptAsJson = /json\(\s*COALESCE\(\s*json_extract\(session_base\.body, '\$\._sessionSeenTrail'\)|json\(json_extract\(session_base\.body, '\$\._sessionSeenTrail'\)\)|session_base\.body\s*->\s*'\$\._sessionSeenTrail'/i.test(text)
-        next._sessionSeenTrail = keptAsJson || typeof trail === 'string' ? trail : JSON.stringify(trail)
-      } else {
-        delete next._sessionSeenTrail
-      }
+      if (trail != null) next._sessionSeenTrail = trail
+      else delete next._sessionSeenTrail
       row.body = JSON.stringify(next)
       return { changes: 1 }
     }
