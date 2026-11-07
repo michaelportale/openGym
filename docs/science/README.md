@@ -13,7 +13,8 @@ The PRD table row "Deload after 3 misses, e1RM formula, rest defaults, increment
 Each has its own entry so a later audit can accept or replace one number without touching the others.
 
 Defaults for the open questions on the science PR are in [Decisions](decisions.md). They follow the PRD
-and can be overridden.
+and can be overridden. What is done, what is still open, and which populations still need a source
+are in [Phase 4 status](phase-4-status.md).
 
 ## Fields
 

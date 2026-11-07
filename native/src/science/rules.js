@@ -189,11 +189,25 @@ export const RULES = Object.freeze({
  * @property {string} source
  */
 
+/**
+ * A population row is shown only when the register has a real value.
+ * TODO and a blank are the placeholders, so they are not a population.
+ */
+export function shownPopulation(value) {
+  if (typeof value !== 'string') return null
+  const text = value.trim()
+  if (!text || text.toUpperCase() === 'TODO') return null
+  return text
+}
+
 /** Plain-language explanation for one registered rule. */
 export function whyThis(ruleId) {
   const rule = typeof ruleId === 'string' ? RULES[ruleId] : undefined
   if (!rule) throw new Error(`No science register entry for rule "${ruleId}"`)
-  return { ruleId: rule.id, reason: rule.reason, source: rule.source }
+  const payload = { ruleId: rule.id, reason: rule.reason, source: rule.source }
+  const population = shownPopulation(rule.population)
+  if (population) payload.population = population
+  return payload
 }
 
 /** @returns {string[]} Empty when every entry has the required fields. */
