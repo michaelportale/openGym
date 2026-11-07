@@ -208,6 +208,57 @@ test('a failed append settles before finish and leaves no orphan event', async (
   expect(await storage.readAll()).toEqual([])
 })
 
+test('finishing a discarded session does not send, and a failed clear does not reject', async () => {
+  const storage = createMemoryStorage()
+  const active = controller(storage, () => T0 + 60_000)
+  await active.open()
+  await active.call('commitSet', {
+    eventId: 'set-1',
+    exerciseId: 'bench',
+    setId: plannedSetId('bench', 0),
+    fields: { w: 60, r: 5 },
+  })
+  await active.call('putDraft', plannedSetId('bench', 0), { w: 62.5, r: 5 })
+  const discarded = await active.call('discard')
+  expect(discarded).toMatchObject({ ok: true, saved: true })
+  expect(active.getState().status).toBe('discarded')
+  let sent = 0
+  const finished = await active.finishSession({
+    sender: async () => {
+      sent += 1
+      return { saved: true }
+    },
+  })
+  expect(sent).toBe(0)
+  expect(finished).toMatchObject({ ok: false, saved: false, error: { code: 'discarded' } })
+  expect(active.getState().status).toBe('discarded')
+  expect(await storage.readBase()).toBeNull()
+  expect(await storage.readDrafts()).toEqual({})
+
+  const failing = createMemoryStorage()
+  const blocked = controller(failing, () => T0 + 60_000)
+  await blocked.open()
+  await blocked.call('commitSet', {
+    eventId: 'set-1',
+    exerciseId: 'bench',
+    setId: plannedSetId('bench', 0),
+    fields: { w: 60, r: 5 },
+  })
+  failing.clear = async () => { throw new Error('disk full') }
+  let rejected = false
+  const attempt = await blocked.call('discard').catch(error => {
+    rejected = true
+    return { thrown: error?.message || String(error) }
+  })
+  expect(rejected).toBe(false)
+  expect(attempt).toMatchObject({ ok: false, saved: false, error: { code: 'storage' } })
+  expect(attempt.error.message).toContain('disk full')
+  expect(blocked.getState().status).toBe('ready')
+  expect(blocked.getState().error.code).toBe('storage')
+  expect(blocked.getState().view.totals.completedSets).toBe(1)
+  expect(await failing.readAll()).toHaveLength(1)
+})
+
 test('a failed open does not let a later action report a saved set', async () => {
   const storage = createMemoryStorage()
   storage.readAll = async () => { throw new Error('unreadable') }

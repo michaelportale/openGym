@@ -275,6 +275,29 @@ test('an unfinished session that crosses local midnight offers resume, a chosen 
   expect(session.view().finished.end - session.view().finished.start).toBeLessThan(3 * 60 * 60 * 1000)
 })
 
+test('a failed clear leaves the logged set and the draft in place', async () => {
+  const storage = createMemoryStorage()
+  const { session } = await started({ storage })
+  await session.commitSet({ eventId: 'c1', exerciseId: 'bench', setId: bench0, fields: { w: 60, r: 5 } })
+  await session.putDraft(bench1, { w: 70, r: 3 })
+  storage.clear = async () => { throw new Error('disk full') }
+  let thrown = null
+  let result
+  try {
+    result = await session.discard()
+  } catch (error) {
+    thrown = error
+  }
+  expect(thrown).toBeNull()
+  expect(result).toMatchObject({ ok: false, saved: false, error: { code: 'storage' } })
+  expect(result.error.message).toContain('disk full')
+  expect(session.view().status).toBe('active')
+  expect(session.view().totals).toMatchObject({ completedSets: 1, reps: 5, loadReps: 300 })
+  expect(session.getDraft(bench1)).toEqual({ w: 70, r: 3 })
+  expect(await storage.readBase()).not.toBeNull()
+  expect(await storage.readAll()).toHaveLength(1)
+})
+
 test('discard drops an overnight session instead of logging it', async () => {
   const clock = createClock(Date.parse('2026-11-07T23:10:00.000Z'))
   const storage = createMemoryStorage()
