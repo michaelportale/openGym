@@ -292,7 +292,11 @@ class SessionLog {
   async discard() {
     if (this.discarded) return duplicate()
     if (this.#isFinished()) return failure('finished')
-    await this.storage.clear()
+    try {
+      await this.storage.clear()
+    } catch (error) {
+      return failure('storage', error?.message || 'clear failed')
+    }
     this.events = []
     this.drafts = {}
     this.base = null

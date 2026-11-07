@@ -23,6 +23,7 @@ export function createSessionController({ base, storage, finishedWorkouts, now, 
   // finishes share that queue, so the second sees the saved session and does not send again.
   let tail = Promise.resolve()
 
+  // Queued tasks must not call back into the controller: the queue is not re-entrant and would deadlock.
   function enqueue(task) {
     const run = tail.then(task, task)
     tail = run.then(() => {}, () => {})
@@ -72,6 +73,11 @@ export function createSessionController({ base, storage, finishedWorkouts, now, 
     }
 
     const current = session.view()
+    if (current.status === 'discarded') {
+      const error = { code: 'discarded', message: 'discarded' }
+      state = { status: 'discarded', error, view: current }
+      return { ok: false, saved: false, error }
+    }
     if (current.status !== 'finished') {
       let sealed
       try {
