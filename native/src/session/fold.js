@@ -133,7 +133,14 @@ function applyEvent(model, event) {
       const slot = findSlot(model, event.exerciseId, event.setId)
       if (!slot) return
       const row = mergeFields(slot.row, event.fields)
-      row.done = true
+      const namedSides = event.fields != null && Object.prototype.hasOwnProperty.call(event.fields, 'sides')
+      if (isSideSet(row) && !namedSides) {
+        row.sides = {
+          L: { ...row.sides.L, done: true },
+          R: { ...row.sides.R, done: true },
+        }
+      }
+      row.done = isSideSet(row) ? row.sides.L?.done === true && row.sides.R?.done === true : true
       row.at = event.at
       slot.row = row
       return

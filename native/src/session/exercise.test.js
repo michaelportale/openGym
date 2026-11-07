@@ -111,6 +111,59 @@ test('a copied per-side set starts undone on the row and both sides', async () =
   expect(replayed.totals.completedSets).toBe(0)
 })
 
+test('committing a per-side set marks both sides done unless the commit names them', async () => {
+  const storage = createMemoryStorage()
+  const session = await started(storage)
+  const copied = {
+    w: 20,
+    r: 16,
+    done: true,
+    sides: {
+      L: { w: 20, r: 8, done: true },
+      R: { w: 18, r: 8, done: true },
+    },
+  }
+  await session.addSet({ eventId: 'add-both', exerciseId: 'bench', setId: 'both', fields: copied })
+  await session.addSet({ eventId: 'add-one', exerciseId: 'bench', setId: 'one', fields: copied })
+  await session.commitSet({ eventId: 'commit-both', exerciseId: 'bench', setId: 'both', fields: { w: 22 } })
+  await session.commitSet({
+    eventId: 'commit-one',
+    exerciseId: 'bench',
+    setId: 'one',
+    fields: {
+      sides: {
+        L: { w: 20, r: 8, done: true },
+        R: { w: 18, r: 8, done: false },
+      },
+    },
+  })
+
+  function slot(view, setId) {
+    return view.entries.find(entry => entry.id === 'bench').sets.find(set => set.setId === setId)
+  }
+
+  const live = session.view()
+  const both = slot(live, 'both')
+  expect(both.completed).toBe(true)
+  expect(both.row.done).toBe(true)
+  expect(both.row.w).toBe(22)
+  expect(both.row.sides.L).toMatchObject({ w: 20, r: 8, done: true })
+  expect(both.row.sides.R).toMatchObject({ w: 18, r: 8, done: true })
+  const one = slot(live, 'one')
+  expect(one.completed).toBe(true)
+  expect(one.row.done).toBe(false)
+  expect(one.row.sides.L.done).toBe(true)
+  expect(one.row.sides.R.done).toBe(false)
+
+  const restored = await openSession({ storage, now: () => T0 + 60_000, timeZone: 'UTC' })
+  const replayed = restored.view()
+  expect(slot(replayed, 'both').row.sides.L.done).toBe(true)
+  expect(slot(replayed, 'both').row.sides.R.done).toBe(true)
+  expect(slot(replayed, 'both').row.done).toBe(true)
+  expect(slot(replayed, 'one').row.done).toBe(false)
+  expect(slot(replayed, 'one').row.sides.R.done).toBe(false)
+})
+
 test('removing an exercise drops its logged work and clears its draft', async () => {
   const storage = createMemoryStorage()
   const session = await started(storage)
