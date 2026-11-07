@@ -1,4 +1,4 @@
-import { SQLITE_SESSION_SCHEMA } from './storage.js'
+import { SESSION_TIME_ZONE_KEY, SQLITE_SESSION_SCHEMA, baseWithoutTimeZone, timeZoneFromBase } from './storage.js'
 
 // SQLite adapter for the session journal. The handle is injected so this file does not import
 // expo-sqlite. native/package.json does not depend on it yet. When the app adds it, open the
@@ -99,22 +99,31 @@ export function createSqliteSessionStorage(db) {
       return Object.fromEntries(rows.map(row => [row.set_id, parse(row.body)]))
     },
 
-    async writeBase(value) {
+    async writeBase(value, options = {}) {
       await ready()
       if (value == null) {
         await db.run('DELETE FROM session_base')
         return
       }
+      const body = baseWithoutTimeZone(value)
+      const zone = options && typeof options.timeZone === 'string' ? options.timeZone : ''
+      if (zone) body[SESSION_TIME_ZONE_KEY] = zone
       await db.run(
         'INSERT OR REPLACE INTO session_base (id, body) VALUES (?, ?)',
-        [1, JSON.stringify(value)],
+        [1, JSON.stringify(body)],
       )
     },
 
     async readBase() {
       await ready()
       const rows = await db.getAll('SELECT body FROM session_base WHERE id = ?', [1])
-      return rows.length ? parse(rows[0].body) : null
+      return rows.length ? baseWithoutTimeZone(parse(rows[0].body)) : null
+    },
+
+    async readTimeZone() {
+      await ready()
+      const rows = await db.getAll('SELECT body FROM session_base WHERE id = ?', [1])
+      return rows.length ? timeZoneFromBase(parse(rows[0].body)) : ''
     },
   }
 }
