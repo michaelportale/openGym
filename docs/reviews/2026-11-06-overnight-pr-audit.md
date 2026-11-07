@@ -5,7 +5,7 @@
 **Repository:** michaelportale/openGym, across every target branch.
 **Cadence:** every half hour, with a final 7:30 a.m. reconciliation.
 **Status:** in progress. This is a rolling handoff for the coding agents, not an assertion that all listed PRs are safe.
-**Latest discovery:** 62 merged PRs through #105 remain represented; the 05:30 EST refresh exhausted 107 PRs (100 + 7), with no new merge or revision since the 01:40 reconciliation. N002 remains resolved in draft #106 at `2ca47724af7785274ee9cad19bcba0d6c2a544ba`; F004 remains open on actual integration while #107 is draft. #67 still reflects its 00:08 EST snapshot. Historical V001 and device validation limits remain. No audit merge was performed.
+**Latest discovery:** 62 merged PRs through #105 remain represented; the 06:00 EST refresh exhausted 107 PRs (100 + 7), with no new merge or revision since the 01:40 reconciliation. N002 remains resolved in draft #106 at `2ca47724af7785274ee9cad19bcba0d6c2a544ba`; F004 remains open on actual integration while #107 is draft. #67 still reflects its 00:08 EST snapshot. Historical V001 and device validation limits remain. No audit merge was performed.
 **Audit PR:** [#65](https://github.com/michaelportale/openGym/pull/65), kept draft for rolling documentation updates.
 
 ## Agent action queue
@@ -554,6 +554,14 @@ The 10:30:27Z heartbeat exhausted all-state pagination (100 + 7 PRs). All 62 act
 Current reviews and unresolved threads remain empty. Non-audit open heads still have zero check runs/statuses and pending aggregates. Actions remains disabled, classic branch protection is absent, and rulesets are empty. N002 remains resolved in draft #106; F004 remains open on integration while #107 remains draft and unmerged. Its generated preview is not an actual merged fix.
 
 No tests or feedback were repeated for unchanged commits and concerns. Previous independent evidence retains its exact SHA attribution; historical V001 and device/Expo SQLite/mounted-hook limits remain. No application edits, PR merges, T3 work or schedule changes occurred. The final fixed-window reconciliation remains due at 7:30 a.m. EST.
+
+## 6:00 a.m. unchanged-head refresh
+
+The 11:00:28Z heartbeat exhausted all-state pagination (100 + 7 PRs). All 62 actual in-window merges across all bases match the ledger's head/base/merge/time tuples, and all historical merge parent pairs were rechecked. No non-audit PR metadata, revision or discussion changed. Integration remains `ed4fdc288601dde5504246eeb2131a53b19b69d7`; #65/#67/#106/#107 remain open drafts with unchanged non-audit heads and bases.
+
+Current review submissions and unresolved threads remain empty. Non-audit open heads have zero check runs/statuses and pending aggregates; Actions is disabled, classic branch protection is absent, and rulesets are empty. N002 remains resolved in draft #106. F004 remains open on actual integration because candidate #107 has not merged; its tested generated preview is not an actual merge.
+
+No tests or feedback were repeated for unchanged commits and concerns. Previous independent validation retains its exact SHA attribution; historical V001 and device/Expo SQLite/mounted-hook limits remain. No application edits, PR merges, T3 work or schedule changes occurred. Final fixed-window reconciliation remains due at 7:30 a.m. EST.
 
 ## Coverage ledger
 
