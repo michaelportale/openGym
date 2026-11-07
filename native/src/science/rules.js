@@ -33,7 +33,7 @@ export const RULES = Object.freeze({
     sourceUrl: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC7558980/',
     population: 'TODO',
     evidence: 'Limited: one crossover study, bench result',
-    inference: 'The 2 by 6 at 40% and 80% is the product decision taken from that summary. Rounding down onto a loadable weight, and never going below the bar, is our own rule. The shared warm-up helper still ramps by closing half the gap to the work weight, not by 40/80. This entry records the decision and does not change that helper.',
+    inference: 'The 2 by 6 at 40% and 80% is the product decision taken from that summary. Rounding down onto a loadable weight, and never going below the bar, is our own rule. Native warm-ups use that prescription. The shared helper in frontend still closes half the gap, and this lane does not edit it.',
     reading: 'Summary of the full text read.'
   }),
   'warmup-volume': rule({
