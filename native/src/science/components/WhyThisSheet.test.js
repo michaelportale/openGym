@@ -11,7 +11,7 @@ vi.mock('react-native', () => {
   return { View: host('View'), Text: host('Text') }
 })
 
-import { whyThis } from '../rules.js'
+import { RULES, whyThis } from '../rules.js'
 import { whySheetModel } from '../why-sheet.js'
 import { WhyThisSheet } from './WhyThisSheet.jsx'
 
@@ -41,6 +41,28 @@ test('a convention payload is labeled Convention and a cited rule is not', () =>
   expect(whySheetModel(whyThis('deload-after-misses')).label).toBe('Convention')
   expect(whySheetModel(whyThis('warmup-loads')).label).toBe(null)
   expect(whySheetModel(whyThis('warmup-loads')).source).toContain('PMC7558980')
+})
+
+test('a TODO or missing population is never rendered', () => {
+  for (const rule of Object.values(RULES)) {
+    const payload = whyThis(rule.id)
+    const shown = texts(WhyThisSheet({ payload }))
+    expect(shown.join('\n')).not.toMatch(/\bTODO\b/)
+    if (!payload.population) expect(shown).not.toContain('Population')
+  }
+  const base = whyThis('warmup-loads')
+  for (const population of ['TODO', 'todo', ' TODO ', '', '   ', undefined, null]) {
+    const payload = { ...base, population }
+    expect(whySheetModel(payload).population).toBeNull()
+    const shown = texts(WhyThisSheet({ payload }))
+    expect(shown).not.toContain('Population')
+    expect(shown.join('\n')).not.toMatch(/TODO/i)
+  }
+  const stated = { ...base, population: 'stated by a source' }
+  const shown = texts(WhyThisSheet({ payload: stated }))
+  expect(RULES['warmup-loads'].population).toBe('TODO')
+  expect(shown).toContain('Population')
+  expect(shown).toContain('stated by a source')
 })
 
 test('the sheet renders the reason, the source, and the plain label', () => {

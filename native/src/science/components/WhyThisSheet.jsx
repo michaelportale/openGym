@@ -18,6 +18,12 @@ export function WhyThisSheet({ payload }) {
       ) : null}
       <Text style={{ color: color.text, ...type.body }}>{model.reason}</Text>
       <Text style={{ color: color.textSecondary, ...type.body }}>{model.source}</Text>
+      {model.population ? (
+        <View>
+          <Text style={{ color: color.textMuted, ...type.label }}>Population</Text>
+          <Text style={{ color: color.textSecondary, ...type.body }}>{model.population}</Text>
+        </View>
+      ) : null}
     </View>
   )
 }
