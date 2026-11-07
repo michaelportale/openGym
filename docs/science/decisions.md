@@ -38,3 +38,9 @@ Keep the inherited numbers, labeled convention until audited. A new profile rest
 ## Estimated 1RM (`e1rm-formula`)
 
 Keep showing Epley, with the inherited 12-rep cap for a single formula, labeled convention until audited. Do not switch the default to the weighted blend. Epley is the inherited default the PRD told us to audit. The blend is also uncited.
+
+## Effort (`effort-proximity`)
+
+The PRD names optional reps left in the tank, which is RIR. A new log is a whole number from 0 to 10, or omitted. `validateRir` checks that before anything is saved. `effortProgressionNote` reads a hand-entered RIR, or an existing RPE through the shared scale, and returns "This looks far from failure." when the rating is above the inherited `HARD_RIR` of 3. Warm-ups and a bare failure flag do not count. `withEffortNote` copies a prescription and adds that note. It does not change the load.
+
+Charlie can call those three from the journal later. This lane does not edit `native/src/session/`.

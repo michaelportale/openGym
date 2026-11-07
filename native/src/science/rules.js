@@ -117,7 +117,7 @@ export const RULES = Object.freeze({
     sourceUrl: 'https://x-mol.com/paper/1810175950090465280',
     population: 'TODO',
     evidence: 'Exploratory, estimated proximity',
-    inference: 'Showing an optional per-set estimate, and wording a high number as far from failure, is our display of an abstract-level result. It does not change the next session by itself.',
+    inference: 'Showing an optional per-set estimate, and wording a high number as far from failure, is our display of an abstract-level result. Many reps left means a hand-entered rating above the inherited HARD_RIR of 3. It does not change the next session by itself.',
     reading: 'Abstract-level only. DOI 10.1007/s40279-024-02069-2.'
   }),
   'weekly-volume': rule({
