@@ -19,7 +19,7 @@ export const type = {
   label: { fontSize: 11, fontWeight: '500', letterSpacing: 0.8, textTransform: 'uppercase' },
   button: { fontSize: 17, fontWeight: '700' }
 }
-export const fontScale = { value: 1.3, timer: 1.3, label: 1.5 }
+export const fontScale = { value: 1.3, timer: 1.3, label: 1.5, heading: 3 }
 export const motion = { press: 120, progress: 300 }
 export const pressScale = 0.97
 export const size = { icon: 22, marker: 24, progress: 6, stroke: 1 }

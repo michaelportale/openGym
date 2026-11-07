@@ -23,7 +23,7 @@ export default function UnbuiltScreen({ title, phase, summary }) {
 
 const styles = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: color.bg },
-  content: { paddingTop: space.lg, paddingBottom: space.xl },
+  content: { paddingBottom: space.xl },
   card: {
     marginHorizontal: space.lg,
     padding: space.lg,
