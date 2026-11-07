@@ -1,4 +1,4 @@
-import { openSession } from './session.js'
+import { openRecovered } from './recovery.js'
 import { toWorkoutPayload } from './finish.js'
 
 // Screen-facing session commands. The React hook calls open() on mount and call() for each
@@ -32,8 +32,11 @@ export function createSessionController({ base, storage, finishedWorkouts, now, 
 
     async open() {
       try {
-        session = await openSession({ base, storage, now, timeZone })
-        state = { status: 'ready', error: null, view: session.view() }
+        const recovered = await openRecovered({ base, storage, finishedWorkouts, now, timeZone })
+        session = recovered.session
+        state = recovered.status === 'saved'
+          ? { status: 'saved', error: null, view: null }
+          : { status: 'ready', error: null, view: session.view() }
       } catch (error) {
         session = null
         state = {
