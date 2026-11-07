@@ -163,6 +163,33 @@ function applyEvent(model, event) {
       entry.sets.push({ setId: event.setId, row })
       return
     }
+    case 'exercise.add': {
+      const id = event.exerciseId
+      if (typeof id !== 'string' || id === '' || findEntry(model, id)) return
+      const src = event.entry && typeof event.entry === 'object' && !Array.isArray(event.entry)
+        ? clone(event.entry)
+        : {}
+      src.id = id
+      const rawSets = Array.isArray(src.sets) && src.sets.length ? src.sets : [{}]
+      delete src.sets
+      const sets = rawSets.map((set, index) => {
+        const row = set && typeof set === 'object' ? clone(set) : {}
+        delete row.id
+        row.done = false
+        return {
+          setId: set && set.id != null ? String(set.id) : plannedSetId(id, index),
+          row,
+        }
+      })
+      model.entries.push({ source: src, id, sets })
+      return
+    }
+    case 'exercise.remove': {
+      const index = model.entries.findIndex(entry => entry.id === event.exerciseId)
+      if (index < 0) return
+      model.entries.splice(index, 1)
+      return
+    }
     case 'exercise.move': {
       const from = model.entries.findIndex(entry => entry.id === event.exerciseId)
       if (from < 0 || !Number.isInteger(event.toIndex)) return

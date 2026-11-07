@@ -172,6 +172,48 @@ class SessionLog {
     })
   }
 
+  async addExercise({ eventId, exerciseId, entry } = {}) {
+    if (this.#seen(eventId)) return duplicate()
+    if (!this.discarded && !this.#isFinished()) {
+      if (typeof exerciseId !== 'string' || exerciseId === '') return failure('unknown-exercise')
+      if (entryExists(this.#model(), exerciseId)) return failure('known-exercise')
+    }
+    return this.#append({
+      id: eventId,
+      type: 'exercise.add',
+      at: this.now(),
+      exerciseId,
+      entry: entry && typeof entry === 'object' ? entry : {},
+    })
+  }
+
+  async removeExercise({ eventId, exerciseId } = {}) {
+    if (this.#seen(eventId)) return duplicate()
+    let setIds = []
+    if (!this.discarded && !this.#isFinished()) {
+      const entry = this.#model().entries.find(item => item.id === exerciseId)
+      if (!entry) return failure('unknown-exercise')
+      setIds = entry.sets.map(slot => slot.setId)
+    }
+    const result = await this.#append({
+      id: eventId,
+      type: 'exercise.remove',
+      at: this.now(),
+      exerciseId,
+    })
+    if (result.saved) {
+      for (const setId of setIds) {
+        try {
+          await this.storage.putDraft(setId, null)
+        } catch (error) {
+          return { ok: true, saved: true, draftError: { code: 'storage', message: error?.message || 'draft clear failed' } }
+        }
+        delete this.drafts[setId]
+      }
+    }
+    return result
+  }
+
   async moveExercise({ eventId, exerciseId, toIndex } = {}) {
     const model = this.#model()
     if (!this.discarded && !this.#isFinished() && !entryExists(model, exerciseId)) return failure('unknown-exercise')
