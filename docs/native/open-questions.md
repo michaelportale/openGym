@@ -24,7 +24,7 @@ Do not push to `main` and do not commit on it. `main` waits for Michael's phone 
 
 The write-up is F004 in `docs/reviews/2026-11-06-overnight-pr-audit.md` on open PR #65. That file's discovery snapshot stops at #103. It was not re-read against #104 for this note. The catch itself was re-read at the #104 merge `ccf975c`. It was not re-read after #105 merged at `ed4fdc2`.
 
-T2 in the PRD is to make the failure visible without marking an already-saved set or draft as unsaved. T3 queues `putDraft` on the same chain so a draft write after a commit or remove cannot bring a cleared draft back. Whether anything else in the audit changed after #103 was not re-checked.
+T2 in the PRD is to make the failure visible without marking an already-saved set or draft as unsaved. T3 queues `putDraft` on the same chain so an earlier draft write cannot finish after a later commit or remove and bring the cleared draft back. A later accepted draft remains newer input. Whether anything else in the audit changed after #103 was not re-checked.
 
 ## expo-sqlite is not installed
 

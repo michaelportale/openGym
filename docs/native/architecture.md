@@ -31,7 +31,7 @@ If a command's event would not change `workoutFold`, `#appendNow` does not write
 
 Model checks such as unknown set, unknown exercise, no rest, and known set run inside the queued task (#105). Argument checks stay argument checks, in the same order.
 
-`putDraft` is not on this chain. A draft write can land after `commitSet` or `removeSet` clears that draft and put it back. The PRD task T3 queues that write with the clear. `#seenChain` is a separate chain for the last-seen stamp. A failed stamp write is still swallowed there. That is F004 in [open-questions.md](open-questions.md).
+`putDraft` is not on this chain. An earlier draft write can finish after a later `commitSet` or `removeSet` clears that draft and put it back. The PRD task T3 queues that write with the clear, preserving invocation order. A draft accepted after a commit is newer input and remains saved. `#seenChain` is a separate chain for the last-seen stamp. A failed stamp write is still swallowed there. That is F004 in [open-questions.md](open-questions.md).
 
 ## First-write-wins zone
 

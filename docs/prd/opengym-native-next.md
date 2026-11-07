@@ -188,7 +188,7 @@ Do not add `expo-sqlite`. Do not edit screens.
 
 ### T3. Queue draft saves with the journal
 
-Goal: `putDraft`, and the writes to the in-memory drafts map, run on the same `#enqueue` chain as `commitSet` and `removeSet`. A draft save that lands right after one of those commands clears the draft must not bring it back.
+Goal: `putDraft`, and the writes to the in-memory drafts map, run on the same `#enqueue` chain as `commitSet` and `removeSet`. An earlier draft save must finish before a later commit or removal clears it. A later accepted draft save remains a new edit and must be preserved.
 
 `putDraft` today checks `discarded` and `finished`, awaits `storage.putDraft`, then assigns `this.drafts`. `commitSet`, `removeSet`, and `removeExercise` clear that draft inside their queued task (`#clearDraft` deletes the storage row and then `this.drafts[setId]`). Because `putDraft` is not on the chain, its assignment can run after that delete and put the draft back.
 
@@ -196,7 +196,8 @@ Acceptance:
 
 - `putDraft` joins `#enqueue`. The storage write and the `this.drafts` assignment both happen inside that task. A rejection still must not drop the rest of the chain.
 - `#clearDraft` stays on that same chain, which it already does when called from `commitSet`, `removeSet`, and `removeExercise`.
-- Interleave: store a draft for a set, call `commitSet` or `removeSet` for that set without awaiting it, then call `putDraft` for the same set id without awaiting it. Await both. The commit or remove saved. `getDraft(setId)` is null. Draft storage for that id is empty. The `putDraft` did not bring the draft back.
+- Interleave: start `putDraft` for a set and hold its storage write in flight. Then call `commitSet` or `removeSet` for that set without awaiting the draft. Release the held draft write and await both commands. Both saved, and the later commit or remove cleared the earlier draft: `getDraft(setId)` is null and draft storage for that id is empty. For commit, verify that the committed row includes the draft fields.
+- Reverse order: seed a draft, call `commitSet`, then call `putDraft` with newer fields for the same existing set. Await both. The commit saved the earlier fields, and the later accepted draft remains in both `getDraft(setId)` and storage. FIFO does not make newer input stale; this task adds no stale-input rejection policy.
 - A `putDraft` on a discarded or finished session still returns `discarded` or `finished` and writes nothing. Those checks run inside the queued task, after any earlier command.
 - `journal-effect.test.js` stays green. A draft is still not a journal event.
 
@@ -266,7 +267,7 @@ T1 is merged. Its two interleaves in `journal-effect.test.js` (`a commit queued 
 | Read-modify-write of the fold cache | #101. Two appends could each write a stale `#fold`. | `#enqueue`, and `overlapping appends both save, and a later same-value edit stays unchanged` |
 | Discard against an in-flight append | #104. The append could push the event back after the clear. | The two discard tests in `journal-effect.test.js` |
 | Stale model checks | #105, merged at `ed4fdc2`. | `a commit queued behind removeSet reports unknown-set` and `an extend queued behind cancelRest reports no-rest` in `journal-effect.test.js` |
-| A draft write after a clear | Not started. T3. | The interleave in T3: `putDraft` fired right after `commitSet` or `removeSet` leaves the draft cleared |
+| An earlier draft write completes after a later clear | Not started. T3. | Hold `putDraft` first, then queue `commitSet` or `removeSet`; the later clear wins. In reverse order, preserve the later accepted draft. |
 
 Review lessons, from this run of the journal:
 
