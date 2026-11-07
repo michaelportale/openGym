@@ -19,7 +19,11 @@ test('an 80 lb dumbbell work weight on a 5 lb step is about 30 and 60', () => {
 test('a percentage under the bar is raised to the bar and nothing exceeds the work weight', () => {
   expect(warmupRamp({ working: 40, step: 2.5, floor: 20 }).map(s => s.w)).toEqual([20, 30])
   expect(warmupRamp({ working: 50, step: 5, floor: 45 }).map(s => s.w)).toEqual([45, 45])
-  expect(warmupRamp({ working: 30, step: 5, floor: 45 }).map(s => s.w)).toEqual([30, 30])
+})
+
+test('work at or under the bar gets no warm-up sets', () => {
+  expect(warmupRamp({ working: 45, step: 5, floor: 45 })).toEqual([])
+  expect(warmupRamp({ working: 30, step: 5, floor: 45 })).toEqual([])
 })
 
 test('owned bells round down to a bell you have', () => {

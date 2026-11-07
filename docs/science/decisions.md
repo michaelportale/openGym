@@ -9,6 +9,8 @@ Ship two warm-up sets of 6 reps at 40% and 80% of the working weight, rounded do
 
 The PRD states that prescription and says the shared helper, which closes half the gap, is the wrong shape for it. The new helper lives in native science code. `frontend/src/lib` is left on the midpoint ramp so the web app and any unreconciled strength logic stay as they are.
 
+When the working weight is at or under the bar, `warmupRamp` returns no sets. The screen renders that list and does not need its own skip. A heavier work weight still gets the two sets, and a percentage that lands under the bar is still raised to the bar.
+
 ## Progression (`double-progression`)
 
 When a reps exercise and its routine do not name a policy, native suggestions use double progression: one session in which every work set reaches the top of the range raises the weight and returns to the bottom. That one-session trigger is convention.
@@ -36,3 +38,17 @@ Keep the inherited numbers, labeled convention until audited. A new profile rest
 ## Estimated 1RM (`e1rm-formula`)
 
 Keep showing Epley, with the inherited 12-rep cap for a single formula, labeled convention until audited. Do not switch the default to the weighted blend. Epley is the inherited default the PRD told us to audit. The blend is also uncited.
+
+## Effort (`effort-proximity`)
+
+The PRD names optional reps left in the tank, which is RIR. A new log is a whole number from 0 to 10, or omitted. `validateRir` checks that before anything is saved. `effortProgressionNote` reads a hand-entered RIR, or an existing RPE through the shared scale, and returns "This looks far from failure." when the rating is above the inherited `HARD_RIR` of 3. Warm-ups and a bare failure flag do not count. `withEffortNote` copies a prescription and adds that note. It does not change the load.
+
+Charlie can call those three from the journal later. This lane does not edit `native/src/session/`.
+
+## Why this sheet
+
+`WhyThisSheet` renders a `whyThis()` payload: the reason, the source, and a Convention or Definition label when the register uses that plain source. A cited rule shows the citation and no plain label. Gus mounts it by passing that payload. This lane does not mount it in any screen.
+
+## Linear routines
+
+`migrateLinearRoutines` copies a routine whose own `prog` is `linear` and writes `double` on the copy. It does not run on its own. Prescription, boot, and the journal do not call it. Charlie calls it only after an explicit owner action. Exercise-level `prog: 'linear'` is left alone, and that exercise stays linear because the exercise policy wins. Writing `double` keeps the shared web engine on the same policy after a sync. Clearing the field would send the web engine back to linear.

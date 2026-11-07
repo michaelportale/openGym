@@ -33,7 +33,7 @@ export const RULES = Object.freeze({
     sourceUrl: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC7558980/',
     population: 'TODO',
     evidence: 'Limited: one crossover study, bench result',
-    inference: 'The 2 by 6 at 40% and 80% is the product decision taken from that summary. Rounding down onto a loadable weight, and never going below the bar, is our own rule. Native warm-ups use that prescription. The shared helper in frontend still closes half the gap, and this lane does not edit it.',
+    inference: 'The 2 by 6 at 40% and 80% is the product decision taken from that summary. Rounding down onto a loadable weight, and never going below the bar, is our own rule. Native warm-ups use that prescription. When the work weight is at or under the bar, native returns no warm-up sets. The shared helper in frontend still closes half the gap, and this lane does not edit it.',
     reading: 'Summary of the full text read.'
   }),
   'warmup-volume': rule({
@@ -117,7 +117,7 @@ export const RULES = Object.freeze({
     sourceUrl: 'https://x-mol.com/paper/1810175950090465280',
     population: 'TODO',
     evidence: 'Exploratory, estimated proximity',
-    inference: 'Showing an optional per-set estimate, and wording a high number as far from failure, is our display of an abstract-level result. It does not change the next session by itself.',
+    inference: 'Showing an optional per-set estimate, and wording a high number as far from failure, is our display of an abstract-level result. Many reps left means a hand-entered rating above the inherited HARD_RIR of 3. It does not change the next session by itself.',
     reading: 'Abstract-level only. DOI 10.1007/s40279-024-02069-2.'
   }),
   'weekly-volume': rule({
