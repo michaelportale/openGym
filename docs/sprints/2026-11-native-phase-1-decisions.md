@@ -127,6 +127,25 @@ width clips the dock.
 
 Revisit if. The web host moves the pill or insets the screen itself.
 
+## Symbols off iOS
+
+Context. More, pause, add set, the done marks, and the up-next row use
+`expo-symbols` with an SF Symbol name string. The installed non-iOS
+`SymbolView` only draws a name when it is an object with an `android` or
+`web` key. A string becomes null, and the view then renders `fallback`,
+which these call sites do not pass. iOS uses the native SF Symbol view.
+
+Options. Pass Material names in that object and load the icon font. Or
+replace the symbol view on every platform. Or keep the SF Symbol on iOS
+and draw a short text glyph on every other platform.
+
+Why. iOS keeps the locked symbols. The other platforms need a mark that is
+visible without a new dependency. The button and row labels stay the
+accessible names. The glyph is decorative.
+
+Revisit if. `expo-symbols` draws SF Symbol strings off iOS, or a device
+check prefers the Material set to these glyphs.
+
 ## Header action
 
 The ellipsis opens the existing diagnostics screen. It is not a workout action. Its hint

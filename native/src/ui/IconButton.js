@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { Platform, Pressable, StyleSheet } from 'react-native'
 import Animated from 'react-native-reanimated'
-import { SymbolView } from 'expo-symbols'
 import { color, radius, size, space, touch } from '../theme/tokens'
 import AppText from './AppText'
+import NativeSymbol from './NativeSymbol'
 import { focusRingStyle } from './focus-ring'
 import { usePressScale } from './use-press-scale'
 
@@ -26,7 +26,7 @@ export default function IconButton({ symbol, label, accessibilityLabel, accessib
         {label ? (
           <AppText variant="value">{label}</AppText>
         ) : (
-          <SymbolView name={symbol} tintColor={color.text} size={size.icon} />
+          <NativeSymbol name={symbol} tintColor={color.text} size={size.icon} />
         )}
       </Animated.View>
     </Pressable>
