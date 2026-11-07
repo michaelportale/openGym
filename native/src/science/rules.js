@@ -105,7 +105,7 @@ export const RULES = Object.freeze({
     sourceUrl: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC9528903/',
     population: 'TODO',
     evidence: 'The one-session trigger is convention',
-    inference: 'The one-session trigger is convention. The shared engine still defaults reps-mode exercises to linear progression, and it also ships Greyskull, triple, and timed policies. This entry records the decision and does not switch that default.',
+    inference: 'The one-session trigger is convention. Native suggestions use double progression when neither the exercise nor the routine names a policy. An explicit policy is kept. The shared web default stays linear because this lane does not edit frontend.',
     reading: 'Summary of the full text read.'
   }),
   'effort-proximity': rule({
