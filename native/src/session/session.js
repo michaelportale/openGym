@@ -95,6 +95,7 @@ class SessionLog {
   }
 
   async commitSet({ eventId, exerciseId, setId, fields } = {}) {
+    if (this.#seen(eventId)) return duplicate()
     const model = this.#model()
     if (!this.discarded && !this.#isFinished() && !slotExists(model, exerciseId, setId)) return failure('unknown-set')
     const merged = { ...(this.drafts[setId] || {}) }
@@ -119,6 +120,7 @@ class SessionLog {
   }
 
   async editSet({ eventId, exerciseId, setId, fields } = {}) {
+    if (this.#seen(eventId)) return duplicate()
     const model = this.#model()
     if (!this.discarded && !this.#isFinished() && !slotExists(model, exerciseId, setId)) return failure('unknown-set')
     return this.#append({
@@ -132,6 +134,7 @@ class SessionLog {
   }
 
   async undoSet({ eventId, exerciseId, setId } = {}) {
+    if (this.#seen(eventId)) return duplicate()
     const model = this.#model()
     if (!this.discarded && !this.#isFinished() && !slotExists(model, exerciseId, setId)) return failure('unknown-set')
     return this.#append({

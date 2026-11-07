@@ -119,6 +119,25 @@ test('replay shows the same row a non-JSON commit field produced live', async ()
   expect(replayed.totals.loadReps).toBe(live.totals.loadReps)
 })
 
+test('replaying a set event after the set was removed is a duplicate', async () => {
+  const storage = createMemoryStorage()
+  const { session } = await started({ storage })
+  await session.commitSet({ eventId: 'c1', exerciseId: 'bench', setId: bench0, fields: { w: 60, r: 5 } })
+  await session.editSet({ eventId: 'e1', exerciseId: 'bench', setId: bench0, fields: { r: 4 } })
+  await session.undoSet({ eventId: 'u1', exerciseId: 'bench', setId: bench0 })
+  const removed = await session.removeSet({ eventId: 'r1', exerciseId: 'bench', setId: bench0 })
+  expect(removed).toMatchObject({ ok: true, saved: true })
+  const before = (await storage.readAll()).map(event => event.id)
+
+  const commit = await session.commitSet({ eventId: 'c1', exerciseId: 'bench', setId: bench0, fields: { w: 1, r: 1 } })
+  const edit = await session.editSet({ eventId: 'e1', exerciseId: 'bench', setId: bench0, fields: { r: 1 } })
+  const undo = await session.undoSet({ eventId: 'u1', exerciseId: 'bench', setId: bench0 })
+  expect(commit).toMatchObject({ ok: true, saved: false, duplicate: true })
+  expect(edit).toMatchObject({ ok: true, saved: false, duplicate: true })
+  expect(undo).toMatchObject({ ok: true, saved: false, duplicate: true })
+  expect((await storage.readAll()).map(event => event.id)).toEqual(before)
+})
+
 test('an edit after finish is refused and does not change the finished document', async () => {
   const { session, storage, clock } = await started()
   await session.commitSet({ eventId: 'c1', exerciseId: 'bench', setId: bench0, fields: { w: 60, r: 5 } })
