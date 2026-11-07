@@ -289,6 +289,19 @@ test('a repeated pause, cancel, or resume id is a duplicate once its preconditio
   expect((await nightStorage.readAll()).filter(event => event.type === 'session.resume')).toHaveLength(1)
 })
 
+test('replaying an extend after the rest was cancelled is a duplicate', async () => {
+  const storage = createMemoryStorage()
+  const { session } = await started({ storage })
+  await session.startRest({ eventId: 'rest-1', durationMs: 60_000 })
+  const extend = await session.extendRest({ eventId: 'extend-1', byMs: 15_000 })
+  expect(extend).toMatchObject({ ok: true, saved: true })
+  await session.cancelRest({ eventId: 'cancel-1' })
+  const again = await session.extendRest({ eventId: 'extend-1', byMs: 15_000 })
+  expect(again).toMatchObject({ ok: true, saved: false, duplicate: true })
+  expect(session.view().rest).toBeNull()
+  expect((await storage.readAll()).filter(event => event.type === 'rest.extend')).toHaveLength(1)
+})
+
 test('finishing during rest clears the countdown and does not revive it on restore', async () => {
   const clock = createClock(T0)
   const storage = createMemoryStorage()
