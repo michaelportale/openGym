@@ -1,6 +1,7 @@
+// Node-only. scripts/ is outside the app tree Metro bundles (see nativeSourceFiles).
 import { readFileSync, readdirSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { extname, join, relative } from 'node:path'
+import { basename, extname, join, relative, resolve } from 'node:path'
 
 const require = createRequire(import.meta.url)
 const { parse } = require('@babel/parser')
@@ -178,6 +179,10 @@ export function scanSymbolSources(files) {
 }
 
 export function scanSymbolTree(root) {
+  const resolved = resolve(root)
+  if (basename(resolved) !== 'src') {
+    throw new Error(`Symbol scan root must be the app src directory: ${resolved}`)
+  }
   const files = []
   const unresolved = []
   const walk = dir => {
@@ -187,16 +192,20 @@ export function scanSymbolTree(root) {
         walk(full)
         continue
       }
-      if (entry.name.endsWith('.test.js')) continue
+      if (/\.test\.(js|jsx|mjs)$/.test(entry.name)) continue
       const ext = extname(entry.name)
       if (SOURCE_EXT.has(ext)) {
-        files.push({ filename: relative(root, full), source: readFileSync(full, 'utf8') })
+        files.push({ filename: relative(resolved, full), source: readFileSync(full, 'utf8') })
       } else if (ext !== '.json') {
-        unresolved.push(note(relative(root, full), 'unscanned extension', 0))
+        unresolved.push(note(relative(resolved, full), 'unscanned extension', 0))
       }
     }
   }
-  walk(root)
+  walk(resolved)
   const scanned = scanSymbolSources(files)
-  return { names: scanned.names, unresolved: [...unresolved, ...scanned.unresolved] }
+  return {
+    files: files.map(file => file.filename).sort(),
+    names: scanned.names,
+    unresolved: [...unresolved, ...scanned.unresolved]
+  }
 }
