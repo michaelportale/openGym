@@ -74,11 +74,12 @@ export function timeZoneFromBase(value) {
   return typeof zone === 'string' ? zone : ''
 }
 
-// A rewrite that does not pass timeZone keeps the zone already stored. An explicit
-// string replaces it, and an empty string clears it.
+// The zone is the one captured when the journal was first stored. A later rewrite
+// keeps it. The caller's zone is used only when the row has none.
 export function timeZoneForWrite(options, existing) {
+  if (typeof existing === 'string' && existing) return existing
   if (options && typeof options.timeZone === 'string') return options.timeZone
-  return typeof existing === 'string' ? existing : ''
+  return ''
 }
 
 export function createMemoryStorage() {

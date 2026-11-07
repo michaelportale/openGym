@@ -106,37 +106,25 @@ export function createSqliteSessionStorage(db) {
         return
       }
       const body = baseWithoutTimeZone(value)
-      // An explicit zone, including '', is the caller's. When timeZone is absent the
-      // statement copies the current row, so a zone saved while this replace is in
-      // flight is not overwritten by a value read earlier.
-      if (options && typeof options.timeZone === 'string') body[SESSION_TIME_ZONE_KEY] = options.timeZone
-      // Stamp and trail are copied from the current row inside the statement, and only
-      // when that key is present. json() keeps the trail an array. A bare json_extract
-      // is TEXT, and json_set would store it as a quoted string.
-      // On-device JSON1 checklist: this copy must stay json()-wrapped.
+      // A caller zone is only a candidate. The statement keeps the row's zone when
+      // one is already stored, so a later explicit zone cannot move midnight.
+      if (options && typeof options.timeZone === 'string' && options.timeZone) {
+        body[SESSION_TIME_ZONE_KEY] = options.timeZone
+      }
+      // Stamp, trail, and zone are copied from the current row inside this statement.
+      // json() keeps the trail an array. A bare json_extract is TEXT, and json_set
+      // would store it as a quoted string.
+      // On-device JSON1 checklist: the trail copy must stay json()-wrapped.
       const seen = `'$.${SESSION_LAST_SEEN_KEY}'`
       const trail = `'$.${SESSION_SEEN_TRAIL_KEY}'`
       const zone = `'$.${SESSION_TIME_ZONE_KEY}'`
-      const trailJson = `json(json_extract(session_base.body, ${trail}))`
-      const kept = `CASE
-        WHEN json_extract(session_base.body, ${trail}) IS NULL THEN
-          CASE
-            WHEN json_extract(session_base.body, ${seen}) IS NULL THEN excluded.body
-            ELSE json_set(excluded.body, ${seen}, json_extract(session_base.body, ${seen}))
-          END
-        WHEN json_extract(session_base.body, ${seen}) IS NULL THEN
-          json_set(excluded.body, ${trail}, ${trailJson})
-        ELSE json_set(excluded.body, ${seen}, json_extract(session_base.body, ${seen}), ${trail}, ${trailJson})
-      END`
       await db.run(
         `INSERT INTO session_base (id, body) VALUES (1, ?)
-         ON CONFLICT(id) DO UPDATE SET body = (
-           SELECT CASE
-             WHEN json_type(excluded.body, ${zone}) IS NOT NULL THEN kept
-             WHEN json_extract(session_base.body, ${zone}) IS NULL THEN kept
-             ELSE json_set(kept, ${zone}, json_extract(session_base.body, ${zone}))
-           END
-           FROM (SELECT ${kept} AS kept)
+         ON CONFLICT(id) DO UPDATE SET body = json_set(
+           excluded.body,
+           ${seen}, COALESCE(json_extract(session_base.body, ${seen}), json_extract(excluded.body, ${seen})),
+           ${trail}, json(COALESCE(json_extract(session_base.body, ${trail}), json_extract(excluded.body, ${trail}))),
+           ${zone}, COALESCE(NULLIF(json_extract(session_base.body, ${zone}), ''), NULLIF(json_extract(excluded.body, ${zone}), ''))
          )`,
         [JSON.stringify(body)],
       )

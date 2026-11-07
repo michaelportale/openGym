@@ -1,3 +1,4 @@
+import { DatabaseSync } from 'node:sqlite'
 import { describe, expect, test } from 'vitest'
 import { createFakeSqliteDb } from './fake-sqlite.js'
 import { SQLITE_SESSION_SCHEMA, createMemoryStorage } from './storage.js'
@@ -58,6 +59,15 @@ function storageContract(title, open) {
       expect(await storage.readTimeZone()).toBe('America/New_York')
     })
 
+    test('the first stored time zone stays when a later write passes another', async () => {
+      const { storage } = await open()
+      await storage.writeBase({ id: 'w1', name: 'Push' })
+      await storage.writeBase({ id: 'w1', name: 'Push' }, { timeZone: 'UTC' })
+      await storage.writeBase({ id: 'w1', name: 'Pull' }, { timeZone: 'America/New_York' })
+      expect(await storage.readBase()).toEqual({ id: 'w1', name: 'Pull' })
+      expect(await storage.readTimeZone()).toBe('UTC')
+    })
+
     test('clear drops events, drafts, and the base together', async () => {
       const { storage } = await open()
       await storage.append(event('a', 1))
@@ -86,6 +96,15 @@ storageContract('memory storage', async () => {
 
 storageContract('sqlite storage', async () => {
   const db = createFakeSqliteDb()
+  const storage = createSqliteSessionStorage(db)
+  return {
+    storage,
+    failAppend: error => db.failNext(/INSERT OR IGNORE INTO session_events/, error),
+  }
+})
+
+storageContract('node sqlite storage', async () => {
+  const db = createNodeSqliteDb()
   const storage = createSqliteSessionStorage(db)
   return {
     storage,
@@ -171,61 +190,132 @@ test('sqlite append stays saved when the driver does not report a change count',
 })
 
 function squeeze(sql) {
-  return String(sql).replace(/\s+/g, ' ')
+  return String(sql).replace(/\s+/g, ' ').trim()
 }
 
-test('putLastSeen does not clobber a writeBase that lands while it is in flight', async () => {
-  const db = createFakeSqliteDb()
-  const storage = createSqliteSessionStorage(db)
-  const stamp = Date.parse('2026-11-08T00:05:00.000Z')
-  await storage.writeBase({ id: 'w1', title: 'before' }, { timeZone: 'UTC' })
-  db.holdNext(/json_set\(body, '\$\._sessionLastSeen'|INSERT OR REPLACE INTO session_base/)
-  const pending = storage.putLastSeen(stamp)
-  await db.held()
-  await storage.writeBase({ id: 'w1', title: 'after' }, { timeZone: 'America/New_York' })
-  db.release()
-  await pending
-  expect(await storage.readBase()).toEqual({ id: 'w1', title: 'after' })
-  expect(await storage.readTimeZone()).toBe('America/New_York')
-  expect(await storage.readLastSeen()).toBe(stamp)
-})
+// Real SQLite for the session_base statements. Built in, no package. Hold and fail
+// pause or throw before the statement runs, so the SQL itself decides the row.
+function createNodeSqliteDb() {
+  const db = new DatabaseSync(':memory:')
+  const executed = []
+  const failures = []
+  const holds = []
+  const heldWaiters = []
+  let releaseHeld = null
 
-test('writeBase keeps a last seen saved while the base replace is in flight', async () => {
-  const db = createFakeSqliteDb()
-  const storage = createSqliteSessionStorage(db)
-  const earlier = Date.parse('2026-11-08T00:05:00.000Z')
-  const later = Date.parse('2026-11-08T00:30:00.000Z')
-  const earlierTrail = [earlier - 60_000, earlier]
-  const laterTrail = [earlier - 60_000, earlier, later]
-  await storage.writeBase({ id: 'w1', title: 'before' }, { timeZone: 'UTC' })
-  await storage.putLastSeen(earlier, earlierTrail)
-  db.holdNext(/INSERT OR REPLACE INTO session_base|ON CONFLICT\(id\) DO UPDATE/)
-  const pending = storage.writeBase({ id: 'w1', title: 'after' })
-  await db.held()
-  await storage.putLastSeen(later, laterTrail)
-  db.release()
-  await pending
-  expect(await storage.readBase()).toEqual({ id: 'w1', title: 'after' })
-  expect(await storage.readTimeZone()).toBe('UTC')
-  expect(await storage.readLastSeen()).toBe(later)
-  const kept = await storage.readSeenTrail()
-  expect(Array.isArray(kept)).toBe(true)
-  expect(kept).toEqual(laterTrail)
-})
+  async function waitIfHeld(text) {
+    const index = holds.findIndex(pattern => pattern.test(text))
+    if (index < 0) return
+    holds.splice(index, 1)
+    await new Promise(resolve => {
+      releaseHeld = resolve
+      for (const waiter of heldWaiters.splice(0)) waiter()
+    })
+    releaseHeld = null
+  }
 
-test('writeBase keeps a time zone saved while the base replace is in flight', async () => {
-  const db = createFakeSqliteDb()
-  const storage = createSqliteSessionStorage(db)
-  await storage.writeBase({ id: 'w1', title: 'before' }, { timeZone: 'UTC' })
-  db.holdNext(/ON CONFLICT\(id\) DO UPDATE/)
-  const pending = storage.writeBase({ id: 'w1', title: 'after' })
-  await db.held()
-  await storage.writeBase({ id: 'w1', title: 'mid' }, { timeZone: 'America/New_York' })
-  db.release()
-  await pending
-  expect(await storage.readBase()).toEqual({ id: 'w1', title: 'after' })
-  expect(await storage.readTimeZone()).toBe('America/New_York')
-})
+  async function run(sql, params = []) {
+    const text = squeeze(sql)
+    const hit = failures.findIndex(item => item.pattern.test(text))
+    if (hit >= 0) {
+      executed.push(text)
+      const [{ error }] = failures.splice(hit, 1)
+      throw error
+    }
+    await waitIfHeld(text)
+    executed.push(text)
+    const result = db.prepare(text).run(...params)
+    return { changes: result.changes }
+  }
+
+  return {
+    executed,
+    exec: async sql => {
+      executed.push(sql)
+      const parts = String(sql).split(';').map(part => part.trim()).filter(Boolean)
+      for (const part of parts) await run(part)
+    },
+    run,
+    getAll: async (sql, params = []) => {
+      const text = squeeze(sql)
+      executed.push(text)
+      return db.prepare(text).all(...params)
+    },
+    failNext(pattern, error) {
+      failures.push({ pattern, error })
+    },
+    holdNext(pattern) {
+      holds.push(pattern)
+    },
+    held() {
+      if (releaseHeld) return Promise.resolve()
+      return new Promise(resolve => heldWaiters.push(resolve))
+    },
+    release() {
+      const resume = releaseHeld
+      releaseHeld = null
+      if (resume) resume()
+    },
+  }
+}
+
+function baseRaceTests(title, createDb) {
+  test(`${title}: putLastSeen does not clobber a writeBase that lands while it is in flight`, async () => {
+    const db = createDb()
+    const storage = createSqliteSessionStorage(db)
+    const stamp = Date.parse('2026-11-08T00:05:00.000Z')
+    await storage.writeBase({ id: 'w1', title: 'before' }, { timeZone: 'UTC' })
+    db.holdNext(/json_set\(body, '\$\._sessionLastSeen'|INSERT OR REPLACE INTO session_base/)
+    const pending = storage.putLastSeen(stamp)
+    await db.held()
+    await storage.writeBase({ id: 'w1', title: 'after' }, { timeZone: 'America/New_York' })
+    db.release()
+    await pending
+    expect(await storage.readBase()).toEqual({ id: 'w1', title: 'after' })
+    expect(await storage.readTimeZone()).toBe('UTC')
+    expect(await storage.readLastSeen()).toBe(stamp)
+  })
+
+  test(`${title}: writeBase keeps a last seen saved while the base replace is in flight`, async () => {
+    const db = createDb()
+    const storage = createSqliteSessionStorage(db)
+    const earlier = Date.parse('2026-11-08T00:05:00.000Z')
+    const later = Date.parse('2026-11-08T00:30:00.000Z')
+    const earlierTrail = [earlier - 60_000, earlier]
+    const laterTrail = [earlier - 60_000, earlier, later]
+    await storage.writeBase({ id: 'w1', title: 'before' }, { timeZone: 'UTC' })
+    await storage.putLastSeen(earlier, earlierTrail)
+    db.holdNext(/INSERT OR REPLACE INTO session_base|ON CONFLICT\(id\) DO UPDATE/)
+    const pending = storage.writeBase({ id: 'w1', title: 'after' })
+    await db.held()
+    await storage.putLastSeen(later, laterTrail)
+    db.release()
+    await pending
+    expect(await storage.readBase()).toEqual({ id: 'w1', title: 'after' })
+    expect(await storage.readTimeZone()).toBe('UTC')
+    expect(await storage.readLastSeen()).toBe(later)
+    const kept = await storage.readSeenTrail()
+    expect(Array.isArray(kept)).toBe(true)
+    expect(kept).toEqual(laterTrail)
+  })
+
+  test(`${title}: writeBase keeps the first time zone when another lands during the replace`, async () => {
+    const db = createDb()
+    const storage = createSqliteSessionStorage(db)
+    await storage.writeBase({ id: 'w1', title: 'before' })
+    db.holdNext(/ON CONFLICT\(id\) DO UPDATE/)
+    const pending = storage.writeBase({ id: 'w1', title: 'after' }, { timeZone: 'America/New_York' })
+    await db.held()
+    await storage.writeBase({ id: 'w1', title: 'mid' }, { timeZone: 'UTC' })
+    db.release()
+    await pending
+    expect(await storage.readBase()).toEqual({ id: 'w1', title: 'after' })
+    expect(await storage.readTimeZone()).toBe('UTC')
+  })
+}
+
+baseRaceTests('fake sqlite', createFakeSqliteDb)
+baseRaceTests('node sqlite', createNodeSqliteDb)
 
 test('sqlite storage requires an injected db handle', () => {
   expect(() => createSqliteSessionStorage()).toThrow(/expo-sqlite/)
