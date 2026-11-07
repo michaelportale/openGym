@@ -4,6 +4,14 @@ Draft handoff for Codex. Do not merge this PR.
 
 Branch to continue: `native/phase-1`. The sprint PRD (`docs/sprints/2026-10-30-native-workout-prd.md`) uses different phase numbers. On that PRD, Phase 1 is the shell. This branch also holds the journal, finish, and science work. The shell and the Workout screens are Gus's lane. Do not mount the journal on a screen.
 
+Read next:
+
+- [Session architecture](../native/architecture.md)
+- [On-device checklist](../native/device-checklist.md)
+- [Bug classes](../native/bug-classes.md)
+- [Open questions](../native/open-questions.md)
+- [UI handoff for Gus](../native/ui-handoff.md)
+
 ## 1. Current state
 
 `native/phase-1` head: `ccf975cae4b268e08c04d19bbf3a4aa5f85cdda7` (merge of #104).
@@ -126,9 +134,21 @@ Already on the branch before #62, from the same PR list: the journal (#42), the 
 
 - #68 native: correct the standup warm-up bar example
 
+## iPhone limits
+
+The shell and the symbol fixes are merged. No iPhone validation is claimed.
+
+Still to check on the iPhone: SF Symbols, Liquid Glass labels, focus, the native tab bar versus the dock, Dynamic Type, reduced motion, and haptics.
+
+A clean install and the Metro export passed earlier. The export still needed `EXPO_NO_TYPESCRIPT_SETUP=1`.
+
+Details for Gus: [ui-handoff.md](../native/ui-handoff.md).
+
 ## 3. Remaining work
 
 Do these one at a time. One small draft PR into `native/phase-1`. Do not start the next until the previous has been reviewed. Do not redo a branch that already exists.
+
+The longer notes for these tasks live in [architecture.md](../native/architecture.md), [device-checklist.md](../native/device-checklist.md), [bug-classes.md](../native/bug-classes.md), and [open-questions.md](../native/open-questions.md).
 
 The shell, Workout screens, mounting `useActiveSession`, and mounting `WhyThisSheet` are Gus's. `docs/science/phase-4-status.md` says the warm-up prompt and the Why-this sheet are blocked on the shell.
 
@@ -234,6 +254,8 @@ Review lessons from this run:
 - `native/src/shared/training.js` is the only native file that may import `frontend/src/lib`.
 
 ## 8. Open question
+
+The full list is [open-questions.md](../native/open-questions.md).
 
 #70 changed shared web code: `frontend/src/lib/finish-workout.js`, plus the native finish and fold callers. `training.js` re-exports that module. The sprint PRD says native imports `frontend/src/lib` in place this sprint, and Phase 10 moves shared logic to `packages/core`.
 
