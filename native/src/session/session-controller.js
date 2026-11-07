@@ -15,7 +15,7 @@ function confirmedSave(result) {
   return result.saved === true || result.ok === true
 }
 
-export function createSessionController({ base, storage, now, timeZone } = {}) {
+export function createSessionController({ base, storage, finishedWorkouts, now, timeZone } = {}) {
   let session = null
   let state = { ...INITIAL }
 
@@ -99,6 +99,19 @@ export function createSessionController({ base, storage, now, timeZone } = {}) {
         const failure = { code: 'not-saved', message: 'sender did not confirm the save' }
         state = { status: 'ready', error: failure, view: session.view() }
         return { ok: false, saved: false, error: failure, payload }
+      }
+
+      // The local row is the folded workout. Write it before clearing the journal so a
+      // failed clear can be retried, and the retry replaces the same id. A refused save
+      // never reaches this write.
+      if (finishedWorkouts) {
+        try {
+          await finishedWorkouts.put(payload.workout)
+        } catch (error) {
+          const failure = { code: 'storage', message: error?.message || 'finished workout was not stored' }
+          state = { status: 'ready', error: failure, view: session.view() }
+          return { ok: false, saved: true, error: failure, payload }
+        }
       }
 
       try {
