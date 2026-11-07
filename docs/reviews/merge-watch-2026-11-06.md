@@ -2,8 +2,8 @@
 
 Running log of pulls merged into `native/phase-1` on the night of 6 November 2026. This pull request is a log only. Do not merge it.
 
-- Last checked: 2026-11-06 22:31 EST
-- `native/phase-1` head: `8bfbf93e7ae36e7ea3817228d05773c9cae423a5`
+- Last checked: 2026-11-06 23:06 EST (~11:06 PM ET)
+- `native/phase-1` head: `1521ab7b70390100012b428eba2a03c880c66522`
 - Native `npm test` at `f66609519231c03800aaec05faee11bc738f2fcf`: 37 files, 281 passed, no failures. This check did not re-run the suite.
 - Window: merges after `aac6bcc` (the #48 session-adapter merge), from #49 through the head above
 - Lanes: session = Charlie, shell/screens = Gus, science = Bob
@@ -11,7 +11,9 @@ Running log of pulls merged into `native/phase-1` on the night of 6 November 202
 
 ## Open findings
 
-The first pass of this log said the #59 Node-import gap and the #62 journal gap were closed on the head at that time. Both of those are still closed. F001 and F002, from Codex's audit [#65](https://github.com/michaelportale/openGym/pull/65), were open in Charlie's session lane. Both were checked again on `f66609519231c03800aaec05faee11bc738f2fcf` and are closed.
+The first pass of this log said the #59 Node-import gap and the #62 journal gap were closed on the head at that time. Both of those are still closed. F001 and F002, from Codex's audit [#65](https://github.com/michaelportale/openGym/pull/65), were open in Charlie's session lane. Both were checked again on `f66609519231c03800aaec05faee11bc738f2fcf` and are closed. On this head, `open`, `call`, and `finishSession` still return `enqueue(...)`, and `native/src/session` still has no `structuredClone(` call.
+
+Codex updated [#65](https://github.com/michaelportale/openGym/pull/65) at 22:35 EST (`ea1f2fca`), after the previous line of this log. That pass covers merges through #79. It reconfirmed F003 and added V001. No new audit file is on `native/phase-1`. There is no new Codex review comment on #80 through #88. The comments on those pulls are Charlie's. Merges #80 through #88 do not change the add paths F003 names, so F003 is still open on this head.
 
 ### F001 — finish can save without a set write that is still in flight
 
@@ -32,6 +34,26 @@ The first pass of this log said the #59 Node-import gap and the #62 journal gap 
 - What Codex reproduced at `018621ed`: delete `globalThis.structuredClone` before opening a populated session. Open returns an error. `fold.js` cloned with `structuredClone`. The #54 test removed the global only after the session was already opened, committed, and finished, then checked `toWorkoutPayload`.
 - Checked on `f66609519231c03800aaec05faee11bc738f2fcf`. `native/src/session` has no `structuredClone(` call. `fold.js` copies with `JSON.parse(JSON.stringify(...))`, and so do the session draft get/put, the memory storage, and `buildCompletedWorkout` in `frontend/src/lib/finish-workout.js`. The test `the session opens, drafts, commits, finishes, and reopens when structuredClone is missing` deletes the global before `open` and leaves it absent through draft, commit, finish, and reopen.
 - Fix: [#70](https://github.com/michaelportale/openGym/pull/70)
+
+### F003 — copied per-side sets arrive already completed
+
+- Status: OPEN
+- Severity: P2
+- Lane: session (Charlie)
+- Traces to: [#42](https://github.com/michaelportale/openGym/pull/42) (`set.add`) and [#66](https://github.com/michaelportale/openGym/pull/66) (`exercise.add`)
+- What Codex reported: both add paths set only `row.done = false`. A copied per-side row can keep `sides.L.done` or `sides.R.done`. `hasCompletedWork` reads those limb flags, so the new row counts before any `set.commit`. Codex reproduced 1 completed set, 10 reps, and 200 load-reps at merge #72 and again at merge #79 (`8bfbf93e`). Finishing then keeps that exercise because the finished document keeps an entry whose sets have completed work.
+- Checked on `1521ab7b70390100012b428eba2a03c880c66522`. Confirmed. `set.add` builds the row with `mergeFields` and then sets `row.done = false`. `exercise.add` clones each incoming set, deletes `id`, and sets `row.done = false`. Neither path calls `clearDone`. `clearDone` already sets both limb flags false, and `set.undo` uses it. `hasCompletedWork` is true for a side set when either limb is done. `projectSession` adds that row to the totals. `buildCompletedWorkout` keeps an entry when `sets.some(hasCompletedWork)`. #80 through #88 do not edit those add cases.
+- Fix: none yet
+
+### V001 — historical clean install failed on the React peer lock
+
+- Status: CLOSED
+- Severity: not a current defect
+- Lane: native lockfile
+- Traces to: [#43](https://github.com/michaelportale/openGym/pull/43) and the same lock at [#42](https://github.com/michaelportale/openGym/pull/42), [#46](https://github.com/michaelportale/openGym/pull/46), and [#47](https://github.com/michaelportale/openGym/pull/47)
+- What Codex reported: `npm ci` at #43 head `80d9eca` fails with ERESOLVE because the lock selects `react-dom@19.3.1` while the manifest pins `react@19.3.0`. [#52](https://github.com/michaelportale/openGym/pull/52) is the later repair. Codex says a clean install at merge #77 succeeds.
+- Checked from the #52 entry already in this log. That diff is only `native/package-lock.json`, and `react-dom` moves from 19.3.1 to 19.3.0. This pass did not re-run `npm ci` at the old head. The finding is the historical install, and #52 is already merged.
+- Fix: [#52](https://github.com/michaelportale/openGym/pull/52)
 
 ## Merges
 
@@ -296,7 +318,88 @@ The first pass of this log said the #59 Node-import gap and the #62 journal gap 
 - Tests claimed at merge: `npm run verify`, 38 files, 298 tests passed. That count is this branch's suite, not the combined head.
 - Review status: Reviewed by Charlie at `83b26f7a0797fd46c551bf7f851680b7bd1d67cf`. Independent findings: the diff is `timing.js`, `fold.js`, and `session.test.js`. No lockfile change, no secrets, no `node:` import. A resume stamp moves the high-water mark and adds nothing for the gap before it. Samples and the open tail drop a span that changes local date. A journal stamp that is not a resume still adds a gap of at most four hours, so the test's 23:40 to 00:10 set adds 30 minutes. The idle case, 23:10 to 01:10, stays at the elapsed time from before the gap, through a reopen and a resume. Ten minutes after resume are counted.
 
+### #80 — [Keep the session timer counting through a rest that crosses midnight](https://github.com/michaelportale/openGym/pull/80)
+
+- Merged commit: `c12bce2b78de05cbb785abc455f9c9f3c228a9d0`
+- Resulting `native/phase-1` head: `7bf4b352115d9728e8ae0175b9a8cf02b46564af`
+- Lane: session (Charlie)
+- Summary: A cross-midnight rest, sample, or resume counts when the gap is within `REST_MAX_MS`. A longer overnight return still adds nothing.
+- Tests claimed at merge: `npm run verify`, 38 files, 301 tests, `check:shared` clean.
+- Review status: Reviewed by Charlie at `c12bce2b78de05cbb785abc455f9c9f3c228a9d0`. Independent findings: the diff is `timing.js` and one test in `session.test.js`. No lockfile change, no secrets, no `node:` import. A sample or open tail is dropped only when the gap is longer than `REST_MAX_MS` and the local date changes. A resume gap longer than `REST_MAX_MS` adds nothing, and a shorter one counts. The test expects 23:50 to 00:05 to add the rest maximum, a later idle look at 00:30 to keep the 23:59 sample, and 23:50 to 00:06 to add nothing. Samples in this pull request still live only in the open process. [#82](https://github.com/michaelportale/openGym/pull/82) stores the last counted instant.
+
+### #81 — [Treat a replayed pause, cancel, or resume as a duplicate](https://github.com/michaelportale/openGym/pull/81)
+
+- Merged commit: `0eae2259173762ed7dca325ee58b3ac20ea690c4`
+- Resulting `native/phase-1` head: `02cef12aafa041e2b9d1f85d89e46fa6afddc068`
+- Lane: session (Charlie)
+- Summary: A repeated pause, cancel, or resume id is a duplicate even after the rest is gone or the session is no longer overnight.
+- Tests claimed at merge: `npm run verify`, 38 files, 301 tests, `check:shared` clean.
+- Review status: Reviewed by Charlie at `0eae2259173762ed7dca325ee58b3ac20ea690c4`. Independent findings: the diff is `session.js` and one test. No lockfile change, no secrets, no `node:` import. `pauseRest` and `cancelRest` return duplicate before the rest check. `resume` still returns `discarded` and `finished` before the duplicate check, then `not-overnight`. The test pauses twice, reopens and pauses again, cancels twice, and resumes twice. The journal keeps one `session.resume`. The rest stays paused across the replayed pause and stays null after the replayed cancel.
+
+### #83 — [Fold the JSON document so a restart shows the same row](https://github.com/michaelportale/openGym/pull/83)
+
+- Merged commit: `81a97565dce8a77de1465dde3217c47702cd26b5`
+- Resulting `native/phase-1` head: `ad1bb3471318216a177031aa57e8cb75f4fc1c7b`
+- Lane: session (Charlie)
+- Summary: `#append` stores the JSON document it writes, so `NaN` and `undefined` cannot make the live row differ from the replayed row.
+- Tests claimed at merge: `npm run verify`, 38 files, 303 tests, `check:shared` clean.
+- Review status: Reviewed by Charlie at `81a97565dce8a77de1465dde3217c47702cd26b5`. Independent findings: the diff is `session.js` and one test. No lockfile change, no secrets, no `node:` import. The seen check still runs first. The JSON copy is inside the `try`, and that object is what `storage.append` and the in-memory event list receive. A value JSON cannot copy fails as `storage` and is not pushed. The test commits `{ w: NaN, r: 5, bar: undefined }` and expects the reopened weight, bar, and load-reps to match the live view. It does not assert that the stored weight is null.
+
+### #82 — [Keep the last counted instant so a kill cannot rewind the timer](https://github.com/michaelportale/openGym/pull/82)
+
+- Merged commit: `83f612ecd0b64b3bd3a5c800a39ac3e48cd097be`
+- Resulting `native/phase-1` head: `d688cd77eed450333944dd4a2b7857f9969ad18a`
+- Lane: session (Charlie)
+- Summary: The latest instant the timer counted is stored on the base. The next open seeds it as a sample, so a kill during a short midnight rest does not drop that rest.
+- Tests claimed at merge: `npm run verify` on `83f612ec`, 38 files, 307 tests, `check:shared` clean.
+- Review status: Reviewed by Charlie at `83f612ecd0b64b3bd3a5c800a39ac3e48cd097be`. Independent findings: the diff stays in `native/src/session`. No lockfile change, no secrets, no `node:` import. `putLastSeen` on SQLite is one `UPDATE ... json_set`. `view()` does not write. `noteSeen()` skips a write inside 15 seconds, and `flushSeen()` forces one. Finish and discard flush before clear. `readBase` and `toActive` strip `_sessionLastSeen`, and the kill test expects the reopened base to omit that key. The 00:05 stamp plus a 00:30 reopen counts the 25 minutes. A reopen that never flushed the short rest stays at the logged elapsed. In this pull request, `writeBase` still reads the body and writes it back, so a stamp saved during that replace can be lost. [#86](https://github.com/michaelportale/openGym/pull/86) copies the stamp inside the statement. A failed `putLastSeen` is swallowed, and the queued instant is cleared so a later note can try again.
+
+### #84 — [Replay a set event as a duplicate after the set is gone](https://github.com/michaelportale/openGym/pull/84)
+
+- Merged commit: `e17b91bf4bedb37b7fe510f4f38599aabbb93c8d`
+- Resulting `native/phase-1` head: `fdb229b25e885133d5276c20b5e75641126891ec`
+- Lane: session (Charlie)
+- Summary: `commitSet`, `editSet`, and `undoSet` treat a seen id as a duplicate before they check that the set still exists.
+- Tests claimed at merge: `npm run verify`, 38 files, 304 tests, `check:shared` clean.
+- Review status: Reviewed by Charlie at `e17b91bf4bedb37b7fe510f4f38599aabbb93c8d`. Independent findings: the diff is `session.js` and one test. No lockfile change, no secrets, no `node:` import. Each of the three methods returns duplicate before `slotExists`. The test commits, edits, undoes, removes the set, and replays all three ids. Each replay is `duplicate: true`, and the stored ids do not change. The test stays in one process. `#seen` reads the in-memory event list, which `open` fills from storage.
+
+### #85 — [Guard elapsed so a fixed session cannot rewind](https://github.com/michaelportale/openGym/pull/85)
+
+- Merged commit: `37e5a95a0a568c1e7e416bf367af88d84615f99e`
+- Resulting `native/phase-1` head: `2e2fafd4efb34b94ff60da7a520e5fb2ad94f25a`
+- Lane: session (Charlie)
+- Summary: A reopen seeds the trail of counted instants, and stamps are walked in time order, so a fixed session does not lose elapsed except on discard.
+- Tests claimed at merge: `npm run verify` on `37e5a95a`, 39 files, 309 tests, `check:shared` clean.
+- Review status: Reviewed by Charlie at `37e5a95a0a568c1e7e416bf367af88d84615f99e`. Independent findings: the diff stays in `native/src/session`, including a new `rewind.test.js`. No lockfile change, no secrets, no `node:` import. `elapsedStamps` skips a sample earlier than the start and sorts every stamp by time, so a later resume cannot hide an earlier sample. `compactSeen` drops a middle instant only when the hop across it still counts, which keeps a midnight point whose bridge is longer than a rest. The scripted session runs on memory and on the fake SQLite driver, flushes before each kill, and allows elapsed to fall only on discard. `toActive` strips `_sessionSeenTrail`. `writeBase` in this pull request still copies the trail from the body it read before the replace. [#86](https://github.com/michaelportale/openGym/pull/86) copies that trail inside the upsert. This pull request does not change `set.add` or `exercise.add`. F003 stays open.
+
+### #87 — [Replay an extend as a duplicate after the rest is gone](https://github.com/michaelportale/openGym/pull/87)
+
+- Merged commit: `5d91e0d17371753b4ec9b94d7f409194daa81bad`
+- Resulting `native/phase-1` head: `e0c0bdd6758c5a4f0fcb5ba580c73bd46aab543a`
+- Lane: session (Charlie)
+- Summary: `extendRest` treats a seen id as a duplicate before it checks that a rest is still running.
+- Tests claimed at merge: `npm run verify`, 39 files, 310 tests, `check:shared` clean.
+- Review status: Reviewed by Charlie at `5d91e0d17371753b4ec9b94d7f409194daa81bad`. Independent findings: the diff is `session.js` and one test. No lockfile change, no secrets, no `node:` import. The seen check is before the `no-rest` check. A bad `byMs` is still checked after the seen id, so a replay with a finite `byMs` does not hit `bad-extend`. The test extends, cancels, and replays the same id. The rest stays null, and the journal keeps one `rest.extend`.
+
+### #86 — [Keep a last seen saved while the base is replaced](https://github.com/michaelportale/openGym/pull/86)
+
+- Merged commit: `fef5f1f5f0303548dc1ddb8c13e726bdf12008ad`
+- Resulting `native/phase-1` head: `164aeb4ceb60b5586f4ebf2f5cf7ae308dd2892e`
+- Lane: session (Charlie)
+- Summary: Replacing the journal base copies the current last-seen stamp and trail inside the write, and the trail stays a JSON array.
+- Tests claimed at merge: `npm run verify` on `fef5f1f5`, 39 files, 311 tests, `check:shared` clean.
+- Review status: Reviewed by Charlie at `fef5f1f5f0303548dc1ddb8c13e726bdf12008ad`. Independent findings: the diff is `sqlite-storage.js`, `storage.js`, `fake-sqlite.js`, and the storage contract test. No lockfile change, no secrets, no `node:` import. The SQLite upsert copies each key only when that key is present on the current row. The trail copy is `json(json_extract(...))`. A bare extract is text, and `json_set` would store it as a quoted string, which `seenTrailFromBase` would drop. The fake stores that bare extract as a string unless the SQL has the `json()` wrap. The interleave test holds the replace, saves a later stamp and a longer trail, then releases. The new title remains, and `readSeenTrail` is that array. Memory reads the live row immediately before the assign, with no await between those lines. This closes the replace race left by [#82](https://github.com/michaelportale/openGym/pull/82) and [#85](https://github.com/michaelportale/openGym/pull/85). It does not change the add paths. F003 stays open.
+
+### #88 — [Replay an added set as a duplicate after the exercise is gone](https://github.com/michaelportale/openGym/pull/88)
+
+- Merged commit: `9e4694339b81cab159c4cb3ede6e9aaf0973cb20`
+- Resulting `native/phase-1` head: `1521ab7b70390100012b428eba2a03c880c66522`
+- Lane: session (Charlie)
+- Summary: `addSet` treats a seen id as a duplicate before it checks that the exercise still exists.
+- Tests claimed at merge: `npm run verify`, 39 files, 311 tests, `check:shared` clean. That count is this branch's suite, not a new run on the combined head.
+- Review status: Reviewed by Charlie at `9e4694339b81cab159c4cb3ede6e9aaf0973cb20`. Independent findings: the diff is `session.js` and one test. No lockfile change, no secrets, no `node:` import. The seen check is before `unknown-exercise`. The test adds a set, removes the exercise, and replays the same id. The replay is a duplicate, the entries stay `bench`, and the journal keeps one `set.add`. `moveExercise` still checks that the exercise exists before `#append`, so a replay after that exercise is gone returns `unknown-exercise`. `startRest` checks the deadline before `#append`. A replay that still carries a deadline reaches the seen check there. This pull request does not clear limb done flags. F003 stays open.
+
 ## Open pulls into `native/phase-1`
 
-- [#65](https://github.com/michaelportale/openGym/pull/65) — draft, `docs: overnight PR audit for November 6–7`. Not merged. The F001 and F002 entries above started in that audit. The rest of its ledger is not this log's review.
+- [#65](https://github.com/michaelportale/openGym/pull/65) — draft, `docs: overnight PR audit for November 6–7`. Not merged. Updated at 22:35 EST (`ea1f2fca`) through merge #79. F003 is the open item from that pass. V001 is the historical install note, closed by [#52](https://github.com/michaelportale/openGym/pull/52). The ledger does not yet list #80 through #88.
 - [#67](https://github.com/michaelportale/openGym/pull/67) — draft, this log. Not merged. Do not merge it.
