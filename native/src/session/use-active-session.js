@@ -10,6 +10,8 @@ const ACTIONS = [
   'undoSet',
   'removeSet',
   'addSet',
+  'addExercise',
+  'removeExercise',
   'moveExercise',
   'startRest',
   'pauseRest',
