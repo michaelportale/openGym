@@ -12,7 +12,10 @@ test('a new log accepts a whole number of reps left from 0 to 10, or nothing', (
   expect(validateRir(' 4 ')).toEqual({ ok: true, rir: 4 })
   expect(validateRir(0).rir).toBe(0)
   expect(validateRir(10).rir).toBe(10)
-  for (const bad of [2.5, -1, 11, 'lots', NaN, true]) {
+  expect(validateRir('0')).toEqual({ ok: true, rir: 0 })
+  expect(validateRir('10')).toEqual({ ok: true, rir: 10 })
+  expect(validateRir(' 0 ')).toEqual({ ok: true, rir: 0 })
+  for (const bad of [2.5, -1, 11, 'lots', NaN, true, '11', '-1', '2.5', 10.5]) {
     expect(validateRir(bad).ok).toBe(false)
   }
 })
@@ -20,8 +23,13 @@ test('a new log accepts a whole number of reps left from 0 to 10, or nothing', (
 test('many reps left on a work set is far from failure and does not change the load', () => {
   expect(effort.HARD_RIR).toBe(3)
   expect(effortProgressionNote({ rir: 4 })).toBe(FAR)
+  expect(effortProgressionNote({ rir: 10 })).toBe(FAR)
   expect(effortProgressionNote({ rir: 3 })).toBe(null)
+  expect(effortProgressionNote({ rir: 0 })).toBe(null)
   expect(effortProgressionNote({ rpe: 6 })).toBe(FAR)
+  expect(effortProgressionNote({ rpe: 0 })).toBe(FAR)
+  expect(effortProgressionNote({ rpe: 7 })).toBe(null)
+  expect(effortProgressionNote({ rpe: 10 })).toBe(null)
   expect(effortProgressionNote({ rir: 8, phase: 'warmup', warmup: true })).toBe(null)
   expect(effortProgressionNote({ failure: true })).toBe(null)
   expect(effortProgressionNote({})).toBe(null)
@@ -34,6 +42,12 @@ test('many reps left on a work set is far from failure and does not change the l
   expect(out.changesLoad).toBe(false)
   expect(out.effortNote).toBe(FAR)
   expect(prescription.effortNote).toBeUndefined()
+
+  const held = withEffortNote(prescription, [{ rir: 0 }, { rir: 3 }])
+  expect(held.effortNote).toBe(null)
+  expect(held.changesLoad).toBe(false)
+  expect(held.weight).toBe(40)
+  expect(withEffortNote(prescription, null).effortNote).toBe(null)
 })
 
 test('the note cites the effort rule and the journal handoff is written down', () => {
