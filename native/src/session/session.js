@@ -60,6 +60,7 @@ export async function openSession({ base, storage, now, timeZone = 'UTC' } = {})
 
 class SessionLog {
   #seenChain = Promise.resolve()
+  #appendChain = Promise.resolve()
   #queuedSeen = null
   #fold = null
 
@@ -456,7 +457,18 @@ class SessionLog {
     return this.events.some(event => event.type === 'session.finish')
   }
 
+  // One queue. The fold check reads this.events and #fold, then the storage
+  // write and the cache update run later. A second command waits until both
+  // are stored. A rejection here must not drop the rest of the queue.
   async #append(event) {
+    const run = this.#appendChain
+      .catch(() => {})
+      .then(() => this.#appendNow(event))
+    this.#appendChain = run.catch(() => {})
+    return run
+  }
+
+  async #appendNow(event) {
     if (this.discarded) return failure('discarded')
     const id = event.id != null ? event.id : createEventId()
     if (this.#seen(id)) return duplicate()

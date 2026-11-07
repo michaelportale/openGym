@@ -566,3 +566,33 @@ test('a long journal still saves a real commit and reports a same-value edit as 
   expect(edit).toEqual({ ok: true, saved: false, unchanged: true })
   expect(session.view().entries[0].sets[0].row).toMatchObject({ w: 80, r: 5, done: true })
 })
+
+test('overlapping appends both save, and a later same-value edit stays unchanged', async () => {
+  const { session, storage } = await opened()
+  const commit = session.commitSet({
+    eventId: 'commit-bench',
+    exerciseId: 'bench',
+    setId: bench0,
+    fields: { w: 80, r: 5 },
+  })
+  const added = session.addSet({
+    eventId: 'add-row',
+    exerciseId: 'row',
+    setId: 'extra-1',
+    fields: { w: 40, r: 8 },
+  })
+  const [committed, appended] = await Promise.all([commit, added])
+  expect(committed).toEqual({ ok: true, saved: true })
+  expect(appended).toEqual({ ok: true, saved: true })
+
+  const edit = await session.editSet({
+    eventId: 'edit-same',
+    exerciseId: 'bench',
+    setId: bench0,
+    fields: { w: 80, r: 5 },
+  })
+  expect(edit).toEqual({ ok: true, saved: false, unchanged: true })
+
+  const restored = await openSession({ storage, now: () => T0, timeZone: 'UTC' })
+  expect(workoutFold(restored.base, restored.events)).toBe(workoutFold(session.base, session.events))
+})
