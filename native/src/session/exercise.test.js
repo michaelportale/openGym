@@ -164,6 +164,52 @@ test('committing a per-side set marks both sides done unless the commit names th
   expect(slot(replayed, 'one').row.sides.R.done).toBe(false)
 })
 
+test('editing one side of a committed per-side set clears the row done flag', async () => {
+  const storage = createMemoryStorage()
+  const session = await started(storage)
+  await session.addSet({
+    eventId: 'add-side',
+    exerciseId: 'bench',
+    setId: 'side',
+    fields: {
+      w: 20,
+      r: 16,
+      sides: {
+        L: { w: 20, r: 8, done: false },
+        R: { w: 18, r: 8, done: false },
+      },
+    },
+  })
+  await session.commitSet({ eventId: 'commit-side', exerciseId: 'bench', setId: 'side', fields: { w: 22 } })
+  await session.editSet({
+    eventId: 'edit-side',
+    exerciseId: 'bench',
+    setId: 'side',
+    fields: {
+      sides: {
+        L: { w: 20, r: 8, done: true },
+        R: { w: 18, r: 8, done: false },
+      },
+    },
+  })
+
+  function slot(view) {
+    return view.entries.find(entry => entry.id === 'bench').sets.find(set => set.setId === 'side')
+  }
+
+  const live = slot(session.view())
+  expect(live.completed).toBe(true)
+  expect(live.row.done).toBe(false)
+  expect(live.row.sides.L).toMatchObject({ w: 20, r: 8, done: true })
+  expect(live.row.sides.R).toMatchObject({ w: 18, r: 8, done: false })
+
+  const restored = await openSession({ storage, now: () => T0 + 60_000, timeZone: 'UTC' })
+  const replayed = slot(restored.view())
+  expect(replayed.row.done).toBe(false)
+  expect(replayed.row.sides.L.done).toBe(true)
+  expect(replayed.row.sides.R.done).toBe(false)
+})
+
 test('removing an exercise drops its logged work and clears its draft', async () => {
   const storage = createMemoryStorage()
   const session = await started(storage)
