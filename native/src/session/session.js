@@ -96,13 +96,13 @@ class SessionLog {
   // still within SEEN_PERSIST_MS of the last one stored.
   async noteSeen() {
     this.#persistSeen(this.#shownNow(), false)
-    await this.#seenChain
+    return this.#seenChain
   }
 
   // Background, finish, and discard. Writes the current instant even inside the throttle.
   async flushSeen() {
     this.#persistSeen(this.#shownNow(), true)
-    await this.#seenChain
+    return this.#seenChain
   }
 
   #shownNow() {
@@ -123,9 +123,13 @@ class SessionLog {
     const trail = compactSeen(this.samples, this.timeZone)
     this.#seenChain = this.#seenChain
       .catch(() => {})
-      .then(() => this.storage.putLastSeen(at, trail.length ? trail : [at]))
-      .catch(() => {
+      .then(async () => {
+        await this.storage.putLastSeen(at, trail.length ? trail : [at])
+        return { ok: true, saved: true }
+      })
+      .catch(error => {
         if (this.#queuedSeen === at) this.#queuedSeen = null
+        return failure('storage', error?.message || 'timer checkpoint failed')
       })
   }
 
@@ -436,7 +440,8 @@ class SessionLog {
     if (this.discarded) return duplicate()
     if (this.#isFinished()) return failure('finished')
     try {
-      await this.flushSeen()
+      const checkpoint = await this.flushSeen()
+      if (checkpoint?.ok === false) return checkpoint
       await this.storage.clear()
     } catch (error) {
       return failure('storage', error?.message || 'clear failed')
