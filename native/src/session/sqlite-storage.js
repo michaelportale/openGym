@@ -65,7 +65,12 @@ export function createSqliteSessionStorage(db) {
           COMMIT;
         `)
       } catch (error) {
-        await db.exec('ROLLBACK')
+        try {
+          await db.exec('ROLLBACK')
+        } catch {
+          // ROLLBACK can fail with "no transaction" or its own driver error.
+          // Neither one may replace the original clear failure.
+        }
         throw error
       }
     },
