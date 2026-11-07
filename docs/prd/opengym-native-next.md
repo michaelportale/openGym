@@ -1,268 +1,306 @@
 # openGym native next
 
-Draft handoff for Codex. Do not merge this PR.
+Handoff for Codex. You have no other context. Read this file before you edit anything. Do not merge this pull request.
 
-Branch to continue: `native/phase-1`. The sprint PRD (`docs/sprints/2026-10-30-native-workout-prd.md`) uses different phase numbers. On that PRD, Phase 1 is the shell. This branch also holds the journal, finish, and science work. The shell and the Workout screens are Gus's lane. Do not mount the journal on a screen.
+Deeper notes, if you need them after this file: [architecture](../native/architecture.md), [device checklist](../native/device-checklist.md), [bug classes](../native/bug-classes.md), [open questions](../native/open-questions.md), [UI handoff](../native/ui-handoff.md). This PRD is enough to start.
 
-Read next:
+## Start here
 
-- [Session architecture](../native/architecture.md)
-- [On-device checklist](../native/device-checklist.md)
-- [Bug classes](../native/bug-classes.md)
-- [Open questions](../native/open-questions.md)
-- [UI handoff for Gus](../native/ui-handoff.md)
+Repo: `michaelportale/openGym`. Clone you are in.
 
-## 1. Current state
+Base branch: `native/phase-1`.
 
-`native/phase-1` head: `ccf975cae4b268e08c04d19bbf3a4aa5f85cdda7` (merge of #104).
+Head of `native/phase-1` when this handoff was written: `ccf975cae4b268e08c04d19bbf3a4aa5f85cdda7` (merge of #104). Fetch before you branch. If the head has moved, use the new head and say so in the PR. Do not branch from `main`.
 
-`native/src/session/` is the logging core. The Workout tab is still the preview in `native/src/app/(tabs)/workout.js`. It uses sample rows and `preview-actions.js`. A press records nothing. `docs/sprints/2026-11-native-phase-1-decisions.md` says those controls stay `unavailable` until a later phase connects them.
+There is no `package.json` at the repo root. Every command below says its working directory. Run them from there.
 
-### Journal
+Node: the repo README and `docs/ENGINEERING.md` say Node 22. `native/package-lock.json` is the lockfile. `docs/ENGINEERING.md` says to install with `npm ci` against the committed lockfile. `native/package.json` has no install script.
 
-- Events append. A correction is a new event. Each event has an id.
-- `openSession` loads the base, the event list, drafts, the time zone, the last-seen stamp, and the seen trail.
-- `foldJournal` replays events onto the base. `workoutFold` is the structural snapshot used to decide whether a save changed the workout. It keeps entries, set ids, rows, rest, notes, and finished. It leaves stamps out.
-- `resume` is the one saved event that may leave `workoutFold` unchanged. It only moves the activity stamp so the timer can cross midnight. `journal-effect.test.js` lists it in `STAMP_ONLY`.
-- A command that would not change `workoutFold` returns `{ ok: true, saved: false, unchanged: true }` and does not append. That check lives in `#appendNow` (#101).
+```sh
+cd native
+npm ci
+```
+
+Scripts copied from `native/package.json`:
+
+```json
+"start": "expo start",
+"ios": "expo run:ios",
+"test": "vitest run",
+"check:shared": "node scripts/check-shared-lib.mjs",
+"verify": "npm test && npm run check:shared"
+```
+
+Verify, from `native/`:
+
+```sh
+cd native
+npm run verify
+```
+
+That runs `npm test` (`vitest run`) and then `npm run check:shared`.
+
+Shared-lib check alone, from `native/`:
+
+```sh
+cd native
+npm run check:shared
+```
+
+That runs `node scripts/check-shared-lib.mjs`. It loads `native/src/shared/training.js` under plain node, scans that import graph, and fails if any other file under `native/` imports `frontend/` directly. Only `native/src/shared/training.js` may import `frontend/src/lib`.
+
+One test file, still from `native/`. This is the `test` script's binary plus a path. It is not a separate npm script:
+
+```sh
+cd native
+npx vitest run src/session/journal-effect.test.js
+```
+
+Metro start, the only Metro script in `native/package.json`:
+
+```sh
+cd native
+npm start
+```
+
+That runs `expo start`. `docs/sprints/2026-11-native-phase-0-results.md` records that port 8081 was sometimes taken and Metro was started with:
+
+```sh
+npx expo start --dev-client --port 8082
+```
+
+The phase 0 note does not name a working directory. The Expo app is `native/`.
+
+Metro export: a clean install and a Metro export passed earlier, and that export needed `EXPO_NO_TYPESCRIPT_SETUP=1`. `native/package.json` has no export script. No script under `native/scripts/` is an export. Do not invent `expo export` or its flags. If you must repeat the export, stop. The environment variable is recorded. The argv is not in this repo.
+
+`npm run ios` runs `expo run:ios`. It is not part of the verify gate. Do not run it unless a task says so.
+
+`docs/sprints/2026-10-30-native-workout-prd.md` says GitHub Actions is disabled on this fork. The suite you run locally is the one that counts. Report the vitest file count, the test count, and the `check:shared` lines on every PR.
+
+Before the first edit:
+
+```sh
+git fetch origin native/phase-1
+git rev-parse origin/native/phase-1
+cd native
+npm ci
+npm run verify
+```
+
+## What this branch is
+
+The sprint PRD (`docs/sprints/2026-10-30-native-workout-prd.md`) calls Phase 1 the five-tab shell. `native/phase-1` also holds the workout journal, finish, and the science register. You are on the journal. Do not mount it on a screen. The shell and the Workout screens are Gus's. See the UI section below.
+
+`native/src/app/(tabs)/workout.js` is still a preview. Presses go through `native/src/workout/preview-actions.js` and record nothing. `docs/sprints/2026-11-native-phase-1-decisions.md` says those controls stay unavailable until a later phase connects them.
+
+### Journal, in short
+
+Code: `native/src/session/`.
+
+- Events append. A correction is a new event with its own id.
+- `openSession` loads the base, events, drafts, time zone, last-seen stamp, and seen trail.
+- `foldJournal` replays events onto the base. `workoutFold` is the structural snapshot (entries, set ids, rows, rest, notes, finished). Stamps are left out.
 - `#fold` is cached on open and after a successful append, and cleared on discard.
+- `resume` is the only saved event that may leave `workoutFold` unchanged. It only moves the activity stamp across midnight. `native/src/session/journal-effect.test.js` lists it in `STAMP_ONLY`.
+- A command that would not change `workoutFold` returns `{ ok: true, saved: false, unchanged: true }` and does not append (#101). That shape matches the duplicate result. `ok` stays true so the controller does not show an error.
+- `#enqueue` is one promise chain. `#append` and `discard` share it (#101, #104). An append waits for the append already in flight. A discard waits for that append, then clears. An append queued after discard returns `failure('discarded')` and writes nothing. A rejection must not drop the rest of the chain.
+- On head `ccf975c`, model preconditions (unknown set, no rest, known set, and the rest) still run before the task is queued. That is open draft #105. Do not reimplement it. See T1.
+- `putDraft` is not on `#enqueue`. `#seenChain` is a separate chain for `putLastSeen`. `#persistSeen` catches a rejected write, clears a private marker, and does not report an error. That is T2.
+- `writeBase` is one upsert. `json_patch` copies `_sessionLastSeen`, `_sessionSeenTrail`, and `_sessionTimeZone` from the current row inside the statement. The first non-empty zone wins (#90). `json_patch` drops a null member, so a key neither row has is omitted (#93). The trail copy is wrapped in `json()`. The comment in `native/src/session/sqlite-storage.js` says SQLite 3.53.4 keeps a `json_extract` array as an array inside `json_set`. The `json()` wrap stays so the copy does not depend on that. `putLastSeen` is one `UPDATE ... json_set`, not a read-modify-write of the whole body.
+- `native/package.json` does not depend on `expo-sqlite`. `native/src/session/storage.js` says not to import it in this phase. `sqlite-storage.js` takes an injected handle (`exec`, `run`, `getAll`). Tests use `fake-sqlite.js` and `node:sqlite`.
+- `plannedSetId(exerciseId, index)` is `plan:<exerciseId>:<index>`. `createEventId` prefers `crypto.randomUUID`.
+- `timing.js`: rest remaining is deadline minus now; pause freezes remaining; elapsed does not rewind; a gap longer than `DURATION_GAP_MS` (4 hours) is not added; an overnight gap longer than `REST_MAX_MS` (15 minutes) is not session time; a shorter overnight rest still counts. Overnight is a local-date change in the session zone. Finish then needs an explicit end. Resume, finish, and discard are the three choices. `REST_MAX_MS` is copied from the idea in `frontend/src/lib/duration.js` and is not imported.
+- `exerciseSetIds` is shared by the live add-exercise guard and by `foldJournal`. A replayed add that reuses a set id is dropped (#103). `extendBy` is shared by `extendRest` and the fold. A full rest that would grow by nothing is refused (#99).
+- A per-side row is done only when both `sides.L.done` and `sides.R.done` are true. `syncSideDone` is that derivation. A commit that does not name `sides` ticks both.
 
-### Save queue
+Already merged on this branch before #62, by PR title: the journal (#42), the five-tab shell and Workout preview (#44), the science register (#43), warm-ups and double progression (#46), the sqlite adapter and hook (#48), effort and Why this (#47), finish into a stored workout (#54), finished workouts by id and date (#57), the hook wire-up (#60), glyphs when SF Symbols are not drawn (#50), iOS symbols with no text glyph (#59), symbol scanner kept out of the app tree (#61).
 
-- `#enqueue` is one promise chain. `#append` and `discard` share it (#101, #104).
-- An append waits for the append already in flight. A discard waits for that append, then clears. An append queued after discard returns `failure('discarded')` and writes nothing.
-- A rejection does not drop the rest of the chain.
-- On this head, model preconditions (unknown set, no rest, known set, and the rest) still run **before** the task is queued. That is the open draft #105, below.
-- `putDraft` is not on this chain.
-- `#seenChain` is a separate chain for `putLastSeen`. `#persistSeen` catches a rejected write, clears its private marker, and does not report an error. That is finding F004, below.
+#62 through #104 are merged. #105 is an open draft. #65 and #67 are open doc drafts. Do not merge #65, #67, or this handoff. The grouped titles are in the previous section of git history; do not redo those PRs. The bug-class table below is the part you must not regress.
 
-### Base row
+## Ordered tasks
 
-- One `session_base` row. `writeBase` is an upsert: `INSERT ... ON CONFLICT DO UPDATE` with `json_patch`.
-- The patch copies `_sessionLastSeen`, `_sessionSeenTrail`, and `_sessionTimeZone` off the current row inside the same statement.
-- Zone is first-write-wins: a stored non-empty zone beats the zone on the incoming body (#90).
-- Stamp and trail prefer the current row, then the incoming body.
-- `json_patch` drops a null member, so a key neither row has is omitted rather than stored as JSON null (#93).
-- The trail copy is wrapped in `json()`. The comment in `sqlite-storage.js` says SQLite 3.53.4 keeps a `json_extract` array as an array inside `json_set`, and the `json()` wrap stays so the copy does not depend on that.
-- `putLastSeen` is one `UPDATE` with `json_set`. It does not read the body and write it back.
+Do one task, then stop for review. Do not start the next code task while the previous code PR is still open. Do not commit on `native/phase-1` or on `main`.
 
-### Storage doubles
+### T0. Confirm the base
 
-- `storage.js` is the in-memory store and the schema. Its header says not to import `expo-sqlite` in this phase.
-- `sqlite-storage.js` takes an injected handle (`exec`, `run`, `getAll`). `native/package.json` does not depend on `expo-sqlite`.
-- `fake-sqlite.js` is the test double. It must keep a copied seen trail as an array, matching `node:sqlite` (#102).
-- `storage-contract.test.js` runs the same cases on the fake and on `node:sqlite`, including the in-flight `writeBase` / `putLastSeen` / zone races.
+Goal: know which commit you are on, and that verify passes, before any edit.
 
-### Ids and time
+Acceptance: you can quote `git rev-parse` of `origin/native/phase-1` and the vitest counts from `npm run verify`.
 
-- `plannedSetId(exerciseId, index)` is `plan:<exerciseId>:<index>`.
-- `createEventId` prefers `crypto.randomUUID`, then `evt-<time>-<random>`.
-- `timing.js` states the rules: rest remaining is deadline minus now; a pause freezes remaining; elapsed does not rewind; a gap longer than `DURATION_GAP_MS` (4 hours) is not added; an overnight gap longer than `REST_MAX_MS` (15 minutes) is not session time; a short overnight rest still counts (#79, #80).
-- Overnight is a local-date change in the session zone, and only when now is later than the last activity. Finish then needs an explicit end. Resume, finish, and discard are the three choices (#77).
-- `REST_MAX_MS` matches `frontend/src/lib/duration.js` and is copied, not imported. The comment says only `native/src/shared/training.js` may import `frontend/`.
+Files: none.
 
-### Per-side sets
+Tests to add: none.
 
-- `syncSideDone` sets `row.done` only when both `sides.L.done` and `sides.R.done` are true.
-- A `set.commit` that names no `sides` marks both L and R done. A commit that names `sides` keeps those ticks (#92, #95).
+Commands, in order:
 
-## 2. What's done
+```sh
+git fetch origin native/phase-1
+git rev-parse origin/native/phase-1
+cd native
+npm ci
+npm run verify
+```
 
-Titles are the GitHub PR titles on `native/phase-1`. #65 and #67 are open docs. They are not in this list. Nothing after #104 is merged. #105 is the open draft in section 3.
+No pull request.
 
-Already on the branch before #62, from the same PR list: the journal (#42), the five-tab shell and Workout preview (#44), the science register (#43), warm-ups and double progression (#46), the sqlite adapter and active-session hook (#48), effort and the Why-this sheet (#47), finish into a stored workout (#54), finished workouts by id and date (#57), and the hook wire-up (#60).
+### T1. Preconditions on the append queue
 
-### Recovery
+Goal: a command's model checks run after any earlier queued command has landed, so a commit behind a remove is `unknown-set` and an extend behind a cancel is `no-rest`.
 
-- #62 native: replay an open journal and skip a finished one
-- #63 native: restore an unfinished journal ahead of a finished base
-- #82 Keep the last counted instant so a kill cannot rewind the timer
-- #85 Guard elapsed so a fixed session cannot rewind
-- #86 Keep a last seen saved while the base is replaced
+This task is already a draft. Do not open a second implementation.
 
-### Finish, clear, notes
+- PR: https://github.com/michaelportale/openGym/pull/105
+- Branch: `cursor/phase-2-queued-checks-ac15`
+- Head when this handoff was written: `5de1543db5026b76119e759aad4c10c6bc84a284`
+- Base: `native/phase-1`
 
-- #69 native: serialize session commands ahead of finish
-- #72 native: keep a failed discard from throwing the session away
-- #73 native: clear the session journal in one SQLite transaction
-- #74 native: record a session note in the journal
-- #75 native: keep a clear failure and cap a session note
-- #76 native: record an exercise note in the journal
+If that PR is open, leave it. Do not push more commits onto it unless a reviewer asked for a change on that branch. If it has been merged, skip T1 and fetch the new `native/phase-1`. If it is closed and not merged, then do the work below on a new branch from the current `native/phase-1`.
 
-### Sets and exercises
+On `ccf975c` the checks still run before `#enqueue`. Two calls fired together can both pass. The second then saves an event the fold ignores and returns `unchanged`.
 
-- #64 native: edit and delete a committed set
-- #66 native: add and remove an exercise mid-session
-- #71 native: keep at least one exercise in a live session
-- #97 Refuse an added set whose id is missing or taken
-- #98 Refuse a copied exercise that reuses a set id
-- #100 Do not record a move with a non-integer index
-- #103 native: drop a replayed add that reuses a set id
+Acceptance, if you have to rebuild it:
 
-### Rest, midnight, zone
-
-- #77 Keep the session time zone so a killed overnight journal refuses a silent finish
-- #78 Keep the stored session time zone when the base is rewritten
-- #79 Leave a short overnight gap out of session elapsed
-- #80 Keep the session timer counting through a rest that crosses midnight
-- #81 Treat a replayed pause, cancel, or resume as a duplicate
-- #84 Replay a set event as a duplicate after the set is gone
-- #87 Replay an extend as a duplicate after the rest is gone
-- #88 Replay an added set as a duplicate after the exercise is gone
-- #89 Replay every eventId command as a duplicate
-- #90 Keep a time zone saved while the base is replaced
-- #99 Do not record an extend a full rest cannot apply
-
-### Fold, queue, SQLite shape
-
-- #70 native: copy session documents without structuredClone
-- #83 Fold the JSON document so a restart shows the same row
-- #93 Omit null stamp, trail, and zone keys from the base
-- #101 native: refuse a journal event the fold does not change
-- #102 native: keep a copied seen trail as an array
-- #104 native: queue discard with in-flight journal appends
-
-### Per-side done
-
-- #91 Clear both sides when a copied set is added
-- #92 Mark both sides done when a per-side set is committed
-- #94 Follow the side ticks when a per-side set is edited
-- #95 Derive per-side done in one place
-- #96 Keep per-side done aligned on the base and every event
-
-### Docs in this range
-
-- #68 native: correct the standup warm-up bar example
-
-## iPhone limits
-
-The shell and the symbol fixes are merged. No iPhone validation is claimed.
-
-Still to check on the iPhone: SF Symbols, Liquid Glass labels, focus, the native tab bar versus the dock, Dynamic Type, reduced motion, and haptics.
-
-A clean install and the Metro export passed earlier. The export still needed `EXPO_NO_TYPESCRIPT_SETUP=1`.
-
-Details for Gus: [ui-handoff.md](../native/ui-handoff.md).
-
-## 3. Remaining work
-
-Do these one at a time. One small draft PR into `native/phase-1`. Do not start the next until the previous has been reviewed. Do not redo a branch that already exists.
-
-The longer notes for these tasks live in [architecture.md](../native/architecture.md), [device-checklist.md](../native/device-checklist.md), [bug-classes.md](../native/bug-classes.md), and [open-questions.md](../native/open-questions.md).
-
-The shell, Workout screens, mounting `useActiveSession`, and mounting `WhyThisSheet` are Gus's. `docs/science/phase-4-status.md` says the warm-up prompt and the Why-this sheet are blocked on the shell.
-
-The sprint PRD's later phases are not tasks here: rest notifications and motion (its Phase 3), pairing and backup (Phase 5), Health sync beyond the Phase 0 gates (Phase 6), Plan / Progress / Exercises / Nutrition (Phase 7), WHOOP (Phase 8), device acceptance (Phase 9), web retirement (Phase 10). `storage.js` says not to import `expo-sqlite` in this phase.
-
-### Task 1. Land the precondition queue (#105)
-
-Open draft: https://github.com/michaelportale/openGym/pull/105
-
-Branch `cursor/phase-2-queued-checks-ac15`, head `5de1543db5026b76119e759aad4c10c6bc84a284`. Not merged. Do not open a second implementation.
-
-On `ccf975c`, `commitSet`, `extendRest`, and the other commands still read the model before `#enqueue`. Two calls fired together can both pass, and the second then saves an event the fold ignores (`unchanged`) .
-
-The branch moves those checks into the queued task, after the earlier command has landed. Argument checks stay argument checks, in the same order: a duplicate id, then a non-integer index or a zero extend, then the model. Empty set ids stay behind the active-session guard.
-
-Acceptance:
-
-- `removeSet(bench1)` and `commitSet(bench1)`, fired in that order without awaiting the remove first: the commit returns `unknown-set`, not `unchanged`, and the journal has only the remove.
-- `cancelRest` and `extendRest`, fired in that order: the extend returns `no-rest`, and the journal has the start and the cancel only.
-- `journal-effect.test.js` stays green.
-- `cd native && npm run verify` passes. The verify on that head, before this handoff, was 43 files, 348 tests, `check:shared` clean.
+- `removeSet` of bench set 1 and `commitSet` of that same set, fired in that order without awaiting the remove: the commit is `{ ok: false, saved: false, error: { code: 'unknown-set' } }`, not `unchanged`. The journal contains only the remove.
+- `cancelRest` and `extendRest` fired in that order: the extend is `no-rest`. The journal contains the rest start and the cancel only.
+- Argument checks stay argument checks, in today's order. A duplicate event id is still decided before a non-integer index or a zero extend. Empty set ids stay behind the active-session guard. `finish` still checks `discarded` before the duplicate id.
+- `native/src/session/journal-effect.test.js` stays green.
 
 Files: `native/src/session/session.js`, `native/src/session/journal-effect.test.js`.
 
-### Task 2. F004, failed timer checkpoints
+Tests to add, only if you are rebuilding: the two interleaves above, in `journal-effect.test.js`.
 
-Source: `docs/reviews/2026-11-06-overnight-pr-audit.md` on open PR #65 (`codex/overnight-pr-audit-2026-11-06`). That audit's discovery snapshot stops at #103. It was not re-run for this handoff. The same swallow is still in `#persistSeen` at `ccf975c`.
+Commands before opening a replacement PR:
 
-`noteSeen` and `flushSeen` call `#persistSeen`. The `putLastSeen` rejection is caught, the private marker is cleared, and the caller sees success. The controller can keep `state.error === null`. The audit's injected case: a draft save returns `{ ok: true, saved: true }` while the checkpoint `UPDATE` fails; elapsed shows 900000 ms and no error; reopen shows elapsed 0 and no error. The draft itself was saved.
+```sh
+cd native
+npx vitest run src/session/journal-effect.test.js
+npm run verify
+```
+
+The verify recorded for head `5de1543d`, before this handoff, was 43 files, 348 tests, `check:shared` clean. Re-run it. Do not reuse that count.
+
+### T2. F004, a failed timer checkpoint must be visible
+
+Start T2 only after T1 is merged into `native/phase-1`, or after you have confirmed PR #105 is closed without a merge and you are not editing the same lines. If #105 is still open, do not start T2. `session.js` is in both diffs. Branch from the current `native/phase-1`, not from the #105 branch.
+
+Goal: a failed `putLastSeen` is visible. A set or draft that already saved stays saved.
+
+Source: finding F004 in `docs/reviews/2026-11-06-overnight-pr-audit.md` on open PR #65 (branch `codex/overnight-pr-audit-2026-11-06`). That write-up's discovery snapshot stops at #103. The same `catch` is in `#persistSeen` at `ccf975c`. The audit was not re-run after #104.
+
+What the code does now: `noteSeen` and `flushSeen` call `#persistSeen`. The `putLastSeen` rejection is caught, the private marker is cleared, and the promise resolves. The controller can keep `state.error === null`. The audit's injected case: a draft save returns `{ ok: true, saved: true }` while the checkpoint `UPDATE` fails; elapsed on screen is 900000 ms and `error` is null; reopen shows elapsed 0 and `error` null. The draft itself was saved.
 
 Acceptance, from that finding:
 
-- Inject one rejected checkpoint `UPDATE` after a successful command. The checkpoint error is visible. The journal and the draft stay. The set or draft result stays saved.
-- Restore writes and retry. The error clears. A reopen keeps the displayed 15 minutes.
+- Inject one rejected checkpoint `UPDATE` after a successful command. A checkpoint or storage error is visible. The journal and the draft are still there. The set or draft result stays `saved: true`.
+- Restore writes and retry the checkpoint. The error clears. A reopen keeps the displayed 15 minutes.
 - Cover `noteSeen` and forced `flushSeen`, and a retry after rejection.
-- A permanent storage failure stays visible. A kill before storage accepts the write cannot be papered over.
+- A permanent storage failure stays visible. Do not pretend a kill is safe when storage never accepted the write.
+- Do not mark the saved set or draft as unsaved.
 
-Files the audit names: `native/src/session/session.js`, `native/src/session/session-controller.js`, `native/src/session/use-active-session.js`, plus a test. The preview does not mount the hook. This is a session defect, not a device incident the audit observed.
+Files: `native/src/session/session.js` (`#persistSeen`, `noteSeen`, `flushSeen`). `native/src/session/session-controller.js` if the controller must copy the checkpoint error into `state.error`. `native/src/session/use-active-session.js` only if the hook drops that error. The audit says the hook forwards controller state.
 
-## 4. Tests every change must keep passing
+Tests to add: a new file `native/src/session/seen-checkpoint.test.js` with the cases above. Keep `session-controller.test.js` green, including `a call notes the timer once it has moved 15 seconds` and `an unchanged edit leaves the screen without an error`.
 
-From `native/`: `npm run verify`, which is `npm test` and `npm run check:shared`.
+Commands before opening the PR:
 
-`check:shared` (`native/scripts/check-shared-lib.mjs`) loads `native/src/shared/training.js` under plain node, scans that import graph for browser-only code, and fails if any other native file imports `frontend/` directly.
+```sh
+cd native
+npx vitest run src/session/seen-checkpoint.test.js src/session/session-controller.test.js src/session/journal-effect.test.js
+npm run verify
+```
 
-Guard tests:
+Do not add `expo-sqlite`. Do not edit screens.
 
-- `journal-effect.test.js`. A saved command appends one event and the reopened `workoutFold` differs. A result with `ok: false` or `saved: false` leaves the journal byte-identical. `unchanged` is benign (`ok: true`, `saved: false`, no error). `STAMP_ONLY` is only `resume`, and the reason is in the file. Also: a long journal, overlapping appends, and the discard interleaves (in-flight commit then discard; append queued behind discard).
-- `side-done.test.js`. Seeded walk: `row.done` follows both ticks on the base and after every seeded command.
-- `storage-contract.test.js`. Memory and SQLite contracts, the clear transaction, and the `node:sqlite` races: `putLastSeen` must not clobber an in-flight `writeBase`, `writeBase` must keep a last seen saved during the replace, and `writeBase` must keep the first zone when another lands during the replace. The trail test checks that `node:sqlite` and the fake agree, with and without the `json()` wrap.
-- `fold-add.test.js`. A replayed `set.add` or `exercise.add` that reuses a set id, or repeats one inside the copied entry, is dropped. Fresh ids are kept.
-- `replay.test.js`. Every `eventId` command replays as a duplicate after its precondition is gone.
-- After #105 merges, its two interleaves (commit behind remove, extend behind cancel) join this list.
+There is no T3 in this window. Do not start rest notifications, pairing, Health sync, other tabs, WHOOP, web retirement, science number changes, or a fork of `frontend/src/lib`. Those are named in the sprint PRD and in [open questions](../native/open-questions.md). They are not your tasks tonight.
 
-Report the file count, the test count, and `check:shared` on the PR.
+## Branch and merge rules
 
-## 5. On-device checklist
+Each code task gets its own branch cut from the current `origin/native/phase-1`. Recent branches look like `cursor/<short-name>-ac15`, all lowercase. Use a new name. Do not reuse `cursor/phase-2-queued-checks-ac15`.
 
-Not run for this handoff. The audit says device rendering and real Expo SQLite are unverified. `expo-sqlite` is not installed. The Workout screen does not mount the session hook, so these need a build that actually opens a session. Gus owns that screen.
+```sh
+git fetch origin native/phase-1
+git checkout -b <your-branch> origin/native/phase-1
+```
 
-When that build exists:
+A small draft pull request into `native/phase-1`. One behavior. Do not merge it. Do not enable auto-merge.
 
-- Kill and reopen mid-set. The committed sets and the open draft come back. A partial draft is not a completed set.
-- Kill and reopen mid-rest. Remaining time matches the stored deadline or the paused remaining. No negative countdown.
-- Cross local midnight in the session zone. A short gap, within `REST_MAX_MS`, still counts. A longer overnight gap does not. The app offers resume, finish with an explicit end, or discard. It does not finish silently.
-- Resume after that overnight gap. The stamp moves. Sets, rest, notes, and finish stay as they were.
-- A short rest and a gap longer than `DURATION_GAP_MS`. The long gap is not added to elapsed. Elapsed does not shrink.
-- JSON1 on the device database: `json_patch`, `json_object`, `json_extract`, `json_set`, and the `json()` wrap around the trail. A reopen must still see the trail as an array, the first zone unchanged, and null stamp or trail or zone keys absent.
-- Compare `sqlite_version()` from the device `expo-sqlite` with `node:sqlite` in the verify environment. The repo comment names SQLite 3.53.4 for the array-inside-`json_set` behavior. The audit names a Node SQLite 3.50.0 probe for clear and rollback. Those are different notes. Do not treat them as the phone's version.
-- Per-side set. `row.done` is true only when both L and R are done. A commit that does not send `sides` ticks both. A commit that sends `sides` keeps those ticks. Adding a copy clears both ticks.
+- Merge commits only, when a human merges. No rebase. No force-push. Do not rewrite pushed history.
+- Never commit on `main` and never push to `main`. `main` waits for Michael's phone check.
+- Nothing is deleted. Move an unwanted file to `~/ToBeDeleted/`. Tag `archive/<branch>` before a branch is deleted.
+- No secrets. No personal workout data. No health data. The repo is public. Tests use fixed fake sessions.
+- Never open, read, or generate from `catalogue/media/`.
+- Keep `LICENSE` and `NOTICE` intact. Native's package license field is `AGPL-3.0-or-later`.
+- No new npm dependencies.
 
-## 6. Bug classes and the guard for each
+Who reviews and who merges: `docs/sprints/2026-10-30-native-workout-prd.md` says the owner reviews and merges. `docs/science/decisions.md` uses the name Charlie for a later caller of effort helpers and `migrateLinearRoutines`. It does not say Charlie is the GitHub reviewer. This handoff was also told that Charlie reviews every PR, including security, and that agents do not merge. Those two writings do not name the same person. See the open question below. Until a human says otherwise: open the PR as a draft, do not merge it, and do not push to `main`.
 
-| Class | How it showed up | Guard that must stay |
+## Invariant tests that must stay green
+
+Run from `native/` via `npm run verify`. What each file guarantees:
+
+| File | Guarantee |
+| --- | --- |
+| `native/src/session/journal-effect.test.js` | Discovers every command whose signature takes `eventId`. `saved: true` appends one event and the reopened `workoutFold` differs, except `resume` in `STAMP_ONLY`. `ok: false` or `saved: false` leaves the journal byte-identical. `unchanged` is `ok: true`, `saved: false`, and no error. A long journal still saves a real commit and reports a same-value edit as unchanged. Two overlapping appends both save, and a later same-value edit stays unchanged. A discard waits for an in-flight commit and leaves the journal empty. An append queued behind a discard is `discarded` and writes nothing. |
+| `native/src/session/replay.test.js` | `every eventId command replays as a duplicate after its precondition is gone`. |
+| `native/src/session/side-done.test.js` | `per-side row.done follows both ticks on the base and after every seeded command`. |
+| `native/src/session/fold-add.test.js` | A replayed `set.add` or `exercise.add` that reuses a set id is dropped. Fresh ids are kept. The test builds the journal by hand and calls `foldJournal`. |
+| `native/src/session/storage-contract.test.js` | The in-memory store and the SQLite adapter agree. Clear is one transaction. `node:sqlite` and `fake-sqlite.js` keep the seen trail as an array, with and without the `json()` wrap. `putLastSeen` does not clobber an in-flight `writeBase`. `writeBase` keeps a last seen saved during the replace, and keeps the first time zone when another zone lands during the replace. A stamp, trail, or zone key neither row has is absent, not JSON null. |
+| `native/src/session/session-controller.test.js` | Finish waits for a pending commit. A second finish does not send while the first is saving. An unchanged edit leaves the screen without an error. A storage failure is surfaced and the set is not saved. |
+| `native/src/session/rewind.test.js` | Displayed elapsed never rewinds across a fixed session. |
+| `native/src/session/recovery.test.js` | A kill restores the open journal, recomputes rest from the deadline, and keeps the session time zone. A finished workout does not block a different open journal, and does not resurrect a session whose workout is already finished. |
+
+`check:shared` must still print that `training.js` loads, then the scanned-file line and the checked-file line, and exit 0.
+
+After T1's PR is merged, its two new interleaves in `journal-effect.test.js` join this list. Do not delete them.
+
+## Bug classes to guard against
+
+| Class | Where it showed up | Guard |
 | --- | --- | --- |
-| Per-side done drift | #91, #92, #94, then the single derivation in #95 and #96 | `side-done.test.js` seeded walk. `syncSideDone` is the one place `row.done` is derived for a side row. |
-| A saved event the fold ignores | #97, #98, #99, #100, then the invariant in #101 | `journal-effect.test.js`. `saved: true` changes the reopened fold, except `resume`. `unchanged` writes nothing. |
-| Replay of a duplicate set id | #103. Live commands already refused it. | `fold-add.test.js` feeds a hand-built journal to `foldJournal`. |
-| Fake SQLite does not match real SQLite | #102, audit N001. The fake quoted a JSON array; SQLite 3.53.4 kept it an array. | `storage-contract.test.js`: fake and `node:sqlite` agree on the trail shape. Production keeps the `json()` wrap. |
-| Read-modify-write of the base zone | #90. A zone read, then a later replace, could move midnight. | `writeBase` copies zone, stamp, and trail inside one upsert. The zone race test in `storage-contract.test.js`. |
-| Read-modify-write of the fold cache | #101. Two appends could each fold a stale `#fold`. | `#enqueue` around `#appendNow`. The overlapping-append test in `journal-effect.test.js`. |
-| Discard against an in-flight append | #104. Discard could clear, then the append pushed the event back. | Discard on the same chain. The two discard interleave tests. |
+| Per-side done drift | #91, #92, #94, then one derivation in #95 and #96 | `native/src/session/side-done.test.js` |
+| A saved event the fold ignores | #97, #98, #99, #100, then the invariant in #101 | `native/src/session/journal-effect.test.js` |
+| Replay of a duplicate set id | #103. Live commands already refused it. | `native/src/session/fold-add.test.js` |
+| Fake SQLite does not match real SQLite | #102, audit N001. The fake quoted an array. SQLite 3.53.4 kept it an array. | `storage-contract.test.js`: `node sqlite and the fake keep the seen trail as an array`. Keep the production `json()` wrap. |
+| Read-modify-write of the base zone | #90. A later replace could move midnight. | The zone race in `storage-contract.test.js`, and the `json_patch` upsert in `sqlite-storage.js` |
+| Read-modify-write of the fold cache | #101. Two appends could each write a stale `#fold`. | `#enqueue`, and `overlapping appends both save, and a later same-value edit stays unchanged` |
+| Discard against an in-flight append | #104. The append could push the event back after the clear. | The two discard tests in `journal-effect.test.js` |
+| Stale model checks | Not merged. Draft #105. | The two interleaves named in T1, once that PR lands |
 
-Review lessons from this run:
+Review lessons, from this run of the journal:
 
-- One invariant that discovers every command beats another one-off case. `journal-effect.test.js` and `replay.test.js` find commands by reading `eventId` on the prototype.
-- A read-modify-write that awaits in the middle needs one queue. Errors must not break the chain.
-- Folding and projection stay pure. `view` does not write the journal.
-- The duplicate-id check stays before the model preconditions, in the same order as today. On #105 that whole sequence runs inside the queue, so it sees the journal after the earlier command. `finish` still checks `discarded` before the duplicate id. Leave that order unless a review says otherwise.
-- Merge parallel PRs one at a time. After each merge, run `npm run verify` on the new `native/phase-1` head before branching again.
+- An invariant that discovers every command beats another one-off case.
+- A read-modify-write that awaits in the middle needs one queue. A rejection must not drop the rest of the queue.
+- `foldJournal`, `workoutFold`, and `view` stay pure. `view` does not write the journal.
+- Check a duplicate event id before the model preconditions. Keep that order. `finish` checks `discarded` before the duplicate id. Leave that order.
+- Merge parallel PRs one at a time. After each merge, run `npm run verify` on the new `native/phase-1` head before you branch again.
 
-## 7. Rules
+## Gus's UI checklist
 
-- Never push to `main` and never commit on it. `main` waits for Michael's phone check.
-- PRs target `native/phase-1`. Draft until Charlie has reviewed. Charlie reviews every PR, including security.
-- Merge commits only. No rebase. No force-push.
-- Nothing is deleted. Move a file to `~/ToBeDeleted/`. Tag `archive/<branch>` before deleting a branch.
-- No secrets in the repo, the PR, or the logs.
-- No personal workout or health data. The repo is public. Tests use fixed fake sessions.
-- Never open, read, or generate from `catalogue/media/`. The licence bars feeding that media to an AI system.
-- Keep the AGPL `LICENSE` and `NOTICE` intact.
-- Small PRs. One behavior each. No new npm dependencies for this lane.
-- `native/src/shared/training.js` is the only native file that may import `frontend/src/lib`.
+Word for word:
 
-## 8. Open question
+> the shell and symbol fixes are merged, but NO iPhone validation is claimed. Still to check on the iPhone: SF Symbols, Liquid Glass labels, focus, the native tab bar vs the dock, Dynamic Type, reduced motion, and haptics. A clean install and the Metro export passed earlier, but the export still needed `EXPO_NO_TYPESCRIPT_SETUP=1`.
 
-The full list is [open-questions.md](../native/open-questions.md).
+Limits, plainly:
 
-#70 changed shared web code: `frontend/src/lib/finish-workout.js`, plus the native finish and fold callers. `training.js` re-exports that module. The sprint PRD says native imports `frontend/src/lib` in place this sprint, and Phase 10 moves shared logic to `packages/core`.
+- No iPhone validation is claimed. Do not write that SF Symbols, Liquid Glass, focus, the tab bar, the dock, Dynamic Type, reduced motion, or haptics passed on a phone.
+- Do not edit `native/src/app/`, `native/src/shell/`, `native/src/workout/`, or `native/src/ui/` for T1 or T2.
+- Do not mount `useActiveSession` or `WhyThisSheet` on a screen. `docs/science/decisions.md` says Gus mounts the Why-this sheet. `docs/science/phase-4-status.md` says the warm-up prompt and that sheet are blocked on the shell.
+- The clean install and the Metro export are earlier results. They are not a device pass. The export needed `EXPO_NO_TYPESCRIPT_SETUP=1`. The export argv is not in `native/package.json`.
 
-Should native keep importing that shared file, or fork or copy it into `native/src/shared`? That needs Michael's call. Do not fork it while this question is open.
+Merged shell and symbol PRs, by title, so you do not redo them: #44 lock the five-tab shell and Workout preview, #50 show a glyph when SF Symbols are not drawn, #59 let iOS draw a symbol that has no text glyph, #61 keep the symbol scanner out of the app tree.
 
-Other questions, not tasks:
+## On-device session checks
 
-- The #65 audit was not refreshed after #104. F004 is still in the code at `ccf975c`. Whether anything else in that audit moved after #103 was not re-checked here.
-- `expo-sqlite` is intentionally not a dependency yet. Who adds it, and on which PRD phase, is not decided in the session code.
-- #65 (`docs: overnight PR audit for November 6–7`) and #67 (`Overnight merge watch (running log, do not merge)`) are open docs. Do not merge them as part of this lane.
+Not run for this handoff. Do not claim them. They need a build that opens a real session. The preview does not. `expo-sqlite` is not installed. When that build exists, the checks are: kill and reopen mid-set and mid-rest; cross midnight and resume; a short rest and a gap longer than four hours; JSON1 `json_patch` and the `json()` trail wrap on the device database; compare `sqlite_version()` from device `expo-sqlite` with `node:sqlite` (the repo comment names 3.53.4 for the array behavior; the audit names a Node 3.50.0 probe for clear and rollback; neither note is the phone); per-side `row.done` only when both sides are done, and a commit with no `sides` ticks both. Full wording: [device-checklist.md](../native/device-checklist.md).
+
+## Open questions
+
+Do not decide these in a code change.
+
+1. Shared web code. #70 edited `frontend/src/lib/finish-workout.js`. `native/src/shared/training.js` re-exports it. The sprint PRD says native imports `frontend/src/lib` in place this sprint, and Phase 10 moves shared logic to `packages/core`. Should native keep importing that file, or fork or copy it into `native/src/shared`? Michael's call. Do not fork it.
+2. Who merges. The sprint PRD says the owner reviews and merges. The science notes use the name Charlie for a later caller, not for GitHub. This handoff was also told Charlie reviews every PR, including security. Do not merge your own PR while this is unresolved.
+3. `main`. It waits for Michael's phone check. Do not push to it.
+4. F004's audit text stops at #103. The `catch` was still present at `ccf975c`. Anything else in that audit after #104 was not re-checked here.
+5. `expo-sqlite` is intentionally absent. Do not add it.
+6. Science numbers in `docs/science/sources-needed.md` (weekly volume, deload, e1RM, rest defaults, increments) stay until a source is read. Do not edit `frontend/src/lib/progression.js` or the shared store.
+7. #65, #67, and this handoff (#106) are docs. Do not merge them as part of T1 or T2.
