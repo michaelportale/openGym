@@ -3,6 +3,9 @@ import { createMemoryStorage } from './storage.js'
 import { openSession } from './session.js'
 
 const T0 = Date.parse('2026-11-07T15:00:00.000Z')
+const SEEDS = [1, 7, 19, 42, 99]
+const STEPS = 16
+const KINDS = ['add', 'commit', 'edit', 'undo', 'copy', 'move', 'addExercise', 'removeExercise']
 
 function baseWorkout() {
   return {
@@ -15,12 +18,35 @@ function baseWorkout() {
       {
         id: 'bench',
         target: { sets: 1, reps: 5, weight: 60 },
-        sets: [{ w: 60, r: 5, done: false }],
+        sets: [{ id: 'bench-0', w: 60, r: 5, done: false }],
       },
       {
         id: 'row',
         target: { sets: 1, reps: 8 },
-        sets: [{ w: 40, r: 8, done: false }],
+        sets: [{
+          id: 'row-0',
+          w: 20,
+          r: 16,
+          done: true,
+          sides: {
+            L: { w: 20, r: 8, done: true },
+            R: { w: 18, r: 8, done: false },
+          },
+        }],
+      },
+      {
+        id: 'curl',
+        target: { sets: 1, reps: 10 },
+        sets: [{
+          id: 'curl-0',
+          w: 12,
+          r: 10,
+          done: false,
+          sides: {
+            L: { w: 12, r: 5, done: true },
+            R: { w: 10, r: 5, done: true },
+          },
+        }],
       },
     ],
   }
@@ -36,13 +62,8 @@ const doneSides = {
   },
 }
 
-function oneSide(leftDone, rightDone) {
-  return {
-    sides: {
-      L: { w: 20, r: 8, done: leftDone },
-      R: { w: 18, r: 8, done: rightDone },
-    },
-  }
+function clone(value) {
+  return JSON.parse(JSON.stringify(value))
 }
 
 function isPerSide(row) {
@@ -68,149 +89,159 @@ function sideFacts(view) {
   return facts
 }
 
-async function started(storage) {
-  return openSession({
-    base: baseWorkout(),
-    storage,
-    now: () => T0 + 60_000,
-    timeZone: 'UTC',
-  })
+function slots(view) {
+  const out = []
+  for (const entry of view.entries) {
+    for (const set of entry.sets) out.push({ exerciseId: entry.id, setId: set.setId, row: set.row })
+  }
+  return out
 }
 
-test('per-side row.done follows both ticks after every set change, live and on replay', async () => {
-  const storage = createMemoryStorage()
-  const session = await started(storage)
-  let step = 0
-
-  async function run(label, command) {
-    step += 1
-    const result = await command()
-    expect(result, label).toMatchObject({ ok: true, saved: true })
-    const live = sideFacts(session.view())
-    const restored = await openSession({ storage, now: () => T0 + 60_000, timeZone: 'UTC' })
-    const replay = sideFacts(restored.view())
-    expect({ step, label, live, replay }).toEqual({
-      step,
-      label,
-      live: live.map(fact => ({ ...fact, agreed: true })),
-      replay: live.map(fact => ({ ...fact, agreed: true })),
-    })
-    return restored.view()
+// xorshift32. An LCG's low bits cycle too tightly to pick among eight commands.
+function random(seed) {
+  let state = seed >>> 0 || 1
+  return () => {
+    state ^= state << 13
+    state >>>= 0
+    state ^= state >>> 17
+    state ^= state << 5
+    return state >>> 0
   }
+}
 
-  await run('add a copied per-side set', () => session.addSet({
-    eventId: 'add-side',
-    exerciseId: 'bench',
-    setId: 'side',
-    fields: doneSides,
-  }))
-  await run('commit both sides', () => session.commitSet({
-    eventId: 'commit-side',
-    exerciseId: 'bench',
-    setId: 'side',
-    fields: { w: 22 },
-  }))
-  await run('edit one side off', () => session.editSet({
-    eventId: 'edit-one',
-    exerciseId: 'bench',
-    setId: 'side',
-    fields: oneSide(true, false),
-  }))
-  await run('undo the per-side set', () => session.undoSet({
-    eventId: 'undo-side',
-    exerciseId: 'bench',
-    setId: 'side',
-  }))
-  await run('commit naming one side', () => session.commitSet({
-    eventId: 'commit-one',
-    exerciseId: 'bench',
-    setId: 'side',
-    fields: oneSide(true, false),
-  }))
-  await run('copy the per-side shape onto a new set', () => session.addSet({
-    eventId: 'copy-side',
-    exerciseId: 'row',
-    setId: 'copied',
-    fields: doneSides,
-  }))
-  await run('move the exercise that holds the copy', () => session.moveExercise({
-    eventId: 'move-row',
-    exerciseId: 'row',
-    toIndex: 0,
-  }))
-  await run('edit the copy so both sides are done', () => session.editSet({
-    eventId: 'edit-copy',
-    exerciseId: 'row',
-    setId: 'copied',
-    fields: oneSide(true, true),
-  }))
-  await run('add a plain set', () => session.addSet({
-    eventId: 'add-plain',
-    exerciseId: 'bench',
-    setId: 'plain',
-    fields: { w: 60, r: 5, done: true },
-  }))
-  const afterPlain = await run('commit the plain set', () => session.commitSet({
-    eventId: 'commit-plain',
-    exerciseId: 'bench',
-    setId: 'plain',
-    fields: { w: 62, r: 5 },
-  }))
-  const plain = afterPlain.entries.find(entry => entry.id === 'bench').sets.find(set => set.setId === 'plain')
-  expect(plain.row.done).toBe(true)
-  expect(plain.row.sides).toBeUndefined()
+function plan(session, view, kind, next, ids) {
+  const exercises = view.entries
+  const sets = slots(view)
+  if (!exercises.length || !sets.length) return null
+  if (kind === 'add') {
+    const exerciseId = exercises[next() % exercises.length].id
+    const setId = `add-${ids.n}`
+    ids.n += 1
+    return () => session.addSet({
+      eventId: ids.event(kind),
+      exerciseId,
+      setId,
+      fields: { w: 40 + (next() % 20), r: 5 + (next() % 6), done: true },
+    })
+  }
+  if (kind === 'copy') {
+    const exerciseId = exercises[next() % exercises.length].id
+    const setId = `copy-${ids.n}`
+    ids.n += 1
+    const perSide = sets.filter(slot => isPerSide(slot.row))
+    const source = perSide.length ? perSide[next() % perSide.length].row : doneSides
+    return () => session.addSet({
+      eventId: ids.event(kind),
+      exerciseId,
+      setId,
+      fields: clone(source),
+    })
+  }
+  if (kind === 'commit' || kind === 'edit' || kind === 'undo') {
+    const slot = sets[next() % sets.length]
+    if (kind === 'undo') {
+      return () => session.undoSet({ eventId: ids.event(kind), exerciseId: slot.exerciseId, setId: slot.setId })
+    }
+    if (kind === 'commit') {
+      const nameSides = isPerSide(slot.row) && next() % 2 === 0
+      const fields = nameSides
+        ? { sides: { L: { ...slot.row.sides.L, done: next() % 2 === 0 }, R: { ...slot.row.sides.R, done: next() % 2 === 0 } } }
+        : { w: 20 + (next() % 30) }
+      return () => session.commitSet({
+        eventId: ids.event(kind),
+        exerciseId: slot.exerciseId,
+        setId: slot.setId,
+        fields,
+      })
+    }
+    const makeSide = !isPerSide(slot.row) || next() % 2 === 0
+    const fields = makeSide
+      ? { sides: { L: { w: 20, r: 8, done: next() % 2 === 0 }, R: { w: 18, r: 8, done: next() % 2 === 0 } } }
+      : { w: 30 + (next() % 10) }
+    return () => session.editSet({
+      eventId: ids.event(kind),
+      exerciseId: slot.exerciseId,
+      setId: slot.setId,
+      fields,
+    })
+  }
+  if (kind === 'move') {
+    const exerciseId = exercises[next() % exercises.length].id
+    const toIndex = next() % (exercises.length + 1)
+    return () => session.moveExercise({ eventId: ids.event(kind), exerciseId, toIndex })
+  }
+  if (kind === 'addExercise') {
+    const exerciseId = `extra-${ids.n}`
+    ids.n += 1
+    const copied = sets.filter(slot => isPerSide(slot.row))
+    const source = copied.length ? clone(copied[next() % copied.length].row) : clone(doneSides)
+    return () => session.addExercise({
+      eventId: ids.event(kind),
+      exerciseId,
+      entry: {
+        id: exerciseId,
+        target: { sets: 2, reps: 8 },
+        sets: [
+          { id: `${exerciseId}-side`, ...source },
+          { id: `${exerciseId}-plain`, w: 12, r: 10, done: true },
+        ],
+      },
+    })
+  }
+  if (kind === 'removeExercise') {
+    if (exercises.length < 2) return null
+    const exerciseId = exercises[next() % exercises.length].id
+    return () => session.removeExercise({ eventId: ids.event(kind), exerciseId })
+  }
+  return null
+}
 
-  await run('turn the plain set into one finished side', () => session.editSet({
-    eventId: 'edit-plain-side',
-    exerciseId: 'bench',
-    setId: 'plain',
-    fields: oneSide(true, false),
-  }))
-  await run('undo that set', () => session.undoSet({
-    eventId: 'undo-plain',
-    exerciseId: 'bench',
-    setId: 'plain',
-  }))
+async function check(session, storage, seed, step, label) {
+  const live = sideFacts(session.view())
+  const restored = await openSession({ storage, now: () => T0 + 60_000, timeZone: 'UTC' })
+  const replay = sideFacts(restored.view())
+  const where = `seed ${seed} step ${step} ${label}`
+  expect(live.filter(fact => !fact.agreed), where).toEqual([])
+  expect(replay.filter(fact => !fact.agreed), `${where} replay`).toEqual([])
+  expect(replay, `${where} replay rows`).toEqual(live)
+}
 
-  const curlId = 'curl'
-  await run('copy an exercise that already has a finished per-side set', () => session.addExercise({
-    eventId: 'copy-curl',
-    exerciseId: curlId,
-    entry: {
-      id: curlId,
-      target: { sets: 2, reps: 8 },
-      sets: [
-        { id: 'curl-side', ...doneSides },
-        { id: 'curl-plain', w: 12, r: 10, done: true },
-      ],
-    },
-  }))
-  await run('commit the copied per-side set', () => session.commitSet({
-    eventId: 'commit-curl-side',
-    exerciseId: curlId,
-    setId: 'curl-side',
-    fields: { w: 24 },
-  }))
-  await run('edit the copied set down to one side', () => session.editSet({
-    eventId: 'edit-curl-side',
-    exerciseId: curlId,
-    setId: 'curl-side',
-    fields: oneSide(false, true),
-  }))
-  await run('undo the copied per-side set', () => session.undoSet({
-    eventId: 'undo-curl-side',
-    exerciseId: curlId,
-    setId: 'curl-side',
-  }))
-  await run('move the copied exercise', () => session.moveExercise({
-    eventId: 'move-curl',
-    exerciseId: curlId,
-    toIndex: 1,
-  }))
-  await run('commit the copied plain set', () => session.commitSet({
-    eventId: 'commit-curl-plain',
-    exerciseId: curlId,
-    setId: 'curl-plain',
-    fields: { r: 12 },
-  }))
+test('per-side row.done follows both ticks on the base and after every seeded command', async () => {
+  const covered = new Set()
+  for (const seed of SEEDS) {
+    const storage = createMemoryStorage()
+    const session = await openSession({
+      base: baseWorkout(),
+      storage,
+      now: () => T0 + 60_000,
+      timeZone: 'UTC',
+    })
+    await check(session, storage, seed, 0, 'base')
+    const next = random(seed)
+    const ids = {
+      n: 0,
+      event(kind) {
+        this.n += 1
+        return `${seed}-${kind}-${this.n}`
+      },
+    }
+    for (let step = 1; step <= STEPS; step += 1) {
+      const view = session.view()
+      const start = next() % KINDS.length
+      let ran = null
+      for (let offset = 0; offset < KINDS.length; offset += 1) {
+        const kind = KINDS[(start + offset) % KINDS.length]
+        const command = plan(session, view, kind, next, ids)
+        if (!command) continue
+        const result = await command()
+        expect(result, `seed ${seed} step ${step} ${kind}`).toMatchObject({ ok: true, saved: true })
+        ran = kind
+        break
+      }
+      expect(ran, `seed ${seed} step ${step} had no command`).not.toBeNull()
+      covered.add(ran)
+      await check(session, storage, seed, step, ran)
+    }
+  }
+  expect([...covered].sort()).toEqual([...KINDS].sort())
 })
