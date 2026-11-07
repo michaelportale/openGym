@@ -5,7 +5,7 @@
 **Repository:** michaelportale/openGym, across every target branch.
 **Cadence:** every half hour, with a final 7:30 a.m. reconciliation.
 **Status:** in progress. This is a rolling handoff for the coding agents, not an assertion that all listed PRs are safe.
-**Latest discovery:** 62 merged PRs through #105 remain represented; exhaustive pagination during the 01:40 EST reconciliation still returns 107 PRs (100 + 7). N002 is now independently confirmed resolved in draft #106 by documentation commit `2ca47724af7785274ee9cad19bcba0d6c2a544ba`; it has not merged. F004 remains open on actual integration while #107 is draft. The other-agent #67 watch log still reflects its 00:08 EST snapshot and omits F004/#107; use this audit's current evidence for their status. Historical V001 and device validation limits remain. No audit merge was performed.
+**Latest discovery:** 62 merged PRs through #105 remain represented; the 02:01 EST refresh exhausted 107 PRs (100 + 7), with no new merge or revision since the 01:40 reconciliation. N002 remains resolved in draft #106 at `2ca47724af7785274ee9cad19bcba0d6c2a544ba`; F004 remains open on actual integration while #107 is draft. #67 still reflects its 00:08 EST snapshot. Historical V001 and device validation limits remain. No audit merge was performed.
 **Audit PR:** [#65](https://github.com/michaelportale/openGym/pull/65), kept draft for rolling documentation updates.
 
 ## Agent action queue
@@ -488,6 +488,16 @@ This resolves N002 in the open draft. The original finding, failure case and per
 **Other-agent log is stale:** the current [#67 watch file](https://github.com/michaelportale/openGym/blob/8719eb8c1d2bc3460686086cb8586328d34236ca/docs/reviews/merge-watch-2026-11-06.md#L5-L18) is still at head `8719eb8c1d2bc3460686086cb8586328d34236ca`, file blob `6cfc87d427eb775bfef241ada3e87c1950495f8e`. It states a 00:08 EST snapshot and no newer audit commit/finding after `9048c1b1`; the full current file contains neither F004 nor a #107 entry. That is a historical snapshot, not the current finding state. Agents should use [this audit's F004 status](#f004--must-fix--p2-failed-timer-checkpoints-are-silently-discarded), [candidate validation](#1230-am-merge-reconciliation-and-candidate-fix-review), and [the #107 verification comment](https://github.com/michaelportale/openGym/pull/107#issuecomment-6702891847). No edit was made to #67's branch or instructions sent to its agent.
 
 **Live state:** source refs were refreshed before publication. #65/#67/#106 remain unmerged documentation drafts; #107 remains draft at `af260fb438fc459992590867c24c3186f1636ce6`, while integration remains `ed4fdc288601dde5504246eeb2131a53b19b69d7`. F004 is still open there. The independently tested `d39859dba71b4dac050059a6d8cabe3cf91e4a3c` is only a generated merge preview. T3 is not started or assigned by this audit; its gate remains #107's merge or explicit user permission to prepare it earlier. The existing half-hour schedule, documentation-only push permission and 7:30 a.m. EST final deadline are unchanged.
+
+## 2:01 a.m. unchanged-head refresh
+
+The 07:01Z heartbeat exhausted all-state REST pagination (100 + 7 PRs), across all base branches. All 62 actual in-window merges retain the same head/base/merge/time tuples; all 62 historical merge parent pairs were rechecked against local Git objects. No merged PR or non-audit open PR has changed since the 01:40 reconciliation. The coverage ledger remains complete for discovered merges, with validation limits explicitly retained.
+
+Current `native/phase-1` is still `ed4fdc288601dde5504246eeb2131a53b19b69d7`. #65/#67/#106/#107 remain open drafts. #67 remains at `8719eb8c1d2bc3460686086cb8586328d34236ca`; #106 remains at corrected documentation head `2ca47724af7785274ee9cad19bcba0d6c2a544ba`; #107 remains at `af260fb438fc459992590867c24c3186f1636ce6`. Metadata, discussions, review submissions, unresolved-thread lists and checks were refreshed: no new response/review/thread, and zero check runs/statuses with a pending aggregate on each non-audit open head. Actions remains disabled, classic branch protection is absent, and rulesets are empty. Missing CI is not a passing result.
+
+N002 stays resolved in the unmerged documentation correction. F004 stays open on actual integration; #107's tested `d39859dba71b4dac050059a6d8cabe3cf91e4a3c` is only a generated merge preview. Existing comments were read and not duplicated. No test was rerun because source/base commits and review concerns are unchanged. Prior independent 348 tests at actual merge #105, 361 at #107 head, 363 at its generated preview, and checkpoint failure/retry probes retain their original commit attributions; frontend/API/MCP evidence remains at merge #85. Historical V001 and device/Expo SQLite/mounted-hook limitations remain.
+
+No application file was edited, no PR was merged, and T3 was not started or assigned. The final fixed-window reconciliation is still due at 7:30 a.m. EST.
 
 ## Coverage ledger
 
