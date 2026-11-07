@@ -129,12 +129,14 @@ function applyPause(model, event) {
   }
 }
 
+export function extendBy(rest, byMs) {
+  if (!rest || !Number.isFinite(byMs) || byMs === 0) return 0
+  const room = Math.max(0, REST_MAX_MS - rest.totalMs)
+  return byMs > 0 ? Math.min(byMs, room) : byMs
+}
+
 function applyExtend(model, event) {
-  if (!model.rest) return
-  const byMs = Number(event.byMs)
-  if (!Number.isFinite(byMs) || byMs === 0) return
-  const room = Math.max(0, REST_MAX_MS - model.rest.totalMs)
-  const applied = byMs > 0 ? Math.min(byMs, room) : byMs
+  const applied = extendBy(model.rest, Number(event.byMs))
   if (applied === 0) return
   const totalMs = Math.max(0, model.rest.totalMs + applied)
   if (model.rest.status === 'paused') {

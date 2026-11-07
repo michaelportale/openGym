@@ -1,5 +1,5 @@
 import { finishWorkout } from '../shared/training.js'
-import { activityAt, elapsedStamps, entryExists, exerciseSetIds, foldJournal, projectSession, slotExists, toActive } from './fold.js'
+import { activityAt, elapsedStamps, entryExists, exerciseSetIds, extendBy, foldJournal, projectSession, slotExists, toActive } from './fold.js'
 import { DURATION_GAP_MS, compactSeen, isOvernight, shownThrough } from './timing.js'
 import { createEventId } from './ids.js'
 
@@ -343,9 +343,13 @@ class SessionLog {
 
   async extendRest({ eventId, byMs } = {}) {
     if (this.#seen(eventId)) return duplicate()
-    const rest = this.view().rest
-    if (!this.discarded && !this.#isFinished() && !rest) return failure('no-rest')
     if (!Number.isFinite(byMs) || byMs === 0) return failure('bad-extend')
+    const rest = this.view().rest
+    if (!this.discarded && !this.#isFinished()) {
+      if (!rest) return failure('no-rest')
+      // A full rest grows by nothing. The fold would keep the event and ignore it.
+      if (extendBy(rest, byMs) === 0) return failure('bad-extend')
+    }
     return this.#append({ id: eventId, type: 'rest.extend', at: this.now(), byMs })
   }
 
