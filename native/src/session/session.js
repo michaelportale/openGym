@@ -287,6 +287,7 @@ class SessionLog {
   }
 
   async moveExercise({ eventId, exerciseId, toIndex } = {}) {
+    if (this.#seen(eventId)) return duplicate()
     const model = this.#model()
     if (!this.discarded && !this.#isFinished() && !entryExists(model, exerciseId)) return failure('unknown-exercise')
     return this.#append({
@@ -299,6 +300,7 @@ class SessionLog {
   }
 
   async startRest({ eventId, deadline, durationMs, totalMs } = {}) {
+    if (this.#seen(eventId)) return duplicate()
     const at = this.now()
     const resolved = Number.isFinite(deadline) ? deadline : at + Number(durationMs)
     if (!Number.isFinite(resolved)) return failure('bad-deadline')
@@ -368,9 +370,9 @@ class SessionLog {
   }
 
   async resume({ eventId } = {}) {
+    if (this.#seen(eventId)) return duplicate()
     if (this.discarded) return failure('discarded')
     if (this.#isFinished()) return failure('finished')
-    if (this.#seen(eventId)) return duplicate()
     if (!this.view().overnight) return failure('not-overnight')
     return this.#append({ id: eventId, type: 'session.resume', at: this.now() })
   }
