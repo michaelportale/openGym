@@ -11,6 +11,14 @@ The PRD states that prescription and says the shared helper, which closes half t
 
 When the working weight is at or under the bar, `warmupRamp` returns no sets. The screen renders that list and does not need its own skip. A heavier work weight still gets the two sets, and a percentage that lands under the bar is still raised to the bar.
 
+## Weekly volume (`weekly-volume`)
+
+`weeklyVolumeTarget` returns null. No weekly set target ships until the primary paper is read. A screen calls that helper and shows nothing. Inventing a set count here would overstate a secondary record. The population stays `TODO`.
+
+## Rep ranges (`rep-ranges`)
+
+`programRepRange` returns the `reps` and `repsMin` already stored on the program. A missing or unreadable bound stays empty. There is no optimal range, so 8-12 is not filled in and is not labeled uniquely best. The shared normalizer in `frontend/src/lib` still fills a missing range. This lane does not edit it.
+
 ## Progression (`double-progression`)
 
 When a reps exercise and its routine do not name a policy, native suggestions use double progression: one session in which every work set reaches the top of the range raises the weight and returns to the bottom. That one-session trigger is convention.

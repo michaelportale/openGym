@@ -46,7 +46,8 @@ test('the registry has one entry per PRD rule and every entry is complete', () =
 })
 
 test('each registry entry matches its docs/science register file', () => {
-  const files = readdirSync(DOCS).filter(name => name.endsWith('.md') && name !== 'README.md' && name !== 'decisions.md').sort()
+  const extra = new Set(['README.md', 'decisions.md', 'phase-4-status.md'])
+  const files = readdirSync(DOCS).filter(name => name.endsWith('.md') && !extra.has(name)).sort()
   expect(files).toEqual(PRD_RULE_IDS.map(id => `${id}.md`).sort())
   for (const file of files) {
     const doc = parseFrontmatter(readFileSync(join(DOCS, file), 'utf8'))
@@ -59,6 +60,7 @@ test('each registry entry matches its docs/science register file', () => {
   const readme = readFileSync(join(DOCS, 'README.md'), 'utf8')
   for (const id of PRD_RULE_IDS) expect(readme).toContain(`(${id}.md)`)
   expect(readme).toContain('(decisions.md)')
+  expect(readme).toContain('(phase-4-status.md)')
 })
 
 test('standup decisions record a PRD default for each open question', () => {
@@ -124,10 +126,45 @@ test('whyThis returns the rule id, the plain-language reason, and the source', (
   expect(whyThis('warmup-accounting')).toEqual({
     ruleId: 'warmup-accounting',
     reason: rule.reason,
-    source: rule.source
+    source: rule.source,
+    population: 'Not a study'
   })
   expect(whyThis('weekly-volume').source).toContain('https://sponet.de/sponet/Record/4097139?lng=en')
   expect(whyThis('weekly-volume').reason.toLowerCase()).toContain('no weekly')
+  expect(whyThis('weekly-volume')).not.toHaveProperty('population')
+})
+
+test('phase 4 status marks every done-when item done, not started, or blocked', () => {
+  const status = readFileSync(join(DOCS, 'phase-4-status.md'), 'utf8')
+  const items = [
+    ['`docs/science/` register', '#43'],
+    ['Warm-up prompt', '#46'],
+    ['Progression', '#46'],
+    ['Effort', '#47'],
+    ['"Why this?" sheet', '#49'],
+    ['Rule audit', '#43'],
+    ['Rep ranges', '#49'],
+    ['Weekly volume', '#43']
+  ]
+  for (const [item, pr] of items) {
+    const line = status.split('\n').find(row => row.includes(item))
+    expect(line, item).toBeTruthy()
+    expect(line).toMatch(/Done|Not started|Blocked/)
+    expect(line).toContain(pr)
+  }
+  expect(status).toMatch(/not started/)
+  expect(status).toMatch(/blocked/)
+})
+
+test('a TODO population stays in the register, off the payload, and on the source list', () => {
+  const status = readFileSync(join(DOCS, 'phase-4-status.md'), 'utf8')
+  const waiting = Object.values(RULES).filter(rule => rule.population === 'TODO')
+  expect(waiting.length).toBeGreaterThan(0)
+  for (const rule of waiting) {
+    expect(whyThis(rule.id)).not.toHaveProperty('population')
+    expect(status).toContain(rule.id)
+  }
+  expect(status).toContain('needs a source')
 })
 
 test('whyThis fails when the rule id has no register entry', () => {

@@ -1,4 +1,4 @@
-import { RULES } from './rules.js'
+import { RULES, shownPopulation } from './rules.js'
 
 const PLAIN_LABELS = new Set(['Convention', 'Definition'])
 
@@ -12,5 +12,11 @@ export function whySheetModel(payload) {
   }
   const rule = typeof payload.ruleId === 'string' ? RULES[payload.ruleId] : undefined
   const label = rule && PLAIN_LABELS.has(rule.source) ? rule.source : null
-  return { ruleId: payload.ruleId, reason: payload.reason, source: payload.source, label }
+  return {
+    ruleId: payload.ruleId,
+    reason: payload.reason,
+    source: payload.source,
+    label,
+    population: shownPopulation(payload.population)
+  }
 }
