@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest'
 import { createMemoryStorage } from './storage.js'
 import { openSession, plannedSetId } from './session.js'
+import { REST_MAX_MS } from './timing.js'
 
 const T0 = Date.parse('2026-11-07T15:00:00.000Z')
 
@@ -341,6 +342,51 @@ test('a short overnight gap stays out of elapsed through a kill and a resume', a
   const restored = await openSession({ storage, now: idleClock.now, timeZone: 'UTC' })
   expect(restored.view().overnight).toBe(false)
   expect(restored.view().elapsedMs).toBe(logged + 10 * 60 * 1000)
+})
+
+test('a rest across midnight keeps counting and does not fall back to the last set', async () => {
+  const clock = createClock(Date.parse('2026-11-07T23:50:00.000Z'))
+  const storage = createMemoryStorage()
+  const base = baseWorkout()
+  base.start = clock.now()
+  const { session } = await started({ clock, storage, base, timeZone: 'UTC' })
+  await session.commitSet({ eventId: 'c1', exerciseId: 'bench', setId: bench0, fields: { w: 60, r: 5 } })
+  const logged = session.view().elapsedMs
+
+  clock.set(Date.parse('2026-11-08T00:05:00.000Z'))
+  const resting = session.view()
+  expect(resting.overnight).toBe(true)
+  expect(resting.elapsedMs).toBe(logged + REST_MAX_MS)
+
+  const killed = await openSession({ storage, now: clock.now, timeZone: 'UTC' })
+  expect(killed.view().overnight).toBe(true)
+  expect(killed.view().elapsedMs).toBe(logged + REST_MAX_MS)
+
+  const resume = await session.resume({ eventId: 'resume-1' })
+  expect(resume).toMatchObject({ ok: true, saved: true })
+  expect(session.view().overnight).toBe(false)
+  expect(session.view().elapsedMs).toBe(logged + REST_MAX_MS)
+
+  const idleClock = createClock(Date.parse('2026-11-07T23:50:00.000Z'))
+  const idleBase = baseWorkout()
+  idleBase.start = idleClock.now()
+  const idle = await started({ clock: idleClock, base: idleBase, timeZone: 'UTC' })
+  await idle.session.commitSet({ eventId: 'c1', exerciseId: 'bench', setId: bench0, fields: { w: 60, r: 5 } })
+  const idleLogged = idle.session.view().elapsedMs
+  idleClock.set(Date.parse('2026-11-07T23:59:00.000Z'))
+  const beforeMidnight = idle.session.view().elapsedMs
+  expect(beforeMidnight).toBe(idleLogged + 9 * 60 * 1000)
+  idleClock.set(Date.parse('2026-11-08T00:30:00.000Z'))
+  expect(idle.session.view().elapsedMs).toBe(beforeMidnight)
+
+  const pastRest = createClock(Date.parse('2026-11-07T23:50:00.000Z'))
+  const pastBase = baseWorkout()
+  pastBase.start = pastRest.now()
+  const longer = await started({ clock: pastRest, base: pastBase, timeZone: 'UTC' })
+  await longer.session.commitSet({ eventId: 'c1', exerciseId: 'bench', setId: bench0, fields: { w: 60, r: 5 } })
+  const pastLogged = longer.session.view().elapsedMs
+  pastRest.set(Date.parse('2026-11-08T00:06:00.000Z'))
+  expect(longer.session.view().elapsedMs).toBe(pastLogged)
 })
 
 test('discard drops an overnight session instead of logging it', async () => {
