@@ -147,6 +147,14 @@ function applyEvent(model, event) {
       slot.row = clearDone(slot.row)
       return
     }
+    case 'set.remove': {
+      const entry = findEntry(model, event.exerciseId)
+      if (!entry || entry.sets.length <= 1) return
+      const index = entry.sets.findIndex(slot => slot.setId === event.setId)
+      if (index < 0) return
+      entry.sets.splice(index, 1)
+      return
+    }
     case 'set.add': {
       const entry = findEntry(model, event.exerciseId)
       if (!entry || entry.sets.some(slot => slot.setId === event.setId)) return

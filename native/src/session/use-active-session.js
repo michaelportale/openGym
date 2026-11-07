@@ -8,6 +8,7 @@ const ACTIONS = [
   'commitSet',
   'editSet',
   'undoSet',
+  'removeSet',
   'addSet',
   'moveExercise',
   'startRest',
