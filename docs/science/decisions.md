@@ -44,3 +44,7 @@ Keep showing Epley, with the inherited 12-rep cap for a single formula, labeled 
 The PRD names optional reps left in the tank, which is RIR. A new log is a whole number from 0 to 10, or omitted. `validateRir` checks that before anything is saved. `effortProgressionNote` reads a hand-entered RIR, or an existing RPE through the shared scale, and returns "This looks far from failure." when the rating is above the inherited `HARD_RIR` of 3. Warm-ups and a bare failure flag do not count. `withEffortNote` copies a prescription and adds that note. It does not change the load.
 
 Charlie can call those three from the journal later. This lane does not edit `native/src/session/`.
+
+## Why this sheet
+
+`WhyThisSheet` renders a `whyThis()` payload: the reason, the source, and a Convention or Definition label when the register uses that plain source. A cited rule shows the citation and no plain label. Gus mounts it by passing that payload. This lane does not mount it in any screen.
