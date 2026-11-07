@@ -33,7 +33,8 @@ CREATE TABLE IF NOT EXISTS session_base (
 export { createSqliteSessionStorage } from './sqlite-storage.js'
 
 function clone(value) {
-  return value == null ? value : structuredClone(value)
+  // Plain JSON only. Hermes on device may not provide structuredClone.
+  return value == null ? value : JSON.parse(JSON.stringify(value))
 }
 
 export function createMemoryStorage() {

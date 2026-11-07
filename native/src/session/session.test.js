@@ -377,7 +377,7 @@ test('a failed append surfaces the error and does not mark the set saved', async
 test('finish folds into the web workout document and keeps unknown keys', async () => {
   const clock = createClock(T0)
   const base = baseWorkout()
-  const snapshot = structuredClone(base)
+  const snapshot = JSON.parse(JSON.stringify(base))
   const { session } = await started({ clock, base })
   await session.commitSet({
     eventId: 'warm',
