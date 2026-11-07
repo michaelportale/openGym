@@ -94,6 +94,22 @@ treatment.
 
 Revisit if. A device check needs a visible focus style that web outline does not provide.
 
+## Accessibility preferences a platform does not implement
+
+Context. The preview asks whether motion and transparency are reduced. iOS can answer
+both. The web preview can answer motion and has no transparency reader. Calling the
+missing function threw, and the Workout screen did not render.
+
+Options. Keep the call. Or treat a missing reader as a request for the reduced
+treatment. Or start reduced only when a reader exists, and leave the treatment off
+when the platform has no preference to report.
+
+Why. A missing reader is not a request. Where a reader exists, the reduced treatment
+still starts on until the platform answers. iOS behaviour for both preferences is
+unchanged.
+
+Revisit if. The web preview gains a transparency reader.
+
 ## Header action
 
 The ellipsis opens the existing diagnostics screen. It is not a workout action. Its hint
