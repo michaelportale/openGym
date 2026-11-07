@@ -122,13 +122,20 @@ export function createFakeSqliteDb() {
       }
       const current = JSON.parse(row.body)
       const next = JSON.parse(params[0])
-      if (current._sessionLastSeen != null) next._sessionLastSeen = current._sessionLastSeen
+      const seen = current._sessionLastSeen != null ? current._sessionLastSeen : next._sessionLastSeen
+      if (seen != null) next._sessionLastSeen = seen
       else delete next._sessionLastSeen
-      if (current._sessionSeenTrail != null) {
+      const currentZone = typeof current._sessionTimeZone === 'string' && current._sessionTimeZone ? current._sessionTimeZone : ''
+      const incomingZone = typeof next._sessionTimeZone === 'string' && next._sessionTimeZone ? next._sessionTimeZone : ''
+      const zone = currentZone || incomingZone
+      if (zone) next._sessionTimeZone = zone
+      else delete next._sessionTimeZone
+      const trail = current._sessionSeenTrail != null ? current._sessionSeenTrail : next._sessionSeenTrail
+      if (trail != null) {
         // A bare json_extract is TEXT. json_set stores that as a quoted string.
-        // json() or -> is what keeps the trail an array.
-        const keptAsJson = /json\(json_extract\(session_base\.body, '\$\._sessionSeenTrail'\)\)|session_base\.body\s*->\s*'\$\._sessionSeenTrail'/i.test(text)
-        next._sessionSeenTrail = keptAsJson ? current._sessionSeenTrail : JSON.stringify(current._sessionSeenTrail)
+        // json() around the extract keeps the trail an array.
+        const keptAsJson = /json\(\s*COALESCE\(\s*json_extract\(session_base\.body, '\$\._sessionSeenTrail'\)|json\(json_extract\(session_base\.body, '\$\._sessionSeenTrail'\)\)|session_base\.body\s*->\s*'\$\._sessionSeenTrail'/i.test(text)
+        next._sessionSeenTrail = keptAsJson || typeof trail === 'string' ? trail : JSON.stringify(trail)
       } else {
         delete next._sessionSeenTrail
       }

@@ -1,4 +1,4 @@
-import { SESSION_LAST_SEEN_KEY, SESSION_SEEN_TRAIL_KEY, SESSION_TIME_ZONE_KEY, SQLITE_SESSION_SCHEMA, baseWithoutTimeZone, lastSeenFromBase, seenTrailFromBase, timeZoneForWrite, timeZoneFromBase } from './storage.js'
+import { SESSION_LAST_SEEN_KEY, SESSION_SEEN_TRAIL_KEY, SESSION_TIME_ZONE_KEY, SQLITE_SESSION_SCHEMA, baseWithoutTimeZone, lastSeenFromBase, seenTrailFromBase, timeZoneFromBase } from './storage.js'
 
 // SQLite adapter for the session journal. The handle is injected so this file does not import
 // expo-sqlite. native/package.json does not depend on it yet. When the app adds it, open the
@@ -105,31 +105,27 @@ export function createSqliteSessionStorage(db) {
         await db.run('DELETE FROM session_base')
         return
       }
-      const rows = await db.getAll('SELECT body FROM session_base WHERE id = ?', [1])
-      const existingBody = rows.length ? parse(rows[0].body) : null
       const body = baseWithoutTimeZone(value)
-      const zone = timeZoneForWrite(options, timeZoneFromBase(existingBody))
-      if (zone) body[SESSION_TIME_ZONE_KEY] = zone
-      // Stamp and trail are copied from the current row inside the statement, and only
-      // when that key is present. Values read above would be stale if putLastSeen
-      // committed before this replace. json() keeps the trail an array. A bare
-      // json_extract is TEXT, and json_set would store it as a quoted string.
-      // On-device JSON1 checklist: this copy must stay json()-wrapped.
+      // A caller zone is only a candidate. The statement keeps the row's zone when
+      // one is already stored, so a later explicit zone cannot move midnight.
+      if (options && typeof options.timeZone === 'string' && options.timeZone) {
+        body[SESSION_TIME_ZONE_KEY] = options.timeZone
+      }
+      // Stamp, trail, and zone are copied from the current row inside this statement.
+      // json() keeps the trail an array. A bare json_extract is TEXT, and json_set
+      // would store it as a quoted string.
+      // On-device JSON1 checklist: the trail copy must stay json()-wrapped.
       const seen = `'$.${SESSION_LAST_SEEN_KEY}'`
       const trail = `'$.${SESSION_SEEN_TRAIL_KEY}'`
-      const trailJson = `json(json_extract(session_base.body, ${trail}))`
+      const zone = `'$.${SESSION_TIME_ZONE_KEY}'`
       await db.run(
         `INSERT INTO session_base (id, body) VALUES (1, ?)
-         ON CONFLICT(id) DO UPDATE SET body = CASE
-           WHEN json_extract(session_base.body, ${trail}) IS NULL THEN
-             CASE
-               WHEN json_extract(session_base.body, ${seen}) IS NULL THEN excluded.body
-               ELSE json_set(excluded.body, ${seen}, json_extract(session_base.body, ${seen}))
-             END
-           WHEN json_extract(session_base.body, ${seen}) IS NULL THEN
-             json_set(excluded.body, ${trail}, ${trailJson})
-           ELSE json_set(excluded.body, ${seen}, json_extract(session_base.body, ${seen}), ${trail}, ${trailJson})
-         END`,
+         ON CONFLICT(id) DO UPDATE SET body = json_set(
+           excluded.body,
+           ${seen}, COALESCE(json_extract(session_base.body, ${seen}), json_extract(excluded.body, ${seen})),
+           ${trail}, json(COALESCE(json_extract(session_base.body, ${trail}), json_extract(excluded.body, ${trail}))),
+           ${zone}, COALESCE(NULLIF(json_extract(session_base.body, ${zone}), ''), NULLIF(json_extract(excluded.body, ${zone}), ''))
+         )`,
         [JSON.stringify(body)],
       )
     },
