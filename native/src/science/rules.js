@@ -33,7 +33,7 @@ export const RULES = Object.freeze({
     sourceUrl: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC7558980/',
     population: 'TODO',
     evidence: 'Limited: one crossover study, bench result',
-    inference: 'The 2 by 6 at 40% and 80% is the product decision taken from that summary. Rounding down onto a loadable weight, and never going below the bar, is our own rule. The shared warm-up helper still ramps by closing half the gap to the work weight, not by 40/80. This entry records the decision and does not change that helper.',
+    inference: 'The 2 by 6 at 40% and 80% is the product decision taken from that summary. Rounding down onto a loadable weight, and never going below the bar, is our own rule. Native warm-ups use that prescription. The shared helper in frontend still closes half the gap, and this lane does not edit it.',
     reading: 'Summary of the full text read.'
   }),
   'warmup-volume': rule({
@@ -57,7 +57,7 @@ export const RULES = Object.freeze({
     sourceUrl: 'https://sportrxiv.org/index.php/server/preprint/view/559',
     population: 'TODO',
     evidence: 'Our inference',
-    inference: 'Prompting only the first lift for a muscle group is our inference from the summary\'s support for skipping loads already near a 10RM. The summary does not itself test that session rule.',
+    inference: 'Prompting only the first lift for a muscle group is our inference from the summary\'s support for skipping loads already near a 10RM. The summary does not itself test that session rule. The muscle group used here is the catalogue body part. A later lift for a new body part is still prompted.',
     reading: 'Preprint summary read; since published. DOI 10.1016/j.smhs.2025.08.002.'
   }),
   'warmup-accounting': rule({
@@ -105,7 +105,7 @@ export const RULES = Object.freeze({
     sourceUrl: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC9528903/',
     population: 'TODO',
     evidence: 'The one-session trigger is convention',
-    inference: 'The one-session trigger is convention. The shared engine still defaults reps-mode exercises to linear progression, and it also ships Greyskull, triple, and timed policies. This entry records the decision and does not switch that default.',
+    inference: 'The one-session trigger is convention. Native suggestions use double progression when neither the exercise nor the routine names a policy. An explicit policy is kept. The shared web default stays linear because this lane does not edit frontend.',
     reading: 'Summary of the full text read.'
   }),
   'effort-proximity': rule({
