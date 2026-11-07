@@ -1,4 +1,4 @@
-import { SESSION_LAST_SEEN_KEY, SESSION_TIME_ZONE_KEY, SQLITE_SESSION_SCHEMA, baseWithoutTimeZone, lastSeenFromBase, timeZoneForWrite, timeZoneFromBase } from './storage.js'
+import { SESSION_LAST_SEEN_KEY, SESSION_SEEN_TRAIL_KEY, SESSION_TIME_ZONE_KEY, SQLITE_SESSION_SCHEMA, baseWithoutTimeZone, lastSeenFromBase, seenTrailFromBase, timeZoneForWrite, timeZoneFromBase } from './storage.js'
 
 // SQLite adapter for the session journal. The handle is injected so this file does not import
 // expo-sqlite. native/package.json does not depend on it yet. When the app adds it, open the
@@ -110,8 +110,10 @@ export function createSqliteSessionStorage(db) {
       const body = baseWithoutTimeZone(value)
       const zone = timeZoneForWrite(options, timeZoneFromBase(existingBody))
       const seen = lastSeenFromBase(existingBody)
+      const trail = seenTrailFromBase(existingBody)
       if (zone) body[SESSION_TIME_ZONE_KEY] = zone
       if (seen != null) body[SESSION_LAST_SEEN_KEY] = seen
+      if (trail.length) body[SESSION_SEEN_TRAIL_KEY] = trail
       await db.run(
         'INSERT OR REPLACE INTO session_base (id, body) VALUES (?, ?)',
         [1, JSON.stringify(body)],
@@ -130,14 +132,16 @@ export function createSqliteSessionStorage(db) {
       return rows.length ? timeZoneFromBase(parse(rows[0].body)) : ''
     },
 
-    async putLastSeen(at) {
+    async putLastSeen(at, trail) {
       await ready()
       if (!Number.isFinite(at)) return
+      const points = Array.isArray(trail) ? trail.filter(item => Number.isFinite(item)) : [at]
+      const stored = points.length ? points : [at]
       // One statement. A read of the whole body, then a later replace, would wipe a
       // writeBase that committed in between.
       await db.run(
-        `UPDATE session_base SET body = json_set(body, '$.${SESSION_LAST_SEEN_KEY}', ?) WHERE id = 1`,
-        [at],
+        `UPDATE session_base SET body = json_set(body, '$.${SESSION_LAST_SEEN_KEY}', ?, '$.${SESSION_SEEN_TRAIL_KEY}', json(?)) WHERE id = 1`,
+        [at, JSON.stringify(stored)],
       )
     },
 
@@ -145,6 +149,12 @@ export function createSqliteSessionStorage(db) {
       await ready()
       const rows = await db.getAll('SELECT body FROM session_base WHERE id = ?', [1])
       return rows.length ? lastSeenFromBase(parse(rows[0].body)) : null
+    },
+
+    async readSeenTrail() {
+      await ready()
+      const rows = await db.getAll('SELECT body FROM session_base WHERE id = ?', [1])
+      return rows.length ? seenTrailFromBase(parse(rows[0].body)) : []
     },
   }
 }

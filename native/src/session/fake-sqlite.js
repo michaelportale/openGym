@@ -119,11 +119,12 @@ export function createFakeSqliteDb() {
       tables.session_base = []
       return { changes }
     }
-    if (/^UPDATE session_base SET body = json_set\(body, '\$\._sessionLastSeen', \?\) WHERE id = 1$/i.test(text)) {
+    if (/^UPDATE session_base SET body = json_set\(body, '\$\._sessionLastSeen', \?, '\$\._sessionSeenTrail', json\(\?\)\) WHERE id = 1$/i.test(text)) {
       const row = tables.session_base.find(item => item.id === 1)
       if (!row) return { changes: 0 }
       const body = JSON.parse(row.body)
       body._sessionLastSeen = params[0]
+      body._sessionSeenTrail = JSON.parse(params[1])
       row.body = JSON.stringify(body)
       return { changes: 1 }
     }
