@@ -15,6 +15,12 @@ When a reps exercise and its routine do not name a policy, native suggestions us
 
 An explicit policy on the exercise or the routine is kept, including linear and Greyskull. Greyskull's deload after 1 miss is not the native default. The PRD names double progression, and it names deload after 3 misses as the inherited convention still waiting on an audit. The shared engine's double policy already waits for 3 misses. The web app's own default stays linear because this lane does not edit `frontend/src/lib`.
 
+## When to prompt (`warmup-prompt`)
+
+Prompt a warm-up on the first exercise in the session for a catalogue body part, and not on a later exercise for that same body part. A later exercise for a different body part is still prompted. An exercise the catalogue does not know is not prompted.
+
+The PRD calls the timing our inference and does not name which field is a muscle group. The catalogue body part, such as chest or back, is the group the data already has. A finer muscle name can replace it.
+
 ## Population
 
 Leave `population` as `TODO` on every cited rule. The PRD evidence list does not say who was studied. Filling a population in would be a citation we do not have. Revisit only after that source is read again.
