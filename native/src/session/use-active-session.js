@@ -14,6 +14,7 @@ const ACTIONS = [
   'removeExercise',
   'moveExercise',
   'setNote',
+  'setExerciseNote',
   'startRest',
   'pauseRest',
   'extendRest',

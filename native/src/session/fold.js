@@ -212,6 +212,19 @@ function applyEvent(model, event) {
     case 'rest.cancel':
       model.rest = null
       return
+    case 'exercise.note': {
+      const entry = findEntry(model, event.exerciseId)
+      if (!entry?.source || typeof event.note !== 'string') return
+      if (!event.note.trim()) {
+        delete entry.source.note
+        delete entry.source.notePin
+        return
+      }
+      entry.source.note = event.note
+      if (event.notePin === true) entry.source.notePin = true
+      else if (event.notePin === false) delete entry.source.notePin
+      return
+    }
     case 'session.note':
       if (typeof event.note !== 'string') return
       if (event.note.trim()) model.base.note = event.note
@@ -351,6 +364,8 @@ export function projectSession(model, { now, timeZone, drafts, discarded, sample
   let warmupSets = 0
   const entries = model.entries.map(entry => ({
     id: entry.id,
+    note: typeof entry.source?.note === 'string' ? entry.source.note : '',
+    notePin: entry.source?.notePin === true,
     sets: entry.sets.map(slot => {
       const row = clone(slot.row)
       const completed = hasCompletedWork(row)
