@@ -264,6 +264,17 @@ class SessionLog {
     return this.#append({ id: eventId, type: 'rest.cancel', at: this.now() })
   }
 
+  async setNote({ eventId, note } = {}) {
+    if (this.#seen(eventId)) return duplicate()
+    if (!this.discarded && !this.#isFinished() && typeof note !== 'string') return failure('bad-note')
+    return this.#append({
+      id: eventId,
+      type: 'session.note',
+      at: this.now(),
+      note: typeof note === 'string' ? note : '',
+    })
+  }
+
   async resume({ eventId } = {}) {
     if (this.discarded) return failure('discarded')
     if (this.#isFinished()) return failure('finished')
