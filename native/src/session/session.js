@@ -308,6 +308,8 @@ class SessionLog {
 
   async moveExercise({ eventId, exerciseId, toIndex } = {}) {
     if (this.#seen(eventId)) return duplicate()
+    // The fold ignores a non-integer index, so the event would say the exercise moved.
+    if (!Number.isInteger(toIndex)) return failure('bad-index')
     const model = this.#model()
     if (!this.discarded && !this.#isFinished() && !entryExists(model, exerciseId)) return failure('unknown-exercise')
     return this.#append({
