@@ -48,3 +48,7 @@ Charlie can call those three from the journal later. This lane does not edit `na
 ## Why this sheet
 
 `WhyThisSheet` renders a `whyThis()` payload: the reason, the source, and a Convention or Definition label when the register uses that plain source. A cited rule shows the citation and no plain label. Gus mounts it by passing that payload. This lane does not mount it in any screen.
+
+## Linear routines
+
+`migrateLinearRoutines` copies a routine whose own `prog` is `linear` and writes `double` on the copy. It does not run on its own. Prescription, boot, and the journal do not call it. Charlie calls it only after an explicit owner action. Exercise-level `prog: 'linear'` is left alone, and that exercise stays linear because the exercise policy wins. Writing `double` keeps the shared web engine on the same policy after a sync. Clearing the field would send the web engine back to linear.
