@@ -133,13 +133,11 @@ export function createSqliteSessionStorage(db) {
     async putLastSeen(at) {
       await ready()
       if (!Number.isFinite(at)) return
-      const rows = await db.getAll('SELECT body FROM session_base WHERE id = ?', [1])
-      if (!rows.length) return
-      const body = parse(rows[0].body)
-      body[SESSION_LAST_SEEN_KEY] = at
+      // One statement. A read of the whole body, then a later replace, would wipe a
+      // writeBase that committed in between.
       await db.run(
-        'INSERT OR REPLACE INTO session_base (id, body) VALUES (?, ?)',
-        [1, JSON.stringify(body)],
+        `UPDATE session_base SET body = json_set(body, '$.${SESSION_LAST_SEEN_KEY}', ?) WHERE id = 1`,
+        [at],
       )
     },
 

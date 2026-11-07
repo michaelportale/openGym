@@ -20,6 +20,9 @@ export function createFakeSqliteDb() {
   let snapshot = null
   const failures = []
   const executed = []
+  const holds = []
+  const heldWaiters = []
+  let releaseHeld = null
 
   function restore(saved) {
     tables.session_events = saved.session_events
@@ -28,14 +31,27 @@ export function createFakeSqliteDb() {
     tables.finished_workouts = saved.finished_workouts
   }
 
+  async function waitIfHeld(text) {
+    const index = holds.findIndex(pattern => pattern.test(text))
+    if (index < 0) return
+    holds.splice(index, 1)
+    await new Promise(resolve => {
+      releaseHeld = resolve
+      for (const waiter of heldWaiters.splice(0)) waiter()
+    })
+    releaseHeld = null
+  }
+
   async function run(sql, params = []) {
     const text = squeeze(sql)
-    executed.push(text)
     const hit = failures.findIndex(item => item.pattern.test(text))
     if (hit >= 0) {
+      executed.push(text)
       const [{ error }] = failures.splice(hit, 1)
       throw error
     }
+    await waitIfHeld(text)
+    executed.push(text)
     if (/^BEGIN$/i.test(text)) {
       if (snapshot) throw new Error('nested transaction')
       snapshot = cloneTables(tables)
@@ -103,6 +119,14 @@ export function createFakeSqliteDb() {
       tables.session_base = []
       return { changes }
     }
+    if (/^UPDATE session_base SET body = json_set\(body, '\$\._sessionLastSeen', \?\) WHERE id = 1$/i.test(text)) {
+      const row = tables.session_base.find(item => item.id === 1)
+      if (!row) return { changes: 0 }
+      const body = JSON.parse(row.body)
+      body._sessionLastSeen = params[0]
+      row.body = JSON.stringify(body)
+      return { changes: 1 }
+    }
     throw new Error(`fake sqlite cannot run: ${text}`)
   }
 
@@ -146,6 +170,18 @@ export function createFakeSqliteDb() {
     getAll,
     failNext(pattern, error) {
       failures.push({ pattern, error })
+    },
+    holdNext(pattern) {
+      holds.push(pattern)
+    },
+    held() {
+      if (releaseHeld) return Promise.resolve()
+      return new Promise(resolve => heldWaiters.push(resolve))
+    },
+    release() {
+      const resume = releaseHeld
+      releaseHeld = null
+      if (resume) resume()
     },
   }
 }

@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
 import { createMemoryStorage } from './storage.js'
-import { plannedSetId } from './session.js'
+import { SEEN_PERSIST_MS, plannedSetId } from './session.js'
 import { createSessionController } from './session-controller.js'
 
 const T0 = Date.parse('2026-11-07T15:00:00.000Z')
@@ -42,6 +42,19 @@ test('open restores a session that was already in storage', async () => {
   expect(opened.status).toBe('ready')
   expect(opened.error).toBeNull()
   expect(opened.view.totals).toMatchObject({ completedSets: 1, reps: 5, loadReps: 300 })
+})
+
+test('a call notes the timer once it has moved 15 seconds', async () => {
+  const storage = createMemoryStorage()
+  let now = T0
+  const active = controller(storage, () => now)
+  await active.open()
+  now = T0 + SEEN_PERSIST_MS
+  await active.call('putDraft', plannedSetId('bench', 0), { w: 70 })
+  expect(await storage.readLastSeen()).toBe(T0 + SEEN_PERSIST_MS)
+  now = T0 + SEEN_PERSIST_MS + 1000
+  await active.call('putDraft', plannedSetId('bench', 0), { w: 75 })
+  expect(await storage.readLastSeen()).toBe(T0 + SEEN_PERSIST_MS)
 })
 
 test('a storage failure is surfaced and the set is not saved', async () => {

@@ -2,7 +2,7 @@ import { expect, test } from 'vitest'
 import { createMemoryStorage } from './storage.js'
 import { createFakeSqliteDb } from './fake-sqlite.js'
 import { createSqliteSessionStorage } from './sqlite-storage.js'
-import { openSession, plannedSetId } from './session.js'
+import { SEEN_PERSIST_MS, openSession, plannedSetId } from './session.js'
 import { REST_MAX_MS } from './timing.js'
 
 const T0 = Date.parse('2026-11-07T15:00:00.000Z')
@@ -494,6 +494,34 @@ test('a kill after a shown rest across midnight does not rewind elapsed', async 
   const idleOpened = await openSession({ storage: idleStorage, now: () => reopenAt, timeZone: 'UTC' })
   expect(idleOpened.view().overnight).toBe(true)
   expect(idleOpened.view().elapsedMs).toBe(idleLogged)
+})
+
+test('view does not persist last seen, and noteSeen waits 15 seconds', async () => {
+  const setAt = Date.parse('2026-11-07T23:50:00.000Z')
+  const seenAt = Date.parse('2026-11-08T00:05:00.000Z')
+  const clock = createClock(setAt)
+  const storage = createMemoryStorage()
+  const { session } = await started({ clock, storage, base: { ...baseWorkout(), start: setAt }, timeZone: 'UTC' })
+  await session.commitSet({ eventId: 'c1', exerciseId: 'bench', setId: bench0, fields: { w: 60, r: 5 } })
+  clock.set(seenAt)
+  session.view()
+  expect(await storage.readLastSeen()).toBeNull()
+
+  await session.noteSeen()
+  expect(await storage.readLastSeen()).toBe(seenAt)
+
+  clock.set(seenAt + SEEN_PERSIST_MS - 1000)
+  session.view()
+  await session.noteSeen()
+  expect(await storage.readLastSeen()).toBe(seenAt)
+
+  await session.flushSeen()
+  expect(await storage.readLastSeen()).toBe(seenAt + SEEN_PERSIST_MS - 1000)
+
+  clock.set(seenAt + SEEN_PERSIST_MS - 1000 + SEEN_PERSIST_MS)
+  session.view()
+  await session.noteSeen()
+  expect(await storage.readLastSeen()).toBe(seenAt + SEEN_PERSIST_MS - 1000 + SEEN_PERSIST_MS)
 })
 
 test('discard drops an overnight session instead of logging it', async () => {

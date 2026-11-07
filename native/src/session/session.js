@@ -7,6 +7,10 @@ const { sessionEnd } = finishWorkout
 
 export { plannedSetId } from './ids.js'
 
+// A live timer reads view() often. The base is rewritten only after the counted
+// instant has moved this far, unless the caller flushes.
+export const SEEN_PERSIST_MS = 15 * 1000
+
 function failure(code, message) {
   return { ok: false, saved: false, error: { code, message: message || code } }
 }
@@ -73,18 +77,35 @@ class SessionLog {
       return projectSession(foldJournal(null, []), { now, timeZone, drafts: {}, discarded: true, samples: this.samples })
     }
     const model = foldJournal(this.base, this.events)
-    const projected = projectSession(model, { now, timeZone, drafts: this.drafts, discarded: false, samples: this.samples })
-    const clockEnd = model.finished ? model.finished.end : now
-    this.#persistSeen(shownThrough(elapsedStamps(model, this.samples), clockEnd, DURATION_GAP_MS, timeZone))
-    return projected
+    return projectSession(model, { now, timeZone, drafts: this.drafts, discarded: false, samples: this.samples })
   }
 
-  async flushSeen() {
+  // Records the instant the timer has counted. Skips the write when that instant is
+  // still within SEEN_PERSIST_MS of the last one stored.
+  async noteSeen() {
+    this.#persistSeen(this.#shownNow(), false)
     await this.#seenChain
   }
 
-  #persistSeen(at) {
-    if (!Number.isFinite(at) || at === this.#queuedSeen) return
+  // Background, finish, and discard. Writes the current instant even inside the throttle.
+  async flushSeen() {
+    this.#persistSeen(this.#shownNow(), true)
+    await this.#seenChain
+  }
+
+  #shownNow() {
+    const now = this.now()
+    this.#sample(now)
+    if (this.discarded) return null
+    const model = foldJournal(this.base, this.events)
+    const clockEnd = model.finished ? model.finished.end : now
+    return shownThrough(elapsedStamps(model, this.samples), clockEnd, DURATION_GAP_MS, this.timeZone)
+  }
+
+  #persistSeen(at, force) {
+    if (!Number.isFinite(at)) return
+    if (this.#queuedSeen != null && at <= this.#queuedSeen) return
+    if (!force && this.#queuedSeen != null && at - this.#queuedSeen < SEEN_PERSIST_MS) return
     if (typeof this.storage.putLastSeen !== 'function') return
     this.#queuedSeen = at
     this.#seenChain = this.#seenChain
