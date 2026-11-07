@@ -596,3 +596,35 @@ test('overlapping appends both save, and a later same-value edit stays unchanged
   const restored = await openSession({ storage, now: () => T0, timeZone: 'UTC' })
   expect(workoutFold(restored.base, restored.events)).toBe(workoutFold(session.base, session.events))
 })
+
+test('a discard waits for an in-flight commit and leaves the journal empty', async () => {
+  const { session, storage } = await opened()
+  const commit = session.commitSet({
+    eventId: 'commit-bench',
+    exerciseId: 'bench',
+    setId: bench0,
+    fields: { w: 80, r: 5 },
+  })
+  const discarded = session.discard()
+  const [, result] = await Promise.all([commit, discarded])
+  expect(result).toEqual({ ok: true, saved: true })
+  expect(await storage.readAll()).toEqual([])
+  expect(session.events).toEqual([])
+  expect(session.view().status).toBe('discarded')
+})
+
+test('an append queued behind a discard is refused and writes nothing', async () => {
+  const { session, storage } = await opened()
+  const discarded = session.discard()
+  const commit = session.commitSet({
+    eventId: 'commit-late',
+    exerciseId: 'bench',
+    setId: bench0,
+    fields: { w: 80, r: 5 },
+  })
+  const [, committed] = await Promise.all([discarded, commit])
+  expect(committed).toMatchObject({ ok: false, saved: false, error: { code: 'discarded' } })
+  expect(await storage.readAll()).toEqual([])
+  expect(session.events).toEqual([])
+  expect(session.view().status).toBe('discarded')
+})

@@ -429,6 +429,10 @@ class SessionLog {
   }
 
   async discard() {
+    return this.#enqueue(() => this.#discardNow())
+  }
+
+  async #discardNow() {
     if (this.discarded) return duplicate()
     if (this.#isFinished()) return failure('finished')
     try {
@@ -457,15 +461,19 @@ class SessionLog {
     return this.events.some(event => event.type === 'session.finish')
   }
 
-  // One queue. The fold check reads this.events and #fold, then the storage
-  // write and the cache update run later. A second command waits until both
-  // are stored. A rejection here must not drop the rest of the queue.
-  async #append(event) {
+  // One queue for append and discard. Each task reads this.events and #fold,
+  // then awaits storage, then writes them back. The next task waits until that
+  // finishes. A rejection must not drop the rest of the queue.
+  #enqueue(task) {
     const run = this.#appendChain
       .catch(() => {})
-      .then(() => this.#appendNow(event))
+      .then(task)
     this.#appendChain = run.catch(() => {})
     return run
+  }
+
+  async #append(event) {
+    return this.#enqueue(() => this.#appendNow(event))
   }
 
   async #appendNow(event) {
