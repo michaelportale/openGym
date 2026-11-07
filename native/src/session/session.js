@@ -257,6 +257,7 @@ class SessionLog {
   }
 
   async pauseRest({ eventId } = {}) {
+    if (this.#seen(eventId)) return duplicate()
     const rest = this.view().rest
     if (!this.discarded && !this.#isFinished() && (!rest || rest.status !== 'running')) return failure('no-rest')
     return this.#append({ id: eventId, type: 'rest.pause', at: this.now() })
@@ -270,6 +271,7 @@ class SessionLog {
   }
 
   async cancelRest({ eventId } = {}) {
+    if (this.#seen(eventId)) return duplicate()
     const rest = this.view().rest
     if (!this.discarded && !this.#isFinished() && !rest) return failure('no-rest')
     return this.#append({ id: eventId, type: 'rest.cancel', at: this.now() })
@@ -311,6 +313,7 @@ class SessionLog {
   async resume({ eventId } = {}) {
     if (this.discarded) return failure('discarded')
     if (this.#isFinished()) return failure('finished')
+    if (this.#seen(eventId)) return duplicate()
     if (!this.view().overnight) return failure('not-overnight')
     return this.#append({ id: eventId, type: 'session.resume', at: this.now() })
   }

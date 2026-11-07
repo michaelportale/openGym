@@ -212,6 +212,43 @@ test('pause freezes remaining across a background gap and extend writes a new de
   expect(session.view().rest).toMatchObject({ status: 'paused', remainingMs: 65_000 })
 })
 
+test('a repeated pause, cancel, or resume id is a duplicate once its precondition is gone', async () => {
+  const clock = createClock(T0)
+  const storage = createMemoryStorage()
+  const { session } = await started({ clock, storage })
+  await session.startRest({ eventId: 'rest-1', durationMs: 60_000 })
+  const pause = await session.pauseRest({ eventId: 'pause-1' })
+  expect(pause).toMatchObject({ ok: true, saved: true })
+  const pauseAgain = await session.pauseRest({ eventId: 'pause-1' })
+  expect(pauseAgain).toMatchObject({ ok: true, saved: false, duplicate: true })
+  expect(session.view().rest).toMatchObject({ status: 'paused', remainingMs: 60_000 })
+
+  const restored = await openSession({ storage, now: clock.now, timeZone: 'UTC' })
+  const pauseReplay = await restored.pauseRest({ eventId: 'pause-1' })
+  expect(pauseReplay).toMatchObject({ ok: true, saved: false, duplicate: true })
+  expect(restored.view().rest).toMatchObject({ status: 'paused', remainingMs: 60_000 })
+
+  const cancel = await session.cancelRest({ eventId: 'cancel-1' })
+  expect(cancel).toMatchObject({ ok: true, saved: true })
+  const cancelAgain = await session.cancelRest({ eventId: 'cancel-1' })
+  expect(cancelAgain).toMatchObject({ ok: true, saved: false, duplicate: true })
+  expect(session.view().rest).toBeNull()
+
+  const night = createClock(Date.parse('2026-11-07T23:10:00.000Z'))
+  const nightStorage = createMemoryStorage()
+  const nightBase = baseWorkout()
+  nightBase.start = night.now()
+  const overnight = await started({ clock: night, storage: nightStorage, base: nightBase, timeZone: 'UTC' })
+  await overnight.session.commitSet({ eventId: 'c1', exerciseId: 'bench', setId: bench0, fields: { w: 60, r: 5 } })
+  night.set(Date.parse('2026-11-08T07:00:00.000Z'))
+  const resume = await overnight.session.resume({ eventId: 'resume-1' })
+  expect(resume).toMatchObject({ ok: true, saved: true })
+  const resumeAgain = await overnight.session.resume({ eventId: 'resume-1' })
+  expect(resumeAgain).toMatchObject({ ok: true, saved: false, duplicate: true })
+  expect(overnight.session.view().overnight).toBe(false)
+  expect((await nightStorage.readAll()).filter(event => event.type === 'session.resume')).toHaveLength(1)
+})
+
 test('finishing during rest clears the countdown and does not revive it on restore', async () => {
   const clock = createClock(T0)
   const storage = createMemoryStorage()
