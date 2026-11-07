@@ -46,7 +46,7 @@ test('the registry has one entry per PRD rule and every entry is complete', () =
 })
 
 test('each registry entry matches its docs/science register file', () => {
-  const files = readdirSync(DOCS).filter(name => name.endsWith('.md') && name !== 'README.md').sort()
+  const files = readdirSync(DOCS).filter(name => name.endsWith('.md') && name !== 'README.md' && name !== 'decisions.md').sort()
   expect(files).toEqual(PRD_RULE_IDS.map(id => `${id}.md`).sort())
   for (const file of files) {
     const doc = parseFrontmatter(readFileSync(join(DOCS, file), 'utf8'))
@@ -58,6 +58,25 @@ test('each registry entry matches its docs/science register file', () => {
   }
   const readme = readFileSync(join(DOCS, 'README.md'), 'utf8')
   for (const id of PRD_RULE_IDS) expect(readme).toContain(`(${id}.md)`)
+  expect(readme).toContain('(decisions.md)')
+})
+
+test('standup decisions record a PRD default for each open question', () => {
+  const text = readFileSync(join(DOCS, 'decisions.md'), 'utf8')
+  expect(text).toContain('warmup-loads')
+  expect(text).toContain('40%')
+  expect(text).toContain('80%')
+  expect(text).toContain('double-progression')
+  expect(text).toContain('one-session trigger is convention')
+  expect(text).toContain('population')
+  expect(text).toContain('TODO')
+  expect(text).toContain('deload-after-misses')
+  expect(text).toContain('e1rm-formula')
+  expect(text).toContain('Epley')
+  expect(text).toContain('rest-defaults')
+  expect(text).toContain('90')
+  expect(text).toContain('load-increments')
+  expect(text).toContain('2.5 kg')
 })
 
 test('cited rules keep the PRD source, and uncited rules stay labeled convention or definition', () => {

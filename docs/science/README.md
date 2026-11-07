@@ -12,6 +12,9 @@ in `docs/sprints/2026-10-30-native-workout-prd.md`. Where that list does not say
 The PRD table row "Deload after 3 misses, e1RM formula, rest defaults, increments" is four rules.
 Each has its own entry so a later audit can accept or replace one number without touching the others.
 
+Defaults for the open questions on the science PR are in [Decisions](decisions.md). They follow the PRD
+and can be overridden.
+
 ## Fields
 
 | Field | Meaning |
