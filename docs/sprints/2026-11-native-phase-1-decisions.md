@@ -110,6 +110,23 @@ unchanged.
 
 Revisit if. The web preview gains a transparency reader.
 
+## Web preview of the native tab pill
+
+Context. On the web host the five tabs are a fixed pill at the top of the screen.
+Its built-in padding hides Exercises at a phone width, and the pill draws over the
+title. iOS draws the tab bar itself and insets the screen.
+
+Options. Replace the tab host on web. Or leave the titles underneath the pill.
+Or keep the host, clear the title by a web-only top inset, and reduce only the
+web pill's horizontal padding so all five names fit.
+
+Why. The iOS bar stays the system bar. The preview can show every tab and the
+title without a second navigator. The Workout screen also fills the panel.
+Without that, the web column shrinks to the preview notice and the phone
+width clips the dock.
+
+Revisit if. The web host moves the pill or insets the screen itself.
+
 ## Header action
 
 The ellipsis opens the existing diagnostics screen. It is not a workout action. Its hint

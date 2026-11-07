@@ -31,8 +31,41 @@ export function tabBarColors() {
       default: color.textSecondary,
       selected: color.accent
     },
-    tintColor: color.accent
+    tintColor: color.accent,
+    backgroundColor: color.surface
   }
+}
+
+// Expo's web pill is fixed over the screen. Native tabs inset the screen themselves.
+export function screenTopInset(os) {
+  return os === 'web' ? 72 : 0
+}
+
+// The web column otherwise shrinks to the widest line and the phone width clips it.
+export function screenFrame(os) {
+  return { flex: 1, width: '100%', paddingTop: screenTopInset(os) }
+}
+
+export function tabLabelStyle(os) {
+  const { labelStyle } = tabBarColors()
+  const fit = os === 'web' ? { fontSize: 13 } : {}
+  return {
+    default: { ...labelStyle.default, ...fit },
+    selected: { ...labelStyle.selected, ...fit }
+  }
+}
+
+// The web pill's built-in padding hides the fifth label at phone width.
+export const WEB_TAB_FIT = '[role="tablist"][aria-label="Main"] [role="tab"]{padding-left:8px;padding-right:8px}'
+
+export function installWebTabFit(doc) {
+  if (!doc?.head || typeof doc.createElement !== 'function' || typeof doc.getElementById !== 'function') return false
+  if (doc.getElementById('opengym-web-tabs')) return false
+  const style = doc.createElement('style')
+  style.id = 'opengym-web-tabs'
+  style.textContent = WEB_TAB_FIT
+  doc.head.appendChild(style)
+  return true
 }
 
 // Liquid Glass recolours a tab item unless both appearances carry the same value.

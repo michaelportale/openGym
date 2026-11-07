@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { expect, test } from 'vitest'
 import { color } from '../theme/tokens.js'
-import { TABS, pinnedTabColor, tabBarColors } from './tabs.js'
+import { TABS, installWebTabFit, pinnedTabColor, screenFrame, screenTopInset, tabBarColors, tabLabelStyle } from './tabs.js'
 
 test('the five tabs stay in PRD order and keep their visible names', () => {
   expect(TABS.map(tab => [tab.name, tab.label])).toEqual([
@@ -30,7 +30,34 @@ test('the selected tab uses accent and the others use secondary', () => {
   expect(bar.iconColor.selected).toBe(color.accent)
   expect(bar.iconColor.default).toBe(color.textSecondary)
   expect(bar.tintColor).toBe(color.accent)
+  expect(bar.backgroundColor).toBe(color.surface)
   expect(bar.labelStyle.selected.color).not.toBe(bar.labelStyle.default.color)
+})
+
+test('web clears the fixed tab pill and native screens do not add that inset', () => {
+  expect(screenTopInset('web')).toBeGreaterThanOrEqual(64)
+  expect(screenTopInset('ios')).toBe(0)
+  expect(tabLabelStyle('ios').default.fontSize).toBeUndefined()
+  expect(tabLabelStyle('web').default.fontSize).toBe(13)
+  expect(tabLabelStyle('web').selected.color).toBe(color.accent)
+  expect(screenFrame('web')).toEqual({ flex: 1, width: '100%', paddingTop: screenTopInset('web') })
+  expect(screenFrame('ios').paddingTop).toBe(0)
+  expect(screenFrame('ios').width).toBe('100%')
+})
+
+test('web tab fit keeps every label in the pill and does not install twice', () => {
+  const style = {}
+  const doc = {
+    head: { appendChild: node => { style.node = node } },
+    createElement: () => style,
+    getElementById: id => style.id === id ? style : null
+  }
+  expect(installWebTabFit(doc)).toBe(true)
+  expect(style.id).toBe('opengym-web-tabs')
+  expect(style.textContent).toContain('[role="tab"]')
+  expect(style.textContent).toContain('padding-left:8px')
+  expect(installWebTabFit(doc)).toBe(false)
+  expect(installWebTabFit(null)).toBe(false)
 })
 
 test('only the workout tab opts out of automatic content insets', () => {

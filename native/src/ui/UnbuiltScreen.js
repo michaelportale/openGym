@@ -1,4 +1,5 @@
-import { ScrollView, StyleSheet, View } from 'react-native'
+import { Platform, ScrollView, StyleSheet, View } from 'react-native'
+import { screenTopInset } from '../shell/tabs'
 import { color, radius, space } from '../theme/tokens'
 import AppText from './AppText'
 import ScreenHeader from './ScreenHeader'
@@ -9,7 +10,7 @@ export default function UnbuiltScreen({ title, phaseLabel, summary, status }) {
     <ScrollView
       style={styles.scroll}
       contentInsetAdjustmentBehavior="automatic"
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, { paddingTop: screenTopInset(Platform.OS) }]}
     >
       <ScreenHeader title={title} />
       <View style={styles.card}>

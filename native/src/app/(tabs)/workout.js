@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { ScrollView, StyleSheet, View } from 'react-native'
+import { Platform, ScrollView, StyleSheet, View } from 'react-native'
 import { SafeAreaView } from 'react-native-screens/experimental'
+import { screenFrame } from '../../shell/tabs'
 import { color, space } from '../../theme/tokens'
 import AppText from '../../ui/AppText'
 import Card from '../../ui/Card'
@@ -53,7 +54,7 @@ export default function Workout() {
   )
 
   return (
-    <SafeAreaView edges={{ top: true, bottom: true }} onLayout={measure('screen')}>
+    <SafeAreaView edges={{ top: true, bottom: true }} onLayout={measure('screen')} style={screenFrame(Platform.OS)}>
       {pinned ? head : null}
       <ScrollView
         style={styles.scroll}
