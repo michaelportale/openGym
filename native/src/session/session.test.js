@@ -376,6 +376,75 @@ test('an added set needs a new id, and a taken id never reaches the journal', as
   expect((await storage.readAll()).map(event => event.type)).toEqual(['set.remove', 'set.add'])
 })
 
+test('a copied exercise keeps its own set ids and does not reuse one already in the session', async () => {
+  const storage = createMemoryStorage()
+  const { session } = await started({ storage })
+  const copiedSet = await session.addExercise({
+    eventId: 'copy-taken-set',
+    exerciseId: 'curl',
+    entry: { sets: [{ id: bench0, w: 12, r: 10 }, { id: 'curl-plain', w: 10, r: 8 }] },
+  })
+  const copiedPair = await session.addExercise({
+    eventId: 'copy-pair',
+    exerciseId: 'curl',
+    entry: { sets: [{ id: 'same', w: 12, r: 10 }, { id: 'same', w: 14, r: 8 }] },
+  })
+  const known = await session.addExercise({
+    eventId: 'copy-bench',
+    exerciseId: 'bench',
+    entry: { sets: [{ id: 'fresh', w: 1, r: 1 }] },
+  })
+  expect(copiedSet).toMatchObject({ ok: false, saved: false, error: { code: 'known-set' } })
+  expect(copiedPair).toMatchObject({ ok: false, saved: false, error: { code: 'known-set' } })
+  expect(known).toMatchObject({ ok: false, saved: false, error: { code: 'known-exercise' } })
+  expect(session.view().entries.map(entry => entry.id)).toEqual(['bench', 'row'])
+  expect((await storage.readAll()).map(event => event.id)).toEqual([])
+
+  const planted = await session.addSet({ eventId: 'plant-zero', exerciseId: 'row', setId: '0', fields: { w: 1, r: 1 } })
+  const copiedNumber = await session.addExercise({
+    eventId: 'copy-number',
+    exerciseId: 'curl',
+    entry: { sets: [{ id: 0, w: 12, r: 10 }] },
+  })
+  const plantedPlan = await session.addSet({
+    eventId: 'plant-plan',
+    exerciseId: 'bench',
+    setId: plannedSetId('fly', 0),
+    fields: { w: 8, r: 12 },
+  })
+  const copiedPlan = await session.addExercise({
+    eventId: 'copy-plan',
+    exerciseId: 'fly',
+    entry: { sets: [{ w: 8, r: 12 }] },
+  })
+  expect(planted).toMatchObject({ ok: true, saved: true })
+  expect(copiedNumber).toMatchObject({ ok: false, saved: false, error: { code: 'known-set' } })
+  expect(plantedPlan).toMatchObject({ ok: true, saved: true })
+  expect(copiedPlan).toMatchObject({ ok: false, saved: false, error: { code: 'known-set' } })
+  expect(session.view().entries.map(entry => entry.id)).toEqual(['bench', 'row'])
+  expect((await storage.readAll()).map(event => event.id)).toEqual(['plant-zero', 'plant-plan'])
+
+  const removed = await session.removeExercise({ eventId: 'remove-row', exerciseId: 'row' })
+  expect(removed).toMatchObject({ ok: true, saved: true })
+  const reused = await session.addExercise({
+    eventId: 'copy-row-again',
+    exerciseId: 'row',
+    entry: { sets: [{ id: '0', w: 42, r: 6 }] },
+  })
+  expect(reused).toMatchObject({ ok: true, saved: true })
+  const reusedAgain = await session.addExercise({
+    eventId: 'copy-row-again',
+    exerciseId: 'row',
+    entry: { sets: [{ id: '0', w: 1, r: 1 }] },
+  })
+  expect(reusedAgain).toMatchObject({ ok: true, saved: false, duplicate: true })
+
+  const restored = await openSession({ storage, now: () => T0 + 60_000, timeZone: 'UTC' })
+  const row = restored.view().entries.find(entry => entry.id === 'row')
+  expect(row.sets.map(set => set.setId)).toEqual(['0'])
+  expect(row.sets[0].row).toMatchObject({ w: 42, r: 6, done: false })
+})
+
 test('replaying an added set after the exercise is removed is a duplicate', async () => {
   const storage = createMemoryStorage()
   const { session } = await started({ storage })

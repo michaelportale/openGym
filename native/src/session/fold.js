@@ -53,6 +53,21 @@ function findSlot(model, exerciseId, setId) {
   return entry.sets.find(slot => slot.setId === setId) || null
 }
 
+function rawCopiedSets(entry) {
+  if (entry && typeof entry === 'object' && !Array.isArray(entry) && Array.isArray(entry.sets) && entry.sets.length) {
+    return entry.sets
+  }
+  return [{}]
+}
+
+// The id the fold will store. A missing id becomes plan:<exercise>:<index>.
+// A number is the same string the journal keeps, so "0" and 0 are one id.
+export function exerciseSetIds(exerciseId, entry) {
+  return rawCopiedSets(entry).map((set, index) => (
+    set && typeof set === 'object' && set.id != null ? String(set.id) : plannedSetId(exerciseId, index)
+  ))
+}
+
 function mergeFields(row, fields) {
   const next = { ...row }
   for (const [key, value] of Object.entries(fields || {})) {
@@ -194,15 +209,13 @@ function applyEvent(model, event) {
         ? clone(event.entry)
         : {}
       src.id = id
-      const rawSets = Array.isArray(src.sets) && src.sets.length ? src.sets : [{}]
+      const rawSets = rawCopiedSets(event.entry)
       delete src.sets
+      const setIds = exerciseSetIds(id, event.entry)
       const sets = rawSets.map((set, index) => {
         const row = clearDone(set && typeof set === 'object' ? clone(set) : {})
         delete row.id
-        return {
-          setId: set && set.id != null ? String(set.id) : plannedSetId(id, index),
-          row,
-        }
+        return { setId: setIds[index], row }
       })
       model.entries.push({ source: src, id, sets })
       return
