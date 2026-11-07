@@ -1,6 +1,6 @@
 import { finishWorkout } from '../shared/training.js'
 import { activityAt, elapsedStamps, entryExists, foldJournal, projectSession, slotExists, toActive } from './fold.js'
-import { DURATION_GAP_MS, isOvernight, shownThrough } from './timing.js'
+import { DURATION_GAP_MS, compactSeen, isOvernight, shownThrough } from './timing.js'
 import { createEventId } from './ids.js'
 
 const { sessionEnd } = finishWorkout
@@ -33,6 +33,7 @@ export async function openSession({ base, storage, now, timeZone = 'UTC' } = {})
   let zone = typeof storage.readTimeZone === 'function' ? await storage.readTimeZone() : ''
   if (typeof zone !== 'string' || !zone) zone = ''
   const seenAt = typeof storage.readLastSeen === 'function' ? await storage.readLastSeen() : null
+  const seenTrail = typeof storage.readSeenTrail === 'function' ? await storage.readSeenTrail() : null
   if (!resolved && base) {
     await storage.writeBase(base, { timeZone: callerZone })
     resolved = await storage.readBase()
@@ -49,6 +50,7 @@ export async function openSession({ base, storage, now, timeZone = 'UTC' } = {})
     now: typeof now === 'function' ? now : Date.now,
     timeZone: zone || callerZone,
     seenAt,
+    seenTrail,
   })
 }
 
@@ -56,7 +58,7 @@ class SessionLog {
   #seenChain = Promise.resolve()
   #queuedSeen = null
 
-  constructor({ base, events, drafts, storage, now, timeZone, seenAt }) {
+  constructor({ base, events, drafts, storage, now, timeZone, seenAt, seenTrail }) {
     this.base = base
     this.events = events || []
     this.drafts = drafts || {}
@@ -64,10 +66,13 @@ class SessionLog {
     this.now = now
     this.timeZone = timeZone
     this.discarded = false
-    // In-process samples plus the last counted instant from a previous process.
-    // A later clock step cannot erase time the timer already counted.
-    this.samples = Number.isFinite(seenAt) ? [seenAt] : []
-    if (Number.isFinite(seenAt)) this.#queuedSeen = seenAt
+    // Counted instants from a previous process. The last one alone is not enough:
+    // the hop from the last set to that instant can be an idle overnight gap even
+    // when the steps in between were counted.
+    const trail = Array.isArray(seenTrail) ? seenTrail.filter(at => Number.isFinite(at)) : []
+    this.samples = trail.length ? trail.slice() : (Number.isFinite(seenAt) ? [seenAt] : [])
+    const queued = Number.isFinite(seenAt) ? seenAt : this.samples[this.samples.length - 1]
+    if (Number.isFinite(queued)) this.#queuedSeen = queued
   }
 
   view({ timeZone = this.timeZone } = {}) {
@@ -108,9 +113,10 @@ class SessionLog {
     if (!force && this.#queuedSeen != null && at - this.#queuedSeen < SEEN_PERSIST_MS) return
     if (typeof this.storage.putLastSeen !== 'function') return
     this.#queuedSeen = at
+    const trail = compactSeen(this.samples, this.timeZone)
     this.#seenChain = this.#seenChain
       .catch(() => {})
-      .then(() => this.storage.putLastSeen(at))
+      .then(() => this.storage.putLastSeen(at, trail.length ? trail : [at]))
       .catch(() => {
         if (this.#queuedSeen === at) this.#queuedSeen = null
       })

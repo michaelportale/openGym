@@ -114,18 +114,18 @@ export function createFakeSqliteDb() {
       else tables.session_base.push({ id, body })
       return { changes: 1 }
     }
-    if (/^INSERT INTO session_base \(id, body\) VALUES \(1, \?\) ON CONFLICT\(id\) DO UPDATE SET body = CASE WHEN json_extract\(session_base\.body, '\$\._sessionLastSeen'\) IS NULL THEN excluded\.body ELSE json_set\(excluded\.body, '\$\._sessionLastSeen', json_extract\(session_base\.body, '\$\._sessionLastSeen'\)\) END$/i.test(text)) {
-      const incoming = params[0]
+    if (/^INSERT INTO session_base \(id, body\) VALUES \(1, \?\) ON CONFLICT\(id\) DO UPDATE SET body = CASE WHEN json_extract\(session_base\.body, '\$\._sessionSeenTrail'\) IS NULL THEN CASE WHEN json_extract\(session_base\.body, '\$\._sessionLastSeen'\) IS NULL THEN excluded\.body ELSE json_set\(excluded\.body, '\$\._sessionLastSeen', json_extract\(session_base\.body, '\$\._sessionLastSeen'\)\) END WHEN json_extract\(session_base\.body, '\$\._sessionLastSeen'\) IS NULL THEN json_set\(excluded\.body, '\$\._sessionSeenTrail', json_extract\(session_base\.body, '\$\._sessionSeenTrail'\)\) ELSE json_set\(excluded\.body, '\$\._sessionLastSeen', json_extract\(session_base\.body, '\$\._sessionLastSeen'\), '\$\._sessionSeenTrail', json_extract\(session_base\.body, '\$\._sessionSeenTrail'\)\) END$/i.test(text)) {
       const row = tables.session_base.find(item => item.id === 1)
       if (!row) {
-        tables.session_base.push({ id: 1, body: incoming })
+        tables.session_base.push({ id: 1, body: params[0] })
         return { changes: 1 }
       }
       const current = JSON.parse(row.body)
-      const next = JSON.parse(incoming)
-      if (Object.prototype.hasOwnProperty.call(current, '_sessionLastSeen') && current._sessionLastSeen != null) {
-        next._sessionLastSeen = current._sessionLastSeen
-      }
+      const next = JSON.parse(params[0])
+      if (current._sessionLastSeen != null) next._sessionLastSeen = current._sessionLastSeen
+      else delete next._sessionLastSeen
+      if (current._sessionSeenTrail != null) next._sessionSeenTrail = current._sessionSeenTrail
+      else delete next._sessionSeenTrail
       row.body = JSON.stringify(next)
       return { changes: 1 }
     }
@@ -134,11 +134,12 @@ export function createFakeSqliteDb() {
       tables.session_base = []
       return { changes }
     }
-    if (/^UPDATE session_base SET body = json_set\(body, '\$\._sessionLastSeen', \?\) WHERE id = 1$/i.test(text)) {
+    if (/^UPDATE session_base SET body = json_set\(body, '\$\._sessionLastSeen', \?, '\$\._sessionSeenTrail', json\(\?\)\) WHERE id = 1$/i.test(text)) {
       const row = tables.session_base.find(item => item.id === 1)
       if (!row) return { changes: 0 }
       const body = JSON.parse(row.body)
       body._sessionLastSeen = params[0]
+      body._sessionSeenTrail = JSON.parse(params[1])
       row.body = JSON.stringify(body)
       return { changes: 1 }
     }
