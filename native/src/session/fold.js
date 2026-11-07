@@ -68,6 +68,12 @@ export function exerciseSetIds(exerciseId, entry) {
   ))
 }
 
+function sameSetId(left, right) {
+  const a = left != null ? String(left) : left
+  const b = right != null ? String(right) : right
+  return a === b
+}
+
 function mergeFields(row, fields) {
   const next = { ...row }
   for (const [key, value] of Object.entries(fields || {})) {
@@ -197,7 +203,7 @@ function applyEvent(model, event) {
     }
     case 'set.add': {
       const entry = findEntry(model, event.exerciseId)
-      if (!entry || entry.sets.some(slot => slot.setId === event.setId)) return
+      if (!entry || model.entries.some(item => item.sets.some(slot => sameSetId(slot.setId, event.setId)))) return
       const row = clearDone(mergeFields({}, event.fields))
       entry.sets.push({ setId: event.setId, row })
       return
@@ -205,13 +211,26 @@ function applyEvent(model, event) {
     case 'exercise.add': {
       const id = event.exerciseId
       if (typeof id !== 'string' || id === '' || findEntry(model, id)) return
+      // Same ids the live command refuses. A replay of a journal that got past
+      // that check, or was written by hand, must not grow a second copy.
+      const setIds = exerciseSetIds(id, event.entry)
+      const taken = new Set()
+      for (const item of model.entries) {
+        for (const slot of item.sets) {
+          if (slot.setId != null) taken.add(String(slot.setId))
+        }
+      }
+      const seen = new Set()
+      for (const setId of setIds) {
+        if (seen.has(setId) || taken.has(setId)) return
+        seen.add(setId)
+      }
       const src = event.entry && typeof event.entry === 'object' && !Array.isArray(event.entry)
         ? clone(event.entry)
         : {}
       src.id = id
       const rawSets = rawCopiedSets(event.entry)
       delete src.sets
-      const setIds = exerciseSetIds(id, event.entry)
       const sets = rawSets.map((set, index) => {
         const row = clearDone(set && typeof set === 'object' ? clone(set) : {})
         delete row.id

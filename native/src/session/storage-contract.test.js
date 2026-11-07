@@ -317,6 +317,56 @@ function baseRaceTests(title, createDb) {
 baseRaceTests('fake sqlite', createFakeSqliteDb)
 baseRaceTests('node sqlite', createNodeSqliteDb)
 
+const TRAIL = [Date.parse('2026-11-07T15:00:00.000Z'), Date.parse('2026-11-07T15:01:00.000Z')]
+
+// The copy below is the writeBase statement without the json() wrap. SQLite 3.53.4
+// keeps that json_extract array as an array inside json_set. The fake must agree.
+function bareTrailCopy() {
+  return `INSERT INTO session_base (id, body) VALUES (1, ?)
+    ON CONFLICT(id) DO UPDATE SET body = json_patch(
+      excluded.body,
+      json_object(
+        '_sessionLastSeen', COALESCE(json_extract(session_base.body, '$._sessionLastSeen'), json_extract(excluded.body, '$._sessionLastSeen')),
+        '_sessionSeenTrail', COALESCE(json_extract(session_base.body, '$._sessionSeenTrail'), json_extract(excluded.body, '$._sessionSeenTrail')),
+        '_sessionTimeZone', COALESCE(NULLIF(json_extract(session_base.body, '$._sessionTimeZone'), ''), NULLIF(json_extract(excluded.body, '$._sessionTimeZone'), ''))
+      )
+    )`
+}
+
+async function copiedTrail(db, sql) {
+  await db.exec(SQLITE_SESSION_SCHEMA)
+  await db.run('INSERT OR REPLACE INTO session_base (id, body) VALUES (?, ?)', [1, JSON.stringify({
+    id: 'w1',
+    _sessionLastSeen: TRAIL[1],
+    _sessionSeenTrail: TRAIL,
+    _sessionTimeZone: 'UTC',
+  })])
+  await db.run(sql, [JSON.stringify({ id: 'w1', title: 'after' })])
+  const rows = await db.getAll('SELECT body FROM session_base WHERE id = ?', [1])
+  return JSON.parse(rows[0].body)._sessionSeenTrail
+}
+
+test('node sqlite and the fake keep the seen trail as an array', async () => {
+  const bareReal = await copiedTrail(createNodeSqliteDb(), bareTrailCopy())
+  const bareFake = await copiedTrail(createFakeSqliteDb(), bareTrailCopy())
+  expect(bareReal).toEqual(TRAIL)
+  expect(bareFake).toEqual(bareReal)
+
+  async function storedTrail(createDb) {
+    const db = createDb()
+    const storage = createSqliteSessionStorage(db)
+    await storage.writeBase({ id: 'w1', title: 'before' }, { timeZone: 'UTC' })
+    await storage.putLastSeen(TRAIL[1], TRAIL)
+    await storage.writeBase({ id: 'w1', title: 'after' })
+    const rows = await db.getAll('SELECT body FROM session_base WHERE id = ?', [1])
+    return JSON.parse(rows[0].body)._sessionSeenTrail
+  }
+  const real = await storedTrail(createNodeSqliteDb)
+  const fake = await storedTrail(createFakeSqliteDb)
+  expect(real).toEqual(TRAIL)
+  expect(fake).toEqual(real)
+})
+
 test('node sqlite: writeBase leaves stamp, trail, and zone out of the body when neither row has them', async () => {
   const db = createNodeSqliteDb()
   const storage = createSqliteSessionStorage(db)
