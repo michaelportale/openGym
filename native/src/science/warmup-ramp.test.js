@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { history } from '../shared/training.js'
+import { history, progression } from '../shared/training.js'
 import { isWarmupSet, setsFor } from './warmup.js'
 import { WARMUP_PERCENTS, WARMUP_REPS, warmupRamp, warmupRampWhy } from './warmup-ramp.js'
 
@@ -24,6 +24,25 @@ test('a percentage under the bar is raised to the bar and nothing exceeds the wo
 test('work at or under the bar gets no warm-up sets', () => {
   expect(warmupRamp({ working: 45, step: 5, floor: 45 })).toEqual([])
   expect(warmupRamp({ working: 30, step: 5, floor: 45 })).toEqual([])
+  expect(warmupRamp({ working: 44.9, step: 2.5, floor: 45 })).toEqual([])
+  expect(warmupRamp({ working: '45', step: 2.5, floor: '45' })).toEqual([])
+})
+
+test('kilograms and pounds round down on different steps', () => {
+  expect(progression.defaultIncrement('0025', 'kg')).toBe(2.5)
+  expect(progression.defaultIncrement('0025', 'lb')).toBe(5)
+  expect(warmupRamp({ working: 73, id: '0025', unit: 'kg' }).map(s => s.w)).toEqual([27.5, 57.5])
+  expect(warmupRamp({ working: 73, id: '0025', unit: 'lb' }).map(s => s.w)).toEqual([25, 55])
+  expect(progression.defaultIncrement('1013', 'kg')).toBe(5)
+  expect(progression.defaultIncrement('1013', 'lb')).toBe(10)
+  expect(warmupRamp({ working: 73, id: '1013', unit: 'kg' }).map(s => s.w)).toEqual([25, 55])
+  expect(warmupRamp({ working: 73, id: '1013', unit: 'lb' }).map(s => s.w)).toEqual([20, 50])
+})
+
+test('a weight just above the bar still has warm-up sets, and a negative floor is no bar', () => {
+  expect(warmupRamp({ working: 45.1, step: 2.5, floor: 45 }).map(s => s.w)).toEqual([45, 45])
+  expect(warmupRamp({ working: 80, step: 5, floor: 45 }).map(s => s.w)).toEqual([45, 60])
+  expect(warmupRamp({ working: 100, step: 2.5, floor: -5 }).map(s => s.w)).toEqual([40, 80])
 })
 
 test('owned bells round down to a bell you have', () => {

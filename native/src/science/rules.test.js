@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, test } from 'vitest'
-import { REQUIRED_FIELDS, RULES, registryProblems, whyThis } from './rules.js'
+import { REQUIRED_FIELDS, RULES, registryProblems, shownPopulation, whyThis } from './rules.js'
 
 // The training rules named in docs/sprints/2026-10-30-native-workout-prd.md.
 // The last table row names four inherited rules; each gets its own entry.
@@ -46,7 +46,7 @@ test('the registry has one entry per PRD rule and every entry is complete', () =
 })
 
 test('each registry entry matches its docs/science register file', () => {
-  const extra = new Set(['README.md', 'decisions.md', 'phase-4-status.md'])
+  const extra = new Set(['README.md', 'decisions.md', 'phase-4-status.md', 'sources-needed.md'])
   const files = readdirSync(DOCS).filter(name => name.endsWith('.md') && !extra.has(name)).sort()
   expect(files).toEqual(PRD_RULE_IDS.map(id => `${id}.md`).sort())
   for (const file of files) {
@@ -61,6 +61,7 @@ test('each registry entry matches its docs/science register file', () => {
   for (const id of PRD_RULE_IDS) expect(readme).toContain(`(${id}.md)`)
   expect(readme).toContain('(decisions.md)')
   expect(readme).toContain('(phase-4-status.md)')
+  expect(readme).toContain('(sources-needed.md)')
 })
 
 test('standup decisions record a PRD default for each open question', () => {
@@ -120,6 +121,36 @@ const PRD_URLS = [
   'https://x-mol.com/paper/1810175950090465280',
   'https://sponet.de/sponet/Record/4097139?lng=en'
 ]
+
+test('sources still needed name each blocked default and do not cite a study', () => {
+  const text = readFileSync(join(DOCS, 'sources-needed.md'), 'utf8')
+  for (const phrase of [
+    'weeklyVolumeTarget',
+    'DELOAD_AFTER',
+    'DELOAD_FACTOR',
+    'DEFAULT_FORMULA',
+    'REP_CAP',
+    'restSec',
+    'restPauseSec',
+    'defaultIncrement',
+    'Candidate source type'
+  ]) expect(text).toContain(phrase)
+  expect(text).not.toMatch(/https?:\/\//)
+  const status = readFileSync(join(DOCS, 'phase-4-status.md'), 'utf8')
+  expect(status).toContain('(sources-needed.md)')
+})
+
+test('shownPopulation hides a TODO or blank value and keeps a real one', () => {
+  expect(shownPopulation('TODO')).toBeNull()
+  expect(shownPopulation(' todo ')).toBeNull()
+  expect(shownPopulation('')).toBeNull()
+  expect(shownPopulation('   ')).toBeNull()
+  expect(shownPopulation(undefined)).toBeNull()
+  expect(shownPopulation(null)).toBeNull()
+  expect(shownPopulation('Not a study')).toBe('Not a study')
+  expect(shownPopulation(' trained adults ')).toBe('trained adults')
+  expect(RULES['warmup-loads'].population).toBe('TODO')
+})
 
 test('whyThis returns the rule id, the plain-language reason, and the source', () => {
   const rule = RULES['warmup-accounting']

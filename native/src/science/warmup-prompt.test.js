@@ -8,6 +8,9 @@ const [back] = idsFor('back')
 
 test('the first lift for a body part is prompted, and a later lift for that body part is not', () => {
   expect(muscleGroupOf(firstChest)).toBe('chest')
+  expect(muscleGroupOf({ id: firstChest })).toBe('chest')
+  expect(muscleGroupOf({ id: 'not-a-catalogue-id' })).toBeNull()
+  expect(muscleGroupOf(null)).toBeNull()
   const prompts = warmupPrompts([firstChest, secondChest, back, firstChest])
   expect(prompts).toEqual([
     { id: firstChest, group: 'chest', prompt: true },
