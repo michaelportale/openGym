@@ -187,3 +187,36 @@ test('an unfinished journal is restored when the incoming base is a different fi
   expect(await createSqliteSessionStorage(db).readAll()).toHaveLength(1)
   expect((await createSqliteFinishedWorkouts(db).get('session-9')).id).toBe('session-9')
 })
+
+test('killing the app recomputes rest from the stored deadline and does not complete the next set', async () => {
+  const db = createFakeSqliteDb()
+  let now = T0 + 60_000
+  const first = boot(db, { now: () => now })
+  await first.open()
+  await first.call('startRest', { eventId: 'rest-1', durationMs: 90_000 })
+
+  now = T0 + 100_000
+  const during = await boot(db, { now: () => now }).open()
+  expect(during.view.rest).toMatchObject({ status: 'running', remainingMs: 50_000, deadline: T0 + 150_000 })
+  expect(during.view.totals.completedSets).toBe(0)
+
+  now = T0 + 200_000
+  const expired = await boot(db, { now: () => now }).open()
+  expect(expired.view.rest).toMatchObject({ status: 'complete', remainingMs: 0 })
+  expect(expired.view.entries[0].sets.every(set => set.completed)).toBe(false)
+})
+
+test('a paused rest stays frozen when the app is killed and the clock moves', async () => {
+  const db = createFakeSqliteDb()
+  let now = T0 + 60_000
+  const first = boot(db, { now: () => now })
+  await first.open()
+  await first.call('startRest', { eventId: 'rest-1', durationMs: 90_000 })
+  now = T0 + 70_000
+  await first.call('pauseRest', { eventId: 'rest-pause' })
+  expect(first.getState().view.rest.remainingMs).toBe(80_000)
+
+  now = T0 + 10 * 60_000
+  const restored = await boot(db, { now: () => now }).open()
+  expect(restored.view.rest).toMatchObject({ status: 'paused', remainingMs: 80_000 })
+})
