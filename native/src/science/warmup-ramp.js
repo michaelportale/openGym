@@ -23,12 +23,14 @@ function gridOf({ step, owned, id, unit }) {
  * Two warm-up sets at 40% and 80% of `working`, rounded down to a loadable weight.
  * `owned` is the bells you have; otherwise `step` is the load increment.
  * Never under `floor` (the bar), and never over the work weight.
+ * Work at or under the bar returns no sets, so a screen can render the list as-is.
  */
 export function warmupRamp({ working, step, floor = 0, owned, id, unit } = {}) {
   const work = Number(working)
   if (!(work > 0)) return []
-  const grid = gridOf({ step, owned, id, unit })
   const bar = Math.max(0, Number(floor) || 0)
+  if (!(work > bar)) return []
+  const grid = gridOf({ step, owned, id, unit })
   return WARMUP_PERCENTS.map(pct => {
     const w = Math.min(work, Math.max(bar, roundDown(work * pct, grid)))
     return { w, r: WARMUP_REPS, done: false, phase: 'warmup', warmup: true }

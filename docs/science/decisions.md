@@ -9,6 +9,8 @@ Ship two warm-up sets of 6 reps at 40% and 80% of the working weight, rounded do
 
 The PRD states that prescription and says the shared helper, which closes half the gap, is the wrong shape for it. The new helper lives in native science code. `frontend/src/lib` is left on the midpoint ramp so the web app and any unreconciled strength logic stay as they are.
 
+When the working weight is at or under the bar, `warmupRamp` returns no sets. The screen renders that list and does not need its own skip. A heavier work weight still gets the two sets, and a percentage that lands under the bar is still raised to the bar.
+
 ## Progression (`double-progression`)
 
 When a reps exercise and its routine do not name a policy, native suggestions use double progression: one session in which every work set reaches the top of the range raises the weight and returns to the bottom. That one-session trigger is convention.
