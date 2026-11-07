@@ -109,14 +109,28 @@ export function createSqliteSessionStorage(db) {
       const existingBody = rows.length ? parse(rows[0].body) : null
       const body = baseWithoutTimeZone(value)
       const zone = timeZoneForWrite(options, timeZoneFromBase(existingBody))
-      const seen = lastSeenFromBase(existingBody)
-      const trail = seenTrailFromBase(existingBody)
       if (zone) body[SESSION_TIME_ZONE_KEY] = zone
-      if (seen != null) body[SESSION_LAST_SEEN_KEY] = seen
-      if (trail.length) body[SESSION_SEEN_TRAIL_KEY] = trail
+      // Stamp and trail are copied from the current row inside the statement, and only
+      // when that key is present. Values read above would be stale if putLastSeen
+      // committed before this replace. json() keeps the trail an array. A bare
+      // json_extract is TEXT, and json_set would store it as a quoted string.
+      // On-device JSON1 checklist: this copy must stay json()-wrapped.
+      const seen = `'$.${SESSION_LAST_SEEN_KEY}'`
+      const trail = `'$.${SESSION_SEEN_TRAIL_KEY}'`
+      const trailJson = `json(json_extract(session_base.body, ${trail}))`
       await db.run(
-        'INSERT OR REPLACE INTO session_base (id, body) VALUES (?, ?)',
-        [1, JSON.stringify(body)],
+        `INSERT INTO session_base (id, body) VALUES (1, ?)
+         ON CONFLICT(id) DO UPDATE SET body = CASE
+           WHEN json_extract(session_base.body, ${trail}) IS NULL THEN
+             CASE
+               WHEN json_extract(session_base.body, ${seen}) IS NULL THEN excluded.body
+               ELSE json_set(excluded.body, ${seen}, json_extract(session_base.body, ${seen}))
+             END
+           WHEN json_extract(session_base.body, ${seen}) IS NULL THEN
+             json_set(excluded.body, ${trail}, ${trailJson})
+           ELSE json_set(excluded.body, ${seen}, json_extract(session_base.body, ${seen}), ${trail}, ${trailJson})
+         END`,
+        [JSON.stringify(body)],
       )
     },
 

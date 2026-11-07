@@ -114,6 +114,27 @@ export function createFakeSqliteDb() {
       else tables.session_base.push({ id, body })
       return { changes: 1 }
     }
+    if (/^INSERT INTO session_base \(id, body\) VALUES \(1, \?\) ON CONFLICT\(id\) DO UPDATE SET body = /i.test(text)) {
+      const row = tables.session_base.find(item => item.id === 1)
+      if (!row) {
+        tables.session_base.push({ id: 1, body: params[0] })
+        return { changes: 1 }
+      }
+      const current = JSON.parse(row.body)
+      const next = JSON.parse(params[0])
+      if (current._sessionLastSeen != null) next._sessionLastSeen = current._sessionLastSeen
+      else delete next._sessionLastSeen
+      if (current._sessionSeenTrail != null) {
+        // A bare json_extract is TEXT. json_set stores that as a quoted string.
+        // json() or -> is what keeps the trail an array.
+        const keptAsJson = /json\(json_extract\(session_base\.body, '\$\._sessionSeenTrail'\)\)|session_base\.body\s*->\s*'\$\._sessionSeenTrail'/i.test(text)
+        next._sessionSeenTrail = keptAsJson ? current._sessionSeenTrail : JSON.stringify(current._sessionSeenTrail)
+      } else {
+        delete next._sessionSeenTrail
+      }
+      row.body = JSON.stringify(next)
+      return { changes: 1 }
+    }
     if (/^DELETE FROM session_base$/i.test(text)) {
       const changes = tables.session_base.length
       tables.session_base = []

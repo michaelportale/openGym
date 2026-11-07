@@ -118,11 +118,13 @@ export function createMemoryStorage() {
         base = null
         return
       }
-      const seen = lastSeenFromBase(base)
-      const trail = seenTrailFromBase(base)
       const body = baseWithoutTimeZone(value)
       const zone = timeZoneForWrite(options, timeZoneFromBase(base))
       if (zone) body[SESSION_TIME_ZONE_KEY] = zone
+      // Taken from the live row at the write, and only when that key is set.
+      // A copy made any earlier would keep a stamp or trail putLastSeen has already replaced.
+      const seen = lastSeenFromBase(base)
+      const trail = seenTrailFromBase(base)
       if (seen != null) body[SESSION_LAST_SEEN_KEY] = seen
       if (trail.length) body[SESSION_SEEN_TRAIL_KEY] = trail
       base = body
