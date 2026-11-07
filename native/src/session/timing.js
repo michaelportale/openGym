@@ -120,6 +120,36 @@ export function shownThrough(stamps, now, gap = DURATION_GAP_MS, timeZone) {
   return walkElapsed(stamps, now, gap, timeZone).shown
 }
 
+function hopCounts(prev, next, timeZone) {
+  const delta = next - prev
+  if (!(delta > 0 && delta <= DURATION_GAP_MS)) return false
+  if (idleOvernight(delta, prev, next, timeZone)) return false
+  return true
+}
+
+// Drop a counted instant only when the hop from the one before it to the one after
+// still counts. A later reopen can seed this list and get the same elapsed.
+export function compactSeen(stamps, timeZone) {
+  const points = []
+  for (const raw of stamps) {
+    const at = stampAt(raw)
+    if (!Number.isFinite(at)) continue
+    if (points.length && at <= points[points.length - 1]) continue
+    points.push(at)
+    while (points.length >= 3) {
+      const earlier = points[points.length - 3]
+      const middle = points[points.length - 2]
+      const later = points[points.length - 1]
+      const bridge = hopCounts(earlier, middle, timeZone)
+        && hopCounts(middle, later, timeZone)
+        && hopCounts(earlier, later, timeZone)
+      if (!bridge) break
+      points.splice(points.length - 2, 1)
+    }
+  }
+  return points
+}
+
 export function projectRest(rest, now) {
   if (!rest) return null
   if (rest.status === 'paused') {

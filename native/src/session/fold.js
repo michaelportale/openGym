@@ -1,7 +1,7 @@
 import { finishWorkout, workoutModel } from '../shared/training.js'
 import { DURATION_GAP_MS, REST_MAX_MS, clampMs, elapsedMs, isOvernight, projectRest, stampAt } from './timing.js'
 import { plannedSetId } from './ids.js'
-import { SESSION_LAST_SEEN_KEY, SESSION_TIME_ZONE_KEY } from './storage.js'
+import { SESSION_LAST_SEEN_KEY, SESSION_SEEN_TRAIL_KEY, SESSION_TIME_ZONE_KEY } from './storage.js'
 
 const { buildCompletedWorkout, sessionEnd } = finishWorkout
 const { hasCompletedWork, isSideSet } = workoutModel
@@ -264,6 +264,7 @@ export function toActive(model) {
   const base = clone(model.base || {})
   delete base[SESSION_TIME_ZONE_KEY]
   delete base[SESSION_LAST_SEEN_KEY]
+  delete base[SESSION_SEEN_TRAIL_KEY]
   const entries = model.entries.map(entry => {
     const src = clone(entry.source || {})
     delete src.sets
@@ -343,8 +344,14 @@ export function elapsedStamps(model, samples) {
   }
   for (const sample of samples || []) {
     if (!Number.isFinite(sample)) continue
+    // A clock step backward of the device can be earlier than the session. Leaving
+    // it out keeps that step from becoming the start of the timer.
+    if (Number.isFinite(model?.start) && sample < model.start) continue
     if (!finished || sample <= finished.end) stamps.push({ at: sample, sample: true })
   }
+  // Samples are not journal events, so they were listed after every event. A resume
+  // logged later in the night would then sit in front of earlier samples and erase them.
+  stamps.sort((a, b) => stampAt(a) - stampAt(b))
   return stamps
 }
 
