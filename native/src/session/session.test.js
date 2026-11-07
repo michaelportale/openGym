@@ -302,6 +302,19 @@ test('replaying an extend after the rest was cancelled is a duplicate', async ()
   expect((await storage.readAll()).filter(event => event.type === 'rest.extend')).toHaveLength(1)
 })
 
+test('replaying an added set after the exercise is removed is a duplicate', async () => {
+  const storage = createMemoryStorage()
+  const { session } = await started({ storage })
+  const added = await session.addSet({ eventId: 'add-1', exerciseId: 'row', setId: 'extra-1', fields: { w: 40, r: 8 } })
+  expect(added).toMatchObject({ ok: true, saved: true })
+  const removed = await session.removeExercise({ eventId: 'remove-1', exerciseId: 'row' })
+  expect(removed).toMatchObject({ ok: true, saved: true })
+  const again = await session.addSet({ eventId: 'add-1', exerciseId: 'row', setId: 'extra-1', fields: { w: 40, r: 8 } })
+  expect(again).toMatchObject({ ok: true, saved: false, duplicate: true })
+  expect(session.view().entries.map(entry => entry.id)).toEqual(['bench'])
+  expect((await storage.readAll()).filter(event => event.type === 'set.add')).toHaveLength(1)
+})
+
 test('finishing during rest clears the countdown and does not revive it on restore', async () => {
   const clock = createClock(T0)
   const storage = createMemoryStorage()
