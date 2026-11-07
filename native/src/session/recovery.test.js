@@ -142,3 +142,48 @@ test('open does not resurrect a session whose workout is already finished', asyn
   expect(reopened).toMatchObject({ status: 'saved', view: null })
   expect(await createSqliteSessionStorage(db).readAll()).toEqual([])
 })
+
+test('an unfinished journal is restored when the incoming base is a different finished workout', async () => {
+  const db = createFakeSqliteDb()
+  const first = boot(db)
+  await first.open()
+  await first.call('commitSet', {
+    eventId: 'bench-0',
+    exerciseId: 'bench',
+    setId: plannedSetId('bench', 0),
+    fields: { w: 60, r: 5 },
+  })
+  await createSqliteFinishedWorkouts(db).put({
+    id: 'session-9',
+    d: '2026-11-06',
+    name: 'Pull',
+    entries: [],
+    prs: [],
+    vol: 0,
+  })
+
+  const restored = createSessionController(sessionOptionsFrom({
+    db,
+    base: {
+      id: 'session-9',
+      d: '2026-11-06',
+      start: T0,
+      name: 'Pull',
+      routineIds: ['routine-9'],
+      entries: [{
+        id: 'row',
+        target: { sets: 1, reps: 8 },
+        sets: [{ w: 40, r: 8, done: false }],
+      }],
+    },
+    now: () => T0 + 60_000,
+    timeZone: 'UTC',
+  }))
+  const opened = await restored.open()
+  expect(opened.status).toBe('ready')
+  expect(opened.view.entries.map(entry => entry.id)).toEqual(['bench'])
+  expect(opened.view.totals).toMatchObject({ completedSets: 1, reps: 5, loadReps: 300 })
+  expect((await createSqliteSessionStorage(db).readBase()).id).toBe('session-1')
+  expect(await createSqliteSessionStorage(db).readAll()).toHaveLength(1)
+  expect((await createSqliteFinishedWorkouts(db).get('session-9')).id).toBe('session-9')
+})
