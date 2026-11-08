@@ -183,7 +183,7 @@ export function createFakeSqliteDb() {
     throw new Error(`fake sqlite cannot read: ${text}`)
   }
 
-  return {
+  const handle = {
     executed,
     exec: async sql => {
       executed.push(sql)
@@ -207,5 +207,13 @@ export function createFakeSqliteDb() {
       releaseHeld = null
       if (resume) resume()
     },
+    // Same tables after a kill, as node-sqlite.js reopen() gives the same file. A kill loses an
+    // open transaction, so that is rolled back first.
+    reopen() {
+      if (snapshot) restore(snapshot)
+      snapshot = null
+      return handle
+    },
   }
+  return handle
 }

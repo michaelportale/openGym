@@ -1,13 +1,16 @@
 import { expect, test } from 'vitest'
 import { openSession, plannedSetId } from './session.js'
 import { createMemoryStorage } from './storage.js'
-import { createFakeSqliteDb } from './fake-sqlite.js'
+import { SQLITE_DRIVERS } from '../../scripts/node-sqlite.mjs'
 import { createSqliteSessionStorage } from './sqlite-storage.js'
 import { createSqliteFinishedWorkouts } from './finished-workouts.js'
 import { createSessionController } from './session-controller.js'
 import { sessionOptionsFrom } from './use-active-session.js'
 
 const T0 = Date.parse('2026-11-07T15:00:00.000Z')
+
+// Each kill below is db.reopen(). On the file database that closes the connection, so the
+// next boot reads only what SQLite committed.
 
 function baseWorkout() {
   return {
@@ -37,8 +40,8 @@ function boot(db, extra = {}) {
   }))
 }
 
-test('killing the app keeps a partial set out of the totals and restores it on open', async () => {
-  const db = createFakeSqliteDb()
+test.each(SQLITE_DRIVERS)('%s: killing the app keeps a partial set out of the totals and restores it on open', async (_driver, createDb) => {
+  let db = createDb()
   const first = boot(db)
   await first.open()
   await first.call('commitSet', {
@@ -49,6 +52,7 @@ test('killing the app keeps a partial set out of the totals and restores it on o
   })
   await first.call('putDraft', plannedSetId('bench', 1), { w: 62.5, r: 3 })
 
+  db = db.reopen()
   const restored = boot(db)
   const opened = await restored.open()
   const sets = opened.view.entries[0].sets
@@ -59,8 +63,8 @@ test('killing the app keeps a partial set out of the totals and restores it on o
   expect(opened.view.totals).toMatchObject({ completedSets: 1, reps: 5, loadReps: 300 })
 })
 
-test('replaying the journal after a kill counts a duplicate event id once', async () => {
-  const db = createFakeSqliteDb()
+test.each(SQLITE_DRIVERS)('%s: replaying the journal after a kill counts a duplicate event id once', async (_driver, createDb) => {
+  let db = createDb()
   const first = boot(db)
   await first.open()
   const committed = await first.call('commitSet', {
@@ -78,14 +82,15 @@ test('replaying the journal after a kill counts a duplicate event id once', asyn
   expect(committed).toMatchObject({ ok: true, saved: true })
   expect(again).toMatchObject({ ok: true, saved: false, duplicate: true })
 
+  db = db.reopen()
   const restored = boot(db)
   const opened = await restored.open()
   expect(opened.view.totals).toMatchObject({ completedSets: 1, reps: 5, loadReps: 300 })
   expect(await createSqliteSessionStorage(db).readAll()).toHaveLength(1)
 })
 
-test('a finished workout with a different id does not block the open journal', async () => {
-  const db = createFakeSqliteDb()
+test.each(SQLITE_DRIVERS)('%s: a finished workout with a different id does not block the open journal', async (_driver, createDb) => {
+  let db = createDb()
   const first = boot(db)
   await first.open()
   await first.call('commitSet', {
@@ -103,6 +108,7 @@ test('a finished workout with a different id does not block the open journal', a
     vol: 0,
   })
 
+  db = db.reopen()
   const restored = boot(db)
   const opened = await restored.open()
   expect(opened.status).toBe('ready')
@@ -110,8 +116,8 @@ test('a finished workout with a different id does not block the open journal', a
   expect(await createSqliteSessionStorage(db).readAll()).toHaveLength(1)
 })
 
-test('open does not resurrect a session whose workout is already finished', async () => {
-  const db = createFakeSqliteDb()
+test.each(SQLITE_DRIVERS)('%s: open does not resurrect a session whose workout is already finished', async (_driver, createDb) => {
+  let db = createDb()
   const first = boot(db)
   await first.open()
   await first.call('commitSet', {
@@ -132,20 +138,22 @@ test('open does not resurrect a session whose workout is already finished', asyn
     vol: 300,
   })
 
+  db = db.reopen()
   const restored = boot(db)
   const opened = await restored.open()
   expect(opened).toMatchObject({ status: 'saved', view: null })
   expect(await createSqliteSessionStorage(db).readAll()).toEqual([])
   expect(await createSqliteFinishedWorkouts(db).list()).toHaveLength(1)
 
+  db = db.reopen()
   const second = boot(db)
   const reopened = await second.open()
   expect(reopened).toMatchObject({ status: 'saved', view: null })
   expect(await createSqliteSessionStorage(db).readAll()).toEqual([])
 })
 
-test('an unfinished journal is restored when the incoming base is a different finished workout', async () => {
-  const db = createFakeSqliteDb()
+test.each(SQLITE_DRIVERS)('%s: an unfinished journal is restored when the incoming base is a different finished workout', async (_driver, createDb) => {
+  let db = createDb()
   const first = boot(db)
   await first.open()
   await first.call('commitSet', {
@@ -163,6 +171,7 @@ test('an unfinished journal is restored when the incoming base is a different fi
     vol: 0,
   })
 
+  db = db.reopen()
   const restored = createSessionController(sessionOptionsFrom({
     db,
     base: {
@@ -189,26 +198,28 @@ test('an unfinished journal is restored when the incoming base is a different fi
   expect((await createSqliteFinishedWorkouts(db).get('session-9')).id).toBe('session-9')
 })
 
-test('killing the app recomputes rest from the stored deadline and does not complete the next set', async () => {
-  const db = createFakeSqliteDb()
+test.each(SQLITE_DRIVERS)('%s: killing the app recomputes rest from the stored deadline and does not complete the next set', async (_driver, createDb) => {
+  let db = createDb()
   let now = T0 + 60_000
   const first = boot(db, { now: () => now })
   await first.open()
   await first.call('startRest', { eventId: 'rest-1', durationMs: 90_000 })
 
   now = T0 + 100_000
+  db = db.reopen()
   const during = await boot(db, { now: () => now }).open()
   expect(during.view.rest).toMatchObject({ status: 'running', remainingMs: 50_000, deadline: T0 + 150_000 })
   expect(during.view.totals.completedSets).toBe(0)
 
   now = T0 + 200_000
+  db = db.reopen()
   const expired = await boot(db, { now: () => now }).open()
   expect(expired.view.rest).toMatchObject({ status: 'complete', remainingMs: 0 })
   expect(expired.view.entries[0].sets.every(set => set.completed)).toBe(false)
 })
 
-test('a paused rest stays frozen when the app is killed and the clock moves', async () => {
-  const db = createFakeSqliteDb()
+test.each(SQLITE_DRIVERS)('%s: a paused rest stays frozen when the app is killed and the clock moves', async (_driver, createDb) => {
+  let db = createDb()
   let now = T0 + 60_000
   const first = boot(db, { now: () => now })
   await first.open()
@@ -218,12 +229,13 @@ test('a paused rest stays frozen when the app is killed and the clock moves', as
   expect(first.getState().view.rest.remainingMs).toBe(80_000)
 
   now = T0 + 10 * 60_000
+  db = db.reopen()
   const restored = await boot(db, { now: () => now }).open()
   expect(restored.view.rest).toMatchObject({ status: 'paused', remainingMs: 80_000 })
 })
 
-test('a killed overnight session keeps the time zone it was started in', async () => {
-  const db = createFakeSqliteDb()
+test.each(SQLITE_DRIVERS)('%s: a killed overnight session keeps the time zone it was started in', async (_driver, createDb) => {
+  let db = createDb()
   const evening = Date.parse('2026-11-07T23:10:00-05:00')
   const morning = Date.parse('2026-11-08T07:00:00-05:00')
   let now = evening
@@ -245,6 +257,7 @@ test('a killed overnight session keeps the time zone it was started in', async (
   // The process that opens the next morning does not pass the original zone.
   // UTC puts both instants on 8 Nov, so a forgotten zone would hide the overnight.
   now = morning
+  db = db.reopen()
   const restored = await boot(db, { base, now: () => now, timeZone: 'UTC' }).open()
   expect(restored.view.timeZone).toBe('America/New_York')
   expect(restored.view.overnight).toBe(true)
@@ -253,6 +266,7 @@ test('a killed overnight session keeps the time zone it was started in', async (
   expect(restored.view.rest).toMatchObject({ status: 'paused', remainingMs: 90_000 })
   expect(await createSqliteSessionStorage(db).readBase()).not.toHaveProperty('_sessionTimeZone')
 
+  db = db.reopen()
   const second = boot(db, { base, now: () => now, timeZone: 'UTC' })
   await second.open()
   let sent = 0
@@ -274,12 +288,14 @@ test('a killed overnight session keeps the time zone it was started in', async (
   expect(second.getState().view.elapsedMs).toBe(before.elapsedMs)
   expect(second.getState().view.rest).toMatchObject({ status: 'paused', remainingMs: 90_000 })
 
+  db = db.reopen()
   const third = await boot(db, { base, now: () => now, timeZone: 'UTC' }).open()
   expect(third.view.timeZone).toBe('America/New_York')
   expect(third.view.overnight).toBe(false)
   expect(third.view.elapsedMs).toBe(before.elapsedMs)
   expect(third.view.rest).toMatchObject({ status: 'paused', remainingMs: 90_000 })
 
+  db = db.reopen()
   const finishing = boot(db, { base, now: () => now, timeZone: 'UTC' })
   await finishing.open()
   let payload = null
@@ -299,12 +315,13 @@ test('a killed overnight session keeps the time zone it was started in', async (
   expect(await createSqliteSessionStorage(db).readBase()).toBeNull()
 })
 
-test('a journal stored before the time zone was kept adopts the zone of the boot that finds it', async () => {
-  const db = createFakeSqliteDb()
+test.each(SQLITE_DRIVERS)('%s: a journal stored before the time zone was kept adopts the zone of the boot that finds it', async (_driver, createDb) => {
+  let db = createDb()
   const storage = createSqliteSessionStorage(db)
   const evening = Date.parse('2026-11-07T23:10:00-05:00')
   const morning = Date.parse('2026-11-08T07:00:00-05:00')
   await storage.writeBase({ ...baseWorkout(), start: evening })
+  db = db.reopen()
   const first = await boot(db, {
     now: () => morning,
     timeZone: 'America/New_York',
@@ -312,10 +329,11 @@ test('a journal stored before the time zone was kept adopts the zone of the boot
   expect(first.view.timeZone).toBe('America/New_York')
   expect(first.view.overnight).toBe(true)
 
+  db = db.reopen()
   const second = await boot(db, { now: () => morning, timeZone: 'UTC' }).open()
   expect(second.view.timeZone).toBe('America/New_York')
   expect(second.view.overnight).toBe(true)
-  expect(await storage.readBase()).not.toHaveProperty('_sessionTimeZone')
+  expect(await createSqliteSessionStorage(db).readBase()).not.toHaveProperty('_sessionTimeZone')
 })
 
 test('memory storage keeps the session time zone across a new process', async () => {

@@ -1,6 +1,6 @@
-import { DatabaseSync } from 'node:sqlite'
 import { describe, expect, test } from 'vitest'
 import { createFakeSqliteDb } from './fake-sqlite.js'
+import { createNodeSqliteDb, createNodeSqliteFileDb } from '../../scripts/node-sqlite.mjs'
 import { SQLITE_SESSION_SCHEMA, createMemoryStorage } from './storage.js'
 import { createSqliteSessionStorage } from './sqlite-storage.js'
 
@@ -193,72 +193,6 @@ function squeeze(sql) {
   return String(sql).replace(/\s+/g, ' ').trim()
 }
 
-// Real SQLite for the session_base statements. Built in, no package. Hold and fail
-// pause or throw before the statement runs, so the SQL itself decides the row.
-function createNodeSqliteDb() {
-  const db = new DatabaseSync(':memory:')
-  const executed = []
-  const failures = []
-  const holds = []
-  const heldWaiters = []
-  let releaseHeld = null
-
-  async function waitIfHeld(text) {
-    const index = holds.findIndex(pattern => pattern.test(text))
-    if (index < 0) return
-    holds.splice(index, 1)
-    await new Promise(resolve => {
-      releaseHeld = resolve
-      for (const waiter of heldWaiters.splice(0)) waiter()
-    })
-    releaseHeld = null
-  }
-
-  async function run(sql, params = []) {
-    const text = squeeze(sql)
-    const hit = failures.findIndex(item => item.pattern.test(text))
-    if (hit >= 0) {
-      executed.push(text)
-      const [{ error }] = failures.splice(hit, 1)
-      throw error
-    }
-    await waitIfHeld(text)
-    executed.push(text)
-    const result = db.prepare(text).run(...params)
-    return { changes: result.changes }
-  }
-
-  return {
-    executed,
-    exec: async sql => {
-      executed.push(sql)
-      const parts = String(sql).split(';').map(part => part.trim()).filter(Boolean)
-      for (const part of parts) await run(part)
-    },
-    run,
-    getAll: async (sql, params = []) => {
-      const text = squeeze(sql)
-      executed.push(text)
-      return db.prepare(text).all(...params)
-    },
-    failNext(pattern, error) {
-      failures.push({ pattern, error })
-    },
-    holdNext(pattern) {
-      holds.push(pattern)
-    },
-    held() {
-      if (releaseHeld) return Promise.resolve()
-      return new Promise(resolve => heldWaiters.push(resolve))
-    },
-    release() {
-      const resume = releaseHeld
-      releaseHeld = null
-      if (resume) resume()
-    },
-  }
-}
-
 function baseRaceTests(title, createDb) {
   test(`${title}: putLastSeen does not clobber a writeBase that lands while it is in flight`, async () => {
     const db = createDb()
@@ -378,6 +312,43 @@ test('node sqlite: writeBase leaves stamp, trail, and zone out of the body when 
   expect(body).not.toHaveProperty('_sessionLastSeen')
   expect(body).not.toHaveProperty('_sessionSeenTrail')
   expect(body).not.toHaveProperty('_sessionTimeZone')
+})
+
+// A kill is a closed connection. Only what SQLite committed is there when the app opens again.
+test('node sqlite file: a clear and the appends after it are still there after a kill', async () => {
+  let db = createNodeSqliteFileDb()
+  const storage = createSqliteSessionStorage(db)
+  await storage.append(event('a', 1))
+  await storage.putDraft('plan:bench:0', { r: 3 })
+  await storage.writeBase({ id: 'w1' })
+  await storage.clear()
+  await storage.append(event('b', 2))
+
+  db = db.reopen()
+  const reopened = createSqliteSessionStorage(db)
+  expect((await reopened.readAll()).map(row => row.id)).toEqual(['b'])
+  expect(await reopened.readDrafts()).toEqual({})
+  expect(await reopened.readBase()).toBeNull()
+})
+
+test('node sqlite file: a clear that SQLite stops partway is rolled back, and later appends survive a kill', async () => {
+  let db = createNodeSqliteFileDb()
+  const storage = createSqliteSessionStorage(db)
+  await storage.append(event('a', 1))
+  await storage.putDraft('plan:bench:0', { r: 3 })
+  await storage.writeBase({ id: 'w1' })
+  // The events delete has already run inside the transaction when this trigger stops the script.
+  await db.exec(`CREATE TRIGGER drafts_locked BEFORE DELETE ON session_drafts
+    BEGIN SELECT RAISE(ABORT, 'locked'); END`)
+  await expect(storage.clear()).rejects.toThrow(/locked/)
+  await db.exec('DROP TRIGGER drafts_locked')
+  expect(await storage.append(event('b', 2))).toMatchObject({ ok: true })
+
+  db = db.reopen()
+  const reopened = createSqliteSessionStorage(db)
+  expect((await reopened.readAll()).map(row => row.id)).toEqual(['a', 'b'])
+  expect(await reopened.getDraft('plan:bench:0')).toEqual({ r: 3 })
+  expect(await reopened.readBase()).toEqual({ id: 'w1' })
 })
 
 test('sqlite storage requires an injected db handle', () => {

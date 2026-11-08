@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest'
 import { createMemoryStorage } from './storage.js'
 import { createFakeSqliteDb } from './fake-sqlite.js'
+import { createNodeSqliteFileDb } from '../../scripts/node-sqlite.mjs'
 import { createSqliteSessionStorage } from './sqlite-storage.js'
 import { SEEN_PERSIST_MS, openSession, plannedSetId } from './session.js'
 import { REST_MAX_MS } from './timing.js'
@@ -856,6 +857,16 @@ test('a kill after a shown rest across midnight does not rewind elapsed', async 
         reopen: () => createSqliteSessionStorage(db),
       }
     })(),
+    await (async () => {
+      let db = createNodeSqliteFileDb()
+      return {
+        storage: createSqliteSessionStorage(db),
+        reopen: () => {
+          db = db.reopen()
+          return createSqliteSessionStorage(db)
+        },
+      }
+    })(),
   ]
 
   for (const { storage, reopen } of stores) {
@@ -869,11 +880,12 @@ test('a kill after a shown rest across midnight does not rewind elapsed', async 
     expect(shown.elapsedMs).toBe(REST_MAX_MS)
     if (typeof session.flushSeen === 'function') await session.flushSeen()
 
-    const reopened = await openSession({ storage: reopen(storage), now: () => reopenAt, timeZone: 'UTC' })
+    const fresh = reopen(storage)
+    const reopened = await openSession({ storage: fresh, now: () => reopenAt, timeZone: 'UTC' })
     const revived = reopened.view()
     expect(revived.overnight).toBe(true)
     expect(revived.elapsedMs).toBe(shown.elapsedMs + (reopenAt - seenAt))
-    expect(await storage.readBase()).not.toHaveProperty('_sessionLastSeen')
+    expect(await fresh.readBase()).not.toHaveProperty('_sessionLastSeen')
   }
 
   const idleClock = createClock(setAt)
