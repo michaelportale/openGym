@@ -145,16 +145,18 @@ class SessionLog {
   }
 
   async putDraft(setId, fields) {
-    if (this.discarded) return failure('discarded')
-    if (this.#isFinished()) return failure('finished')
-    try {
-      await this.storage.putDraft(setId, fields)
-    } catch (error) {
-      return failure('storage', error?.message || 'draft failed')
-    }
-    if (fields == null) delete this.drafts[setId]
-    else this.drafts[setId] = JSON.parse(JSON.stringify(fields))
-    return { ok: true, saved: true }
+    return this.#enqueue(async () => {
+      if (this.discarded) return failure('discarded')
+      if (this.#isFinished()) return failure('finished')
+      try {
+        await this.storage.putDraft(setId, fields)
+      } catch (error) {
+        return failure('storage', error?.message || 'draft failed')
+      }
+      if (fields == null) delete this.drafts[setId]
+      else this.drafts[setId] = JSON.parse(JSON.stringify(fields))
+      return { ok: true, saved: true }
+    })
   }
 
   async commitSet({ eventId, exerciseId, setId, fields } = {}) {
