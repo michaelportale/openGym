@@ -7,14 +7,14 @@ function usable(set) {
   if (!set || workoutModel.isWarmupRow(set)) return null
   if (workoutModel.isSideSet(set)) {
     const { L, R } = set.sides
-    const done = [L, R].filter(s => s.done === true && num(s.w) && num(s.r))
+    const done = [L, R].filter(s => s.done && num(s.w) && num(s.r))
     if (!done.length) return null
     return {
       top: Math.max(...done.map(s => s.w)),
       set: { sides: { L: { w: L.w, r: L.r }, R: { w: R.w, r: R.r } } },
     }
   }
-  if (set.done !== true || !num(set.w) || !num(set.r)) return null
+  if (!set.done || !num(set.w) || !num(set.r)) return null
   return { top: set.w, set: { w: set.w, r: set.r } }
 }
 
@@ -28,7 +28,8 @@ export function lastTime(state, exerciseId, routineId) {
   const found = []
   for (const w of state?.workouts ?? []) {
     const entry = (w.entries ?? []).find(e => e.id === exerciseId)
-    if (!entry) continue
+    // Deload/rehab sessions and no-progression entries must not seed the opening weight.
+    if (!entry || w.excludeFromProgression === true || entry.noProg === true) continue
     const sets = (entry.sets ?? []).map(usable).filter(Boolean)
     if (sets.length) found.push({ w, same: sameRoutine(w, entry, routineId), sets })
   }

@@ -91,6 +91,29 @@ test('a per-side set counts when one side is done, using the done side weight', 
   expect(lastTime({ workouts: [w] }, '0289', 'x').top).toBe(10)
 })
 
+test('a newer excluded session is skipped, by either flag', () => {
+  const sets = [row(30, 10)]
+  const wk = { id: 'x', d: '2026-10-25', routineIds: ['push-a'], excludeFromProgression: true, entries: [{ id: '0289', sets }] }
+  const nk = { id: 'y', d: '2026-10-26', routineIds: ['push-a'], entries: [{ id: '0289', noProg: true, sets }] }
+  expect(lastTime({ workouts: [p1, wk] }, '0289', 'push-a').workoutId).toBe('p1')
+  expect(lastTime({ workouts: [p1, nk] }, '0289', 'push-a').workoutId).toBe('p1')
+})
+test('top is the max weight, not the first or last', () => {
+  const w = { id: 'm', d: '2026-10-20', routineIds: [], entries: [{ id: '0289', sets: [row(60, 5), row(80, 5), row(70, 5)] }] }
+  expect(lastTime({ workouts: [w] }, '0289', 'x').top).toBe(80)
+})
+test('per-side top is the heavier done side', () => {
+  const w = {
+    id: 's', d: '2026-10-20', routineIds: [],
+    entries: [{ id: '0289', sets: [{ sides: { L: { w: 7.5, r: 10, done: true }, R: { w: 10, r: 10, done: true } } }] }],
+  }
+  expect(lastTime({ workouts: [w] }, '0289', 'x').top).toBe(10)
+})
+test('a truthy done counts, as in the shared lib', () => {
+  const w = { id: 'd', d: '2026-10-20', routineIds: [], entries: [{ id: '0289', sets: [row(55, 5, { done: 1 })] }] }
+  expect(lastTime({ workouts: [w] }, '0289', 'x').top).toBe(55)
+})
+
 const planned = () => [
   { id: '0289', sets: [{ w: 0, r: 10, phase: 'warmup' }, { w: 0, r: 10 }, { w: 0, r: 8 }] },
   { id: '0999', sets: [{ w: 5, r: 12, sides: { L: { w: 5, r: 12 }, R: { w: 5, r: 12 } } }] },
