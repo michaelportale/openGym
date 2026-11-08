@@ -5,7 +5,8 @@ const since = Date.parse('2026-10-22T00:00:00Z')
 const now = Date.parse('2026-11-09T12:00:00Z')
 
 const fixture = workouts => ({
-  routines: [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }, { id: 'c', name: 'C' }],
+  // c first, so the no-queue fallback (routines[0]) cannot pass for the refill case
+  routines: [{ id: 'c', name: 'C' }, { id: 'a', name: 'A' }, { id: 'b', name: 'B' }],
   rotation: { id: 'rot', sequence: ['a', 'b', 'c'] },
   queue: { ids: ['a', 'b', 'c'], since, startsOn: '2026-10-22', rotationId: 'rot' },
   workouts,
