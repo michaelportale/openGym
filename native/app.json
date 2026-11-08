@@ -26,7 +26,8 @@
           "NSHealthUpdateUsageDescription": "openGym saves your finished workouts and weigh-ins to Apple Health.",
           "NSHealthShareUsageDescription": "openGym reads your body weight from Apple Health for your weight trend."
         }
-      ]
+      ],
+      "expo-sqlite"
     ]
   }
 }
