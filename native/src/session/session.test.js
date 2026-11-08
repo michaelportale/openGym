@@ -61,6 +61,19 @@ async function started(over = {}) {
 const bench0 = plannedSetId('bench', 0)
 const bench1 = plannedSetId('bench', 1)
 
+function holdNextWrite(storage, method) {
+  const entered = Promise.withResolvers()
+  const held = Promise.withResolvers()
+  const write = storage[method].bind(storage)
+  storage[method] = async (...args) => {
+    storage[method] = write
+    entered.resolve()
+    await held.promise
+    return write(...args)
+  }
+  return { entered: entered.promise, release: held.resolve, reject: held.reject }
+}
+
 test('a repeated event id is a no-op and does not double count', async () => {
   const { session } = await started()
   const first = await session.commitSet({
@@ -189,6 +202,143 @@ test('a draft is visible but never counts until it is committed', async () => {
   expect(done.totals).toMatchObject({ completedSets: 1, reps: 4, loadReps: 280 })
   expect(session.getDraft(bench0)).toBeNull()
 })
+
+for (const kind of ['memory', 'sqlite']) {
+  const createStorage = () => kind === 'memory'
+    ? createMemoryStorage()
+    : createSqliteSessionStorage(createFakeSqliteDb())
+
+  for (const method of ['commitSet', 'removeSet', 'removeExercise']) {
+    test(`${kind}: ${method} waits for an earlier draft and clears it`, async () => {
+      const { session, storage } = await started({ storage: createStorage() })
+      const held = holdNextWrite(storage, 'putDraft')
+      const draft = session.putDraft(bench0, { w: 70, r: 4 })
+      await held.entered
+      const command = session[method]({ eventId: 'after-draft', exerciseId: 'bench', setId: bench0 })
+      // Let unblocked commands run while the earlier storage write stays held.
+      await new Promise(setImmediate)
+      held.release()
+      expect(await Promise.all([draft, command])).toEqual([
+        { ok: true, saved: true }, { ok: true, saved: true },
+      ])
+      expect(session.getDraft(bench0)).toBeNull()
+      expect(await storage.getDraft(bench0)).toBeNull()
+      const restored = await openSession({ storage, now: () => T0 })
+      expect(restored.view()).toEqual(session.view())
+      if (method === 'commitSet') {
+        expect(session.view().entries[0].sets[0].row).toMatchObject({ w: 70, r: 4, done: true })
+        expect((await storage.readAll())[0].fields).toEqual({ w: 70, r: 4 })
+      } else if (method === 'removeSet') {
+        expect(session.view().entries[0].sets.map(set => set.setId)).toEqual([bench1])
+      } else {
+        expect(session.view().entries.map(entry => entry.id)).toEqual(['row'])
+      }
+    })
+  }
+
+  test(`${kind}: a draft queued after a commit remains a newer edit`, async () => {
+    const { session, storage } = await started({ storage: createStorage() })
+    await session.putDraft(bench0, { w: 70, r: 4 })
+    const held = holdNextWrite(storage, 'append')
+    const committed = session.commitSet({ eventId: 'before-draft', exerciseId: 'bench', setId: bench0 })
+    await held.entered
+    const draft = session.putDraft(bench0, { w: 75, r: 3 })
+    await new Promise(setImmediate)
+    held.release()
+    expect(await Promise.all([committed, draft])).toEqual([
+      { ok: true, saved: true }, { ok: true, saved: true },
+    ])
+    expect(session.view().entries[0].sets[0].row).toMatchObject({ w: 70, r: 4, done: true })
+    expect((await storage.readAll())[0].fields).toEqual({ w: 70, r: 4 })
+    expect(session.getDraft(bench0)).toEqual({ w: 75, r: 3 })
+    expect(await storage.getDraft(bench0)).toEqual({ w: 75, r: 3 })
+    const restored = await openSession({ storage, now: () => T0 })
+    expect(restored.view()).toEqual(session.view())
+  })
+
+  for (const [method, code] of [['discard', 'discarded'], ['finish', 'finished']]) {
+    test(`${kind}: ${method} waits for an earlier draft`, async () => {
+      const { session, storage } = await started({ storage: createStorage() })
+      const held = holdNextWrite(storage, 'putDraft')
+      const draft = session.putDraft(bench0, { w: 70, r: 4 })
+      await held.entered
+      const command = session[method]({ eventId: 'after-draft' })
+      await new Promise(setImmediate)
+      const statusWhileHeld = session.view().status
+      held.release()
+      expect(await Promise.all([draft, command])).toEqual([
+        { ok: true, saved: true }, { ok: true, saved: true },
+      ])
+      expect(statusWhileHeld).toBe('active')
+      expect(session.view().status).toBe(code)
+      const expectedDraft = method === 'discard' ? null : { w: 70, r: 4 }
+      expect(session.getDraft(bench0)).toEqual(expectedDraft)
+      expect(await storage.getDraft(bench0)).toEqual(expectedDraft)
+      expect((await storage.readAll()).map(event => event.type)).toEqual(method === 'discard' ? [] : ['session.finish'])
+    })
+
+    test(`${kind}: a draft queued after ${method} is refused without writing`, async () => {
+      const { session, storage } = await started({ storage: createStorage() })
+      const held = holdNextWrite(storage, method === 'discard' ? 'clear' : 'append')
+      const command = session[method]({ eventId: 'before-draft' })
+      await held.entered
+      const draft = session.putDraft(bench0, { w: 70, r: 4 })
+      await new Promise(setImmediate)
+      const storedWhileHeld = await storage.getDraft(bench0)
+      held.release()
+      expect(await command).toEqual({ ok: true, saved: true })
+      expect(await draft).toMatchObject({ ok: false, saved: false, error: { code } })
+      expect(storedWhileHeld).toBeNull()
+      expect(session.getDraft(bench0)).toBeNull()
+      expect(await storage.getDraft(bench0)).toBeNull()
+      expect(await session.putDraft(bench1, { r: 1 })).toMatchObject({ ok: false, saved: false, error: { code } })
+      expect(await storage.readDrafts()).toEqual({})
+    })
+  }
+
+  test(`${kind}: multiple pending drafts save in order before a later commit`, async () => {
+    const { session, storage } = await started({ storage: createStorage() })
+    const held = holdNextWrite(storage, 'putDraft')
+    const first = session.putDraft(bench0, { w: 70, r: 4 })
+    await held.entered
+    const second = session.putDraft(bench0, { w: 75, r: 3 })
+    const third = session.putDraft(bench1, { w: 80, r: 2 })
+    const committed = session.commitSet({ eventId: 'after-drafts', exerciseId: 'bench', setId: bench0 })
+    await new Promise(setImmediate)
+    held.release()
+    for (const result of await Promise.all([first, second, third, committed])) {
+      expect(result).toEqual({ ok: true, saved: true })
+    }
+    expect(session.view().entries[0].sets[0].row).toMatchObject({ w: 75, r: 3, done: true })
+    expect((await storage.readAll())[0].fields).toEqual({ w: 75, r: 3 })
+    expect(session.getDraft(bench0)).toBeNull()
+    expect(session.getDraft(bench1)).toEqual({ w: 80, r: 2 })
+    expect(await storage.readDrafts()).toEqual({ [bench1]: { w: 80, r: 2 } })
+  })
+
+  test(`${kind}: a rejected draft leaves earlier state intact and later commands recover`, async () => {
+    const { session, storage } = await started({ storage: createStorage() })
+    await session.putDraft(bench0, { w: 65, r: 5 })
+    const held = holdNextWrite(storage, 'putDraft')
+    const rejected = session.putDraft(bench0, { w: 70, r: 4 })
+    await held.entered
+    const note = session.setNote({ eventId: 'queued-after-rejection', note: 'kept' })
+    held.reject(new Error('draft unavailable'))
+    expect(await rejected).toEqual({ ok: false, saved: false, error: { code: 'storage', message: 'draft unavailable' } })
+    expect(await note).toEqual({ ok: true, saved: true })
+    expect(session.getDraft(bench0)).toEqual({ w: 65, r: 5 })
+    expect(await storage.getDraft(bench0)).toEqual({ w: 65, r: 5 })
+    expect((await storage.readAll()).map(event => event.type)).toEqual(['session.note'])
+    const draft = session.putDraft(bench0, { w: 75, r: 3 })
+    const committed = session.commitSet({ eventId: 'after-rejection', exerciseId: 'bench', setId: bench0 })
+    expect(await Promise.all([draft, committed])).toEqual([
+      { ok: true, saved: true }, { ok: true, saved: true },
+    ])
+    expect(session.view().entries[0].sets[0].row).toMatchObject({ w: 75, r: 3, done: true })
+    expect(session.getDraft(bench0)).toBeNull()
+    expect(await storage.getDraft(bench0)).toBeNull()
+  })
+}
 
 test('restoring from storage after termination reproduces the same view', async () => {
   const storage = createMemoryStorage()
