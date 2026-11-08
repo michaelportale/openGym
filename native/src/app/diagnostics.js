@@ -1,8 +1,11 @@
 import { useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { deleteDatabaseAsync, openDatabaseAsync } from 'expo-sqlite'
 import { color, radius, space, touch } from '../theme/tokens'
 import AppText from '../ui/AppText'
 import { readVerdict } from '../health/gates'
+import { toSessionDbHandle } from '../storage/db-handle'
+import { runStorageProbe } from '../storage/probe'
 import { removeGateWorkouts, runWorkoutGates } from '../health/run-gates'
 import {
   deleteWorkout,
@@ -13,6 +16,8 @@ import {
   saveStrengthWorkout
 } from '../health/healthkit'
 
+// A separate file from opengym.db, so the check can clear its rows and delete the file safely.
+const PROBE_DATABASE_NAME = 'opengym-probe.db'
 const OWN_BUNDLE = 'io.github.michaelportale.opengym'
 const MANUAL_ID = 'opengym-phase0-gate-manual'
 const adapter = { saveStrengthWorkout, findWorkoutsBySyncId, findOwnWorkouts, deleteWorkout }
@@ -86,6 +91,21 @@ export default function Diagnostics() {
       return out
     })
 
+  const storageCheck = () =>
+    run(async () => {
+      const expoDb = await openDatabaseAsync(PROBE_DATABASE_NAME)
+      let r
+      try {
+        r = await runStorageProbe(toSessionDbHandle(expoDb))
+      } finally {
+        await expoDb.closeAsync()
+        await deleteDatabaseAsync(PROBE_DATABASE_NAME)
+      }
+      if (r.ok) return ['Storage check passed']
+      const failed = r.steps[r.steps.length - 1]
+      return ['Storage check failed at ' + failed.name + ': ' + failed.detail]
+    })
+
   return (
     <View style={styles.container}>
       <AppText variant="value">e1RM {e1rm}</AppText>
@@ -97,6 +117,7 @@ export default function Diagnostics() {
         <ActionButton title="Read body weight" disabled={busy} onPress={readWeight} />
         <ActionButton title="Save one test workout" disabled={busy} onPress={saveManual} />
         <ActionButton title="Remove test workouts" disabled={busy} onPress={removeTests} />
+        <ActionButton title="Storage check" disabled={busy} onPress={storageCheck} />
       </View>
       <ScrollView style={styles.output}>
         {lines.map((l, i) => (
