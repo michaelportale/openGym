@@ -1,0 +1,1086 @@
+import { expect, test } from 'vitest'
+import { createMemoryStorage } from './storage.js'
+import { createFakeSqliteDb } from './fake-sqlite.js'
+import { createSqliteSessionStorage } from './sqlite-storage.js'
+import { SEEN_PERSIST_MS, openSession, plannedSetId } from './session.js'
+import { REST_MAX_MS } from './timing.js'
+
+const T0 = Date.parse('2026-11-07T15:00:00.000Z')
+
+function createClock(start = T0) {
+  let t = start
+  return {
+    now: () => t,
+    set(n) { t = n },
+    advance(ms) { t += ms },
+  }
+}
+
+function baseWorkout(extra = {}) {
+  return {
+    id: 'w1',
+    d: '2026-11-07',
+    start: T0,
+    name: 'Push',
+    bw: 80,
+    routineIds: ['routine-1'],
+    importedFrom: 'fitnotes',
+    entries: [
+      {
+        id: 'bench',
+        coachNote: 'keep-entry',
+        target: { sets: 2, reps: 5, weight: 60 },
+        sets: [
+          { w: 60, r: 5, done: false, bar: 'texas' },
+          { w: 60, r: 5, done: false },
+        ],
+      },
+      {
+        id: 'row',
+        target: { sets: 1, reps: 8 },
+        sets: [{ w: 40, r: 8, done: false }],
+      },
+    ],
+    ...extra,
+  }
+}
+
+async function started(over = {}) {
+  const clock = over.clock || createClock(over.start ?? T0)
+  const storage = over.storage || createMemoryStorage()
+  const base = over.base === undefined ? baseWorkout() : over.base
+  const session = await openSession({
+    base,
+    storage,
+    now: clock.now,
+    timeZone: over.timeZone || 'UTC',
+  })
+  return { session, clock, storage, base }
+}
+
+const bench0 = plannedSetId('bench', 0)
+const bench1 = plannedSetId('bench', 1)
+
+function holdNextWrite(storage, method) {
+  const entered = Promise.withResolvers()
+  const held = Promise.withResolvers()
+  const write = storage[method].bind(storage)
+  storage[method] = async (...args) => {
+    storage[method] = write
+    entered.resolve()
+    await held.promise
+    return write(...args)
+  }
+  return { entered: entered.promise, release: held.resolve, reject: held.reject }
+}
+
+test('a repeated event id is a no-op and does not double count', async () => {
+  const { session } = await started()
+  const first = await session.commitSet({
+    eventId: 'commit-1',
+    exerciseId: 'bench',
+    setId: bench0,
+    fields: { w: 60, r: 5 },
+  })
+  const again = await session.commitSet({
+    eventId: 'commit-1',
+    exerciseId: 'bench',
+    setId: bench1,
+    fields: { w: 100, r: 10 },
+  })
+  const view = session.view()
+  expect(first).toMatchObject({ ok: true, saved: true })
+  expect(again).toMatchObject({ ok: true, saved: false, duplicate: true })
+  expect(view.totals).toMatchObject({ completedSets: 1, reps: 5, loadReps: 300 })
+  expect(view.entries[0].sets[0].completed).toBe(true)
+  expect(view.entries[0].sets[1].completed).toBe(false)
+  expect(view.entries[0].sets[1].row.w).toBe(60)
+})
+
+test('rapid complete then undo leaves the set uncounted, and a second undo stays a single correction', async () => {
+  const { session } = await started()
+  await session.commitSet({ eventId: 'c1', exerciseId: 'bench', setId: bench0, fields: { w: 80, r: 5 } })
+  await session.undoSet({ eventId: 'u1', exerciseId: 'bench', setId: bench0 })
+  const afterUndo = session.view()
+  expect(afterUndo.entries[0].sets[0].completed).toBe(false)
+  expect(afterUndo.entries[0].sets[0].row.done).toBe(false)
+  expect(afterUndo.totals.completedSets).toBe(0)
+  expect(afterUndo.totals.loadReps).toBe(0)
+
+  const duplicateUndo = await session.undoSet({ eventId: 'u1', exerciseId: 'bench', setId: bench0 })
+  expect(duplicateUndo).toMatchObject({ ok: true, saved: false, duplicate: true })
+
+  await session.commitSet({ eventId: 'c2', exerciseId: 'bench', setId: bench0, fields: { w: 80, r: 3 } })
+  const redone = session.view()
+  expect(redone.totals).toMatchObject({ completedSets: 1, reps: 3, loadReps: 240 })
+  expect(redone.entries[0].sets[0].row.w).toBe(80)
+})
+
+test('replay shows the same row a non-JSON commit field produced live', async () => {
+  const storage = createMemoryStorage()
+  const { session } = await started({ storage })
+  const committed = await session.commitSet({
+    eventId: 'c1',
+    exerciseId: 'bench',
+    setId: bench0,
+    fields: { w: NaN, r: 5, bar: undefined },
+  })
+  expect(committed).toMatchObject({ ok: true, saved: true })
+  const live = session.view()
+  const restored = await openSession({ storage, now: () => T0 + 60_000, timeZone: 'UTC' })
+  const replayed = restored.view()
+  expect(replayed.entries[0].sets[0].row.w).toBe(live.entries[0].sets[0].row.w)
+  expect(replayed.entries[0].sets[0].row.bar).toBe(live.entries[0].sets[0].row.bar)
+  expect(replayed.totals.loadReps).toBe(live.totals.loadReps)
+})
+
+test('replaying a set event after the set was removed is a duplicate', async () => {
+  const storage = createMemoryStorage()
+  const { session } = await started({ storage })
+  await session.commitSet({ eventId: 'c1', exerciseId: 'bench', setId: bench0, fields: { w: 60, r: 5 } })
+  await session.editSet({ eventId: 'e1', exerciseId: 'bench', setId: bench0, fields: { r: 4 } })
+  await session.undoSet({ eventId: 'u1', exerciseId: 'bench', setId: bench0 })
+  const removed = await session.removeSet({ eventId: 'r1', exerciseId: 'bench', setId: bench0 })
+  expect(removed).toMatchObject({ ok: true, saved: true })
+  const before = (await storage.readAll()).map(event => event.id)
+
+  const commit = await session.commitSet({ eventId: 'c1', exerciseId: 'bench', setId: bench0, fields: { w: 1, r: 1 } })
+  const edit = await session.editSet({ eventId: 'e1', exerciseId: 'bench', setId: bench0, fields: { r: 1 } })
+  const undo = await session.undoSet({ eventId: 'u1', exerciseId: 'bench', setId: bench0 })
+  expect(commit).toMatchObject({ ok: true, saved: false, duplicate: true })
+  expect(edit).toMatchObject({ ok: true, saved: false, duplicate: true })
+  expect(undo).toMatchObject({ ok: true, saved: false, duplicate: true })
+  expect((await storage.readAll()).map(event => event.id)).toEqual(before)
+})
+
+test('an edit after finish is refused and does not change the finished document', async () => {
+  const { session, storage, clock } = await started()
+  await session.commitSet({ eventId: 'c1', exerciseId: 'bench', setId: bench0, fields: { w: 60, r: 5 } })
+  clock.advance(60_000)
+  const finished = await session.finish({ eventId: 'finish-1' })
+  expect(finished).toMatchObject({ ok: true, saved: true })
+  const before = session.view().finished
+  const edit = await session.editSet({
+    eventId: 'edit-after',
+    exerciseId: 'bench',
+    setId: bench0,
+    fields: { r: 1, w: 1 },
+  })
+  expect(edit).toMatchObject({ ok: false, saved: false, error: { code: 'finished' } })
+  expect(session.view().finished).toEqual(before)
+  expect((await storage.readAll()).map(event => event.id)).not.toContain('edit-after')
+
+  await storage.append({
+    id: 'edit-smuggled',
+    type: 'set.edit',
+    at: clock.now(),
+    exerciseId: 'bench',
+    setId: bench0,
+    fields: { r: 1, w: 1 },
+  })
+  const restored = await openSession({ storage, now: clock.now, timeZone: 'UTC' })
+  expect(restored.view().finished.entries[0].sets[0]).toMatchObject({ w: 60, r: 5, done: true })
+  expect(restored.view().finished).toEqual(before)
+})
+
+test('a draft is visible but never counts until it is committed', async () => {
+  const { session } = await started()
+  const put = await session.putDraft(bench0, { w: 70, r: 4 })
+  expect(put).toMatchObject({ ok: true, saved: true })
+  const drafted = session.view()
+  expect(drafted.entries[0].sets[0].draft).toEqual({ w: 70, r: 4 })
+  expect(drafted.entries[0].sets[0].completed).toBe(false)
+  expect(drafted.entries[0].sets[0].row).toMatchObject({ w: 60, r: 5, done: false })
+  expect(drafted.totals).toMatchObject({ completedSets: 0, reps: 0, loadReps: 0 })
+
+  const commit = await session.commitSet({ eventId: 'from-draft', exerciseId: 'bench', setId: bench0 })
+  expect(commit).toMatchObject({ ok: true, saved: true })
+  const done = session.view()
+  expect(done.entries[0].sets[0].draft).toBeNull()
+  expect(done.entries[0].sets[0].completed).toBe(true)
+  expect(done.entries[0].sets[0].row).toMatchObject({ w: 70, r: 4, done: true })
+  expect(done.totals).toMatchObject({ completedSets: 1, reps: 4, loadReps: 280 })
+  expect(session.getDraft(bench0)).toBeNull()
+})
+
+for (const kind of ['memory', 'sqlite']) {
+  const createStorage = () => kind === 'memory'
+    ? createMemoryStorage()
+    : createSqliteSessionStorage(createFakeSqliteDb())
+
+  for (const method of ['commitSet', 'removeSet', 'removeExercise']) {
+    test(`${kind}: ${method} waits for an earlier draft and clears it`, async () => {
+      const { session, storage } = await started({ storage: createStorage() })
+      const held = holdNextWrite(storage, 'putDraft')
+      const draft = session.putDraft(bench0, { w: 70, r: 4 })
+      await held.entered
+      const command = session[method]({ eventId: 'after-draft', exerciseId: 'bench', setId: bench0 })
+      // Let unblocked commands run while the earlier storage write stays held.
+      await new Promise(setImmediate)
+      held.release()
+      expect(await Promise.all([draft, command])).toEqual([
+        { ok: true, saved: true }, { ok: true, saved: true },
+      ])
+      expect(session.getDraft(bench0)).toBeNull()
+      expect(await storage.getDraft(bench0)).toBeNull()
+      const restored = await openSession({ storage, now: () => T0 })
+      expect(restored.view()).toEqual(session.view())
+      if (method === 'commitSet') {
+        expect(session.view().entries[0].sets[0].row).toMatchObject({ w: 70, r: 4, done: true })
+        expect((await storage.readAll())[0].fields).toEqual({ w: 70, r: 4 })
+      } else if (method === 'removeSet') {
+        expect(session.view().entries[0].sets.map(set => set.setId)).toEqual([bench1])
+      } else {
+        expect(session.view().entries.map(entry => entry.id)).toEqual(['row'])
+      }
+    })
+  }
+
+  test(`${kind}: a draft queued after a commit remains a newer edit`, async () => {
+    const { session, storage } = await started({ storage: createStorage() })
+    await session.putDraft(bench0, { w: 70, r: 4 })
+    const held = holdNextWrite(storage, 'append')
+    const committed = session.commitSet({ eventId: 'before-draft', exerciseId: 'bench', setId: bench0 })
+    await held.entered
+    const draft = session.putDraft(bench0, { w: 75, r: 3 })
+    await new Promise(setImmediate)
+    held.release()
+    expect(await Promise.all([committed, draft])).toEqual([
+      { ok: true, saved: true }, { ok: true, saved: true },
+    ])
+    expect(session.view().entries[0].sets[0].row).toMatchObject({ w: 70, r: 4, done: true })
+    expect((await storage.readAll())[0].fields).toEqual({ w: 70, r: 4 })
+    expect(session.getDraft(bench0)).toEqual({ w: 75, r: 3 })
+    expect(await storage.getDraft(bench0)).toEqual({ w: 75, r: 3 })
+    const restored = await openSession({ storage, now: () => T0 })
+    expect(restored.view()).toEqual(session.view())
+  })
+
+  for (const [method, code] of [['discard', 'discarded'], ['finish', 'finished']]) {
+    test(`${kind}: ${method} waits for an earlier draft`, async () => {
+      const { session, storage } = await started({ storage: createStorage() })
+      const held = holdNextWrite(storage, 'putDraft')
+      const draft = session.putDraft(bench0, { w: 70, r: 4 })
+      await held.entered
+      const command = session[method]({ eventId: 'after-draft' })
+      await new Promise(setImmediate)
+      const statusWhileHeld = session.view().status
+      held.release()
+      expect(await Promise.all([draft, command])).toEqual([
+        { ok: true, saved: true }, { ok: true, saved: true },
+      ])
+      expect(statusWhileHeld).toBe('active')
+      expect(session.view().status).toBe(code)
+      const expectedDraft = method === 'discard' ? null : { w: 70, r: 4 }
+      expect(session.getDraft(bench0)).toEqual(expectedDraft)
+      expect(await storage.getDraft(bench0)).toEqual(expectedDraft)
+      expect((await storage.readAll()).map(event => event.type)).toEqual(method === 'discard' ? [] : ['session.finish'])
+    })
+
+    test(`${kind}: a draft queued after ${method} is refused without writing`, async () => {
+      const { session, storage } = await started({ storage: createStorage() })
+      const held = holdNextWrite(storage, method === 'discard' ? 'clear' : 'append')
+      const command = session[method]({ eventId: 'before-draft' })
+      await held.entered
+      const draft = session.putDraft(bench0, { w: 70, r: 4 })
+      await new Promise(setImmediate)
+      const storedWhileHeld = await storage.getDraft(bench0)
+      held.release()
+      expect(await command).toEqual({ ok: true, saved: true })
+      expect(await draft).toMatchObject({ ok: false, saved: false, error: { code } })
+      expect(storedWhileHeld).toBeNull()
+      expect(session.getDraft(bench0)).toBeNull()
+      expect(await storage.getDraft(bench0)).toBeNull()
+      expect(await session.putDraft(bench1, { r: 1 })).toMatchObject({ ok: false, saved: false, error: { code } })
+      expect(await storage.readDrafts()).toEqual({})
+    })
+  }
+
+  test(`${kind}: multiple pending drafts save in order before a later commit`, async () => {
+    const { session, storage } = await started({ storage: createStorage() })
+    const held = holdNextWrite(storage, 'putDraft')
+    const first = session.putDraft(bench0, { w: 70, r: 4 })
+    await held.entered
+    const second = session.putDraft(bench0, { w: 75, r: 3 })
+    const third = session.putDraft(bench1, { w: 80, r: 2 })
+    const committed = session.commitSet({ eventId: 'after-drafts', exerciseId: 'bench', setId: bench0 })
+    await new Promise(setImmediate)
+    held.release()
+    for (const result of await Promise.all([first, second, third, committed])) {
+      expect(result).toEqual({ ok: true, saved: true })
+    }
+    expect(session.view().entries[0].sets[0].row).toMatchObject({ w: 75, r: 3, done: true })
+    expect((await storage.readAll())[0].fields).toEqual({ w: 75, r: 3 })
+    expect(session.getDraft(bench0)).toBeNull()
+    expect(session.getDraft(bench1)).toEqual({ w: 80, r: 2 })
+    expect(await storage.readDrafts()).toEqual({ [bench1]: { w: 80, r: 2 } })
+  })
+
+  test(`${kind}: a rejected draft leaves earlier state intact and later commands recover`, async () => {
+    const { session, storage } = await started({ storage: createStorage() })
+    await session.putDraft(bench0, { w: 65, r: 5 })
+    const held = holdNextWrite(storage, 'putDraft')
+    const rejected = session.putDraft(bench0, { w: 70, r: 4 })
+    await held.entered
+    const note = session.setNote({ eventId: 'queued-after-rejection', note: 'kept' })
+    held.reject(new Error('draft unavailable'))
+    expect(await rejected).toEqual({ ok: false, saved: false, error: { code: 'storage', message: 'draft unavailable' } })
+    expect(await note).toEqual({ ok: true, saved: true })
+    expect(session.getDraft(bench0)).toEqual({ w: 65, r: 5 })
+    expect(await storage.getDraft(bench0)).toEqual({ w: 65, r: 5 })
+    expect((await storage.readAll()).map(event => event.type)).toEqual(['session.note'])
+    const draft = session.putDraft(bench0, { w: 75, r: 3 })
+    const committed = session.commitSet({ eventId: 'after-rejection', exerciseId: 'bench', setId: bench0 })
+    expect(await Promise.all([draft, committed])).toEqual([
+      { ok: true, saved: true }, { ok: true, saved: true },
+    ])
+    expect(session.view().entries[0].sets[0].row).toMatchObject({ w: 75, r: 3, done: true })
+    expect(session.getDraft(bench0)).toBeNull()
+    expect(await storage.getDraft(bench0)).toBeNull()
+  })
+}
+
+test('restoring from storage after termination reproduces the same view', async () => {
+  const storage = createMemoryStorage()
+  const clock = createClock(T0)
+  const { session } = await started({ storage, clock })
+  await session.commitSet({ eventId: 'c1', exerciseId: 'bench', setId: bench0, fields: { w: 60, r: 5 } })
+  await session.putDraft(bench1, { w: 62.5, r: 5 })
+  await session.addSet({ eventId: 'add-1', exerciseId: 'bench', setId: 'extra-1', fields: { w: 40, r: 8, warmup: true } })
+  await session.startRest({ eventId: 'rest-1', durationMs: 90_000 })
+  await session.moveExercise({ eventId: 'move-1', exerciseId: 'row', toIndex: 0 })
+  clock.advance(25_000)
+  const before = session.view()
+
+  const restored = await openSession({ storage, now: clock.now, timeZone: 'UTC' })
+  expect(restored.view()).toEqual(before)
+  expect(restored.getDraft(bench1)).toEqual({ w: 62.5, r: 5 })
+})
+
+test('a move with a non-integer index is not written', async () => {
+  const storage = createMemoryStorage()
+  const { session } = await started({ storage })
+  const order = () => session.view().entries.map(entry => entry.id)
+
+  const fractional = await session.moveExercise({ eventId: 'move-fraction', exerciseId: 'row', toIndex: 1.5 })
+  const missing = await session.moveExercise({ eventId: 'move-missing', exerciseId: 'row' })
+  const nan = await session.moveExercise({ eventId: 'move-nan', exerciseId: 'row', toIndex: NaN })
+  const text = await session.moveExercise({ eventId: 'move-text', exerciseId: 'row', toIndex: '0' })
+  expect(fractional).toMatchObject({ ok: false, saved: false, error: { code: 'bad-index' } })
+  expect(missing).toMatchObject({ ok: false, saved: false, error: { code: 'bad-index' } })
+  expect(nan).toMatchObject({ ok: false, saved: false, error: { code: 'bad-index' } })
+  expect(text).toMatchObject({ ok: false, saved: false, error: { code: 'bad-index' } })
+  expect(order()).toEqual(['bench', 'row'])
+  expect(await storage.readAll()).toEqual([])
+
+  const moved = await session.moveExercise({ eventId: 'move-ok', exerciseId: 'row', toIndex: 0 })
+  expect(moved).toMatchObject({ ok: true, saved: true })
+  expect(order()).toEqual(['row', 'bench'])
+
+  await session.finish({ eventId: 'finish-1' })
+  const before = (await storage.readAll()).map(event => event.id)
+  const finished = await session.moveExercise({ eventId: 'move-finished', exerciseId: 'row', toIndex: 1.5 })
+  expect(finished).toMatchObject({ ok: false, saved: false, error: { code: 'bad-index' } })
+  expect((await storage.readAll()).map(event => event.id)).toEqual(before)
+
+  const discardedStorage = createMemoryStorage()
+  const discarded = (await started({ storage: discardedStorage })).session
+  await discarded.discard()
+  const afterDiscard = await discarded.moveExercise({ eventId: 'move-discarded', exerciseId: 'row', toIndex: NaN })
+  expect(afterDiscard).toMatchObject({ ok: false, saved: false, error: { code: 'bad-index' } })
+  expect(await discardedStorage.readAll()).toEqual([])
+
+  const restored = await openSession({ storage, now: () => T0 + 60_000, timeZone: 'UTC' })
+  expect(restored.view().entries.map(entry => entry.id)).toEqual(['row', 'bench'])
+})
+
+test('locking during rest reports the deadline remainder, and expiry does not start the next set', async () => {
+  const clock = createClock(T0)
+  const { session } = await started({ clock })
+  await session.commitSet({ eventId: 'c1', exerciseId: 'bench', setId: bench0, fields: { w: 60, r: 5 } })
+  const deadline = clock.now() + 90_000
+  await session.startRest({ eventId: 'rest-1', deadline })
+
+  clock.advance(40_000)
+  const during = session.view().rest
+  expect(during).toMatchObject({ status: 'running', deadline, remainingMs: 50_000 })
+
+  clock.set(deadline + 5_000)
+  const expired = session.view()
+  expect(expired.rest).toMatchObject({ status: 'complete', remainingMs: 0, deadline })
+  expect(expired.entries[0].sets[1].completed).toBe(false)
+  expect(expired.totals.completedSets).toBe(1)
+})
+
+test('pause freezes remaining across a background gap and extend writes a new deadline', async () => {
+  const clock = createClock(T0)
+  const { session } = await started({ clock })
+  await session.startRest({ eventId: 'rest-1', durationMs: 60_000 })
+  clock.advance(10_000)
+  const pause = await session.pauseRest({ eventId: 'pause-1' })
+  expect(pause).toMatchObject({ ok: true, saved: true })
+  const paused = session.view().rest
+  expect(paused.status).toBe('paused')
+  expect(paused.remainingMs).toBe(50_000)
+  expect(paused.deadline).toBe(clock.now() + 50_000)
+
+  clock.advance(30_000)
+  expect(session.view().rest.remainingMs).toBe(50_000)
+  expect(session.view().rest.status).toBe('paused')
+
+  const extend = await session.extendRest({ eventId: 'extend-1', byMs: 15_000 })
+  expect(extend).toMatchObject({ ok: true, saved: true })
+  const extended = session.view().rest
+  expect(extended.status).toBe('paused')
+  expect(extended.remainingMs).toBe(65_000)
+  expect(extended.deadline).toBe(paused.deadline + 15_000)
+
+  clock.advance(20_000)
+  expect(session.view().rest).toMatchObject({ status: 'paused', remainingMs: 65_000 })
+})
+
+test('an extend that cannot grow a full rest is not written', async () => {
+  const storage = createMemoryStorage()
+  const { session } = await started({ storage })
+  await session.startRest({ eventId: 'rest-1', durationMs: 1_000, totalMs: REST_MAX_MS })
+  expect(session.view().rest.totalMs).toBe(REST_MAX_MS)
+
+  const full = await session.extendRest({ eventId: 'extend-full', byMs: 1_000 })
+  expect(full).toMatchObject({ ok: false, saved: false, error: { code: 'bad-extend' } })
+  expect(session.view().rest.totalMs).toBe(REST_MAX_MS)
+  expect((await storage.readAll()).map(event => event.type)).toEqual(['rest.start'])
+
+  const shrink = await session.extendRest({ eventId: 'extend-shrink', byMs: -1_000 })
+  expect(shrink).toMatchObject({ ok: true, saved: true })
+  expect(session.view().rest.totalMs).toBe(REST_MAX_MS - 1_000)
+
+  const grow = await session.extendRest({ eventId: 'extend-grow', byMs: REST_MAX_MS })
+  expect(grow).toMatchObject({ ok: true, saved: true })
+  expect(session.view().rest.totalMs).toBe(REST_MAX_MS)
+
+  const again = await session.extendRest({ eventId: 'extend-full', byMs: 5_000 })
+  expect(again).toMatchObject({ ok: false, saved: false, error: { code: 'bad-extend' } })
+
+  const restored = await openSession({ storage, now: () => T0 + 60_000, timeZone: 'UTC' })
+  expect(restored.view().rest.totalMs).toBe(REST_MAX_MS)
+  expect((await storage.readAll()).map(event => event.id)).toEqual(['rest-1', 'extend-shrink', 'extend-grow'])
+})
+
+test('a finished or discarded session rejects an empty extend and writes nothing', async () => {
+  const finishedStorage = createMemoryStorage()
+  const finished = (await started({ storage: finishedStorage })).session
+  await finished.finish({ eventId: 'finish-1' })
+  const beforeFinish = (await finishedStorage.readAll()).map(event => event.id)
+  const finishedZero = await finished.extendRest({ eventId: 'extend-zero', byMs: 0 })
+  const finishedNan = await finished.extendRest({ eventId: 'extend-nan', byMs: NaN })
+  expect(finishedZero).toMatchObject({ ok: false, saved: false, error: { code: 'bad-extend' } })
+  expect(finishedNan).toMatchObject({ ok: false, saved: false, error: { code: 'bad-extend' } })
+  expect((await finishedStorage.readAll()).map(event => event.id)).toEqual(beforeFinish)
+
+  const discardedStorage = createMemoryStorage()
+  const discarded = (await started({ storage: discardedStorage })).session
+  await discarded.discard()
+  const discardedZero = await discarded.extendRest({ eventId: 'extend-zero', byMs: 0 })
+  const discardedNan = await discarded.extendRest({ eventId: 'extend-nan', byMs: NaN })
+  expect(discardedZero).toMatchObject({ ok: false, saved: false, error: { code: 'bad-extend' } })
+  expect(discardedNan).toMatchObject({ ok: false, saved: false, error: { code: 'bad-extend' } })
+  expect(await discardedStorage.readAll()).toEqual([])
+})
+
+test('a repeated pause, cancel, or resume id is a duplicate once its precondition is gone', async () => {
+  const clock = createClock(T0)
+  const storage = createMemoryStorage()
+  const { session } = await started({ clock, storage })
+  await session.startRest({ eventId: 'rest-1', durationMs: 60_000 })
+  const pause = await session.pauseRest({ eventId: 'pause-1' })
+  expect(pause).toMatchObject({ ok: true, saved: true })
+  const pauseAgain = await session.pauseRest({ eventId: 'pause-1' })
+  expect(pauseAgain).toMatchObject({ ok: true, saved: false, duplicate: true })
+  expect(session.view().rest).toMatchObject({ status: 'paused', remainingMs: 60_000 })
+
+  const restored = await openSession({ storage, now: clock.now, timeZone: 'UTC' })
+  const pauseReplay = await restored.pauseRest({ eventId: 'pause-1' })
+  expect(pauseReplay).toMatchObject({ ok: true, saved: false, duplicate: true })
+  expect(restored.view().rest).toMatchObject({ status: 'paused', remainingMs: 60_000 })
+
+  const cancel = await session.cancelRest({ eventId: 'cancel-1' })
+  expect(cancel).toMatchObject({ ok: true, saved: true })
+  const cancelAgain = await session.cancelRest({ eventId: 'cancel-1' })
+  expect(cancelAgain).toMatchObject({ ok: true, saved: false, duplicate: true })
+  expect(session.view().rest).toBeNull()
+
+  const night = createClock(Date.parse('2026-11-07T23:10:00.000Z'))
+  const nightStorage = createMemoryStorage()
+  const nightBase = baseWorkout()
+  nightBase.start = night.now()
+  const overnight = await started({ clock: night, storage: nightStorage, base: nightBase, timeZone: 'UTC' })
+  await overnight.session.commitSet({ eventId: 'c1', exerciseId: 'bench', setId: bench0, fields: { w: 60, r: 5 } })
+  night.set(Date.parse('2026-11-08T07:00:00.000Z'))
+  const resume = await overnight.session.resume({ eventId: 'resume-1' })
+  expect(resume).toMatchObject({ ok: true, saved: true })
+  const resumeAgain = await overnight.session.resume({ eventId: 'resume-1' })
+  expect(resumeAgain).toMatchObject({ ok: true, saved: false, duplicate: true })
+  expect(overnight.session.view().overnight).toBe(false)
+  expect((await nightStorage.readAll()).filter(event => event.type === 'session.resume')).toHaveLength(1)
+})
+
+test('replaying an extend after the rest was cancelled is a duplicate', async () => {
+  const storage = createMemoryStorage()
+  const { session } = await started({ storage })
+  await session.startRest({ eventId: 'rest-1', durationMs: 60_000 })
+  const extend = await session.extendRest({ eventId: 'extend-1', byMs: 15_000 })
+  expect(extend).toMatchObject({ ok: true, saved: true })
+  await session.cancelRest({ eventId: 'cancel-1' })
+  const again = await session.extendRest({ eventId: 'extend-1', byMs: 15_000 })
+  expect(again).toMatchObject({ ok: true, saved: false, duplicate: true })
+  expect(session.view().rest).toBeNull()
+  expect((await storage.readAll()).filter(event => event.type === 'rest.extend')).toHaveLength(1)
+})
+
+test('an added set needs a new id, and a taken id never reaches the journal', async () => {
+  const storage = createMemoryStorage()
+  const { session } = await started({ storage })
+  const missing = await session.addSet({ eventId: 'add-missing', exerciseId: 'bench', fields: { w: 99, r: 9 } })
+  const blank = await session.addSet({ eventId: 'add-blank', exerciseId: 'bench', setId: '', fields: { w: 99, r: 9 } })
+  const planned = await session.addSet({
+    eventId: 'add-planned',
+    exerciseId: 'bench',
+    setId: bench0,
+    fields: { w: 99, r: 9 },
+  })
+  const otherExercise = await session.addSet({
+    eventId: 'add-other',
+    exerciseId: 'row',
+    setId: bench0,
+    fields: { w: 99, r: 9 },
+  })
+  expect(missing).toMatchObject({ ok: false, saved: false, error: { code: 'unknown-set' } })
+  expect(blank).toMatchObject({ ok: false, saved: false, error: { code: 'unknown-set' } })
+  expect(planned).toMatchObject({ ok: false, saved: false, error: { code: 'known-set' } })
+  expect(otherExercise).toMatchObject({ ok: false, saved: false, error: { code: 'known-set' } })
+  expect(session.view().entries[0].sets[0].row.w).toBe(60)
+  expect((await storage.readAll()).map(event => event.id)).toEqual([])
+
+  await session.removeSet({ eventId: 'remove-bench-1', exerciseId: 'bench', setId: bench1 })
+  const reused = await session.addSet({
+    eventId: 'add-reuse',
+    exerciseId: 'bench',
+    setId: bench1,
+    fields: { w: 70, r: 4 },
+  })
+  expect(reused).toMatchObject({ ok: true, saved: true })
+  const again = await session.addSet({
+    eventId: 'add-reuse',
+    exerciseId: 'bench',
+    setId: bench1,
+    fields: { w: 1, r: 1 },
+  })
+  expect(again).toMatchObject({ ok: true, saved: false, duplicate: true })
+
+  const restored = await openSession({ storage, now: () => T0 + 60_000, timeZone: 'UTC' })
+  const bench = restored.view().entries.find(entry => entry.id === 'bench')
+  expect(bench.sets.map(set => set.setId)).toEqual([bench0, bench1])
+  expect(bench.sets[1].row).toMatchObject({ w: 70, r: 4, done: false })
+  expect((await storage.readAll()).map(event => event.type)).toEqual(['set.remove', 'set.add'])
+})
+
+test('a copied exercise keeps its own set ids and does not reuse one already in the session', async () => {
+  const storage = createMemoryStorage()
+  const { session } = await started({ storage })
+  const copiedSet = await session.addExercise({
+    eventId: 'copy-taken-set',
+    exerciseId: 'curl',
+    entry: { sets: [{ id: bench0, w: 12, r: 10 }, { id: 'curl-plain', w: 10, r: 8 }] },
+  })
+  const copiedPair = await session.addExercise({
+    eventId: 'copy-pair',
+    exerciseId: 'curl',
+    entry: { sets: [{ id: 'same', w: 12, r: 10 }, { id: 'same', w: 14, r: 8 }] },
+  })
+  const known = await session.addExercise({
+    eventId: 'copy-bench',
+    exerciseId: 'bench',
+    entry: { sets: [{ id: 'fresh', w: 1, r: 1 }] },
+  })
+  expect(copiedSet).toMatchObject({ ok: false, saved: false, error: { code: 'known-set' } })
+  expect(copiedPair).toMatchObject({ ok: false, saved: false, error: { code: 'known-set' } })
+  expect(known).toMatchObject({ ok: false, saved: false, error: { code: 'known-exercise' } })
+  expect(session.view().entries.map(entry => entry.id)).toEqual(['bench', 'row'])
+  expect((await storage.readAll()).map(event => event.id)).toEqual([])
+
+  const planted = await session.addSet({ eventId: 'plant-zero', exerciseId: 'row', setId: '0', fields: { w: 1, r: 1 } })
+  const copiedNumber = await session.addExercise({
+    eventId: 'copy-number',
+    exerciseId: 'curl',
+    entry: { sets: [{ id: 0, w: 12, r: 10 }] },
+  })
+  const plantedPlan = await session.addSet({
+    eventId: 'plant-plan',
+    exerciseId: 'bench',
+    setId: plannedSetId('fly', 0),
+    fields: { w: 8, r: 12 },
+  })
+  const copiedPlan = await session.addExercise({
+    eventId: 'copy-plan',
+    exerciseId: 'fly',
+    entry: { sets: [{ w: 8, r: 12 }] },
+  })
+  expect(planted).toMatchObject({ ok: true, saved: true })
+  expect(copiedNumber).toMatchObject({ ok: false, saved: false, error: { code: 'known-set' } })
+  expect(plantedPlan).toMatchObject({ ok: true, saved: true })
+  expect(copiedPlan).toMatchObject({ ok: false, saved: false, error: { code: 'known-set' } })
+  expect(session.view().entries.map(entry => entry.id)).toEqual(['bench', 'row'])
+  expect((await storage.readAll()).map(event => event.id)).toEqual(['plant-zero', 'plant-plan'])
+
+  const removed = await session.removeExercise({ eventId: 'remove-row', exerciseId: 'row' })
+  expect(removed).toMatchObject({ ok: true, saved: true })
+  const reused = await session.addExercise({
+    eventId: 'copy-row-again',
+    exerciseId: 'row',
+    entry: { sets: [{ id: '0', w: 42, r: 6 }] },
+  })
+  expect(reused).toMatchObject({ ok: true, saved: true })
+  const reusedAgain = await session.addExercise({
+    eventId: 'copy-row-again',
+    exerciseId: 'row',
+    entry: { sets: [{ id: '0', w: 1, r: 1 }] },
+  })
+  expect(reusedAgain).toMatchObject({ ok: true, saved: false, duplicate: true })
+
+  const restored = await openSession({ storage, now: () => T0 + 60_000, timeZone: 'UTC' })
+  const row = restored.view().entries.find(entry => entry.id === 'row')
+  expect(row.sets.map(set => set.setId)).toEqual(['0'])
+  expect(row.sets[0].row).toMatchObject({ w: 42, r: 6, done: false })
+})
+
+test('replaying an added set after the exercise is removed is a duplicate', async () => {
+  const storage = createMemoryStorage()
+  const { session } = await started({ storage })
+  const added = await session.addSet({ eventId: 'add-1', exerciseId: 'row', setId: 'extra-1', fields: { w: 40, r: 8 } })
+  expect(added).toMatchObject({ ok: true, saved: true })
+  const removed = await session.removeExercise({ eventId: 'remove-1', exerciseId: 'row' })
+  expect(removed).toMatchObject({ ok: true, saved: true })
+  const again = await session.addSet({ eventId: 'add-1', exerciseId: 'row', setId: 'extra-1', fields: { w: 40, r: 8 } })
+  expect(again).toMatchObject({ ok: true, saved: false, duplicate: true })
+  expect(session.view().entries.map(entry => entry.id)).toEqual(['bench'])
+  expect((await storage.readAll()).filter(event => event.type === 'set.add')).toHaveLength(1)
+})
+
+test('finishing during rest clears the countdown and does not revive it on restore', async () => {
+  const clock = createClock(T0)
+  const storage = createMemoryStorage()
+  const { session } = await started({ clock, storage })
+  await session.commitSet({ eventId: 'c1', exerciseId: 'bench', setId: bench0, fields: { w: 60, r: 5 } })
+  await session.startRest({ eventId: 'rest-1', durationMs: 90_000 })
+  clock.advance(5_000)
+  const result = await session.finish({ eventId: 'finish-1' })
+  expect(result).toMatchObject({ ok: true, saved: true })
+  expect(session.view().status).toBe('finished')
+  expect(session.view().rest).toBeNull()
+  expect(session.view().finished.entries).toHaveLength(1)
+  expect(session.view().finished.end).toBe(clock.now())
+
+  const restored = await openSession({ storage, now: () => clock.now() + 60_000, timeZone: 'UTC' })
+  expect(restored.view().status).toBe('finished')
+  expect(restored.view().rest).toBeNull()
+  expect(restored.view().finished.end).toBe(clock.now())
+  expect(restored.view().elapsedMs).toBe(session.view().elapsedMs)
+})
+
+test('an unfinished session that crosses local midnight offers resume, a chosen end, or discard', async () => {
+  const clock = createClock(Date.parse('2026-11-07T23:10:00.000Z'))
+  const storage = createMemoryStorage()
+  const base = baseWorkout()
+  base.start = clock.now()
+  const { session } = await started({ clock, storage, base, timeZone: 'UTC' })
+  await session.commitSet({ eventId: 'c1', exerciseId: 'bench', setId: bench0, fields: { w: 60, r: 5 } })
+  const loggedAt = clock.now()
+  clock.set(Date.parse('2026-11-08T07:00:00.000Z'))
+
+  const open = session.view()
+  expect(open.overnight).toBe(true)
+  expect(open.disposition).toMatchObject({
+    kind: 'overnight',
+    actions: ['resume', 'finish', 'discard'],
+  })
+  expect(open.disposition.suggestedEnd).toBe(loggedAt)
+  expect(open.elapsedMs).toBeLessThan(30 * 60 * 1000)
+  expect(open.status).toBe('active')
+  expect(open.finished).toBeNull()
+
+  const silent = await session.finish({ eventId: 'finish-silent' })
+  expect(silent).toMatchObject({ ok: false, saved: false, error: { code: 'overnight' } })
+  expect(session.view().finished).toBeNull()
+  expect((await storage.readAll()).map(event => event.id)).not.toContain('finish-silent')
+
+  const resume = await session.resume({ eventId: 'resume-1' })
+  expect(resume).toMatchObject({ ok: true, saved: true })
+  expect(session.view().overnight).toBe(false)
+  expect(session.view().disposition.kind).toBe('active')
+  expect(session.view().elapsedMs).toBeLessThan(30 * 60 * 1000)
+
+  clock.set(Date.parse('2026-11-09T07:00:00.000Z'))
+  expect(session.view().overnight).toBe(true)
+  const chosenEnd = loggedAt + 20 * 60 * 1000
+  const done = await session.finish({ eventId: 'finish-chosen', end: chosenEnd })
+  expect(done).toMatchObject({ ok: true, saved: true })
+  expect(session.view().finished.end).toBe(chosenEnd)
+  expect(session.view().finished.start).toBe(base.start)
+  expect(session.view().finished.end - session.view().finished.start).toBeLessThan(3 * 60 * 60 * 1000)
+})
+
+test('a failed clear leaves the logged set and the draft in place', async () => {
+  const storage = createMemoryStorage()
+  const { session } = await started({ storage })
+  await session.commitSet({ eventId: 'c1', exerciseId: 'bench', setId: bench0, fields: { w: 60, r: 5 } })
+  await session.putDraft(bench1, { w: 70, r: 3 })
+  storage.clear = async () => { throw new Error('disk full') }
+  let thrown = null
+  let result
+  try {
+    result = await session.discard()
+  } catch (error) {
+    thrown = error
+  }
+  expect(thrown).toBeNull()
+  expect(result).toMatchObject({ ok: false, saved: false, error: { code: 'storage' } })
+  expect(result.error.message).toContain('disk full')
+  expect(session.view().status).toBe('active')
+  expect(session.view().totals).toMatchObject({ completedSets: 1, reps: 5, loadReps: 300 })
+  expect(session.getDraft(bench1)).toEqual({ w: 70, r: 3 })
+  expect(await storage.readBase()).not.toBeNull()
+  expect(await storage.readAll()).toHaveLength(1)
+})
+
+test('a short overnight gap stays out of elapsed through a kill and a resume', async () => {
+  const clock = createClock(Date.parse('2026-11-07T23:40:00.000Z'))
+  const across = createMemoryStorage()
+  const acrossBase = baseWorkout()
+  acrossBase.start = clock.now()
+  const first = await started({ clock, storage: across, base: acrossBase, timeZone: 'UTC' })
+  await first.session.commitSet({ eventId: 'c1', exerciseId: 'bench', setId: bench0, fields: { w: 60, r: 5 } })
+  const beforeMidnight = first.session.view().elapsedMs
+  clock.set(Date.parse('2026-11-08T00:10:00.000Z'))
+  await first.session.commitSet({ eventId: 'c2', exerciseId: 'bench', setId: bench1, fields: { w: 60, r: 5 } })
+  expect(first.session.view().elapsedMs - beforeMidnight).toBe(30 * 60 * 1000)
+
+  const idleClock = createClock(Date.parse('2026-11-07T23:10:00.000Z'))
+  const storage = createMemoryStorage()
+  const base = baseWorkout()
+  base.start = idleClock.now()
+  const { session } = await started({ clock: idleClock, storage, base, timeZone: 'UTC' })
+  await session.commitSet({ eventId: 'c1', exerciseId: 'bench', setId: bench0, fields: { w: 60, r: 5 } })
+  const logged = session.view().elapsedMs
+  idleClock.set(Date.parse('2026-11-08T01:10:00.000Z'))
+  const idle = session.view()
+  expect(idle.overnight).toBe(true)
+  expect(idle.elapsedMs).toBe(logged)
+
+  const killed = await openSession({
+    storage,
+    now: idleClock.now,
+    timeZone: 'UTC',
+  })
+  expect(killed.view().overnight).toBe(true)
+  expect(killed.view().elapsedMs).toBe(logged)
+
+  const resume = await session.resume({ eventId: 'resume-1' })
+  expect(resume).toMatchObject({ ok: true, saved: true })
+  expect(session.view().overnight).toBe(false)
+  expect(session.view().elapsedMs).toBe(logged)
+
+  idleClock.advance(10 * 60 * 1000)
+  expect(session.view().elapsedMs).toBe(logged + 10 * 60 * 1000)
+
+  const restored = await openSession({ storage, now: idleClock.now, timeZone: 'UTC' })
+  expect(restored.view().overnight).toBe(false)
+  expect(restored.view().elapsedMs).toBe(logged + 10 * 60 * 1000)
+})
+
+test('a rest across midnight keeps counting and does not fall back to the last set', async () => {
+  const clock = createClock(Date.parse('2026-11-07T23:50:00.000Z'))
+  const storage = createMemoryStorage()
+  const base = baseWorkout()
+  base.start = clock.now()
+  const { session } = await started({ clock, storage, base, timeZone: 'UTC' })
+  await session.commitSet({ eventId: 'c1', exerciseId: 'bench', setId: bench0, fields: { w: 60, r: 5 } })
+  const logged = session.view().elapsedMs
+
+  clock.set(Date.parse('2026-11-08T00:05:00.000Z'))
+  const resting = session.view()
+  expect(resting.overnight).toBe(true)
+  expect(resting.elapsedMs).toBe(logged + REST_MAX_MS)
+
+  const killed = await openSession({ storage, now: clock.now, timeZone: 'UTC' })
+  expect(killed.view().overnight).toBe(true)
+  expect(killed.view().elapsedMs).toBe(logged + REST_MAX_MS)
+
+  const resume = await session.resume({ eventId: 'resume-1' })
+  expect(resume).toMatchObject({ ok: true, saved: true })
+  expect(session.view().overnight).toBe(false)
+  expect(session.view().elapsedMs).toBe(logged + REST_MAX_MS)
+
+  const idleClock = createClock(Date.parse('2026-11-07T23:50:00.000Z'))
+  const idleBase = baseWorkout()
+  idleBase.start = idleClock.now()
+  const idle = await started({ clock: idleClock, base: idleBase, timeZone: 'UTC' })
+  await idle.session.commitSet({ eventId: 'c1', exerciseId: 'bench', setId: bench0, fields: { w: 60, r: 5 } })
+  const idleLogged = idle.session.view().elapsedMs
+  idleClock.set(Date.parse('2026-11-07T23:59:00.000Z'))
+  const beforeMidnight = idle.session.view().elapsedMs
+  expect(beforeMidnight).toBe(idleLogged + 9 * 60 * 1000)
+  idleClock.set(Date.parse('2026-11-08T00:30:00.000Z'))
+  expect(idle.session.view().elapsedMs).toBe(beforeMidnight)
+
+  const pastRest = createClock(Date.parse('2026-11-07T23:50:00.000Z'))
+  const pastBase = baseWorkout()
+  pastBase.start = pastRest.now()
+  const longer = await started({ clock: pastRest, base: pastBase, timeZone: 'UTC' })
+  await longer.session.commitSet({ eventId: 'c1', exerciseId: 'bench', setId: bench0, fields: { w: 60, r: 5 } })
+  const pastLogged = longer.session.view().elapsedMs
+  pastRest.set(Date.parse('2026-11-08T00:06:00.000Z'))
+  expect(longer.session.view().elapsedMs).toBe(pastLogged)
+})
+
+test('a kill after a shown rest across midnight does not rewind elapsed', async () => {
+  const setAt = Date.parse('2026-11-07T23:50:00.000Z')
+  const seenAt = Date.parse('2026-11-08T00:05:00.000Z')
+  const reopenAt = Date.parse('2026-11-08T00:30:00.000Z')
+
+  const stores = [
+    { storage: createMemoryStorage(), reopen: storage => storage },
+    await (async () => {
+      const db = createFakeSqliteDb()
+      return {
+        storage: createSqliteSessionStorage(db),
+        reopen: () => createSqliteSessionStorage(db),
+      }
+    })(),
+  ]
+
+  for (const { storage, reopen } of stores) {
+    const clock = createClock(setAt)
+    const base = { ...baseWorkout(), start: setAt }
+    const { session } = await started({ clock, storage, base, timeZone: 'UTC' })
+    await session.commitSet({ eventId: 'c1', exerciseId: 'bench', setId: bench0, fields: { w: 60, r: 5 } })
+    clock.set(seenAt)
+    const shown = session.view()
+    expect(shown.overnight).toBe(true)
+    expect(shown.elapsedMs).toBe(REST_MAX_MS)
+    if (typeof session.flushSeen === 'function') await session.flushSeen()
+
+    const reopened = await openSession({ storage: reopen(storage), now: () => reopenAt, timeZone: 'UTC' })
+    const revived = reopened.view()
+    expect(revived.overnight).toBe(true)
+    expect(revived.elapsedMs).toBe(shown.elapsedMs + (reopenAt - seenAt))
+    expect(await storage.readBase()).not.toHaveProperty('_sessionLastSeen')
+  }
+
+  const idleClock = createClock(setAt)
+  const idleStorage = createMemoryStorage()
+  const idle = await started({
+    clock: idleClock,
+    storage: idleStorage,
+    base: { ...baseWorkout(), start: setAt },
+    timeZone: 'UTC',
+  })
+  await idle.session.commitSet({ eventId: 'c1', exerciseId: 'bench', setId: bench0, fields: { w: 60, r: 5 } })
+  const idleLogged = idle.session.view().elapsedMs
+  if (typeof idle.session.flushSeen === 'function') await idle.session.flushSeen()
+  const idleOpened = await openSession({ storage: idleStorage, now: () => reopenAt, timeZone: 'UTC' })
+  expect(idleOpened.view().overnight).toBe(true)
+  expect(idleOpened.view().elapsedMs).toBe(idleLogged)
+})
+
+test('view does not persist last seen, and noteSeen waits 15 seconds', async () => {
+  const setAt = Date.parse('2026-11-07T23:50:00.000Z')
+  const seenAt = Date.parse('2026-11-08T00:05:00.000Z')
+  const clock = createClock(setAt)
+  const storage = createMemoryStorage()
+  const { session } = await started({ clock, storage, base: { ...baseWorkout(), start: setAt }, timeZone: 'UTC' })
+  await session.commitSet({ eventId: 'c1', exerciseId: 'bench', setId: bench0, fields: { w: 60, r: 5 } })
+  clock.set(seenAt)
+  session.view()
+  expect(await storage.readLastSeen()).toBeNull()
+
+  await session.noteSeen()
+  expect(await storage.readLastSeen()).toBe(seenAt)
+
+  clock.set(seenAt + SEEN_PERSIST_MS - 1000)
+  session.view()
+  await session.noteSeen()
+  expect(await storage.readLastSeen()).toBe(seenAt)
+
+  await session.flushSeen()
+  expect(await storage.readLastSeen()).toBe(seenAt + SEEN_PERSIST_MS - 1000)
+
+  clock.set(seenAt + SEEN_PERSIST_MS - 1000 + SEEN_PERSIST_MS)
+  session.view()
+  await session.noteSeen()
+  expect(await storage.readLastSeen()).toBe(seenAt + SEEN_PERSIST_MS - 1000 + SEEN_PERSIST_MS)
+})
+
+test('discard drops an overnight session instead of logging it', async () => {
+  const clock = createClock(Date.parse('2026-11-07T23:10:00.000Z'))
+  const storage = createMemoryStorage()
+  const base = baseWorkout()
+  base.start = clock.now()
+  const { session } = await started({ clock, storage, base, timeZone: 'UTC' })
+  await session.commitSet({ eventId: 'c1', exerciseId: 'bench', setId: bench0, fields: { w: 60, r: 5 } })
+  clock.set(Date.parse('2026-11-08T07:00:00.000Z'))
+  const discarded = await session.discard()
+  expect(discarded).toMatchObject({ ok: true, saved: true })
+  expect(session.view().status).toBe('discarded')
+  expect(session.view().finished).toBeNull()
+  expect(await storage.readAll()).toEqual([])
+  expect(await storage.readBase()).toBeNull()
+})
+
+test('a backward or forward clock jump never makes remaining or elapsed negative', async () => {
+  const clock = createClock(T0)
+  const { session } = await started({ clock })
+  await session.commitSet({ eventId: 'c1', exerciseId: 'bench', setId: bench0, fields: { w: 60, r: 5 } })
+  await session.startRest({ eventId: 'rest-1', durationMs: 90_000 })
+  clock.advance(30_000)
+  const mid = session.view()
+  expect(mid.elapsedMs).toBe(30_000)
+  expect(mid.rest.remainingMs).toBe(60_000)
+
+  clock.advance(-2 * 60 * 60 * 1000)
+  const jumpedBack = session.view()
+  expect(jumpedBack.elapsedMs).toBe(mid.elapsedMs)
+  expect(jumpedBack.rest.remainingMs).toBeGreaterThanOrEqual(0)
+  expect(jumpedBack.rest.remainingMs).toBeLessThanOrEqual(jumpedBack.rest.totalMs)
+  expect(jumpedBack.elapsedMs).toBeGreaterThanOrEqual(0)
+
+  clock.set(T0 + 30_000 + 5 * 60 * 60 * 1000)
+  const jumpedForward = session.view()
+  expect(jumpedForward.elapsedMs).toBe(mid.elapsedMs)
+  expect(jumpedForward.rest).toMatchObject({ status: 'complete', remainingMs: 0 })
+  expect(jumpedForward.totals.completedSets).toBe(1)
+})
+
+test('changing time zone does not change elapsed time or rest remaining', async () => {
+  const clock = createClock(Date.parse('2026-11-07T22:00:00-05:00'))
+  const base = baseWorkout()
+  base.start = clock.now()
+  const { session } = await started({ clock, base, timeZone: 'America/New_York' })
+  await session.commitSet({ eventId: 'c1', exerciseId: 'bench', setId: bench0, fields: { w: 60, r: 5 } })
+  await session.startRest({ eventId: 'rest-1', durationMs: 90_000 })
+  clock.advance(30 * 60 * 1000)
+
+  const east = session.view({ timeZone: 'America/New_York' })
+  const west = session.view({ timeZone: 'America/Los_Angeles' })
+  const auckland = session.view({ timeZone: 'Pacific/Auckland' })
+  expect(west.elapsedMs).toBe(east.elapsedMs)
+  expect(auckland.elapsedMs).toBe(east.elapsedMs)
+  expect(west.rest.remainingMs).toBe(east.rest.remainingMs)
+  expect(auckland.rest.remainingMs).toBe(east.rest.remainingMs)
+  expect(east.elapsedMs).toBeGreaterThan(0)
+  expect(east.overnight).toBe(false)
+  expect(west.overnight).toBe(false)
+
+  clock.set(Date.parse('2026-11-08T07:00:00-05:00'))
+  const nextMorning = session.view({ timeZone: 'America/New_York' })
+  const sameInstantWest = session.view({ timeZone: 'America/Los_Angeles' })
+  expect(nextMorning.overnight).toBe(true)
+  expect(sameInstantWest.overnight).toBe(true)
+  expect(nextMorning.elapsedMs).toBe(east.elapsedMs)
+  expect(sameInstantWest.elapsedMs).toBe(east.elapsedMs)
+  expect(nextMorning.rest.remainingMs).toBe(0)
+})
+
+test('a failed append surfaces the error and does not mark the set saved', async () => {
+  const storage = createMemoryStorage()
+  const { session } = await started({ storage })
+  storage.failAppends(new Error('disk full'))
+  const attempt = await session.commitSet({
+    eventId: 'commit-fail',
+    exerciseId: 'bench',
+    setId: bench0,
+    fields: { w: 90, r: 3 },
+  })
+  expect(attempt.ok).toBe(false)
+  expect(attempt.saved).toBe(false)
+  expect(attempt.error.code).toBe('storage')
+  expect(attempt.error.message).toContain('disk full')
+  expect(session.view().entries[0].sets[0].completed).toBe(false)
+  expect(session.view().totals.completedSets).toBe(0)
+  expect(await storage.readAll()).toEqual([])
+
+  storage.failAppends(null)
+  const retry = await session.commitSet({
+    eventId: 'commit-fail',
+    exerciseId: 'bench',
+    setId: bench0,
+    fields: { w: 90, r: 3 },
+  })
+  expect(retry).toMatchObject({ ok: true, saved: true })
+  expect(session.view().totals).toMatchObject({ completedSets: 1, reps: 3, loadReps: 270 })
+})
+
+test('finish folds into the web workout document and keeps unknown keys', async () => {
+  const clock = createClock(T0)
+  const base = baseWorkout()
+  const snapshot = JSON.parse(JSON.stringify(base))
+  const { session } = await started({ clock, base })
+  await session.commitSet({
+    eventId: 'warm',
+    exerciseId: 'bench',
+    setId: bench0,
+    fields: { w: 40, r: 5, warmup: true },
+  })
+  await session.commitSet({
+    eventId: 'work',
+    exerciseId: 'bench',
+    setId: bench1,
+    fields: { w: 60, r: 5 },
+  })
+  clock.advance(10 * 60 * 1000)
+  await session.putDraft(plannedSetId('row', 0), { w: 999, r: 99 })
+  const result = await session.finish({ eventId: 'finish-1' })
+  expect(result).toMatchObject({ ok: true, saved: true })
+
+  const finished = session.view().finished
+  expect(finished).toMatchObject({
+    id: 'w1',
+    d: '2026-11-07',
+    start: T0,
+    end: clock.now(),
+    name: 'Push',
+    bw: 80,
+    routineIds: ['routine-1'],
+    routineId: 'routine-1',
+    importedFrom: 'fitnotes',
+    prs: [],
+  })
+  expect(finished.entries).toHaveLength(1)
+  expect(finished.entries[0].id).toBe('bench')
+  expect(finished.entries[0].coachNote).toBe('keep-entry')
+  expect(finished.entries[0].target).toEqual({ sets: 2, reps: 5, weight: 60 })
+  expect(finished.entries[0].sets[0]).toMatchObject({ w: 40, r: 5, done: true, warmup: true, bar: 'texas' })
+  expect(finished.entries[0].sets[1]).toMatchObject({ w: 60, r: 5, done: true })
+  expect(JSON.stringify(finished)).not.toContain('999')
+  expect(finished.entries[0].topW).toBe(60)
+  expect(base).toEqual(snapshot)
+
+  const live = session.view()
+  expect(live.entries[0].sets[0].warmup).toBe(true)
+  expect(live.totals.warmupSets).toBe(1)
+  expect(live.totals.completedSets).toBe(2)
+  expect(live.totals.loadReps).toBe(40 * 5 + 60 * 5)
+})
+
+test('adding a set and moving an exercise replay in journal order', async () => {
+  const { session } = await started()
+  await session.addSet({ eventId: 'add-1', exerciseId: 'row', setId: 'drop-in', fields: { w: 50, r: 12 } })
+  await session.moveExercise({ eventId: 'move-1', exerciseId: 'row', toIndex: 0 })
+  await session.commitSet({ eventId: 'c-extra', exerciseId: 'row', setId: 'drop-in', fields: { w: 55, r: 10 } })
+  const view = session.view()
+  expect(view.entries.map(entry => entry.id)).toEqual(['row', 'bench'])
+  expect(view.entries[0].sets.map(set => set.setId)).toEqual([plannedSetId('row', 0), 'drop-in'])
+  expect(view.entries[0].sets[1].completed).toBe(true)
+  expect(view.entries[0].sets[1].row).toMatchObject({ w: 55, r: 10, done: true })
+  expect(view.entries[0].sets[0].completed).toBe(false)
+  expect(view.totals).toMatchObject({ completedSets: 1, reps: 10, loadReps: 550 })
+})

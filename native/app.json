@@ -2,18 +2,23 @@
   "expo": {
     "name": "openGym",
     "slug": "opengym",
+    "scheme": "opengym",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "io.github.michaelportale.opengym"
     },
-    "web": {
-      "favicon": "./assets/favicon.png"
-    },
     "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#161B20"
+        }
+      ],
       [
         "@kingstinct/react-native-healthkit",
         {
