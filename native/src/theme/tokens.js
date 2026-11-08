@@ -7,7 +7,7 @@ export const color = {
 export const glass = { fill: '#1C2229', alpha: 0.82, tint: 'dark', intensity: 40 }
 export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 }
 export const radius = { sm: 8, md: 12, lg: 16 }
-export const touch = { min: 44, primary: 56 }
+export const touch = { min: 44, row: 48, primary: 56 }
 export const type = {
   wordmark: { fontSize: 20, fontWeight: '400' },
   wordmarkStrong: { fontSize: 20, fontWeight: '700' },
@@ -16,10 +16,12 @@ export const type = {
   value: { fontSize: 17, fontWeight: '600', fontVariant: ['tabular-nums'] },
   heading: { fontSize: 17, fontWeight: '600' },
   body: { fontSize: 15, fontWeight: '400' },
-  label: { fontSize: 11, fontWeight: '500', letterSpacing: 0.8, textTransform: 'uppercase' },
+  label: { fontSize: 13, fontWeight: '500' },
+  lead: { fontSize: 34, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  screenTitle: { fontSize: 20, fontWeight: '700' },
   button: { fontSize: 17, fontWeight: '700' }
 }
-export const fontScale = { value: 1.3, timer: 1.3, label: 1.5, heading: 3 }
+export const fontScale = { value: 1.3, timer: 1.3, label: 1.5, heading: 3, lead: 1.3, screenTitle: 1.5 }
 export const motion = { press: 120, progress: 300 }
 export const pressScale = 0.97
 export const size = { icon: 22, marker: 24, progress: 6, stroke: 1 }
