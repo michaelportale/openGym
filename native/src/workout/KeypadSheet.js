@@ -13,7 +13,7 @@ const CHIPS = ['-10', '-5', '+5', '+10']
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'back']
 
 // A neutral key: ink on grey, never the accent.
-function Key({ text, label, hint, minHeight, onPress }) {
+function Key({ text, label, hint, minHeight, style = styles.key, onPress }) {
   const press = usePressScale()
   const [focused, setFocused] = useState(false)
   return (
@@ -24,7 +24,7 @@ function Key({ text, label, hint, minHeight, onPress }) {
       onPress={onPress}
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
-      style={styles.key}
+      style={style}
       {...press.handlers}
     >
       <Animated.View style={[styles.keyFace, { minHeight }, focusRingStyle(focused, Platform.OS, color.accent), press.style]}>
@@ -52,11 +52,11 @@ function Field({ title, text, active, onPress }) {
 // `initial` is { w, r } or, per side, { w, sides: { L: { r }, R: { r } } }. Save and Complete
 // hand over keypadValues (numbers or null). Closing by swipe, back or Close calls
 // onClose(values, changed) where `changed` is sheetCloseAction(...) === 'save'; the caller decides
-// whether to store a draft. `weightTitle` is 'Lb each' for a per-hand exercise.
-export default function KeypadSheet({ visible, title, initial, perSide, weightTitle = 'Lb', onSave, onComplete, onClose }) {
-  const [state, setState] = useState(() => keypadState(initial))
+// whether to store a draft. `initialField` is 'w' or 'r' (a tapped reps box opens on reps). `weightTitle` is 'Lb each' for a per-hand exercise.
+export default function KeypadSheet({ visible, title, initial, perSide, initialField = 'w', weightTitle = 'Lb', onSave, onComplete, onClose }) {
+  const [state, setState] = useState(() => keypadState(initial, initialField))
   useEffect(() => {
-    if (visible) setState(keypadState(initial))
+    if (visible) setState(keypadState(initial, initialField))
   }, [visible])
   const values = keypadValues(state)
   const press = key => () => setState(current => applyKey(current, key))
@@ -77,7 +77,7 @@ export default function KeypadSheet({ visible, title, initial, perSide, weightTi
         </View>
         <View style={styles.chips}>
           {CHIPS.map(chip => (
-            <Key key={chip} text={chip.replace('-', '−')} label={`${chip.startsWith('-') ? 'Minus' : 'Plus'} ${chip.slice(1)} pounds`} minHeight={touch.primary} onPress={press(`chip:${chip}`)} />
+            <Key key={chip} text={chip.replace('-', '−')} label={`${chip.startsWith('-') ? 'Minus' : 'Plus'} ${chip.slice(1)} pounds`} minHeight={touch.primary} style={styles.chip} onPress={press(`chip:${chip}`)} />
           ))}
         </View>
         <View style={styles.grid}>
@@ -108,6 +108,7 @@ const styles = StyleSheet.create({
   field: { flex: 1, minHeight: touch.primary, gap: space.xs, padding: space.md, backgroundColor: color.field, borderColor: color.stroke, borderWidth: size.stroke, borderRadius: radius.md },
   fieldActive: { borderColor: color.text },
   chips: { flexDirection: 'row', gap: space.sm },
+  chip: { flex: 1 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   key: { flexBasis: '31%', flexGrow: 1 },
   keyFace: { alignItems: 'center', justifyContent: 'center', backgroundColor: color.control, borderColor: color.stroke, borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.md },

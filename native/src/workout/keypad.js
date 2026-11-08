@@ -26,11 +26,14 @@ function commit(state) {
   return { ...writeField(state, state.field, parse(state.entry)), entry: null }
 }
 
-export function keypadState({ w = null, r = null, sides } = {}) {
+const validField = (field, sided) => (sided ? ['w', 'L.r', 'R.r'] : ['w', 'r']).includes(field)
+
+// `field` is the one the sheet opens on: 'w' by default, 'r' when the reps box was tapped.
+export function keypadState({ w = null, r = null, sides } = {}, field = 'w') {
   const sided = sides
     ? { L: { r: sides.L?.r ?? null }, R: { r: sides.R?.r ?? null } }
     : null
-  return { field: 'w', entry: null, w: w ?? null, r: sided ? null : (r ?? null), sides: sided }
+  return { field: validField(field, sided !== null) ? field : 'w', entry: null, w: w ?? null, r: sided ? null : (r ?? null), sides: sided }
 }
 
 export function keypadValues(state) {
@@ -42,6 +45,7 @@ export function keypadValues(state) {
 function type(state, key) {
   const text = state.entry ?? ''
   if (key === '.') {
+    if (state.field !== 'w') return state // reps are whole numbers
     if (state.entry !== null && text.includes('.')) return state
     return { ...state, entry: state.entry === null || text === '' ? '0.' : `${text}.` }
   }
@@ -57,7 +61,7 @@ function back(state) {
 
 function chip(state, amount) {
   const s = commit(state)
-  return { ...s, w: Math.max(0, (s.w ?? 0) + amount) }
+  return { ...s, w: Math.round(Math.max(0, (s.w ?? 0) + amount) * 1000) / 1000 }
 }
 
 function pick(state, field) {

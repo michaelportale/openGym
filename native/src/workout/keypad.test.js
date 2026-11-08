@@ -76,3 +76,22 @@ test('fieldText shows what is being typed, the value otherwise, and a dash when 
   expect(fieldText(sided, 'L.r')).toBe('12')
   expect(fieldText(sided, 'R.r')).toBe('–')
 })
+
+test('chips do not leave floating-point noise', () => {
+  expect(values(keypadState({ w: 20.1, r: 8 }), 'chip:-5').w).toBe(15.1)
+  expect(values(keypadState({ w: 5.1, r: 8 }), 'chip:-5').w).toBe(0.1)
+})
+test('the sheet can open on reps, and typing then replaces reps only', () => {
+  const out = values(keypadState({ w: 75, r: 8 }, 'r'), '1', '0')
+  expect(out).toEqual({ w: 75, r: 10 })
+  const sided = keypadState({ w: 25, sides: { L: { r: 12 }, R: { r: 12 } } }, 'R.r')
+  expect(values(sided, '9')).toEqual({ w: 25, sides: { L: { r: 12 }, R: { r: 9 } } })
+})
+test('a field that does not fit the set falls back to weight', () => {
+  expect(values(keypadState({ w: 75, r: 8 }, 'L.r'), '3').w).toBe(3)
+})
+test('reps stay whole numbers', () => {
+  expect(values(keypadState({ w: 75, r: 8 }), 'field:r', '8', '.', '5').r).toBe(85)
+  const sided = keypadState({ w: 25, sides: { L: { r: 12 }, R: { r: 12 } } })
+  expect(values(sided, 'field:L.r', '1', '.', '5').sides.L.r).toBe(15)
+})
