@@ -5,7 +5,7 @@ import { color, radius, space, touch } from '../theme/tokens'
 import AppText from '../ui/AppText'
 import { readVerdict } from '../health/gates'
 import { toSessionDbHandle } from '../storage/db-handle'
-import { runStorageProbe } from '../storage/probe'
+import { runStorageProbe, storageCheckLines } from '../storage/probe'
 import { removeGateWorkouts, runWorkoutGates } from '../health/run-gates'
 import {
   deleteWorkout,
@@ -94,16 +94,17 @@ export default function Diagnostics() {
   const storageCheck = () =>
     run(async () => {
       const expoDb = await openDatabaseAsync(PROBE_DATABASE_NAME)
-      let r
+      let outcome
+      const cleanupErrors = []
       try {
-        r = await runStorageProbe(toSessionDbHandle(expoDb))
-      } finally {
-        await expoDb.closeAsync()
-        await deleteDatabaseAsync(PROBE_DATABASE_NAME)
+        outcome = await runStorageProbe(toSessionDbHandle(expoDb))
+      } catch (e) {
+        outcome = { error: e }
       }
-      if (r.ok) return ['Storage check passed']
-      const failed = r.steps[r.steps.length - 1]
-      return ['Storage check failed at ' + failed.name + ': ' + failed.detail]
+      // Each cleanup step runs on its own so one failure neither skips the other nor hides the verdict.
+      try { await expoDb.closeAsync() } catch (e) { cleanupErrors.push(e) }
+      try { await deleteDatabaseAsync(PROBE_DATABASE_NAME) } catch (e) { cleanupErrors.push(e) }
+      return storageCheckLines(outcome, cleanupErrors)
     })
 
   return (

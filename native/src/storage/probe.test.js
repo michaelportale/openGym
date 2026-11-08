@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { createNodeSqliteDb } from '../../scripts/node-sqlite.mjs'
-import { runStorageProbe } from './probe.js'
+import { runStorageProbe, storageCheckLines } from './probe.js'
 
 describe('runStorageProbe', () => {
   test('a working database passes every step', async () => {
@@ -16,5 +16,21 @@ describe('runStorageProbe', () => {
     const result = await runStorageProbe(db)
     expect(result.ok).toBe(false)
     expect(result.steps).toEqual([{ name: 'append', ok: false, detail: 'disk full' }])
+  })
+})
+
+describe('storageCheckLines', () => {
+  test('a passed probe with a failed cleanup shows both lines', () => {
+    const lines = storageCheckLines({ ok: true, steps: [] }, [new Error('locked')])
+    expect(lines).toEqual(['Storage check passed', 'cleanup failed: locked'])
+  })
+
+  test('a failed probe with a clean cleanup shows only the failure line', () => {
+    const outcome = { ok: false, steps: [{ name: 'append', ok: false, detail: 'disk full' }] }
+    expect(storageCheckLines(outcome)).toEqual(['Storage check failed at append: disk full'])
+  })
+
+  test('a probe that threw is reported as failed', () => {
+    expect(storageCheckLines({ error: new Error('boom') })).toEqual(['Storage check failed: boom'])
   })
 })

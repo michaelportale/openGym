@@ -46,3 +46,22 @@ export async function runStorageProbe(handle) {
   }
   return { ok: true, steps: results }
 }
+
+const messageOf = e => (e && e.message) || String(e)
+
+// The lines the screen shows. The verdict comes first and always shows; a cleanup failure
+// (closing or deleting the scratch database) is a separate line and never replaces it.
+// outcome is runStorageProbe's result, or { error } if the probe itself threw.
+export function storageCheckLines(outcome, cleanupErrors = []) {
+  const lines = []
+  if (outcome.error !== undefined) {
+    lines.push('Storage check failed: ' + messageOf(outcome.error))
+  } else if (outcome.ok) {
+    lines.push('Storage check passed')
+  } else {
+    const failed = outcome.steps[outcome.steps.length - 1]
+    lines.push('Storage check failed at ' + failed.name + ': ' + failed.detail)
+  }
+  for (const e of cleanupErrors) lines.push('cleanup failed: ' + messageOf(e))
+  return lines
+}
