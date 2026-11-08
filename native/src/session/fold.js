@@ -358,7 +358,8 @@ function preserveUnknown(active, completed) {
     const src = (active.entries || []).find(item => item.id === entry.id) || {}
     const merged = { ...entry }
     for (const [key, value] of Object.entries(src)) {
-      if (key === 'sets') continue
+      // Shared finish cleanup owns sg, including deliberately removing it.
+      if (key === 'sets' || key === 'sg') continue
       if (!Object.prototype.hasOwnProperty.call(entry, key)) merged[key] = clone(value)
     }
     return merged

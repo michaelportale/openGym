@@ -94,6 +94,48 @@ test('a skipped set stays on an exercise that has other work, and an exercise wi
   expect(payload.workout.vol).toBe(300)
 })
 
+test('finishing one superset member drops its singleton tag and preserves extension metadata', async () => {
+  const base = baseWorkout()
+  base.extension = { source: 'synthetic-session', revision: 1 }
+  base.entries[0].extension = { source: 'synthetic-entry', flags: ['keep'] }
+  base.entries.forEach(entry => { entry.sg = 'superset-1' })
+  const finished = await sealed(base, async (session) => {
+    await session.commitSet({
+      eventId: 'bench-0',
+      exerciseId: 'bench',
+      setId: plannedSetId('bench', 0),
+      fields: { w: 60, r: 5 },
+    })
+  })
+  const payload = toWorkoutPayload(finished)
+
+  expect(payload.workout.entries.map(entry => entry.id)).toEqual(['bench'])
+  expect(payload.workout.entries[0]).not.toHaveProperty('sg')
+  expect(payload.workout.extension).toEqual({ source: 'synthetic-session', revision: 1 })
+  expect(payload.workout.entries[0].extension).toEqual({ source: 'synthetic-entry', flags: ['keep'] })
+})
+
+test('finishing both superset members keeps their grouping', async () => {
+  const base = baseWorkout()
+  base.entries.forEach(entry => { entry.sg = 'superset-1' })
+  const finished = await sealed(base, async (session) => {
+    for (const exerciseId of ['bench', 'row']) {
+      await session.commitSet({
+        eventId: `${exerciseId}-0`,
+        exerciseId,
+        setId: plannedSetId(exerciseId, 0),
+        fields: { w: 60, r: 5 },
+      })
+    }
+  })
+  const payload = toWorkoutPayload(finished)
+
+  expect(payload.workout.entries.map(({ id, sg }) => ({ id, sg }))).toEqual([
+    { id: 'bench', sg: 'superset-1' },
+    { id: 'row', sg: 'superset-1' },
+  ])
+})
+
 test('warm-up sets stay flagged and are left out of top weight and volume', async () => {
   const base = baseWorkout()
   base.entries[0].sets = [
