@@ -21,4 +21,9 @@ describe('effectiveBodyweight', () => {
     expect(effectiveBodyweight({ copy: null, snapshot, pending: [], deleted: {} })).toEqual(snapshot)
     expect(effectiveBodyweight({ copy: null, pending: [], deleted: {} })).toEqual([])
   })
+  it("takes the copy's deletion stamps when none are passed: an older pending set stays hidden, a newer one shows", () => {
+    const removed = { state: { bodyweight: [{ d: '2026-11-07', w: 181, t: 1 }], deleted: { bodyweight: { '2026-11-08': 10 } } } }
+    expect(effectiveBodyweight({ copy: removed, pending: [{ d: '2026-11-08', op: 'set', w: 180, t: 10 }] }).map(e => e.d)).toEqual(['2026-11-07'])
+    expect(effectiveBodyweight({ copy: removed, pending: [{ d: '2026-11-08', op: 'set', w: 180, t: 11 }] }).map(e => e.d)).toEqual(['2026-11-07', '2026-11-08'])
+  })
 })

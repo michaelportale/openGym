@@ -29,15 +29,17 @@ test('a flat series has a non-zero span', () => {
   expect(finite(m)).toBe(true)
 })
 
+const NOW_2026 = new Date(2026, 10, 9, 12).getTime()
+
 test('time maps to pad..width-pad, higher values sit higher', () => {
-  const m = chartModel({ points: pts([10, 20, 30]), width: 300, height: 100, pad: 8 })
+  const m = chartModel({ points: pts([10, 20, 30]), width: 300, height: 100, pad: 8, now: NOW_2026 })
   expect(m.dots[0].x).toBe(8)
   expect(m.dots[2].x).toBe(292)
   expect(m.dots[1].x).toBe(150)
   expect(m.dots[0].y).toBe(92)
   expect(m.dots[2].y).toBe(8)
-  expect(m.xFirst).toBe('2026-01-01')
-  expect(m.xLast).toBe('2026-01-03')
+  expect(m.xFirst).toBe('Jan 1')
+  expect(m.xLast).toBe('Jan 3')
 })
 
 test('uneven spacing is by time, not index', () => {
@@ -106,4 +108,11 @@ test('dotsOnly draws the dots and no line, even with a trend', () => {
   expect(m.line).toBeNull()
   expect(m.dots).toHaveLength(2)
   expect(chartModel({ points, trend: [{ t: 0, y: 12 }, { t: DAY, y: 18 }], dotsOnly: true, width: 300, height: 100 }).line).toBeNull()
+})
+
+test('the x labels carry the year when it is not this one', () => {
+  const points = [{ t: 0, y: 1, d: '2025-12-30' }, { t: 3 * DAY, y: 2, d: '2026-01-02' }]
+  const m = chartModel({ points, width: 300, height: 100, now: NOW_2026 })
+  expect(m.xFirst).toBe('Dec 30, 2025')
+  expect(m.xLast).toBe('Jan 2')
 })

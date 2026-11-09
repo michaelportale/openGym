@@ -21,7 +21,7 @@ describe('exerciseHistoryView', () => {
       wk(7, [{ id: lift.id, sets: [set(185, 5), set(185, 5), set(185, 4)] }]),
       wk(1, [{ id: lift.id, sets: [set(175, 5)] }]),
     ] }
-    const v = exerciseHistoryView(state, lift.id)
+    const v = exerciseHistoryView(state, lift.id, { now: NOW })
     expect(v.metric).toBe('top')
     expect(v.canToggle).toBe(true)
     expect(v.chart.points.map(p => p.y)).toEqual([135, 185, 175])
@@ -32,6 +32,22 @@ describe('exerciseHistoryView', () => {
     expect(e.metric).toBe('e1rm')
     expect(e.chart.points).toHaveLength(3)
     expect(e.chart.points[0].y).toBeGreaterThan(135)
+  })
+
+  it('cannot toggle with one session: neither chart draws, so Est. 1RM would change nothing', () => {
+    const state = { workouts: [wk(3, [{ id: lift.id, sets: [set(135, 5)] }])] }
+    const v = exerciseHistoryView(state, lift.id, { metric: 'e1rm' })
+    expect(v.canToggle).toBe(false)
+    expect(v.metric).toBe('top')
+    expect(v.chart.points).toHaveLength(1)
+  })
+
+  it('puts the year on sessions from another year', () => {
+    const state = { workouts: [
+      { id: 'old', d: '2025-03-04', start: Date.UTC(2025, 2, 4, 12), entries: [{ id: lift.id, sets: [set(95, 5)] }] },
+      wk(1, [{ id: lift.id, sets: [set(135, 5)] }]),
+    ] }
+    expect(exerciseHistoryView(state, lift.id, { now: NOW }).sessions.map(s => s.label)).toEqual(['Nov 8', 'Mar 4, 2025'])
   })
 
   it('cannot toggle a reps-only lift', () => {

@@ -1,7 +1,7 @@
 // The model behind "Your history" on an exercise's screen: the chart series, whether Est. 1RM
 // can be shown, and the recent sessions as plain lines. Pure; the screen renders it.
 import { exerciseHistory } from '../shared/training.js'
-import { shortDate } from '../ui/dates.js'
+import { dayLabel } from '../ui/dates.js'
 
 // A per-side set contributes the sides that were done; any other row is one set.
 const flat = rows => rows.flatMap(s => (s?.sides ? [s.sides.L, s.sides.R].filter(x => x?.done === true) : [s]))
@@ -15,10 +15,11 @@ function setText(s, mode) {
 }
 
 /** @returns {null | { chart: { points: object[] }, canToggle: boolean, metric: 'top'|'e1rm', sessions: { d: string, label: string, sets: string, pr: boolean }[] }} */
-export function exerciseHistoryView(state, id, { metric = 'top' } = {}) {
+export function exerciseHistoryView(state, id, { metric = 'top', now = Date.now() } = {}) {
   const h = exerciseHistory.exerciseHistory(state || {}, id)
   if (!h.sessions.length) return null
-  const canToggle = h.e1rmPoints.length > 0
+  // The chart needs two points: with one session there is nothing for Est. 1RM to change.
+  const canToggle = h.e1rmPoints.length > 1
   const shown = canToggle && metric === 'e1rm' ? 'e1rm' : 'top'
   return {
     chart: { points: shown === 'e1rm' ? h.e1rmPoints : h.points },
@@ -26,7 +27,7 @@ export function exerciseHistoryView(state, id, { metric = 'top' } = {}) {
     metric: shown,
     sessions: h.sessions.map(s => ({
       d: s.d,
-      label: shortDate(s.d, { year: false }),
+      label: dayLabel(s.d, now),
       sets: flat(s.sets).map(x => setText(x, s.mode)).join(', '),
       pr: !!s.pr,
     })),

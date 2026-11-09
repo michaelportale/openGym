@@ -165,7 +165,8 @@ const styles = StyleSheet.create({
   why: { minHeight: touch.min, justifyContent: 'center' },
   whyFace: { paddingHorizontal: space.sm },
   sessionRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
-  sessionDate: { width: 56 },
+  // Sized to its text: 'Nov 9' fits 56 pt, a date from another year ('Nov 9, 2025') takes more.
+  sessionDate: { minWidth: 56 },
   sessionSets: { flexShrink: 1, flexGrow: 1 },
   step: { marginTop: space.sm }
 })

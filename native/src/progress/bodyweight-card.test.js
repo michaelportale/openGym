@@ -69,12 +69,18 @@ describe('bodyweightCard', () => {
     bw[9] = { ...bw[9], src: 'health' }
     const c = bodyweightCard({ bodyweight: bw, range: 90, now: NOW })
     expect(c.recent).toHaveLength(7)
-    expect(c.recent[0]).toEqual({ d: '2026-11-09', label: 'Nov 9', weight: 178.2, health: true })
+    expect(c.recent[0]).toEqual({ d: '2026-11-09', label: 'Nov 9', weight: '178.2 lb', health: true })
     expect(c.recent[1]).toMatchObject({ d: '2026-11-08', label: 'Nov 8', health: false })
+  })
+  it('shows recent weights to one decimal, as the Today line does, and the year when it is not this one', () => {
+    const bw = [{ d: '2025-12-31', w: 185.25, t: 1 }, { d: '2026-11-09', w: 184, t: NOW }]
+    const c = bodyweightCard({ bodyweight: bw, range: 0, now: NOW })
+    expect(c.recent.map(r => [r.label, r.weight])).toEqual([['Nov 9', '184.0 lb'], ['Dec 31, 2025', '185.3 lb']])
+    expect(bodyweightCard({ bodyweight: [{ d: '2026-11-09', w: 'x' }], range: 0, now: NOW }).recent[0].weight).not.toMatch(/NaN/)
   })
   it('shows a pending typed weigh-in in recent', () => {
     const bw = [...series(4), { d: '2026-11-10', w: 175.5, t: NOW + 86400000 }]
     const c = bodyweightCard({ bodyweight: bw, range: 0, now: NOW + 86400000 })
-    expect(c.recent[0]).toMatchObject({ d: '2026-11-10', label: 'Nov 10', weight: 175.5, health: false })
+    expect(c.recent[0]).toMatchObject({ d: '2026-11-10', label: 'Nov 10', weight: '175.5 lb', health: false })
   })
 })

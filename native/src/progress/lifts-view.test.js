@@ -33,6 +33,12 @@ describe('liftsView', () => {
     const [lift] = liftsView(state, { now: NOW }).lifts
     expect(lift).toMatchObject({ id: C.id, value: 12, label: '12 reps' })
   })
+  it('labels a timed lift in seconds and a cardio one in minutes', () => {
+    const timed = { workouts: [wk(3, [{ id: C.id, sets: [{ done: true, sec: 45 }, { done: true, sec: 60 }] }])] }
+    expect(liftsView(timed, { now: NOW }).lifts[0]).toMatchObject({ id: C.id, value: 60, label: '60 s' })
+    const cardio = { workouts: [wk(3, [{ id: C.id, sets: [{ done: true, min: 20 }] }])] }
+    expect(liftsView(cardio, { now: NOW }).lifts[0]).toMatchObject({ id: C.id, value: 20, label: '20 min' })
+  })
   it('counts a workout with no id', () => {
     const w = { d: day(3), start: NOW - 3 * 86400000, entries: [{ id: A.id, sets: sets(120) }] }
     const [lift] = liftsView({ workouts: [w] }, { now: NOW }).lifts

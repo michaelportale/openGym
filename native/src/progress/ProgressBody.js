@@ -89,7 +89,7 @@ export default function ProgressBody({ children }) {
                   <View key={r.d} style={styles.row}>
                     <AppText variant="body" style={styles.grow}>{r.label}</AppText>
                     {r.health ? <AppText variant="label" color={color.textMuted}>Health</AppText> : null}
-                    <AppText variant="value">{r.weight} lb</AppText>
+                    <AppText variant="value">{r.weight}</AppText>
                   </View>
                 ))}
               </View>
@@ -114,9 +114,9 @@ export default function ProgressBody({ children }) {
       ) : null}
 
       {status === 'ready' && (lifts.loading || lifts.rows.length) ? (
-        <Card style={styles.card}>
+        <Card style={[styles.card, styles.lifts]}>
           <AppText variant="heading" accessibilityRole="header">Your lifts</AppText>
-          {lifts.loading ? <AppText variant="body" color={color.textSecondary}>Loading…</AppText> : null}
+          {lifts.loading ? <AppText variant="body" color={color.textSecondary} style={styles.wait}>Loading…</AppText> : null}
           {lifts.rows.map(l => (
             <Pressable
               key={l.id}
@@ -148,5 +148,9 @@ const styles = StyleSheet.create({
   chip: { minHeight: touch.min, minWidth: touch.min, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.md, borderRadius: radius.sm, backgroundColor: color.control },
   chipOn: { backgroundColor: color.accent },
   recent: { gap: space.sm },
-  lift: { minHeight: touch.row }
+  // The rows' own 48-pt touch height spaces them: the card's gap and full bottom padding left a
+  // band under the last row (and about 1,800 pt of extra scrolling at 150 lifts).
+  lifts: { gap: 0, paddingBottom: space.xs },
+  lift: { minHeight: touch.row },
+  wait: { paddingVertical: space.md }
 })

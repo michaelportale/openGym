@@ -1,6 +1,8 @@
 // Pure chart maths for LineChart. points / trend: [{ t: ms, y: number, d?: 'YYYY-MM-DD' }], in
 // any order: x runs from the earliest point to the latest. dotsOnly: the dots and no line.
-// Every number returned is finite, rounded to 0.1.
+// Every number returned is finite, rounded to 0.1. xFirst / xLast are short dates, with the year
+// when it is not the year of `now`.
+import { dayLabel } from './dates.js'
 
 const r1 = (n) => Math.round(n * 10) / 10
 const finite = (n, fallback) => (Number.isFinite(n) ? n : fallback)
@@ -11,7 +13,7 @@ function dateOf(p) {
   return Number.isNaN(ms.getTime()) ? '' : ms.toISOString().slice(0, 10)
 }
 
-export function chartModel({ points, trend = null, goal = null, dotsOnly = false, width, height, pad = 8 }) {
+export function chartModel({ points, trend = null, goal = null, dotsOnly = false, width, height, pad = 8, now = Date.now() }) {
   if (!Array.isArray(points) || points.length === 0) return null
   const pts = points.filter((p) => Number.isFinite(p.t) && Number.isFinite(p.y))
   if (pts.length === 0) return null
@@ -55,7 +57,7 @@ export function chartModel({ points, trend = null, goal = null, dotsOnly = false
     goalY: hasGoal ? yOf(goal) : null,
     yMin,
     yMax,
-    xFirst: dateOf(first),
-    xLast: dateOf(last)
+    xFirst: dayLabel(dateOf(first), now),
+    xLast: dayLabel(dateOf(last), now)
   }
 }
