@@ -94,8 +94,8 @@ cd api && DATA_DIR=../data node scripts/pair-code.mjs        # bare metal (add P
 
 It prints `Pairing code: XXXXXXXX`; enter it on the phone within 5 minutes, exactly as you would
 the code from Settings. Plain http (the app takes it only for a private address) sends the sign-in
-token unencrypted, so it is only for a server and phone that stay on your own network; otherwise
-enter the https address you open the web app at. With more than one profile, say which:
+token unencrypted after every Finish to that address, on whatever network the phone is on, so pair
+over https. Use plain http only for a test server that holds nothing you would mind losing. With more than one profile, say which:
 `--user <name>` (a profile id works too); without it the command lists the names and stops. It
 needs the server running, refuses a disabled profile, and prints only the code — never the secret
 or a session token. A code made this way is the same as one made in Settings, so "sign out
