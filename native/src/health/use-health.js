@@ -4,12 +4,14 @@ import { createSqliteFinishedWorkouts } from '../session/finished-workouts'
 import { createHealthSync } from './health-sync'
 import { createSqliteHealthStore } from './health-store'
 import * as adapter from './healthkit'
+import { shouldSyncOnForeground } from '../sync/sync-triggers'
 
 // The one Health engine for the app, built on first use from the app database. A failed build is
 // not remembered: the next call tries again. Nothing here reaches the session journal.
 let engine = null
 let current = null // the latest status, or null before the first read
 let readNo = 0
+let lastAttemptAt = null
 const watchers = new Set()
 
 export function getHealth() {
@@ -35,6 +37,7 @@ export function getHealth() {
 
 // Read the status again and tell the screens. Only the newest read counts.
 function refresh() {
+  if (watchers.size === 0) return Promise.resolve() // nobody is looking: no read
   const no = ++readNo
   return getHealth()
     .then(health => health.status())
@@ -48,11 +51,16 @@ function refresh() {
 
 // After a durable Finish. Never awaited by the caller's write.
 export function healthAfterFinish() {
+  lastAttemptAt = Date.now()
   return getHealth().then(health => health.run()).catch(() => {})
 }
 
-// Back in the app. A pass with nothing to do makes no HealthKit call.
+// Back in the app: at most once a minute, like the server sync (shouldSyncOnForeground). A pass
+// with nothing to do makes no HealthKit call.
 export function healthOnForeground() {
+  const now = Date.now()
+  if (!shouldSyncOnForeground({ paired: true, lastAt: lastAttemptAt, now })) return Promise.resolve()
+  lastAttemptAt = now
   return getHealth().then(health => health.run()).catch(() => {})
 }
 

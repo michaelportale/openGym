@@ -26,7 +26,7 @@ export default function HealthSection() {
     }
     Alert.alert(
       'Turn off Apple Health?',
-      'Workouts already in Apple Health can stay there, or openGym can remove the ones it wrote.',
+      'Workouts already in Apple Health can stay there, or openGym can remove the ones it wrote. Turning Apple Health back on only sends workouts finished on this install.',
       [
         { text: "Keep what's there", onPress: () => settle({ intended: false, run: () => disable({ remove: false }) }) },
         { text: "Also remove openGym's workouts", style: 'destructive', onPress: () => settle({ intended: false, run: () => disable({ remove: true }) }) },
@@ -68,7 +68,8 @@ export default function HealthSection() {
 }
 
 const styles = StyleSheet.create({
-  section: { alignSelf: 'stretch', gap: space.md, paddingHorizontal: space.lg },
+  // marginTop: the same space.xl above the header that "Your server" gets from the screen's top padding, less the screen's own gap.
+  section: { alignSelf: 'stretch', gap: space.md, paddingHorizontal: space.lg, marginTop: space.xl - space.xs },
   card: { padding: space.lg, gap: space.xs },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   secondary: {

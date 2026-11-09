@@ -183,17 +183,20 @@ export function createHealthSync({ adapter, store, workouts, now }) {
     }
     try {
       result.on = await isOn()
+      let failed = null
       const current = await links.list('w')
       result.exported = current.filter((l) => l.state === 'exported').length
-      const rows = await workouts.list()
-      result.skipped = rows.filter((d) => !exportable(d)).length
-      // Only links a fresh plan would act on: a failure that no longer matters does not stick.
-      const plan = planWorkoutExport({ rows, links: current, now: now() })
-      if (result.on) result.waiting = plan.save.length
-      const removing = new Set(plan.remove.map((r) => r.key))
-      const failed = current
-        .filter((l) => l.error && (l.state === 'pending' || removing.has(l.key)))
-        .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))[0]
+      if (result.on) {
+        const rows = await workouts.list()
+        result.skipped = rows.filter((d) => !exportable(d)).length
+        // Only links a fresh plan would act on: a failure that no longer matters does not stick.
+        const plan = planWorkoutExport({ rows, links: current, now: now() })
+        result.waiting = plan.save.length
+        const removing = new Set(plan.remove.map((r) => r.key))
+        failed = current
+          .filter((l) => l.error && (l.state === 'pending' || removing.has(l.key)))
+          .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))[0]
+      }
       result.error = failed ? failed.error : lastError || (await state.get('error')) || heldError || null
     } catch {
       // keep what was read so far

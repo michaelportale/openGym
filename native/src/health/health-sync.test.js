@@ -69,6 +69,16 @@ test('off: run writes nothing and reads nothing', async () => {
   expect((await health.status()).on).toBe(false)
 })
 
+test('off: run and status never list the finished workouts', async () => {
+  const { workouts, health } = await setup()
+  let lists = 0
+  const list = workouts.list.bind(workouts)
+  workouts.list = async () => { lists++; return list() }
+  await health.run()
+  await health.status()
+  expect(lists).toBe(0)
+})
+
 test('enable then run saves each finished workout once; a second run saves nothing', async () => {
   const { adapter, store, health } = await setup(['w1', 'w2'])
   await health.enable()
