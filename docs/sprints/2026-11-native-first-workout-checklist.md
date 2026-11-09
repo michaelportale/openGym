@@ -159,7 +159,7 @@ Phases 7A (text side) and 7B. Do it before the wipe, with the Release build. Thi
 
 ## 13. Plan
 
-Phase 7C. Do it before the wipe, with the Release build. The phone is unpaired here, so the Plan tab edits the routines bundled in this build and nothing reaches a server; the checks that sync an edit to the web come after the cutover, in step 15. Open the Plan tab.
+Phase 7C. Do it before the wipe, with the Release build. The phone is unpaired here, so the Plan tab edits the routines bundled in this build and nothing reaches a server; the checks that sync an edit to the web come after the cutover, in step 15. These edits stay on the phone, waiting to sync, until the wipe in step 15 deletes the app and discards them, so do not pair the real server before the wipe: pairing would send them. Open the Plan tab.
 
 - [ ] The tab. "How you train" shows "Rotation" with a "Next" tag on one routine, or "Fixed week", or nothing if no schedule is set. "Your routines" lists each routine with its exercise count.
 - [ ] Open a routine. Tap one in "Your routines". Each exercise row shows its name and a target line like the web's, with an up and a down button. The first row's up button and the last row's down button are disabled.
