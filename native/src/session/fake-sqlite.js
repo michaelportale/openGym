@@ -1,3 +1,4 @@
+// Its statement matching is loose; the real-driver (node:sqlite) tests are authoritative for the schema.
 // A tiny database double for the session adapter and the finished-workout store.
 // It understands only the statements those files send, including a single transaction
 // so clear() can roll back.
@@ -84,9 +85,9 @@ export function createFakeSqliteDb() {
       return { changes: 1 }
     }
     if (/^ALTER TABLE finished_workouts ADD COLUMN acked_at TEXT$/i.test(text)) return { changes: 0 }
-    if (/^UPDATE finished_workouts SET acked_at = \? WHERE id = \?$/i.test(text)) {
+    if (/^UPDATE finished_workouts SET acked_at = \? WHERE id = \? AND acked_at IS NULL$/i.test(text)) {
       const row = tables.finished_workouts.find(item => item.id === params[1])
-      if (!row) return { changes: 0 }
+      if (!row || row.acked_at != null) return { changes: 0 }
       row.acked_at = params[0]
       return { changes: 1 }
     }

@@ -13,8 +13,10 @@ function nameOf(id, builtIn, custom) {
   return null
 }
 
+const BUILT_IN = new Map(exercises.EXDB.map(e => [e.id, e]))
+
 function namesFor(state) {
-  const builtIn = new Map(exercises.EXDB.map(e => [e.id, e]))
+  const builtIn = BUILT_IN
   const custom = new Map((state.customEx ?? []).map(e => [e.id, e]))
   const names = {}
   const note = id => {
@@ -33,4 +35,14 @@ export function screenSource({ copy, bundled, pending }) {
   const held = new Set((copy.state.workouts ?? []).map(w => w.id))
   const state = sessionState(copy, (pending ?? []).filter(w => !held.has(w.id)))
   return { state, names: namesFor(state) }
+}
+
+// The stored copy, or null if reading it fails (a corrupt body): the screen then shows the
+// phone's own workouts and the sync engine re-pulls to repair.
+export async function readCopy(serverCopy) {
+  try {
+    return await serverCopy.get()
+  } catch {
+    return null
+  }
 }

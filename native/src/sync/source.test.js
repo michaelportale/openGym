@@ -1,6 +1,8 @@
 import { expect, test } from 'vitest'
-import { screenSource } from './source.js'
+import { readCopy, screenSource } from './source.js'
 import { sessionState } from '../workout/history-state.js'
+import { createNodeSqliteDb } from '../../scripts/node-sqlite.mjs'
+import { createSqliteServerCopy } from './server-copy.js'
 import { exercises } from '../shared/training.js'
 
 const builtIn = exercises.EXDB[0]
@@ -51,4 +53,15 @@ test('paired: history ids get a name where one is known, unknown ids none', () =
   const out = screenSource({ copy, bundled, pending: [] })
   expect(out.names[builtIn.id].name).toBe(cap(builtIn.n))
   expect(out.names.ghost).toBeUndefined()
+})
+
+test('readCopy gives the copy, and null when the read throws or the body is corrupt', async () => {
+  const good = { state: {}, rev: 1 }
+  expect(await readCopy({ get: async () => good })).toBe(good)
+  expect(await readCopy({ get: async () => { throw new SyntaxError('bad json') } })).toBeNull()
+  const db = createNodeSqliteDb()
+  const store = createSqliteServerCopy(db)
+  await store.put({ state: {}, rev: 1, wid: 'w', pulledAt: 't' })
+  await db.run('UPDATE server_copy SET body = ?', ['{not json'])
+  expect(await readCopy(store)).toBeNull()
 })

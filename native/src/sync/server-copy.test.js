@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest'
 import { SQLITE_DRIVERS } from '../../scripts/node-sqlite.mjs'
+import { buildPush } from './outbox.js'
 import { createSqliteServerCopy, createSqliteSyncMeta } from './server-copy.js'
 
 const state = {
@@ -43,4 +44,24 @@ test.each(SQLITE_DRIVERS)('%s: sync_meta stores, replaces and clears keys', asyn
   await again.clear()
   expect(await again.get('server')).toBeNull()
   expect(await again.get('profile')).toBeNull()
+})
+
+test.each(SQLITE_DRIVERS)('%s: put, get, then buildPush keeps everything but workouts', async (_n, createDb) => {
+  const doc = {
+    ...state,
+    deleted: { workouts: ['gone'] },
+    edited: { w1: { at: 5 } },
+    _wid: 'wid-9',
+    _wids: ['wid-9', 'wid-8'],
+  }
+  const copy = createSqliteServerCopy(createDb())
+  await copy.put({ state: doc, rev: 7, wid: 'wid-9', pulledAt: 't' })
+  const got = await copy.get()
+  const push = buildPush(got, [{ id: 'new', d: '2026-11-09' }])
+  const { workouts, ...rest } = push.state
+  const { workouts: original, ...restOriginal } = doc
+  expect(rest).toEqual(restOriginal)
+  expect(workouts).toEqual([...original, { id: 'new', d: '2026-11-09' }])
+  expect(push.baseRev).toBe(7)
+  expect(push.baseWid).toBe('wid-9')
 })

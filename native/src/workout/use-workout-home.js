@@ -4,7 +4,7 @@ import { openAppDatabase } from '../storage/database'
 import { createSqliteFinishedWorkouts } from '../session/finished-workouts'
 import { createSqliteSessionStorage } from '../session/sqlite-storage'
 import { createSqliteServerCopy } from '../sync/server-copy'
-import { screenSource } from '../sync/source'
+import { readCopy, screenSource } from '../sync/source'
 import { nextRoutineId } from './next-up'
 import { buildSessionBase } from './start-session'
 
@@ -30,7 +30,7 @@ export function useWorkoutHome() {
       const finished = createSqliteFinishedWorkouts(db)
       const workouts = await finished.list()
       // Paired: the server copy, plus the workouts it has not acked. Not paired: as before.
-      const copy = await createSqliteServerCopy(db).get()
+      const copy = await readCopy(createSqliteServerCopy(db))
       const pending = copy ? await finished.listPending() : workouts
       const { state, names } = screenSource({ copy, bundled: snapshot, pending })
       const stored = await createSqliteSessionStorage(db).readBase()

@@ -220,3 +220,40 @@ test('a fresh table has acked_at from the schema and needs no ALTER', async () =
   await createSqliteFinishedWorkouts(db).listPending()
   expect(db.executed.some(sql => /ALTER TABLE/i.test(sql))).toBe(false)
 })
+
+test.each(SQLITE_DRIVERS.filter(([name]) => name !== 'fake sqlite'))('%s: two stores opened at once on a pre-Phase-5 table both work, and a reopen is fine', async (_n, createDb) => {
+  let db = createDb()
+  await db.exec('CREATE TABLE finished_workouts (id TEXT PRIMARY KEY, d TEXT NOT NULL, body TEXT NOT NULL);')
+  for (const id of ['o1', 'o2']) {
+    await db.run('INSERT INTO finished_workouts (id, d, body) VALUES (?, ?, ?)', [id, '2026-10-01', JSON.stringify(workout(id, '2026-10-01'))])
+  }
+  const a = createSqliteFinishedWorkouts(db)
+  const b = createSqliteFinishedWorkouts(db)
+  const [la, lb] = await Promise.all([a.list(), b.listPending()])
+  expect(la.map(w => w.id)).toEqual(['o1', 'o2'])
+  expect(lb.map(w => w.id)).toEqual(['o1', 'o2'])
+
+  db = db.reopen()
+  expect((await createSqliteFinishedWorkouts(db).listPending()).map(w => w.id)).toEqual(['o1', 'o2'])
+})
+
+test('a duplicate-column error from the ALTER is treated as done', async () => {
+  const db = createNodeSqliteDb()
+  await db.exec('CREATE TABLE finished_workouts (id TEXT PRIMARY KEY, d TEXT NOT NULL, body TEXT NOT NULL);')
+  // another connection added the column between the check and the ALTER
+  const realRun = db.run
+  db.run = async (sql, params) => {
+    if (/ALTER TABLE/i.test(sql)) await realRun('ALTER TABLE finished_workouts ADD COLUMN acked_at TEXT')
+    return realRun(sql, params)
+  }
+  expect(await createSqliteFinishedWorkouts(db).listPending()).toEqual([])
+})
+
+test('a second ack keeps the first time', async () => {
+  const db = createNodeSqliteDb()
+  const store = createSqliteFinishedWorkouts(db)
+  await store.put(workout('a', '2026-11-05'))
+  await store.markAcked(['a'], 'FIRST')
+  await store.markAcked(['a'], 'SECOND')
+  expect(await db.getAll('SELECT acked_at FROM finished_workouts WHERE id = ?', ['a'])).toEqual([{ acked_at: 'FIRST' }])
+})

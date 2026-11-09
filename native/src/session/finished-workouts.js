@@ -32,7 +32,7 @@ function byDateThenId(a, b) {
 
 export function createMemoryFinishedWorkouts() {
   const rows = new Map()
-  const acked = new Set()
+  const acked = new Map()
   return {
     async put(workout) {
       requireWorkout(workout)
@@ -51,7 +51,7 @@ export function createMemoryFinishedWorkouts() {
       return [...rows.values()].filter(row => !acked.has(row.id)).sort(byDateThenId).map(copy)
     },
     async markAcked(ids, at) {
-      for (const id of ids) if (rows.has(id)) acked.add(id)
+      for (const id of ids) if (rows.has(id) && !acked.has(id)) acked.set(id, at)
       return { ok: true }
     },
   }
@@ -63,27 +63,37 @@ function requireDb(db) {
   }
 }
 
+// One schema/migration run per db handle, shared by every store made on it (several screens
+// each make their own), so two opens cannot both try the ALTER.
+const migrations = new WeakMap()
+
+function migrate(db) {
+  let opening = migrations.get(db)
+  if (!opening) {
+    opening = (async () => {
+      await db.exec(FINISHED_WORKOUTS_SCHEMA)
+      // A table made before Phase 5 has no acked_at: add it once. Its rows stay NULL, so
+      // every workout already on the phone is still to be sent.
+      const columns = await db.getAll('PRAGMA table_info(finished_workouts)')
+      if (!columns.some(column => column.name === 'acked_at')) {
+        try {
+          await db.run('ALTER TABLE finished_workouts ADD COLUMN acked_at TEXT')
+        } catch (error) {
+          if (!/duplicate column/i.test(String(error?.message))) throw error
+        }
+      }
+    })().catch(error => {
+      migrations.delete(db)
+      throw error
+    })
+    migrations.set(db, opening)
+  }
+  return opening
+}
+
 export function createSqliteFinishedWorkouts(db) {
   requireDb(db)
-  let opening = null
-
-  function ready() {
-    if (!opening) {
-      opening = (async () => {
-        await db.exec(FINISHED_WORKOUTS_SCHEMA)
-        // A table made before Phase 5 has no acked_at: add it once. Its rows stay NULL, so
-        // every workout already on the phone is still to be sent.
-        const columns = await db.getAll('PRAGMA table_info(finished_workouts)')
-        if (!columns.some(column => column.name === 'acked_at')) {
-          await db.run('ALTER TABLE finished_workouts ADD COLUMN acked_at TEXT')
-        }
-      })().catch(error => {
-        opening = null
-        throw error
-      })
-    }
-    return opening
-  }
+  const ready = () => migrate(db)
 
   return {
     async put(workout) {
@@ -114,7 +124,7 @@ export function createSqliteFinishedWorkouts(db) {
     },
     async markAcked(ids, at) {
       await ready()
-      for (const id of ids) await db.run('UPDATE finished_workouts SET acked_at = ? WHERE id = ?', [at, id])
+      for (const id of ids) await db.run('UPDATE finished_workouts SET acked_at = ? WHERE id = ? AND acked_at IS NULL', [at, id])
       return { ok: true }
     },
   }
