@@ -25,26 +25,26 @@ export default function WorkoutDock({ dock, perHand, onLayout, inline, onPrimary
       <GlassPanel style={styles.panel}>
         {/* One mode is mounted at a time, so the measured height is never doubled; the new one fades in. */}
         <Animated.View key={resting ? 'rest' : 'set'} entering={entering} style={styles.mode}>
-        {resting ? (
-          <RestPanel lead={dock.lead} sub={dock.sub} label={spoken} paused={dock.paused} onPause={onPause} onResume={onResume} onAddTime={onAddTime} onSkip={onSkip} />
-        ) : (
-          <>
-            {tappable ? (
-              <ScaleButton
-                accessibilityLabel={spoken}
-                accessibilityHint="Opens the keypad to change the weight or reps."
-                onPress={onPressLead}
-                faceStyle={styles.lead}
-              >
-                <AppText variant="lead" color={color.text}>{dock.lead}</AppText>
-              </ScaleButton>
-            ) : (
-              <AppText variant="lead" color={color.text} accessibilityLabel={spoken}>{dock.lead}</AppText>
-            )}
-            <PrimaryButton label={dock.primaryLabel} disabled={busy} accessibilityHint={spokenPrimaryHint(dock.mode, { side: dock.side })} onPress={onPrimary} />
-            {children}
-          </>
-        )}
+          {resting ? (
+            <RestPanel lead={dock.lead} sub={dock.sub} label={spoken} paused={dock.paused} onPause={onPause} onResume={onResume} onAddTime={onAddTime} onSkip={onSkip} />
+          ) : (
+            <>
+              {tappable ? (
+                <ScaleButton
+                  accessibilityLabel={spoken}
+                  accessibilityHint="Opens the keypad to change the weight or reps."
+                  onPress={onPressLead}
+                  faceStyle={styles.lead}
+                >
+                  <AppText variant="lead" color={color.text}>{dock.lead}</AppText>
+                </ScaleButton>
+              ) : (
+                <AppText variant="lead" color={color.text} accessibilityLabel={spoken}>{dock.lead}</AppText>
+              )}
+              <PrimaryButton label={dock.primaryLabel} disabled={busy} accessibilityHint={spokenPrimaryHint(dock.mode, { side: dock.side })} onPress={onPrimary} />
+              {children}
+            </>
+          )}
         </Animated.View>
       </GlassPanel>
     </View>
