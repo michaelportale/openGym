@@ -69,7 +69,7 @@ iOS shows the notification prompt once per install, at the first rest. On a fres
 - [ ] Saved set. Complete the current set. As it saves, the phone gives a single haptic (the system's success pattern, which can feel like a quick double tap), not a repeated one.
 - [ ] Done pop. Watch the Done column and complete the current set. Its mark pops in, growing from small, rather than just appearing. Tap Add warm-up, then open the warm-up and complete it: its mark pops too.
 - [ ] Rest ends in the app. Set Auto-Lock to Never. Complete a set and stay on the Workout tab until the rest runs out. As it ends, the phone gives a single haptic, and no banner or sound appears. Set Auto-Lock back.
-- [ ] Rest ends under Control Centre. Complete a set, then pull down Control Centre a few seconds before the rest runs out and keep it open. As the rest ends, the "Rest over" banner shows. (The simulator could not test this.)
+- [ ] Rest ends under Control Centre. Complete a set, then pull down Control Centre a few seconds before the rest runs out and keep it open. As the rest ends, the "Rest over" alert arrives: as a banner, or in Notification Centre once you close Control Centre. (The simulator could not test this.)
 - [ ] Locked alert. Complete a set, then lock the phone during the rest. The alert arrives when the rest ends.
 - [ ] Tap the alert. Complete a set, tap the Home tab, then lock the phone. When the alert arrives, tap it. The app opens on the Workout tab, not on Home. (The simulator could not test this.)
 - [ ] Pause, then lock. Complete a set, tap Pause on the rest, then lock the phone. No alert arrives while paused. Unlock, tap Resume, lock again: the alert arrives when the time left runs out.
