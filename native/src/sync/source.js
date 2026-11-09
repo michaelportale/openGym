@@ -1,5 +1,5 @@
 // The Workout tab's data: the server copy once paired, else the bundled snapshot. Both give
-// { state, names }, so nothing downstream knows which it got.
+// { state, names, example }, so nothing downstream knows which it got.
 import { exercises } from '../shared/training.js'
 import { sessionState } from '../workout/history-state.js'
 
@@ -48,13 +48,14 @@ function readable(state) {
   }
 }
 
+// `example`: whether the screen shows the example snapshot, and so its banner. Never over the copy.
 export function screenSource({ copy, bundled, pending }) {
-  if (!copy) return { state: sessionState(bundled, pending), names: bundled.names }
+  if (!copy) return { state: sessionState(bundled, pending), names: bundled.names, example: bundled.example === true }
   const doc = readable(copy.state)
   // Acked workouts are in the copy and it wins; only unsent ones are added.
   const held = new Set((doc.workouts ?? []).map(w => w.id))
   const state = sessionState({ state: doc }, (pending ?? []).filter(w => !held.has(w.id)))
-  return { state, names: namesFor(state) }
+  return { state, names: namesFor(state), example: false }
 }
 
 // The stored copy, or null if reading it fails (a corrupt body): the screen then shows the

@@ -144,3 +144,13 @@ test('readScreenSource: a copy the screen still cannot read reads as no copy, as
   expect(out.names).toBe(bundled.names)
   expect(out.workouts).toBe(all)
 })
+
+test('the example banner is the bundle\'s own: shown over example data, never over the server copy', async () => {
+  const example = { ...bundled, example: true }
+  const copy = { state: { routines: [{ id: 'rs', name: 'Server', ex: [] }], workouts: [] }, rev: 1, wid: 'x', pulledAt: 't' }
+  expect(screenSource({ copy: null, bundled: example, pending: [] }).example).toBe(true)
+  expect(screenSource({ copy, bundled: example, pending: [] }).example).toBe(false)
+  expect(screenSource({ copy: null, bundled, pending: [] }).example).toBe(false)
+  expect((await readScreenSource({ ...stores({ copy, all: [], pending: [] }), bundled: example })).example).toBe(false)
+  expect((await readScreenSource({ ...stores({ copy: null, all: [], pending: [] }), bundled: example })).example).toBe(true)
+})

@@ -30,17 +30,17 @@ export function useWorkoutHome() {
     try {
       const db = await openAppDatabase()
       // Paired: the server copy, plus the workouts it has not acked. Not paired: as before.
-      const { state, names, workouts } = await readScreenSource({
+      const { state, names, example, workouts } = await readScreenSource({
         finished: createSqliteFinishedWorkouts(db),
         serverCopy: createSqliteServerCopy(db),
         bundled: snapshot,
       })
       const stored = await createSqliteSessionStorage(db).readBase()
       if (stored) {
-        next = { ...LOADING, status: 'session', db, state, workouts, names, base: stored, sessionId: stored.id }
+        next = { ...LOADING, status: 'session', db, state, workouts, names, example, base: stored, sessionId: stored.id }
       } else {
         const now = Date.now()
-        next = { ...LOADING, status: 'start', db, state, workouts, names, nextId: nextRoutineId(state, now) }
+        next = { ...LOADING, status: 'start', db, state, workouts, names, example, nextId: nextRoutineId(state, now) }
       }
     } catch (error) {
       next = { ...LOADING, status: 'error', error: { message: error?.message || String(error) } }
@@ -78,5 +78,6 @@ export function useWorkoutHome() {
     }
   }, [home])
 
-  return { ...home, snapshot: home.names ? { ...snapshot, names: home.names } : snapshot, reload, begin }
+  // The banner follows what was loaded: never over the server copy (screenSource's example).
+  return { ...home, snapshot: home.names ? { ...snapshot, names: home.names, example: home.example } : snapshot, reload, begin }
 }
