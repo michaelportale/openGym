@@ -50,7 +50,7 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
   const index = shownIndex == null ? currentExerciseIndex(view) : Math.min(shownIndex, Math.max(0, count - 1))
   const screen = view ? workoutScreen(view, { names, lastTimes, exerciseIndex: index, title: base?.name }) : null
   const shownEntry = view?.entries?.[index] ?? null
-  const cardEntering = useFadeIn(index)
+  const cardEntering = useFadeIn(screen ? index : undefined)
   // The rest alert follows the journal: reconciled when the session opens or ends (saved,
   // discarded), on each return to the app, and after every write.
   const alerts = useRestAlerts({ session, sessionId: base?.id, names })
