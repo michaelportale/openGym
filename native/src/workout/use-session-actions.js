@@ -4,7 +4,7 @@ import { workoutModel } from '../shared/training.js'
 import { hapticForWrite } from '../feedback/haptics'
 import { playHaptic } from '../feedback/haptics-adapter'
 import { createEventId } from '../session/ids'
-import { closeSheetOnReturn, typedNumbersKept } from './absence'
+import { closeOnReturn, typedNumbersKept } from './absence'
 import { createActionGate } from './action-gate'
 import { afterGatedWrite, alertsOffNotice } from './after-write'
 import { completeLabels } from './keypad'
@@ -206,6 +206,7 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
     const side = sheetSide(mode, found.slot.row)
     const key = ++sheetKeys.current
     openKey.current = key
+    backgroundedAt.current = null
     setSheet({
       key,
       setId,
@@ -228,6 +229,7 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
   // The sheet stays mounted with its last props while it slides away.
   const closeSheet = () => {
     openKey.current = null
+    backgroundedAt.current = null
     setSheetOpen(false)
   }
   // A refusal stays in the sheet only if that sheet is still open when the write settles;
@@ -275,7 +277,7 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
         const left = backgroundedAt.current
         backgroundedAt.current = null
         const kept = typedNumbersKept(changed, findSet(latest(), sheet.setId)?.slot.draft, values)
-        if (closeSheetOnReturn(left, nowMs) && kept && openKey.current === sheet.key) closeSheet()
+        if (closeOnReturn({ left, now: nowMs, kept }) && openKey.current === sheet.key) closeSheet()
         return
       }
       if (backgroundedAt.current == null && (appState === 'inactive' || appState === 'background')) backgroundedAt.current = nowMs

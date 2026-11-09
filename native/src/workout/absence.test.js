@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { closeSheetOnReturn, typedNumbersKept } from './absence.js'
+import { closeOnReturn, closeSheetOnReturn, typedNumbersKept } from './absence.js'
 
 const MIN = 60 * 1000
 
@@ -31,5 +31,25 @@ describe('typedNumbersKept', () => {
   it('is false when the draft write failed or never happened', () => {
     expect(typedNumbersKept(true, null, values)).toBe(false)
     expect(typedNumbersKept(true, { w: 95, r: 5 }, values)).toBe(false)
+  })
+})
+
+describe('closeOnReturn', () => {
+  const away = { left: 1000, now: 1000 + 5 * MIN, kept: true }
+  it('closes after a long absence with the numbers kept', () => {
+    expect(closeOnReturn(away)).toBe(true)
+  })
+  it('stays open if the numbers are not kept', () => {
+    expect(closeOnReturn({ ...away, kept: false })).toBe(false)
+  })
+  it('stays open short of 5 minutes', () => {
+    expect(closeOnReturn({ ...away, now: 1000 + 5 * MIN - 1 })).toBe(false)
+  })
+  it('a stale timestamp is gone once the sheet reset it to null: a short blip stays open', () => {
+    expect(closeOnReturn({ left: null, now: 99 * MIN, kept: true })).toBe(false)
+  })
+  it('stays open with no clock', () => {
+    expect(closeOnReturn({ left: 1000, now: null, kept: true })).toBe(false)
+    expect(closeOnReturn({ left: 1000, now: undefined, kept: true })).toBe(false)
   })
 })

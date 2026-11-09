@@ -13,3 +13,8 @@ export function typedNumbersKept(changed, stored, values) {
   if (!changed) return true
   return stored != null && JSON.stringify(stored) === JSON.stringify(values)
 }
+
+// The whole close-on-return decision: away 5+ minutes and the typed numbers are safe.
+export function closeOnReturn({ left, now, kept }) {
+  return kept === true && closeSheetOnReturn(left, now)
+}
