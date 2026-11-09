@@ -63,9 +63,9 @@ const plain = (text, tone) => <AppText variant="value" color={tone}>{text}</AppT
 
 // Takes a row of `workoutScreen(...).card.rows`. `onPress(setId, field)` opens the keypad
 // ('w' or 'r'); on a done or pending row the whole row is the target. `sideDone` marks a
-// per-side set with one side logged.
-export default function SetRow({ setId, number, weightText, repsText, lastText, status, sideDone, onPress }) {
-  const view = setRowView({ number, weight: weightText, reps: repsText, status, lastText, sideDone })
+// per-side set with one side logged. `label` is the set number, or 'W' on a warm-up.
+export default function SetRow({ setId, number, label, warmup, weightText, repsText, lastText, status, sideDone, onPress }) {
+  const view = setRowView({ number, weight: weightText, reps: repsText, status, lastText, sideDone, warmup })
   const marker = MARKERS[view.marker]
   const tone = status === 'done' ? color.textSecondary : color.text
   const current = view.fields === 'boxed'
@@ -75,7 +75,7 @@ export default function SetRow({ setId, number, weightText, repsText, lastText, 
         {...(current ? { accessible: true, accessibilityLabel: view.accessibilityLabel } : null)}
         style={styles.number}
       >
-        {plain(number, color.textSecondary)}
+        {plain(label ?? number, color.textSecondary)}
       </View>
       {current ? (
         <>

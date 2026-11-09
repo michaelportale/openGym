@@ -57,3 +57,11 @@ test('no partial mark otherwise', () => {
   expect(view('done', { sideDone: null }).sideMark).toBeNull()
   expect(view('pending', { sideDone: 'X' }).sideMark).toBeNull()
 })
+
+// A warm-up has no set number: it is named, shown as W, and says no last time.
+test('a warm-up is named, not numbered, and has no last time', () => {
+  const warm = (status, over = {}) => setRowView({ number: null, warmup: true, weight: 45, reps: 10, status, ...over })
+  expect(warm('done').accessibilityLabel).toBe('Warm-up, 45 pounds, 10 reps, completed')
+  expect(warm('current', { weight: null, reps: null, lastText: '–' }).accessibilityLabel).toBe('Warm-up, no weight, no reps, current set')
+  expect(warm('pending', { lastText: '75 × 10' }).accessibilityLabel).toBe('Warm-up, 45 pounds, 10 reps, not started')
+})

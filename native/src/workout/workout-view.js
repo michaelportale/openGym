@@ -1,6 +1,6 @@
 import { workoutModel } from '../shared/training.js'
 
-const { isSideSet } = workoutModel
+const { isSideSet, isWarmupRow } = workoutModel
 
 const DASH = '–'
 
@@ -12,7 +12,12 @@ export function isDone(slot) {
   return slot.completed === true
 }
 
-const workSets = entry => (entry.sets || []).filter(slot => !slot.warmup)
+// A warm-up never counts: not in set numbers, the dock's set, rest, progress, the exercise the
+// screen follows, carried weight or the finish count. The row decides, as volume and "Last time"
+// read it: an explicit phase beats the old warmup flag.
+export const isWarmup = slot => isWarmupRow(slot?.row)
+
+const workSets = entry => (entry.sets || []).filter(slot => !isWarmup(slot))
 const hasOpenWork = entry => workSets(entry).some(slot => !isDone(slot))
 
 // Exactly one side of a per-side set logged.
@@ -41,14 +46,14 @@ export function currentExerciseIndex(view) {
 // The weight a set with nothing logged yet opens at: the last done work set before it in the
 // exercise (sets are done in order, so the latest lifted), as the web cascades a changed weight
 // onto the sets after it. Undefined when there is none, or the set has a side or all of it
-// logged: its own weight stands. A draft weight still beats it.
+// logged, or it is a warm-up: its own weight stands. A draft weight still beats it.
 export function carriedWeight(entry, setId) {
   let carried
   for (const slot of entry?.sets ?? []) {
     if (slot.setId === setId) {
-      return isDone(slot) || sideDoneOf(slot.row) !== null ? undefined : carried
+      return isDone(slot) || sideDoneOf(slot.row) !== null || isWarmup(slot) ? undefined : carried
     }
-    if (slot.warmup || !isDone(slot)) continue
+    if (isWarmup(slot) || !isDone(slot)) continue
     const w = slot.row.w ?? slot.row.sides?.L?.w
     if (w != null) carried = w
   }
@@ -179,12 +184,32 @@ export function workoutScreen(view, { names = {}, lastTimes = {}, exerciseIndex,
   const info = names[entry.id]
   const last = lastTimes[entry.id] || null
 
+  // Warm-ups show first, wherever the engine appended them, labelled W with no number and no
+  // last time. Among themselves they go in order like work sets: the first open one is current.
+  let warmCurrent = null
+  const warmRows = (entry.sets || []).filter(isWarmup).map(slot => {
+    const finished = isDone(slot)
+    const isCurrent = !finished && warmCurrent === null
+    if (isCurrent) warmCurrent = slot
+    return {
+      setId: slot.setId,
+      number: null,
+      label: 'W',
+      weightText: num(shown(slot, null).w),
+      repsText: repsText(slot),
+      lastText: DASH,
+      status: finished ? 'done' : isCurrent ? 'current' : 'pending',
+      perSide: false,
+      sideDone: null,
+      warmup: true,
+    }
+  })
+
   let counter = 0
   const rows = []
   let current = null
   let currentNumber = 0
-  for (const slot of entry.sets || []) {
-    if (slot.warmup) continue
+  for (const slot of workSets(entry)) {
     counter += 1
     const finished = isDone(slot)
     const isCurrent = !finished && current === null
@@ -196,12 +221,14 @@ export function workoutScreen(view, { names = {}, lastTimes = {}, exerciseIndex,
     rows.push({
       setId: slot.setId,
       number: counter,
+      label: String(counter),
       weightText: num(shown(slot, isCurrent && perSide ? nextSide(slot.row) : null, carriedWeight(entry, slot.setId)).w),
       repsText: repsText(slot),
       lastText: lastText(last, counter - 1),
       status: finished ? 'done' : isCurrent ? 'current' : 'pending',
       perSide,
       sideDone: sideDoneOf(slot.row),
+      warmup: false,
     })
   }
 
@@ -217,7 +244,7 @@ export function workoutScreen(view, { names = {}, lastTimes = {}, exerciseIndex,
       name: info ? info.name : `Unknown exercise (${entry.id})`,
       category: info ? info.category || '' : '',
       noHistory: last === null,
-      rows,
+      rows: [...warmRows, ...rows],
     },
     dock: dockFor(view || {}, entry, entries, index, current, currentNumber),
   }

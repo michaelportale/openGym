@@ -1,4 +1,5 @@
 import { workoutModel } from '../shared/training.js'
+import { isWarmup } from './workout-view.js'
 
 // Completing a set and starting its rest are two journal writes. These helpers rebuild the second
 // one from the first, so a kill between them loses nothing.
@@ -11,13 +12,13 @@ export const restEventId = (setId, at) => `rest:${setId}:${at}`
 // but rest starts only when both are.
 const bothDone = row => !workoutModel.isSideSet(row) || (row.sides.L.done === true && row.sides.R.done === true)
 
-// The rest that the latest completed set should have started, or null when there is none or it
-// has already run out.
+// The rest that the latest completed work set should have started, or null when there is none or
+// it has already run out. A warm-up starts no rest, so it is never the one to restore.
 export function pendingRest(view, now, restMsOf) {
   let latest = null
   for (const entry of view?.entries ?? []) {
     for (const set of entry.sets ?? []) {
-      if (!set.completed || !Number.isFinite(set.row?.at) || !bothDone(set.row)) continue
+      if (!set.completed || isWarmup(set) || !Number.isFinite(set.row?.at) || !bothDone(set.row)) continue
       if (!latest || set.row.at > latest.at) latest = { at: set.row.at, setId: set.setId, exerciseId: entry.id }
     }
   }

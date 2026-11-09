@@ -1,6 +1,6 @@
 import { workoutModel } from '../shared/training.js'
 import { completeFields, restEventId } from './rest-after.js'
-import { carriedWeight, isDone, shownValues } from './workout-view.js'
+import { carriedWeight, isDone, isWarmup, shownValues } from './workout-view.js'
 
 // Which engine call a tap makes, and with what. Each returns null when the tap must not write.
 
@@ -57,9 +57,10 @@ export function completeCall(view, { setId, side, values, eventId }) {
 
 // The rest a Complete earns, read from the view after the commit: only once the set is done
 // (both sides, per side), named and timed by the commit's own `at` so a reopen rebuilds it.
+// A warm-up earns none.
 export function restAfterComplete(view, setId, restMsOf) {
   const found = findSet(view, setId)
-  if (!found || !isDone(found.slot)) return null
+  if (!found || !isDone(found.slot) || isWarmup(found.slot)) return null
   const at = found.slot.row.at
   if (!Number.isFinite(at)) return null
   return { eventId: restEventId(setId, at), deadline: at + restMsOf(found.entry) }
@@ -108,7 +109,7 @@ export function addSetCall(view, exerciseId, eventId) {
   if (isOvernight(view)) return null
   const entry = (view?.entries ?? []).find(e => e.id === exerciseId)
   if (!entry) return null
-  const work = (entry.sets ?? []).filter(s => !s.warmup)
+  const work = (entry.sets ?? []).filter(s => !isWarmup(s))
   const last = work.length ? work[work.length - 1].row : {}
   const fields = {}
   if (last.w != null) fields.w = last.w
@@ -117,6 +118,16 @@ export function addSetCall(view, exerciseId, eventId) {
     fields.sides = { L: { w: last.sides.L.w, r: last.sides.L.r }, R: { w: last.sides.R.w, r: last.sides.R.r } }
   }
   return { eventId, exerciseId: entry.id, setId: `add:${entry.id}:${eventId}`, fields }
+}
+
+// A blank warm-up row of its own: phase 'warmup' (and the old flag, for older readers) keeps it
+// out of every count. One plain row even on a per-side exercise. The owner types its numbers in
+// the keypad; nulls leave the row without a weight or reps.
+export function addWarmupCall(view, exerciseId, eventId) {
+  if (isOvernight(view)) return null
+  const entry = (view?.entries ?? []).find(e => e.id === exerciseId)
+  if (!entry) return null
+  return { eventId, exerciseId: entry.id, setId: `warm:${entry.id}:${eventId}`, fields: { phase: 'warmup', warmup: true, w: null, r: null } }
 }
 
 const PRIMARY = { ready: 'complete', 'enter-weight': 'keypad', 'enter-reps': 'keypad', 'exercise-done': 'follow', 'all-done': 'finish' }

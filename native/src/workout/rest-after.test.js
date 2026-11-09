@@ -93,6 +93,18 @@ test('pendingRest takes the latest completed row across exercises', () => {
   expect(pendingRest(view, 0, id => (id === 'y' ? 50 : 10))).toEqual({ eventId: restEventId('s2', 300), deadline: 350 })
 })
 
+// A warm-up starts no rest, so a reopen must not start one for it either.
+test('pendingRest ignores a completed warm-up', () => {
+  const warm = at => ({ w: 45, r: 10, done: true, at, phase: 'warmup', warmup: true })
+  const view = { entries: [{ id: 'x', sets: [
+    { setId: 's1', completed: true, row: { done: true, at: 100 } },
+    { setId: 'w1', completed: true, warmup: true, row: warm(300) },
+  ] }] }
+  expect(pendingRest(view, 0, () => 90)).toEqual({ eventId: restEventId('s1', 100), deadline: 190 })
+  const only = { entries: [{ id: 'x', sets: [{ setId: 'w1', completed: true, warmup: true, row: warm(300) }] }] }
+  expect(pendingRest(only, 0, () => 90)).toBeNull()
+})
+
 test('completeFields without a side gives weight and reps, omitting undefined', () => {
   expect(completeFields({ w: 60, r: 5 }, null, { w: 62.5, r: 4 })).toEqual({ w: 62.5, r: 4 })
   expect(completeFields({ w: 60, r: 5 }, null, { r: 4 })).toEqual({ r: 4 })

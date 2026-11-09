@@ -139,7 +139,7 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
       <ScrollView style={styles.screen} contentContainerStyle={{ paddingBottom: dockHeight }} scrollIndicatorInsets={{ bottom: dockHeight }}>
         {pinned ? null : head}
         <View style={styles.body}>
-          <ExerciseCard {...card} weightTitle={weightTitle} onPressRow={actions.openSheet} onAddSet={actions.addSet} />
+          <ExerciseCard {...card} weightTitle={weightTitle} onPressRow={actions.openSheet} onAddSet={actions.addSet} onAddWarmup={actions.addWarmup} />
           {upNext ? <UpNextRow name={nameOf(names, upNext.id)} onPress={() => move(1)} /> : null}
         </View>
         {pinned ? null : dock}

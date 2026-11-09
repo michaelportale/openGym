@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest'
-import { OVERNIGHT_NOTICE, addSetCall, completeCall, dockKeypadField, draftCall, editCall, keypadField, overnightNotice, primaryAction, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, undoCall } from './set-calls.js'
-import { shownValues } from './workout-view.js'
-import { restEventId, restMsFor } from './rest-after.js'
+import { OVERNIGHT_NOTICE, addSetCall, addWarmupCall, completeCall, dockKeypadField, draftCall, editCall, keypadField, overnightNotice, primaryAction, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, undoCall } from './set-calls.js'
+import { shownValues, workoutScreen } from './workout-view.js'
+import { pendingRest, restEventId, restMsFor } from './rest-after.js'
 import { withTargets } from './session-screen.js'
 import { SQLITE_DRIVERS } from '../../scripts/node-sqlite.mjs'
 import { createSessionController } from '../session/session-controller.js'
@@ -19,6 +19,8 @@ const sided = (w, L, R, extra = {}) => ({
 const view = entries => ({ status: 'active', entries, rest: null })
 const bench = sets => ({ id: '0289', target: { restSec: 120 }, sets })
 const lateral = sets => ({ id: '0300', target: {}, sets })
+// A warm-up as the engine holds it after addWarmupCall: its own row, phase 'warmup'.
+const warm = (setId, row) => slot(setId, { ...row, phase: 'warmup', warmup: true }, { warmup: true })
 
 describe('shownValues', () => {
   test('the draft over the row', () => {
@@ -145,6 +147,20 @@ describe('completeCall', () => {
   })
 })
 
+describe('completeCall on a warm-up', () => {
+  test('logs the warm-up as shown, never the weight the work sets carry', () => {
+    const v = view([bench([slot('b0', done(80, 10)), warm('w', todo(45, 10))])])
+    expect(completeCall(v, { setId: 'w', side: null, eventId: 'e1' })).toEqual({
+      eventId: 'e1', exerciseId: '0289', setId: 'w', fields: { w: 45, r: 10 },
+    })
+    expect(completeCall(view([bench([slot('b0', done(80, 10)), warm('w', todo(null, 10))])]), { setId: 'w', side: null, eventId: 'e1' })).toBeNull()
+  })
+  test('logs what the sheet hands over', () => {
+    const v = view([bench([warm('w', todo(null, null))])])
+    expect(completeCall(v, { setId: 'w', side: null, values: { w: 45, r: 10 }, eventId: 'e1' }).fields).toEqual({ w: 45, r: 10 })
+  })
+})
+
 describe('restAfterComplete', () => {
   const restMsOf = entry => (entry.target?.restSec ?? 90) * 1000
   test('a done set starts the rest named by its own commit time', () => {
@@ -156,6 +172,9 @@ describe('restAfterComplete', () => {
     expect(restAfterComplete(view([lateral([slot('s', half, { completed: true })])]), 's', restMsOf)).toBeNull()
     const both = sided(7.5, { r: 10, done: true }, { r: 10, done: true }, { at: 6000 })
     expect(restAfterComplete(view([lateral([slot('s', both)])]), 's', restMsOf)).toEqual({ eventId: restEventId('s', 6000), deadline: 6000 + 90_000 })
+  })
+  test('a done warm-up starts no rest', () => {
+    expect(restAfterComplete(view([bench([warm('w', done(45, 10, 5000))])]), 'w', restMsOf)).toBeNull()
   })
   test('nothing when the set is not done, has no time, or is gone', () => {
     expect(restAfterComplete(view([bench([slot('b0', todo(75, 8))])]), 'b0', restMsOf)).toBeNull()
@@ -207,6 +226,27 @@ describe('addSetCall', () => {
   test('an exercise not in the view adds nothing', () => {
     expect(addSetCall(view([]), '0289', 'e9')).toBeNull()
   })
+  test('a warm-up added after the work sets is not what a new set copies', () => {
+    const v = view([bench([slot('b0', done(75, 7)), warm('w', done(45, 10))])])
+    expect(addSetCall(v, '0289', 'e9').fields).toEqual({ w: 75, r: 7 })
+  })
+})
+
+describe('addWarmupCall', () => {
+  test('a blank warm-up row of its own, named by the tap', () => {
+    const v = view([bench([slot('b0', done(75, 10))])])
+    expect(addWarmupCall(v, '0289', 'e9')).toEqual({
+      eventId: 'e9', exerciseId: '0289', setId: 'warm:0289:e9', fields: { phase: 'warmup', warmup: true, w: null, r: null },
+    })
+  })
+  test('a per-side exercise still adds one plain row', () => {
+    const v = view([lateral([slot('s', sided(7.5, { r: 10, done: false }, { r: 10, done: false }))])])
+    expect(addWarmupCall(v, '0300', 'e9').fields).toEqual({ phase: 'warmup', warmup: true, w: null, r: null })
+  })
+  test('an exercise not in the view adds nothing', () => {
+    expect(addWarmupCall(view([]), '0289', 'e9')).toBeNull()
+    expect(addWarmupCall(null, '0289', 'e9')).toBeNull()
+  })
 })
 
 describe('draftCall', () => {
@@ -240,6 +280,7 @@ describe('overnight', () => {
     expect(completeCall(v, { setId: 'b1', side: null, values: { w: 80, r: 8 }, eventId: 'e1' })).toBeNull()
     expect(completeCall(v, { setId: 's', side: 'L', eventId: 'e1' })).toBeNull()
     expect(addSetCall(v, '0289', 'e1')).toBeNull()
+    expect(addWarmupCall(v, '0289', 'e1')).toBeNull()
     expect(editCall(v, { setId: 'b0', values: { w: 80, r: 9 }, eventId: 'e1' })).toBeNull()
     expect(undoCall(v, { setId: 'b0', eventId: 'e1' })).toBeNull()
     expect(draftCall(v, { setId: 'b1', values: { w: 80, r: 8 } })).toBeNull()
@@ -248,6 +289,7 @@ describe('overnight', () => {
     const v = view(sets())
     expect(completeCall(v, { setId: 'b1', side: null, eventId: 'e1' })).not.toBeNull()
     expect(addSetCall(v, '0289', 'e1')).not.toBeNull()
+    expect(addWarmupCall(v, '0289', 'e1')).not.toBeNull()
     expect(editCall(v, { setId: 'b0', values: { w: 80, r: 9 }, eventId: 'e1' })).not.toBeNull()
     expect(undoCall(v, { setId: 'b0', eventId: 'e1' })).not.toBeNull()
     expect(draftCall(v, { setId: 'b1', values: { w: 80, r: 8 } })).not.toBeNull()
@@ -443,6 +485,29 @@ describe.each(SQLITE_DRIVERS)('%s: the calls drive the engine', (_name, createDb
     const added = (await open(db, false)).getState().view.entries[1].sets[1]
     expect(added.setId).toBe('add:lat:a1')
     expect(added.row.sides).toEqual({ L: { w: 7.5, r: 10, done: false }, R: { w: 7.5, r: 10, done: false } })
+  })
+
+  test('a warm-up: add, complete, kill; still a warm-up, no rest, out of the numbers', async () => {
+    clock = T0 + 1000
+    let db = createDb()
+    const first = await open(db)
+    const add = addWarmupCall(current(first), 'bench', 'w1')
+    expect((await first.call('addSet', add)).saved).toBe(true)
+    const call = completeCall(current(first), { setId: add.setId, side: null, values: { w: 45, r: 10 }, eventId: 'c1' })
+    expect((await first.call('commitSet', call)).saved).toBe(true)
+    expect(restAfterComplete(current(first), add.setId, restMsOf)).toBeNull()
+    db = db.reopen()
+    clock = T0 + 5000
+    const second = await open(db, false)
+    const view = current(second)
+    const warmup = view.entries[0].sets.find(s => s.setId === 'warm:bench:w1')
+    expect(warmup.row).toMatchObject({ phase: 'warmup', warmup: true, w: 45, r: 10, done: true, at: T0 + 1000 })
+    expect(pendingRest(view, clock, () => 120_000)).toBeNull()
+    expect(view.rest).toBeNull()
+    const screen = workoutScreen(view, { names: {}, lastTimes: {} })
+    expect(screen.card.rows.map(r => [r.label, r.status])).toEqual([['W', 'done'], ['1', 'current'], ['2', 'pending']])
+    expect(screen.dock).toMatchObject({ lead: 'Set 1 · 75 lb × 8', setId: benchSet })
+    expect(screen.header.progress).toBe(0)
   })
 
   test('a draft from the sheet survives a kill and is what the set shows', async () => {

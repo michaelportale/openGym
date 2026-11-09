@@ -6,7 +6,7 @@ import { createActionGate } from './action-gate'
 import { pendingRest, restMsFor } from './rest-after'
 import { shownAfterComplete, withTargets } from './session-screen'
 import { carriedWeight, shownValues } from './workout-view'
-import { addSetCall, completeCall, dockKeypadField, draftCall, editCall, findSet, keypadField, overnightNotice, primaryAction, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, undoCall } from './set-calls'
+import { addSetCall, addWarmupCall, completeCall, dockKeypadField, draftCall, editCall, findSet, keypadField, overnightNotice, primaryAction, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, undoCall } from './set-calls'
 
 const sideLabel = { L: 'Complete left', R: 'Complete right' }
 const failed = error => ({ ok: false, saved: false, error: { code: 'storage', message: error?.message || String(error) } })
@@ -50,14 +50,15 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
   }
 
   // setId and side come from the tap. The commit is awaited first; its rest is named and timed
-  // by the row's `at` in the view the commit produced (one side of a per-side set earns none).
+  // by the row's `at` in the view the commit produced (one side of a per-side set, or a warm-up,
+  // earns none).
   const complete = ({ setId, side, values }) => act(async () => {
     const call = completeCall(latest(), { setId, side, values, eventId: createEventId() })
     if (!call) return null
     const result = await session.commitSet(call)
     if (!result?.saved) return result
     const next = latest()
-    setShownIndex(index => shownAfterComplete(next, index))
+    setShownIndex(index => shownAfterComplete(next, index, setId))
     const rest = restAfterComplete(next, setId, restMsOf)
     if (!rest) return result
     const started = await session.startRest(rest)
@@ -108,8 +109,8 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
       perSide,
       initial: shownValues(found.slot, side, carriedWeight(found.entry, setId)),
       initialField: keypadField(field, perSide, side),
-      title: `${screen.card.name} · Set ${row.number}`,
-      completeLabel: sideLabel[side] ?? `Complete set ${row.number}`,
+      title: `${screen.card.name} · ${row.warmup ? 'Warm-up' : `Set ${row.number}`}`,
+      completeLabel: sideLabel[side] ?? (row.warmup ? 'Complete warm-up' : `Complete set ${row.number}`),
     })
     setSheetNotice(null)
     setSheetOpen(true)
@@ -156,6 +157,16 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
     },
   }
 
+  // Add set and Add warm-up append a row to the exercise on screen; `callFor` builds it from the
+  // engine's latest view.
+  const addRow = callFor => async () => {
+    if (blockedOvernight() || !shownEntry) return
+    report(await act(async () => {
+      const call = callFor(latest(), shownEntry.id, createEventId())
+      return call ? session.addSet(call) : null
+    }))
+  }
+
   const openFinish = end => {
     setFinishNotice(null)
     setFinishing({ end: end ?? null })
@@ -185,13 +196,8 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
     notice,
     restoreRest,
     openSheet,
-    addSet: async () => {
-      if (blockedOvernight() || !shownEntry) return
-      report(await act(async () => {
-        const call = addSetCall(latest(), shownEntry.id, createEventId())
-        return call ? session.addSet(call) : null
-      }))
-    },
+    addSet: addRow(addSetCall),
+    addWarmup: addRow(addWarmupCall),
     resume: async () => report(await act(() => session.resume({ eventId: createEventId() }))),
     dock: dockActions,
     sheet: { ...sheet, open: sheetOpen, notice: sheetNotice, ...sheetActions },

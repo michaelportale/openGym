@@ -8,6 +8,7 @@ const sided = (w, L, R) => ({
   w, r: L.r + R.r, done: L.done && R.done,
   sides: { L: { w, r: L.r, done: L.done }, R: { w, r: R.r, done: R.done } },
 })
+const warm = (setId, row) => slot(setId, { ...row, phase: 'warmup', warmup: true }, { warmup: true })
 const active = { kind: 'active', actions: [], suggestedEnd: null }
 const view = (entries, extra = {}) => ({ status: 'active', disposition: active, rest: null, elapsedMs: 60_000, entries, ...extra })
 
@@ -81,6 +82,16 @@ describe('shownAfterComplete', () => {
     const half = view([{ id: 'l', sets: [slot('s', sided(7.5, { r: 10, done: true }, { r: 10, done: false }), { completed: true })] }])
     expect(shownAfterComplete(half, 0)).toBe(0)
   })
+  // Auto-advance follows work sets only: a warm-up logged on a finished exercise leaves it on screen.
+  test('completing a warm-up never moves the screen', () => {
+    const w = view([
+      { id: 'a', sets: [slot('a0', done(75, 10)), warm('aw', done(45, 10))] },
+      { id: 'b', sets: [slot('b0', todo(50, 10))] },
+    ])
+    expect(shownAfterComplete(w, 0, 'aw')).toBe(0)
+    expect(shownAfterComplete(w, null, 'aw')).toBeNull()
+    expect(shownAfterComplete(w, 0, 'a0')).toBeNull()
+  })
 })
 
 describe('finishSummary', () => {
@@ -97,6 +108,10 @@ describe('finishSummary', () => {
       { id: 'lat', target: {}, sets: [slot('s', sided(10, { r: 10, done: true }, { r: 10, done: false }), { completed: true })] },
     ])
     expect(finishSummary(v).setsText).toBe('1 set')
+  })
+  test('done warm-ups add no set and no volume', () => {
+    const v = view([{ id: 'bench', target: {}, sets: [warm('w', done(45, 10)), slot('b0', done(100, 5))] }])
+    expect(finishSummary(v)).toMatchObject({ setsText: '1 set', volumeText: '500 lb' })
   })
   test('an empty workout still has a summary', () => {
     expect(finishSummary(view([], { elapsedMs: 0 }))).toEqual({ setsText: '0 sets', volumeText: '0 lb', durationText: '0:00' })

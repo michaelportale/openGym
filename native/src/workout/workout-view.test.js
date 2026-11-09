@@ -112,9 +112,9 @@ describe('card', () => {
     ])]))
     expect(card).toMatchObject({ name: 'Bench press', category: 'chest', noHistory: false })
     expect(card.rows.map(r => [r.number, r.status, r.lastText])).toEqual([
-      [1, 'done', '75 × 10'], [2, 'current', '75 × 10'], [3, 'pending', '–'],
+      [null, 'current', '–'], [1, 'done', '75 × 10'], [2, 'current', '75 × 10'], [3, 'pending', '–'],
     ])
-    expect(card.rows[1]).toMatchObject({ setId: 'b', weightText: '75', repsText: '8' })
+    expect(card.rows[2]).toMatchObject({ setId: 'b', weightText: '75', repsText: '8' })
   })
   test('per-side last time and decimal weights', () => {
     const { card } = screen(view([{ id: '0300', target: {}, sets: [set('s1', sided(7.5, { r: 20, done: false }, { r: 18, done: false }))] }]), {
@@ -249,6 +249,67 @@ describe('carry forward', () => {
       set('w', { w: 40, r: 10, done: true, warmup: true }, { warmup: true }),
       set('a', todo(75, 8)),
     ])])
-    expect(screen(v).card.rows[0].weightText).toBe('75')
+    expect(screen(v).card.rows.map(r => [r.label, r.weightText])).toEqual([['W', '40'], ['1', '75']])
+  })
+})
+
+// A warm-up is logged as the engine writes it (addWarmupCall): its own row, phase 'warmup'. It is
+// shown first, labelled W, and never counts: not in set numbers, the dock's set, progress, the
+// exercise the screen follows, or the weight the work sets carry.
+describe('warm-ups', () => {
+  const warm = (setId, row) => set(setId, { ...row, phase: 'warmup', warmup: true }, { warmup: true })
+  test('show first, labelled W, even when added after the work sets', () => {
+    const { card } = screen(view([bench([
+      set('a', done(75, 10)), set('b', todo(75, 8)),
+      warm('w1', done(45, 10)), warm('w2', todo(null, null)),
+    ])]))
+    expect(card.rows.map(r => [r.setId, r.label, r.number, r.status, r.warmup])).toEqual([
+      ['w1', 'W', null, 'done', true],
+      ['w2', 'W', null, 'current', true],
+      ['a', '1', 1, 'done', false],
+      ['b', '2', 2, 'current', false],
+    ])
+  })
+  test('a later open warm-up waits for the one before it', () => {
+    const { card } = screen(view([bench([warm('w1', todo(45, 10)), warm('w2', todo(65, 5)), set('a', todo(75, 8))])]))
+    expect(card.rows.map(r => r.status)).toEqual(['current', 'pending', 'current'])
+  })
+  test('a warm-up shows its own numbers and no last time; the work sets keep theirs', () => {
+    const { card } = screen(view([bench([set('a', todo(75, 10)), warm('w', done(45, 10))])]))
+    expect(card.rows[0]).toMatchObject({ setId: 'w', weightText: '45', repsText: '10', lastText: '–', perSide: false, sideDone: null })
+    expect(card.rows[1]).toMatchObject({ setId: 'a', lastText: '75 × 10' })
+  })
+  test("the dock's Set 1 ignores a done warm-up, and an open one is never the dock's set", () => {
+    expect(screen(view([bench([warm('w', done(45, 10)), set('a', todo(75, 8))])])).dock)
+      .toMatchObject({ mode: 'ready', lead: 'Set 1 · 75 lb × 8', primaryLabel: 'Complete set 1', setId: 'a' })
+    expect(screen(view([bench([warm('w', todo(45, 10)), set('a', todo(75, 8))])])).dock)
+      .toMatchObject({ lead: 'Set 1 · 75 lb × 8', setId: 'a' })
+  })
+  test('an open warm-up leaves a finished exercise finished', () => {
+    const v = view([bench([set('a', done(75, 8)), warm('w', todo(45, 10))])])
+    expect(screen(v).dock).toMatchObject({ mode: 'all-done', setId: null })
+  })
+  test('progress and the exercise the screen follows ignore warm-ups', () => {
+    const v = view([
+      bench([set('a', done(75, 8)), warm('w', todo(45, 10))]),
+      { id: '0300', target: {}, sets: [warm('w2', done(5, 10)), set('b', todo(10, 12))] },
+    ])
+    expect(currentExerciseIndex(v)).toBe(1)
+    expect(screen(v).header.progress).toBe(0.5)
+  })
+  test('a warm-up takes no carried weight, even after a done work set', () => {
+    const v = view([bench([set('a', done(80, 10)), warm('w', todo(null, 10)), set('b', todo(75, 8))])])
+    expect(carriedWeight(v.entries[0], 'w')).toBeUndefined()
+    expect(screen(v).card.rows.map(r => r.weightText)).toEqual(['–', '80', '80'])
+  })
+  test('a done warm-up is never the weight the work sets carry', () => {
+    const v = view([bench([set('a', done(80, 10)), warm('w', done(40, 10)), set('b', todo(75, 8))])])
+    expect(carriedWeight(v.entries[0], 'b')).toBe(80)
+  })
+  // The row decides, as volume and "Last time" read it: an explicit phase beats the old flag.
+  test("a row marked phase 'work' counts as work even with the old warmup flag", () => {
+    const legacy = set('x', { ...done(60, 5), phase: 'work', warmup: true }, { warmup: true })
+    const { card } = screen(view([bench([legacy, set('a', todo(75, 8))])]))
+    expect(card.rows.map(r => [r.setId, r.label])).toEqual([['x', '1'], ['a', '2']])
   })
 })

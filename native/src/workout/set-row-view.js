@@ -24,8 +24,9 @@ const SIDE_MARKS = {
   R: { text: 'R ✓', label: 'Right side done' }
 }
 
-// `sideDone` is 'L' or 'R' when exactly one side of a per-side set is logged.
-export function setRowView({ number, weight, reps, status, lastText, sideDone }) {
+// `sideDone` is 'L' or 'R' when exactly one side of a per-side set is logged. A `warmup` row has
+// no number: it is spoken as "Warm-up" and has no last time.
+export function setRowView({ number, weight, reps, status, lastText, sideDone, warmup = false }) {
   if (!Object.hasOwn(STATUSES, status)) throw new Error(`Unknown set status: ${status}`)
   const { marker, fields, spoken } = STATUSES[status]
   const load = spokenAmount(weight, 'pound', 'pounds', 'no weight')
@@ -39,6 +40,6 @@ export function setRowView({ number, weight, reps, status, lastText, sideDone })
     weightText: isBlank(weight) ? '–' : String(weight),
     repsText: isBlank(reps) ? '–' : String(reps),
     lastText: lastText || '–',
-    accessibilityLabel: `Set ${number}, ${load}, ${count}, ${spoken}${side}${status === 'done' ? '' : spokenLast(lastText)}`
+    accessibilityLabel: `${warmup ? 'Warm-up' : `Set ${number}`}, ${load}, ${count}, ${spoken}${side}${status === 'done' || warmup ? '' : spokenLast(lastText)}`
   }
 }
