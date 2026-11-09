@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Image, Pressable, StyleSheet, View } from 'react-native'
 import { useEventListener } from 'expo'
 import { useVideoPlayer, VideoView } from 'expo-video'
-import { color, radius } from '../theme/tokens'
+import { color, radius, space } from '../theme/tokens'
 import { MEDIA_CREDIT } from './detail-view'
 import AppText from '../ui/AppText'
 import { useAccessibilityFlag } from '../ui/use-accessibility-flag'
@@ -41,7 +41,11 @@ export default function ExerciseMedia({ media, style = null }) {
   if (stillFailed) return null
   const toggle = () => { if (playing) player.pause(); else player.play() }
   return (
-    <View style={stillLoaded ? style : styles.hidden}>
+    <View
+      style={stillLoaded ? style : styles.hidden}
+      accessibilityElementsHidden={!stillLoaded}
+      importantForAccessibility={stillLoaded ? 'auto' : 'no-hide-descendants'}
+    >
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`Exercise animation, ${playing ? 'playing' : 'paused'}`}
@@ -69,7 +73,7 @@ export default function ExerciseMedia({ media, style = null }) {
 const styles = StyleSheet.create({
   // Out of the flow (and the parent's gap) with no height until the still has loaded.
   hidden: { position: 'absolute', left: 0, width: '100%', height: 0, overflow: 'hidden' },
-  credit: { marginTop: 4 },
+  credit: { marginTop: space.xs },
   box: {
     width: '100%',
     aspectRatio: 1,
