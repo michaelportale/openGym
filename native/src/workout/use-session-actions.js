@@ -31,13 +31,16 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
   const [finishing, setFinishing] = useState(null)
   const [finishNotice, setFinishNotice] = useState(null)
   // VoiceOver speaks neither live regions nor the alert role: speak each notice (the screen's,
-  // its rest line, the keypad's, Finish's) once, when it appears or its words change.
+  // its rest line, the keypad's, Finish's) once, when it appears or its words change. Queued, not
+  // interrupting: a sheet write's notice lands as the sheet slides away, and iOS would cut an
+  // unqueued announcement off when VoiceOver moves to the screen beneath. (React Native falls
+  // back to the plain announcement where the queue option is not available.)
   const spoken = useRef(null)
   const shownNotices = { ...notices, sheet: sheetNotice, finish: finishNotice }
   useEffect(() => {
     const text = noticeAnnouncement(spoken.current, shownNotices)
     spoken.current = shownNotices
-    if (text) AccessibilityInfo.announceForAccessibility(text)
+    if (text) AccessibilityInfo.announceForAccessibilityWithOptions(text, { queue: true })
   }, [notices, sheetNotice, finishNotice])
   // Which sheet is on screen (its key), read when a write settles: state in a closure is stale.
   const sheetKeys = useRef(0)
