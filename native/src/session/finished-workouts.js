@@ -49,7 +49,7 @@ export function createMemoryFinishedWorkouts() {
 
 function requireDb(db) {
   if (!db || typeof db.exec !== 'function' || typeof db.run !== 'function' || typeof db.getAll !== 'function') {
-    throw new Error('SQLite finished workouts need a db handle with exec, run, and getAll. expo-sqlite is not installed yet; pass the app database in once it is.')
+    throw new Error('SQLite finished workouts need a db handle with exec, run, and getAll (see storage/db-handle.js)')
   }
 }
 

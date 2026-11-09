@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
 import { createMemoryStorage } from './storage.js'
-import { createFakeSqliteDb } from './fake-sqlite.js'
+import { SQLITE_DRIVERS } from '../../scripts/node-sqlite.mjs'
 import { createSqliteSessionStorage } from './sqlite-storage.js'
 import { openSession, plannedSetId } from './session.js'
 
@@ -144,8 +144,8 @@ test('deleting a committed set drops it from the totals, and the last set stays'
   expect(after).toMatchObject({ ok: false, saved: false, error: { code: 'finished' } })
 })
 
-test('a deleted set stays gone when the journal is replayed', async () => {
-  const db = createFakeSqliteDb()
+test.each(SQLITE_DRIVERS)('%s: a deleted set stays gone when the journal is replayed', async (_driver, createDb) => {
+  let db = createDb()
   const storage = createSqliteSessionStorage(db)
   const session = await started(storage)
   const bench0 = plannedSetId('bench', 0)
@@ -174,6 +174,7 @@ test('a deleted set stays gone when the journal is replayed', async () => {
     setId: bench1,
   })
 
+  db = db.reopen()
   const restored = await openSession({
     storage: createSqliteSessionStorage(db),
     now: () => T0 + 120_000,

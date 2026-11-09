@@ -5,18 +5,24 @@ import Card from '../ui/Card'
 import IconButton from '../ui/IconButton'
 import SetRow, { SetTableHeader } from './SetRow'
 
-export default function ExerciseCard({ category, name, lastSession, sets, onAddSet, addSetHint }) {
+// Props come from `workoutScreen(...).card`. `onPressRow(setId, field)` opens the keypad.
+export default function ExerciseCard({ name, category, noHistory, rows, weightTitle, onPressRow, onAddSet }) {
   return (
     <Card style={styles.card}>
       <View style={styles.heading}>
-        <AppText variant="label" color={color.textSecondary}>{category}</AppText>
-        <AppText variant="title" accessibilityRole="header">{name}</AppText>
-        <AppText variant="body" color={color.textSecondary}>{lastSession}</AppText>
+        {category ? <AppText variant="label" color={color.textSecondary}>{category}</AppText> : null}
+        <AppText variant="screenTitle" accessibilityRole="header">{name}</AppText>
+        {noHistory ? <AppText variant="body" color={color.textSecondary}>No history yet</AppText> : null}
       </View>
-      <SetTableHeader />
-      {sets.map(set => <SetRow key={set.number} {...set} />)}
+      <SetTableHeader weightTitle={weightTitle} />
+      {rows.map(row => <SetRow key={row.setId} {...row} onPress={onPressRow} />)}
       <View style={styles.addRow}>
-        <IconButton symbol="plus" accessibilityLabel="Add set" accessibilityHint={addSetHint} onPress={onAddSet} />
+        <IconButton
+          symbol="plus"
+          accessibilityLabel="Add set"
+          accessibilityHint="Adds one more set to this exercise."
+          onPress={onAddSet}
+        />
         <AppText variant="body" color={color.textSecondary} accessibilityElementsHidden style={styles.addLabel}>
           Add set
         </AppText>

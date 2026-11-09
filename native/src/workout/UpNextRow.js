@@ -1,17 +1,23 @@
-import { StyleSheet, View } from 'react-native'
+import { Pressable, StyleSheet, View } from 'react-native'
 import { color, radius, size, space, touch } from '../theme/tokens'
 import NativeSymbol from '../ui/NativeSymbol'
 import AppText from '../ui/AppText'
 import Card from '../ui/Card'
-import { upNextAccessibilityLabel } from './preview-actions'
 
-export default function UpNextRow({ name }) {
+export function upNextAccessibilityLabel(name) {
+  if (typeof name !== 'string' || name.trim() === '') throw new Error('Up next needs a name')
+  return `Up next, ${name}.`
+}
+
+// The exercise after the one on screen. Tapping it moves there, as the header's › does.
+export default function UpNextRow({ name, onPress }) {
   return (
     <Card>
-      <View
-        accessible
-        accessibilityRole="text"
+      <Pressable
+        accessibilityRole="button"
         accessibilityLabel={upNextAccessibilityLabel(name)}
+        accessibilityHint="Shows this exercise."
+        onPress={onPress}
         style={styles.row}
       >
         <View style={styles.tile}>
@@ -22,7 +28,7 @@ export default function UpNextRow({ name }) {
           <AppText variant="heading">{name}</AppText>
         </View>
         <NativeSymbol name="chevron.right" tintColor={color.textSecondary} size={size.icon} />
-      </View>
+      </Pressable>
     </Card>
   )
 }

@@ -5,9 +5,9 @@ import { TABS, installWebTabFit, pinnedTabColor, screenFrame, screenTopInset, ta
 
 test('the five tabs stay in PRD order and keep their visible names', () => {
   expect(TABS.map(tab => [tab.name, tab.label])).toEqual([
-    ['index', 'Home'],
+    ['home', 'Home'],
     ['plan', 'Plan'],
-    ['workout', 'Workout'],
+    ['index', 'Workout'],
     ['progress', 'Progress'],
     ['exercises', 'Exercises']
   ])
@@ -61,15 +61,23 @@ test('web tab fit keeps every label in the pill and does not install twice', () 
 })
 
 test('only the workout tab opts out of automatic content insets', () => {
-  expect(TABS.filter(tab => tab.disableAutomaticContentInsets).map(tab => tab.name)).toEqual(['workout'])
+  expect(TABS.filter(tab => tab.disableAutomaticContentInsets).map(tab => tab.label)).toEqual(['Workout'])
 })
 
-test('workout is a preview and the other four tabs are unbuilt', () => {
-  expect(TABS.find(tab => tab.name === 'workout').availability).toBe('preview')
+// Expo Router 58 picks the launch screen from the URL, and a cold launch is '/', the index route.
+test('the app opens on Workout: the launch route is the Workout tab, and Home is its own route', () => {
+  expect(TABS.find(tab => tab.label === 'Workout').name).toBe('index')
+  const read = file => readFileSync(new URL(`../app/(tabs)/${file}`, import.meta.url), 'utf8')
+  expect(read('index.js')).toContain('useWorkoutHome')
+  expect(read('home.js')).toContain("destinationCopy('home')")
+})
+
+test('workout logs real sessions and the other four tabs are unbuilt', () => {
+  expect(TABS.find(tab => tab.label === 'Workout').availability).toBe('ready')
   expect(TABS.filter(tab => tab.availability === 'unbuilt').map(tab => tab.label)).toEqual([
     'Home', 'Plan', 'Progress', 'Exercises'
   ])
-  expect(TABS.some(tab => tab.availability === 'ready')).toBe(false)
+  expect(TABS.some(tab => tab.availability === 'preview')).toBe(false)
 })
 
 test('iOS pins both appearances to the same colour and other platforms keep the hex', () => {
@@ -86,6 +94,16 @@ test('iOS pins both appearances to the same colour and other platforms keep the 
 
 test('a tab colour that is not hex is rejected', () => {
   expect(() => pinnedTabColor('accent', 'web', () => {})).toThrow('accent')
+})
+
+// A render throw on the phone holding the only record must not become a crash loop.
+test('the Workout route has an error boundary with the error, Retry and Export', () => {
+  const route = readFileSync(new URL('../app/(tabs)/index.js', import.meta.url), 'utf8')
+  expect(route).toMatch(/export function ErrorBoundary\(\{ error, retry \}\)/)
+  const screen = readFileSync(new URL('../workout/WorkoutError.js', import.meta.url), 'utf8')
+  expect(screen).toContain('error?.message')
+  expect(screen).toContain('onPress={retry}')
+  expect(screen).toContain('<ExportButton')
 })
 
 test('the tab host uses the shared colours and the five-tab list', () => {

@@ -25,7 +25,6 @@ test('the app tree names every symbol and each one has a web glyph', () => {
     'chevron.right',
     'dumbbell',
     'ellipsis',
-    'pause.fill',
     'plus',
     'square'
   ])

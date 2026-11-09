@@ -3,6 +3,7 @@ import { plannedSetId } from './session.js'
 import { createMemoryStorage } from './storage.js'
 import { createMemoryFinishedWorkouts } from './finished-workouts.js'
 import { createFakeSqliteDb } from './fake-sqlite.js'
+import { SQLITE_DRIVERS } from '../../scripts/node-sqlite.mjs'
 import { createSessionController } from './session-controller.js'
 import { sessionOptionsFrom, useActiveSession } from './use-active-session.js'
 
@@ -39,10 +40,12 @@ function controllerFor(db, extra = {}) {
 test('useActiveSession is a react hook over the session controller', () => {
   expect(typeof useActiveSession).toBe('function')
   expect(useActiveSession.toString()).toContain('sessionOptionsFrom')
+  // The screen reads the committed row's time through this after an action resolves.
+  expect(useActiveSession.toString()).toContain('getState = () => controller.getState()')
 })
 
-test('a database handle wires the sqlite journal and the finished-workout store', async () => {
-  const db = createFakeSqliteDb()
+test.each(SQLITE_DRIVERS)('%s: a database handle wires the sqlite journal and the finished-workout store', async (_driver, createDb) => {
+  let db = createDb()
   const active = controllerFor(db)
   await active.open()
   await active.call('commitSet', {
@@ -55,6 +58,7 @@ test('a database handle wires the sqlite journal and the finished-workout store'
   const saved = await active.finishSession({ sender: async () => ({ saved: true }) })
   expect(saved).toMatchObject({ ok: true, saved: true })
 
+  db = db.reopen()
   const reopened = createSessionController(sessionOptionsFrom({
     db,
     now: () => T0 + 120_000,

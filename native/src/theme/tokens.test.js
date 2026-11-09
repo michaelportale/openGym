@@ -55,3 +55,12 @@ test('dynamic type is capped where a row has to stay on screen', () => {
   expect(fontScale.label).toBeGreaterThan(1)
   expect(fontScale.heading).toBeGreaterThanOrEqual(fontScale.label)
 })
+test('the gym type scale keeps the lead figure the largest on screen', () => {
+  expect(type.label).toEqual({ fontSize: 13, fontWeight: '500' })
+  expect(type.lead.fontSize).toBe(34)
+  expect(type.screenTitle.fontSize).toBe(20)
+  expect(type.timer.fontSize).toBeGreaterThan(type.lead.fontSize)
+  expect(type.lead.fontSize).toBeGreaterThan(type.title.fontSize)
+  expect(fontScale.lead).toBe(1.3)
+  expect(fontScale.screenTitle).toBe(1.5)
+})

@@ -39,3 +39,9 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Personal snapshot of the owner's routines, written by scripts/make-snapshot.mjs
+/local/
+
+# The root ignore of data/ (runtime user data) must not swallow the app's src/data
+!/src/data/

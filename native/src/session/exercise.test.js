@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
 import { createMemoryStorage } from './storage.js'
-import { createFakeSqliteDb } from './fake-sqlite.js'
+import { SQLITE_DRIVERS } from '../../scripts/node-sqlite.mjs'
 import { createSqliteSessionStorage } from './sqlite-storage.js'
 import { openSession, plannedSetId } from './session.js'
 
@@ -257,8 +257,8 @@ test('a smuggled remove cannot drop the last exercise', async () => {
   expect(restored.view().entries.map(entry => entry.id)).toEqual(['bench'])
 })
 
-test('an added exercise and a removal survive replay', async () => {
-  const db = createFakeSqliteDb()
+test.each(SQLITE_DRIVERS)('%s: an added exercise and a removal survive replay', async (_driver, createDb) => {
+  let db = createDb()
   const session = await started(createSqliteSessionStorage(db))
   await session.addExercise({ eventId: 'add-curl', exerciseId: 'curl', entry: curl })
   await session.commitSet({
@@ -269,6 +269,7 @@ test('an added exercise and a removal survive replay', async () => {
   })
   await session.removeExercise({ eventId: 'rm-bench', exerciseId: 'bench' })
 
+  db = db.reopen()
   const restored = await openSession({
     storage: createSqliteSessionStorage(db),
     now: () => T0 + 120_000,

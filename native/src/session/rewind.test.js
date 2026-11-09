@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest'
 import { createFakeSqliteDb } from './fake-sqlite.js'
+import { createNodeSqliteFileDb } from '../../scripts/node-sqlite.mjs'
 import { openSession, plannedSetId } from './session.js'
 import { createSqliteSessionStorage } from './sqlite-storage.js'
 import { createMemoryStorage } from './storage.js'
@@ -62,7 +63,7 @@ async function openDriver(kind, clock) {
       reopen: () => openSession({ storage, now: clock.now, timeZone: 'UTC' }),
     }
   }
-  const db = createFakeSqliteDb()
+  let db = kind === 'node sqlite file' ? createNodeSqliteFileDb() : createFakeSqliteDb()
   const session = await openSession({
     base: baseWorkout(clock.now()),
     storage: createSqliteSessionStorage(db),
@@ -71,16 +72,19 @@ async function openDriver(kind, clock) {
   })
   return {
     session,
-    reopen: () => openSession({
-      storage: createSqliteSessionStorage(db),
-      now: clock.now,
-      timeZone: 'UTC',
-    }),
+    reopen: () => {
+      db = db.reopen()
+      return openSession({
+        storage: createSqliteSessionStorage(db),
+        now: clock.now,
+        timeZone: 'UTC',
+      })
+    },
   }
 }
 
 test('displayed elapsed never rewinds across a fixed session', async () => {
-  for (const kind of ['memory', 'sqlite']) {
+  for (const kind of ['memory', 'sqlite', 'node sqlite file']) {
     const clock = createClock(START)
     let { session, reopen } = await openDriver(kind, clock)
     let previous = null

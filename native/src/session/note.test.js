@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
 import { createMemoryStorage } from './storage.js'
-import { createFakeSqliteDb } from './fake-sqlite.js'
+import { SQLITE_DRIVERS } from '../../scripts/node-sqlite.mjs'
 import { createSqliteSessionStorage } from './sqlite-storage.js'
 import { openSession, plannedSetId } from './session.js'
 import { createSessionController } from './session-controller.js'
@@ -93,10 +93,11 @@ test('a session note longer than 2000 characters is refused', async () => {
   expect((await storage.readAll()).some(event => event.id === 'note-long')).toBe(false)
 })
 
-test('a session note survives replay', async () => {
-  const db = createFakeSqliteDb()
+test.each(SQLITE_DRIVERS)('%s: a session note survives replay', async (_driver, createDb) => {
+  let db = createDb()
   const session = await started(createSqliteSessionStorage(db))
   await session.setNote({ eventId: 'note-1', note: 'pause at the bottom' })
+  db = db.reopen()
   const restored = await openSession({
     storage: createSqliteSessionStorage(db),
     now: () => T0 + 120_000,
@@ -190,8 +191,8 @@ test('a blank exercise note drops the note and the pin', async () => {
   expect(bench.notePin).toBeUndefined()
 })
 
-test('an exercise note survives replay', async () => {
-  const db = createFakeSqliteDb()
+test.each(SQLITE_DRIVERS)('%s: an exercise note survives replay', async (_driver, createDb) => {
+  let db = createDb()
   const session = await started(createSqliteSessionStorage(db))
   await session.setExerciseNote({
     eventId: 'en-1',
@@ -199,6 +200,7 @@ test('an exercise note survives replay', async () => {
     note: 'keep elbows in',
     notePin: true,
   })
+  db = db.reopen()
   const restored = await openSession({
     storage: createSqliteSessionStorage(db),
     now: () => T0 + 120_000,

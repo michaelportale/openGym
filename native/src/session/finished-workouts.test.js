@@ -3,6 +3,7 @@ import { plannedSetId } from './session.js'
 import { createMemoryStorage } from './storage.js'
 import { createSessionController } from './session-controller.js'
 import { createFakeSqliteDb } from './fake-sqlite.js'
+import { SQLITE_DRIVERS, createNodeSqliteDb } from '../../scripts/node-sqlite.mjs'
 import { createSqliteSessionStorage } from './sqlite-storage.js'
 import {
   FINISHED_WORKOUTS_SCHEMA,
@@ -32,12 +33,10 @@ function workout(id, d, extra = {}) {
   }
 }
 
-function stores() {
-  const db = createFakeSqliteDb()
-  return [
-    ['memory', createMemoryFinishedWorkouts()],
-    ['sqlite', createSqliteFinishedWorkouts(db), db],
-  ]
+const STORES = {
+  memory: () => createMemoryFinishedWorkouts(),
+  'fake sqlite': () => createSqliteFinishedWorkouts(createFakeSqliteDb()),
+  'node sqlite': () => createSqliteFinishedWorkouts(createNodeSqliteDb()),
 }
 
 test('the finished-workout table indexes id and date', () => {
@@ -47,9 +46,12 @@ test('the finished-workout table indexes id and date', () => {
   expect(FINISHED_WORKOUTS_SCHEMA).not.toMatch(/expo-sqlite/)
 })
 
-test.each([['memory'], ['sqlite']])('%s store starts empty and keeps unknown keys', async (kind) => {
-  const [memory, sqlite] = stores()
-  const store = kind === 'memory' ? memory[1] : sqlite[1]
+test('sqlite finished workouts require an injected db handle, and say so', () => {
+  expect(() => createSqliteFinishedWorkouts()).toThrow('SQLite finished workouts need a db handle with exec, run, and getAll (see storage/db-handle.js)')
+})
+
+test.each(Object.keys(STORES))('%s store starts empty and keeps unknown keys', async (kind) => {
+  const store = STORES[kind]()
   expect(await store.list()).toEqual([])
   expect(await store.get('session-1')).toBeNull()
 
@@ -61,9 +63,8 @@ test.each([['memory'], ['sqlite']])('%s store starts empty and keeps unknown key
   expect((await store.get('session-1')).entries[0].sets[0].r).toBe(5)
 })
 
-test.each([['memory'], ['sqlite']])('%s store replaces a workout with the same id', async (kind) => {
-  const [memory, sqlite] = stores()
-  const store = kind === 'memory' ? memory[1] : sqlite[1]
+test.each(Object.keys(STORES))('%s store replaces a workout with the same id', async (kind) => {
+  const store = STORES[kind]()
   await store.put(workout('session-1', '2026-11-07'))
   await store.put(workout('session-1', '2026-11-08', { vol: 400, note: 'same session' }))
   await store.put(workout('session-2', '2026-11-06'))
@@ -74,17 +75,18 @@ test.each([['memory'], ['sqlite']])('%s store replaces a workout with the same i
   expect(listed[1]).toMatchObject({ d: '2026-11-08', vol: 400, note: 'same session' })
 })
 
-test('sqlite keeps a finished workout when the session journal is cleared', async () => {
-  const db = createFakeSqliteDb()
+test.each(SQLITE_DRIVERS)('%s: a finished workout stays when the session journal is cleared and the app is killed', async (_driver, createDb) => {
+  let db = createDb()
   const finished = createSqliteFinishedWorkouts(db)
   const journal = createSqliteSessionStorage(db)
   await finished.put(workout('session-1', '2026-11-07'))
   await journal.append({ id: 'e1', at: T0, type: 'set.commit' })
   await journal.clear()
-
-  expect(await journal.readAll()).toEqual([])
-  expect((await finished.get('session-1')).id).toBe('session-1')
   expect(db.executed.some(sql => /CREATE INDEX IF NOT EXISTS finished_workouts_d/i.test(sql))).toBe(true)
+
+  db = db.reopen()
+  expect(await createSqliteSessionStorage(db).readAll()).toEqual([])
+  expect((await createSqliteFinishedWorkouts(db).get('session-1')).id).toBe('session-1')
 })
 
 test('finishSession leaves the journal in place when the save is refused or the workout row cannot be written', async () => {

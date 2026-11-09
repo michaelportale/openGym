@@ -1,8 +1,11 @@
 import { useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { deleteDatabaseAsync, openDatabaseAsync } from 'expo-sqlite'
 import { color, radius, space, touch } from '../theme/tokens'
 import AppText from '../ui/AppText'
 import { readVerdict } from '../health/gates'
+import { toSessionDbHandle } from '../storage/db-handle'
+import { runStorageProbe, storageCheckLines } from '../storage/probe'
 import { removeGateWorkouts, runWorkoutGates } from '../health/run-gates'
 import {
   deleteWorkout,
@@ -13,6 +16,8 @@ import {
   saveStrengthWorkout
 } from '../health/healthkit'
 
+// A separate file from opengym.db, so the check can clear its rows and delete the file safely.
+const PROBE_DATABASE_NAME = 'opengym-probe.db'
 const OWN_BUNDLE = 'io.github.michaelportale.opengym'
 const MANUAL_ID = 'opengym-phase0-gate-manual'
 const adapter = { saveStrengthWorkout, findWorkoutsBySyncId, findOwnWorkouts, deleteWorkout }
@@ -86,6 +91,22 @@ export default function Diagnostics() {
       return out
     })
 
+  const storageCheck = () =>
+    run(async () => {
+      const expoDb = await openDatabaseAsync(PROBE_DATABASE_NAME)
+      let outcome
+      const cleanupErrors = []
+      try {
+        outcome = await runStorageProbe(toSessionDbHandle(expoDb))
+      } catch (e) {
+        outcome = { error: e }
+      }
+      // Each cleanup step runs on its own so one failure neither skips the other nor hides the verdict.
+      try { await expoDb.closeAsync() } catch (e) { cleanupErrors.push(e) }
+      try { await deleteDatabaseAsync(PROBE_DATABASE_NAME) } catch (e) { cleanupErrors.push(e) }
+      return storageCheckLines(outcome, cleanupErrors)
+    })
+
   return (
     <View style={styles.container}>
       <AppText variant="value">e1RM {e1rm}</AppText>
@@ -97,6 +118,7 @@ export default function Diagnostics() {
         <ActionButton title="Read body weight" disabled={busy} onPress={readWeight} />
         <ActionButton title="Save one test workout" disabled={busy} onPress={saveManual} />
         <ActionButton title="Remove test workouts" disabled={busy} onPress={removeTests} />
+        <ActionButton title="Storage check" disabled={busy} onPress={storageCheck} />
       </View>
       <ScrollView style={styles.output}>
         {lines.map((l, i) => (
