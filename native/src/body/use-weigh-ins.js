@@ -4,7 +4,6 @@ import { createSqliteWeighIns } from './weigh-ins'
 import { applyDayOps } from './day-ops'
 import { coalesced } from './coalesce'
 import { readCopy, createSqliteServerCopy } from '../sync/server-copy'
-import { createSqliteRoutineEdits } from '../plan/routine-edits'
 import { keyed, readSourceKey } from '../sync/source-key'
 import { localDate } from '../session/timing'
 import { healthAfterFinish } from '../health/use-health'
@@ -52,7 +51,7 @@ export function useWeighIns() {
     return coalesced(async () => {
       try {
         const db = await openAppDatabase()
-        setView(await load({ db, serverCopy: createSqliteServerCopy(db), weighIns: createSqliteWeighIns(db), routineEdits: createSqliteRoutineEdits(db), now: Date.now() }))
+        setView(await load({ db, serverCopy: createSqliteServerCopy(db), weighIns: createSqliteWeighIns(db), now: Date.now() }))
       } catch {
         // Keep what the screen shows.
       }
