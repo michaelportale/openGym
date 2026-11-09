@@ -261,6 +261,10 @@ export function resultNotice(result, action) {
 
 export const NO_NOTICES = { notice: null, rest: null }
 
+// A notice as the screen holds it: its words and the number of the report that set it. Every
+// reported outcome gets a new number, so the same words reported again are a new notice.
+export const noticeStamp = seq => text => ({ text, seq })
+
 // The screen's two notices after a write. `notice` is what the last write said (null clears
 // it). `rest` is the line that carries the Start rest button: set by a Complete whose set saved
 // but whose rest was refused (or by a rest that failed to start), gone once a rest runs, another
@@ -268,27 +272,33 @@ export const NO_NOTICES = { notice: null, rest: null }
 // other write. 'rest' is the rest restored on open, 'start-rest' the Start rest tap; `result`
 // null there means no rest was left to start. A rest refused overnight says so as the notice and
 // leaves the line as it was: its Start rest works again after Resume. A dropped tap changes nothing.
-export function noticesAfter(notices, result, action) {
+// `stamp` (noticeStamp) wraps each notice this write sets; one kept through it passes as it was.
+// Without it the notices are plain words.
+export function noticesAfter(notices, result, action, stamp = text => text) {
   if (result?.ignored) return notices
   const outcome = writeOutcome(result, action)
+  const said = outcome ? stamp(outcome.text) : null
   if (action === 'rest' || action === 'start-rest') {
-    if (outcome?.kind === 'failed' && result?.error?.code === 'overnight') return { notice: outcome.text, rest: notices.rest }
-    if (outcome?.kind === 'failed') return { notice: notices.notice, rest: outcome.text }
+    if (outcome?.kind === 'failed' && result?.error?.code === 'overnight') return { notice: said, rest: notices.rest }
+    if (outcome?.kind === 'failed') return { notice: notices.notice, rest: said }
     // The tap found that rest already over: say so rather than let the line just vanish.
-    if (result == null && action === 'start-rest') return { notice: REST_RAN_OUT, rest: null }
-    return { notice: outcome?.text ?? notices.notice, rest: null }
+    if (result == null && action === 'start-rest') return { notice: stamp(REST_RAN_OUT), rest: null }
+    return { notice: said ?? notices.notice, rest: null }
   }
-  if (outcome?.kind === 'saved-rest-failed') return { notice: null, rest: outcome.text }
+  if (outcome?.kind === 'saved-rest-failed') return { notice: null, rest: said }
   const moved = result?.saved === true && (action === 'complete' || action === 'undo')
-  return { notice: outcome?.text ?? null, rest: moved ? null : notices.rest }
+  return { notice: said, rest: moved ? null : notices.rest }
 }
 
 // What VoiceOver says when the notices change (iOS speaks neither live regions nor the alert
-// role): each one in `after` that appeared or whose words changed, in its order (the screen's
-// notice, its rest line, then the keypad's and Finish's); nothing for one that went away or stayed
-// the same, so a re-render never repeats it.
+// role). Each notice is a noticeStamp: one in `after` whose report `before` did not hold is
+// spoken, in order (the screen's notice, its rest line, then the keypad's and Finish's), even with
+// the same words as before, so a retry that fails again is heard again. One kept through a write
+// keeps its report and is not spoken again on a re-render; one that went away says nothing.
 export function noticeAnnouncement(before, after) {
-  const fresh = Object.keys(after ?? {}).map(key => (after[key] && after[key] !== before?.[key] ? after[key] : null)).filter(Boolean)
+  const fresh = Object.keys(after ?? {})
+    .map(key => (after[key]?.text && after[key].seq !== before?.[key]?.seq ? after[key].text : null))
+    .filter(Boolean)
   return fresh.length ? fresh.join(' ') : null
 }
 

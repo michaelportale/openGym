@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { NO_NOTICES, OVERNIGHT_NOTICE, PAST_MIDNIGHT, addSetCall, addWarmupCall, completeCall, completeResult, dockKeypadField, draftCall, editCall, finishRetarget, keypadField, noticeAnnouncement, noticesAfter, overnightNotice, overnightNow, overnightRefusal, primaryAction, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, undoCall, undoWrite, writeOutcome, findSet } from './set-calls.js'
+import { NO_NOTICES, OVERNIGHT_NOTICE, PAST_MIDNIGHT, addSetCall, addWarmupCall, completeCall, completeResult, dockKeypadField, draftCall, editCall, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightNow, overnightRefusal, primaryAction, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, undoCall, undoWrite, writeOutcome, findSet } from './set-calls.js'
 import { shownValues, workoutScreen } from './workout-view.js'
 import { pendingRest, restEventId, restMsFor } from './rest-after.js'
 import { withTargets } from './session-screen.js'
@@ -646,6 +646,17 @@ describe('noticesAfter', () => {
     expect(noticesAfter(restLine, { ok: true, saved: true, checkpointError: STORAGE }, 'rest'))
       .toEqual({ notice: "Saved. The workout time couldn't be updated, so it may be off after a restart.", rest: null })
   })
+  test('with a stamp, each notice the write sets carries it; one kept through it passes as it was', () => {
+    const kept = noticeStamp(1)(SAVED_REST)
+    const stamp = noticeStamp(2)
+    const draft = noticesAfter({ notice: null, rest: kept }, refused, 'draft', stamp)
+    expect(draft).toEqual({ notice: { text: "Numbers not saved. The phone couldn't write it. Try again.", seq: 2 }, rest: kept })
+    expect(draft.rest).toBe(kept)
+    expect(noticesAfter({ notice: null, rest: kept }, refused, 'start-rest', stamp))
+      .toEqual({ notice: null, rest: { text: "Rest didn't start. The phone couldn't write it. Try again.", seq: 2 } })
+    expect(noticesAfter({ notice: null, rest: kept }, null, 'start-rest', stamp)).toEqual({ notice: { text: 'That rest has already run out.', seq: 2 }, rest: null })
+    expect(noticesAfter(NO_NOTICES, { ok: true, saved: true, restFailed: true }, 'complete', stamp)).toEqual({ notice: null, rest: { text: SAVED_REST, seq: 2 } })
+  })
   test('a tap the gate dropped changes nothing', () => {
     expect(noticesAfter(restLine, { ignored: true }, 'complete')).toBe(restLine)
     expect(noticesAfter(restLine, { ignored: true }, 'rest')).toBe(restLine)
@@ -653,40 +664,60 @@ describe('noticesAfter', () => {
   })
 })
 
-// VoiceOver on iOS ignores live regions, so the screen announces a notice itself: once, when it
-// appears or its words change, never on a re-render.
+// VoiceOver on iOS ignores live regions, so the screen announces a notice itself: once per
+// report, never on a re-render. A notice is noticeStamp(seq)(text): `seq` is the report that set it.
 describe('noticeAnnouncement', () => {
   const FAILED = "Set not saved. The phone couldn't write it. Try again."
+  const said = (text, seq = 1) => noticeStamp(seq)(text)
   test('a notice or rest line that appears is spoken', () => {
-    expect(noticeAnnouncement(NO_NOTICES, { notice: FAILED, rest: null })).toBe(FAILED)
-    expect(noticeAnnouncement(NO_NOTICES, { notice: null, rest: SAVED_REST })).toBe(SAVED_REST)
+    expect(noticeAnnouncement(NO_NOTICES, { notice: said(FAILED), rest: null })).toBe(FAILED)
+    expect(noticeAnnouncement(NO_NOTICES, { notice: null, rest: said(SAVED_REST) })).toBe(SAVED_REST)
   })
-  test('one whose words changed is spoken; one that stayed the same is not spoken again', () => {
-    expect(noticeAnnouncement({ notice: 'Set not added. No rest is running.', rest: SAVED_REST }, { notice: FAILED, rest: SAVED_REST })).toBe(FAILED)
+  test('one from a new report is spoken; one kept from the same report is not spoken again', () => {
+    expect(noticeAnnouncement({ notice: said('Set not added. No rest is running.', 1), rest: said(SAVED_REST, 1) }, { notice: said(FAILED, 2), rest: said(SAVED_REST, 1) })).toBe(FAILED)
     const why = "Rest didn't start. The phone couldn't write it. Try again."
-    expect(noticeAnnouncement({ notice: FAILED, rest: SAVED_REST }, { notice: FAILED, rest: why })).toBe(why)
-    expect(noticeAnnouncement({ notice: FAILED, rest: SAVED_REST }, { notice: FAILED, rest: SAVED_REST })).toBeNull()
+    expect(noticeAnnouncement({ notice: said(FAILED, 1), rest: said(SAVED_REST, 1) }, { notice: said(FAILED, 1), rest: said(why, 2) })).toBe(why)
+    expect(noticeAnnouncement({ notice: said(FAILED, 1), rest: said(SAVED_REST, 1) }, { notice: said(FAILED, 1), rest: said(SAVED_REST, 1) })).toBeNull()
+  })
+  // A retry that fails the same way says the same words: it is still a new outcome, so it is heard.
+  test('the same words from a new report are spoken again; the same report is not', () => {
+    expect(noticeAnnouncement({ notice: said(FAILED, 1), rest: null }, { notice: said(FAILED, 2), rest: null })).toBe(FAILED)
+    expect(noticeAnnouncement({ notice: said(FAILED, 2), rest: null }, { notice: said(FAILED, 2), rest: null })).toBeNull()
+    const quiet = { notice: null, rest: null, sheet: null, finish: null }
+    expect(noticeAnnouncement({ ...quiet, sheet: said(FAILED, 3) }, { ...quiet, sheet: said(FAILED, 4) })).toBe(FAILED)
+    expect(noticeAnnouncement({ ...quiet, sheet: said(FAILED, 4) }, { ...quiet, sheet: said(FAILED, 4) })).toBeNull()
+  })
+  test('through noticesAfter: a Complete refused twice is spoken twice; the rest line it kept is not', () => {
+    const line = noticesAfter(NO_NOTICES, { ok: true, saved: true, restFailed: true }, 'complete', noticeStamp(1))
+    const first = noticesAfter(line, refused, 'complete', noticeStamp(2))
+    expect(noticeAnnouncement(line, first)).toBe(FAILED)
+    const again = noticesAfter(first, refused, 'complete', noticeStamp(3))
+    expect(again.notice).toEqual({ text: FAILED, seq: 3 })
+    expect(again.rest).toBe(line.rest)
+    expect(noticeAnnouncement(first, again)).toBe(FAILED)
+    // The retry that saves clears both: nothing to say.
+    expect(noticeAnnouncement(again, noticesAfter(again, { ok: true, saved: true }, 'complete', noticeStamp(4)))).toBeNull()
   })
   test('both new: the notice, then the rest line', () => {
-    expect(noticeAnnouncement(NO_NOTICES, { notice: FAILED, rest: SAVED_REST })).toBe(`${FAILED} ${SAVED_REST}`)
+    expect(noticeAnnouncement(NO_NOTICES, { notice: said(FAILED), rest: said(SAVED_REST) })).toBe(`${FAILED} ${SAVED_REST}`)
   })
   // The keypad and Finish sheets show their own notice (a refusal kept with the typed numbers,
   // a finish that did not go through); the alert role alone is silent on iOS too.
   test("the keypad and Finish sheets' notices are spoken by the same rule, after the screen's", () => {
     const quiet = { notice: null, rest: null, sheet: null, finish: null }
     const notClosed = "The workout isn't closed yet. Tap Save workout again."
-    expect(noticeAnnouncement(quiet, { ...quiet, sheet: FAILED })).toBe(FAILED)
-    expect(noticeAnnouncement({ ...quiet, sheet: FAILED }, { ...quiet, sheet: FAILED })).toBeNull()
-    expect(noticeAnnouncement({ ...quiet, sheet: FAILED }, { ...quiet, sheet: 'Numbers not saved. The phone couldn\'t write it. Try again.' })).toBe("Numbers not saved. The phone couldn't write it. Try again.")
-    expect(noticeAnnouncement({ ...quiet, sheet: FAILED }, quiet)).toBeNull()
-    expect(noticeAnnouncement(quiet, { ...quiet, finish: notClosed })).toBe(notClosed)
-    expect(noticeAnnouncement({ ...quiet, finish: notClosed }, { ...quiet, finish: notClosed })).toBeNull()
-    expect(noticeAnnouncement(quiet, { notice: FAILED, rest: null, sheet: null, finish: notClosed })).toBe(`${FAILED} ${notClosed}`)
+    expect(noticeAnnouncement(quiet, { ...quiet, sheet: said(FAILED) })).toBe(FAILED)
+    expect(noticeAnnouncement({ ...quiet, sheet: said(FAILED) }, { ...quiet, sheet: said(FAILED) })).toBeNull()
+    expect(noticeAnnouncement({ ...quiet, sheet: said(FAILED, 1) }, { ...quiet, sheet: said("Numbers not saved. The phone couldn't write it. Try again.", 2) })).toBe("Numbers not saved. The phone couldn't write it. Try again.")
+    expect(noticeAnnouncement({ ...quiet, sheet: said(FAILED) }, quiet)).toBeNull()
+    expect(noticeAnnouncement(quiet, { ...quiet, finish: said(notClosed) })).toBe(notClosed)
+    expect(noticeAnnouncement({ ...quiet, finish: said(notClosed) }, { ...quiet, finish: said(notClosed) })).toBeNull()
+    expect(noticeAnnouncement(quiet, { notice: said(FAILED, 1), rest: null, sheet: null, finish: said(notClosed, 2) })).toBe(`${FAILED} ${notClosed}`)
     expect(noticeAnnouncement(null, quiet)).toBeNull()
   })
   test('one that went away is not spoken', () => {
-    expect(noticeAnnouncement({ notice: FAILED, rest: SAVED_REST }, NO_NOTICES)).toBeNull()
-    expect(noticeAnnouncement({ notice: FAILED, rest: SAVED_REST }, { notice: null, rest: SAVED_REST })).toBeNull()
+    expect(noticeAnnouncement({ notice: said(FAILED), rest: said(SAVED_REST) }, NO_NOTICES)).toBeNull()
+    expect(noticeAnnouncement({ notice: said(FAILED), rest: said(SAVED_REST) }, { notice: null, rest: said(SAVED_REST) })).toBeNull()
     expect(noticeAnnouncement(NO_NOTICES, NO_NOTICES)).toBeNull()
   })
 })

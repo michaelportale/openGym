@@ -6,7 +6,7 @@ import { createActionGate } from './action-gate'
 import { pendingRest, restMsFor } from './rest-after'
 import { shownAfterComplete, withTargets } from './session-screen'
 import { carriedWeight, lockedWeight, shownValues } from './workout-view'
-import { NO_NOTICES, addSetCall, addWarmupCall, completeCall, completeResult, dockKeypadField, draftCall, editCall, findSet, finishRetarget, keypadField, noticeAnnouncement, noticesAfter, overnightNotice, overnightRefusal, primaryAction, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, undoWrite } from './set-calls'
+import { NO_NOTICES, addSetCall, addWarmupCall, completeCall, completeResult, dockKeypadField, draftCall, editCall, findSet, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightRefusal, primaryAction, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, undoWrite } from './set-calls'
 
 const sideLabel = { L: 'Complete left', R: 'Complete right' }
 const failed = error => ({ ok: false, saved: false, error: { code: 'storage', message: error?.message || String(error) } })
@@ -23,15 +23,20 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
   const gate = useRef(null)
   if (gate.current == null) gate.current = createActionGate()
   const [busy, setBusy] = useState(false)
-  // The screen's notice and its "Rest didn't start" line (noticesAfter).
+  // The screen's notice and its "Rest didn't start" line (noticesAfter). Every notice here is a
+  // noticeStamp ({ text, seq }); the screen and the sheets get its text.
   const [notices, setNotices] = useState(NO_NOTICES)
   const [sheet, setSheet] = useState(null)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [sheetNotice, setSheetNotice] = useState(null)
   const [finishing, setFinishing] = useState(null)
   const [finishNotice, setFinishNotice] = useState(null)
+  // Each reported outcome takes the next number, so the same words reported again are a new
+  // notice: the state changes and it is spoken again.
+  const reports = useRef(0)
+  const nextStamp = () => noticeStamp(++reports.current)
   // VoiceOver speaks neither live regions nor the alert role: speak each notice (the screen's,
-  // its rest line, the keypad's, Finish's) once, when it appears or its words change. Queued, not
+  // its rest line, the keypad's, Finish's) once per report (noticeAnnouncement). Queued, not
   // interrupting: a sheet write's notice lands as the sheet slides away, and iOS would cut an
   // unqueued announcement off when VoiceOver moves to the screen beneath. (React Native falls
   // back to the plain announcement where the queue option is not available.)
@@ -63,7 +68,10 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
       setBusy(false)
     }
   })
-  const report = (result, action) => setNotices(current => noticesAfter(current, result, action))
+  const report = (result, action) => {
+    const stamp = nextStamp()
+    setNotices(current => noticesAfter(current, result, action, stamp))
+  }
 
   // Every write but the three overnight choices (Resume, Finish, Discard). Right before it writes,
   // inside the gate, overnight is checked against the clock now in the session's own zone: a
@@ -139,7 +147,8 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
   const blockedOvernight = () => {
     const text = overnightNotice(latest(), Date.now())
     if (text == null) return false
-    setNotices(current => ({ ...current, notice: text }))
+    const notice = nextStamp()(text)
+    setNotices(current => ({ ...current, notice }))
     // A reload that fails leaves the notice; the next tap refuses and reloads again.
     session.refresh().catch(() => {})
     return true
@@ -182,7 +191,7 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
     const outcome = sheetOutcome(result, openKey.current === key, action)
     if (!outcome) return
     if (outcome.close) closeSheet()
-    if (outcome.sheet) setSheetNotice(outcome.sheet)
+    if (outcome.sheet) setSheetNotice(nextStamp()(outcome.sheet))
     if (outcome.screen) report(result, action)
   }
 
@@ -211,8 +220,9 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
       const { key, setId } = sheet
       const text = resultNotice(await keepDraft(setId, values), 'draft')
       if (!text) return
-      if (openKey.current === key) setSheetNotice(text)
-      else setNotices(current => ({ ...current, notice: text }))
+      const notice = nextStamp()(text)
+      if (openKey.current === key) setSheetNotice(notice)
+      else setNotices(current => ({ ...current, notice }))
     },
   }
 
@@ -252,9 +262,9 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
 
   return {
     busy,
-    notice: notices.notice,
+    notice: notices.notice?.text ?? null,
     // "Saved. Rest didn't start." (or why Start rest was refused), with its Start rest button.
-    restNotice: notices.rest,
+    restNotice: notices.rest?.text ?? null,
     restoreRest,
     startRest: () => {
       if (!blockedOvernight()) startPendingRest('start-rest')
@@ -264,11 +274,11 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
     addWarmup: addRow(addWarmupCall, 'add-warmup'),
     resume: async () => report(await act(() => session.resume({ eventId: createEventId() })), 'resume'),
     dock: dockActions,
-    sheet: { ...sheet, open: sheetOpen, notice: sheetNotice, ...sheetActions },
+    sheet: { ...sheet, open: sheetOpen, notice: sheetNotice?.text ?? null, ...sheetActions },
     finish: {
       open: finishing != null,
       endsAtLastSet: finishing?.end != null,
-      notice: finishNotice,
+      notice: finishNotice?.text ?? null,
       show: openFinish,
       close: () => setFinishing(null),
       confirm: async () => {
@@ -280,11 +290,11 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
         const retarget = finishRetarget(result, end, latest())
         if (retarget) {
           setFinishing({ end: retarget.end })
-          setFinishNotice(retarget.notice)
+          setFinishNotice(nextStamp()(retarget.notice))
           return
         }
         const text = resultNotice(result, 'finish')
-        if (text) setFinishNotice(text)
+        if (text) setFinishNotice(nextStamp()(text))
         else setFinishing(null)
       },
     },
