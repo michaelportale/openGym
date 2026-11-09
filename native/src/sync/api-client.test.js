@@ -115,6 +115,11 @@ describe('failure handling', () => {
     const client = createApiClient({ fetch, timeoutMs: 5 })
     expect(await client.rev(BASE, TOKEN)).toEqual({ ok: false, kind: 'offline' })
   })
+  test('a timeout that fires while the body is being read is offline, not server', async () => {
+    const fetch = (url, init) => Promise.resolve({ status: 200, ok: true, json: () => new Promise((_, reject) => init.signal.addEventListener('abort', () => reject(new Error('aborted')))) })
+    const client = createApiClient({ fetch, timeoutMs: 5 })
+    expect(await client.pull(BASE, TOKEN)).toEqual({ ok: false, kind: 'offline' })
+  })
   test('a non-JSON success body is a server error, not a throw', async () => {
     const { client } = make(() => res(200, undefined))
     expect(await client.pull(BASE, TOKEN)).toEqual({ ok: false, kind: 'server', status: 200 })

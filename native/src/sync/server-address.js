@@ -11,7 +11,10 @@ const NOT_AN_ADDRESS = "That doesn't look like a server address. Try something l
 const fail = error => ({ ok: false, error })
 
 function ipv4Octets(host) {
-  const o = host.split('.').map(Number)
+  const parts = host.split('.')
+  // A leading zero reads as octal to inet_aton/NSURL (010 is 8), so 010.0.0.1 is not 10.0.0.1.
+  if (parts.some(p => /^0\d/.test(p))) return null
+  const o = parts.map(Number)
   return o.length === 4 && o.every(n => n >= 0 && n <= 255) ? o : null
 }
 

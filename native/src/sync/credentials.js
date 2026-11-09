@@ -13,6 +13,8 @@ export function createCredentials(secureStore) {
         const token = await secureStore.getItemAsync(TOKEN_KEY, options)
         return token ? { token } : null
       } catch {
+        // A locked or broken Keychain reads as unpaired. That is safe: the engine shows "Not paired"
+        // and keeps all local data; nothing is deleted, and pairing again restores sync.
         return null
       }
     },

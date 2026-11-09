@@ -19,6 +19,7 @@ describe('normalizeServer accepts', () => {
     ['http://[fe80::1]', 'http://[fe80::1]'],
     ['https://8.8.8.8', 'https://8.8.8.8'],
     ['192.168.1.5:3000', 'https://192.168.1.5:3000'],
+    ['http://10.0.0.1', 'http://10.0.0.1'],
   ])('%s', (input, want) => {
     expect(normalizeServer(input)).toEqual({ ok: true, base: want })
   })
@@ -36,6 +37,7 @@ describe('normalizeServer refuses', () => {
     ['http://192.169.0.1'],
     ['http://[2001:db8::1]'],
     ['http://gym.local.evil.com'],
+    ['http://0x7f.0.0.1'],
   ])('plain http to %s', input => {
     const r = normalizeServer(input)
     expect(r.ok).toBe(false)
@@ -47,6 +49,10 @@ describe('normalizeServer refuses', () => {
     expect(r.ok).toBe(false)
     expect(typeof r.error).toBe('string')
     expect(r.error.length).toBeGreaterThan(5)
+  })
+
+  test.each([['http://010.0.0.1'], ['http://192.168.01.5'], ['https://010.0.0.1']])('octal-looking octets are refused: %s', input => {
+    expect(normalizeServer(input).ok).toBe(false)
   })
 
   test('a credential in the address is refused, and not echoed', () => {

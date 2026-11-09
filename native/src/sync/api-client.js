@@ -13,6 +13,8 @@ export function createApiClient({ fetch, timeoutMs = 15000 }) {
       const res = await fetch(`${base}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal: controller.signal })
       let json
       try { json = await res.json() } catch { json = undefined }
+      // The timeout can fire while the body is still arriving; that is a slow network, not a bad server.
+      if (controller.signal.aborted) return { ok: false, kind: 'offline' }
       const status = res.status
       if (status === 401) return { ok: false, kind: 'unauthorized' }
       const special = onStatus?.(status, json)
