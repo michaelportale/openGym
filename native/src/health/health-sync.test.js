@@ -176,17 +176,39 @@ test('disable with remove deletes everything the app wrote and clears links; fin
   expect((await health.status()).on).toBe(false)
 })
 
-test('a failed remove on disable keeps the links and the error until the next good enable and run', async () => {
+test('a failed remove on disable leaves no stale links; enabling again re-saves each workout once and clears the error', async () => {
   const { adapter, store, health } = await setup(['w1', 'w2'])
   await health.enable()
   adapter.failDelete = new Error('locked')
   await health.disable({ remove: true })
-  expect(await store.links.list('w')).toHaveLength(2)
-  expect((await store.links.list('w')).every(l => l.error === null)).toBe(true)
+  expect(await store.links.list('w')).toEqual([])
   expect((await health.status()).error).toBe('locked')
   adapter.failDelete = null
+  adapter.calls.length = 0
   await health.enable()
+  expect(saves(adapter).map(s => s.id).sort()).toEqual(['opengym-w-w1', 'opengym-w-w2'])
   expect(await health.status()).toMatchObject({ on: true, error: null, exported: 2, waiting: 0 })
+})
+
+test('a disable that succeeds clears the error an earlier failed disable left', async () => {
+  const { adapter, health } = await setup(['w1'])
+  await health.enable()
+  adapter.failDelete = new Error('locked')
+  await health.disable({ remove: true })
+  expect((await health.status()).error).toBe('locked')
+  adapter.failDelete = null
+  await health.disable({ remove: true })
+  expect((await health.status()).error).toBeNull()
+})
+
+test('a later disable without remove does not cancel an earlier disable that removes', async () => {
+  const { adapter, store, health } = await setup(['w1'])
+  await health.enable()
+  const a = health.disable({ remove: true })
+  const b = health.disable({ remove: false })
+  await Promise.all([a, b])
+  expect(adapter.calls.filter(c => c[0] === 'deleteAll')).toHaveLength(1)
+  expect(await store.links.list('w')).toEqual([])
 })
 
 test('disable during a slow save switches off at once and no further save happens', async () => {

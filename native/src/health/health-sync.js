@@ -33,6 +33,7 @@ export function createHealthSync({ adapter, store, workouts, now }) {
   // Bumped by every enable and disable the moment it is called. A pass, an enable's queued work
   // or a disable's queued remove that sees a newer number belongs to an earlier call: it stops.
   let generation = 0
+  let enables = 0 // only an enable cancels an earlier disable's remove
 
   async function keepError(text) {
     heldError = text
@@ -126,6 +127,7 @@ export function createHealthSync({ adapter, store, workouts, now }) {
 
   async function enable() {
     const mine = ++generation
+    enables++
     await exclusive(async () => {
       if (generation !== mine) return
       try {
@@ -146,15 +148,19 @@ export function createHealthSync({ adapter, store, workouts, now }) {
   }
 
   async function disable({ remove } = {}) {
-    const mine = ++generation
+    ++generation
+    const enablesThen = enables
     // Queued first, so a later enable's work runs after this one's.
     const queued = exclusive(async () => {
       try {
         await state.set('on', '0')
-        if (remove && generation === mine) {
-          await adapter.deleteAllOwnWorkouts()
+        if (remove && enables === enablesThen) {
+          // Links first: if the delete then fails or the app dies, nothing claims a workout is in Health that is not.
           await links.clear('w')
+          await adapter.deleteAllOwnWorkouts()
         }
+        heldError = null
+        await state.set('error', '')
       } catch (error) {
         await keepError(message(error))
       } finally {
