@@ -217,8 +217,10 @@ describe('foreground and tap', () => {
     expect(foregroundBehavior(REST, undefined)).toEqual(shown)
   })
 
-  test('any other notification shows quietly', () => {
-    expect(foregroundBehavior(undefined)).toEqual({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: false, shouldSetBadge: false })
+  test('any other notification (the app sends none) shows as in the background, active or not', () => {
+    const shown = { shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }
+    expect(foregroundBehavior(undefined, true)).toEqual(shown)
+    expect(foregroundBehavior({ kind: 'reminder' }, false)).toEqual(shown)
   })
 
   test('a tap is on a rest alert only when its data says so', () => {

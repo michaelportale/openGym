@@ -93,12 +93,9 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
     }).then(async result => {
       // Played from the raw gate result, before the alert follow-up: on a session's first rest that
       // waits behind the notification-permission prompt. The follow-up never changes success or
-      // failure. A throw here must never reject the write's promise.
-      try {
-        playHaptic(hapticForWrite(action, result, { tapped: !quiet }))
-      } catch (error) {
-        console.warn('haptic failed', error)
-      }
+      // failure. hapticForWrite is pure and playHaptic catches its own failures, so this never
+      // rejects the write's promise.
+      playHaptic(hapticForWrite(action, result, { tapped: !quiet }))
       return afterGatedWrite(result, { afterWrite, before, after: restOf, now: Date.now(), quiet })
     })
   }

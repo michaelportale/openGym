@@ -9,7 +9,6 @@ import { foregroundBehavior, isRestAlertResponse } from './rest-alert'
 // A request as the planner reads it.
 const flat = request => ({
   identifier: request?.identifier,
-  title: request?.content?.title ?? null,
   body: request?.content?.body ?? null,
   data: request?.content?.data ?? null,
 })

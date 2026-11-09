@@ -15,9 +15,8 @@ describe('hapticFor', () => {
 
 describe('hapticForWrite', () => {
   const saved = { ok: true, saved: true }
-  it('buzzes success for a saved set, warm-up included', () => {
+  it('buzzes success for a saved set (a warm-up\'s Complete is tagged complete too)', () => {
     expect(hapticForWrite('complete', saved)).toBe('success')
-    expect(hapticForWrite('complete-warmup', saved)).toBe('success')
   })
   it('a saved set whose rest failed is still a saved set', () => {
     expect(hapticForWrite('complete', { ...saved, restFailed: true })).toBe('success')
