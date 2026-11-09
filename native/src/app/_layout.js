@@ -21,7 +21,8 @@ export default function RootLayout() {
   // A tap on a rest alert opens the Workout tab and writes nothing: the screen there reads the
   // journal as it always does.
   useEffect(() => onRestAlertTap(() => router.navigate('/')), [])
-  // Back in the app: sync if paired (at most once a minute). It touches no session write.
+  // Back in the app: sync if paired, and the Health pass, each at most once a minute. Neither
+  // touches a session write.
   useEffect(() => {
     syncOnForeground()
     healthOnForeground()
