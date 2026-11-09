@@ -12,23 +12,19 @@ const clone = value => JSON.parse(JSON.stringify(value))
 // The web's `Math.max(1, Math.round(x) || fallback)`; strings and blanks come out as the fallback.
 const whole = (x, fallback) => Math.max(1, Math.round(x) || fallback)
 
-function modeOfSlot(slot) {
-  return history.modeOf(slot)
-}
-
 function isPyramidSlot(slot, mode) {
   return mode === 'reps' && pyramid.isPyramid({ ...slot, mode })
 }
 
 // Whether the policy in force for the draft climbs a rep range (reps mode only).
 export function formRanged(form, slot, routine) {
-  const mode = modeOfSlot(slot)
+  const mode = history.modeOf(slot)
   return mode === 'reps' && climbsRange(progression.policyFor({ ...slot, prog: form.prog }, routine, mode))
 }
 
 // The draft a sheet edits.
 export function slotForm(slot, routine) {
-  const mode = modeOfSlot(slot)
+  const mode = history.modeOf(slot)
   const perSide = history.isPerSide(slot)
   const draft = { mode, sets: slot.sets, reps: slot.reps, repsMin: slot.repsMin, sec: slot.sec, min: slot.min, prog: slot.prog || '', lastToFailure: slot.lastToFailure }
   const ranged = formRanged(draft, slot, routine)
@@ -45,7 +41,7 @@ export function failureOnPick(prog, slot) {
 
 // The slot after the draft is saved. Pyramid slots are left as they are.
 export function applySlotForm(slot, form, routine) {
-  const mode = modeOfSlot(slot)
+  const mode = history.modeOf(slot)
   const out = { ...slot }
   if (isPyramidSlot(slot, mode)) return out
   if (mode === 'cardio') {
@@ -89,7 +85,7 @@ export function applySlotForm(slot, form, routine) {
 // field; a slot's own `inc` of 0 is what makes one invalid (none, or a negative one, is the
 // default increment).
 export function stepInvalid(form, slot, routine) {
-  const mode = modeOfSlot(slot)
+  const mode = history.modeOf(slot)
   const policy = progression.policyFor({ ...slot, prog: form.prog || undefined }, routine, mode)
   const step = slot.inc >= 0 ? slot.inc : mode === 'time' ? 5 : exercises.defaultIncrement(slot.id, 'lb')
   const bw = mode !== 'cardio' && history.isBw(slot)
@@ -102,7 +98,7 @@ export function stepInvalid(form, slot, routine) {
 // Triple adds sets and then load: bodyweight work with no load has no load to finish the cycle
 // with, so it is not offered there unless the slot is already on it (sheets.jsx:1748).
 export function policyChoices(slot, routine) {
-  const mode = modeOfSlot(slot)
+  const mode = history.modeOf(slot)
   const inherited = progression.policyFor({ ...slot, prog: undefined }, routine, mode)
   const bw = mode !== 'cardio' && history.isBw(slot)
   return [
