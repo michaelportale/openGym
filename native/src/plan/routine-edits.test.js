@@ -16,7 +16,6 @@ describe.each(Object.entries(makers))('%s routine edits', (_, make) => {
     const edit = { rid: 'r1', baseTs: 100, routine: r1, sent: null, t: 5 }
     expect(await s.listPending()).toEqual([edit])
     expect(await s.get('r1')).toEqual(edit)
-    expect(await s.list()).toEqual([edit])
     expect(await s.get('nope')).toBeNull()
   })
 
@@ -113,7 +112,7 @@ describe.each(Object.entries(makers))('%s routine edits', (_, make) => {
     await s.markSent([{ rid: 'a', t: 1, baseTs: 1, routine: { name: 'A' } }, { rid: 'b', t: 2, baseTs: 1, routine: { name: 'B' } }, { rid: 'zzz', t: 1, baseTs: 1, routine: {} }])
     expect((await s.get('a')).sent).toBeNull()
     expect((await s.get('b')).sent).toBeNull()
-    expect((await s.list()).map(e => e.rid)).toEqual(['a', 'b'])
+    expect(await s.get('zzz')).toBeNull()
   })
 
   test('markSent passes over a row whose baseTs is no longer the one the push listed: a fresh put started it over', async () => {
@@ -225,7 +224,7 @@ describe.each(Object.entries(makers))('%s routine edits', (_, make) => {
     await expect(s.put({ rid: 'a', baseTs: 1, routine: r1, t: Infinity })).rejects.toThrow()
     await expect(s.put({ rid: 'a', baseTs: 'x', routine: r1, t: 1 })).rejects.toThrow()
     await expect(s.put(undefined)).rejects.toThrow()
-    expect(await s.list()).toEqual([])
+    expect(await s.listPending()).toEqual([])
   })
 })
 
@@ -254,7 +253,7 @@ test('real sqlite: a markSent landing while a put is on its way in is kept, sinc
 test('two stores on one db migrate once', async () => {
   const db = createNodeSqliteDb()
   const stores = [createSqliteRoutineEdits(db), createSqliteRoutineEdits(db)]
-  await Promise.all(stores.map(s => s.list()))
+  await Promise.all(stores.map(s => s.listPending()))
   expect(db.executed.filter(sql => /CREATE TABLE IF NOT EXISTS routine_edits/.test(sql))).toHaveLength(1)
 })
 

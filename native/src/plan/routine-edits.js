@@ -70,9 +70,6 @@ export function createMemoryRoutineEdits() {
       const row = rows.get(rid)
       return row ? publicEdit(row) : null
     },
-    async list() {
-      return [...rows.values()].sort(byT).map(publicEdit)
-    },
     async listPending() {
       return [...rows.values()].filter(isPending).sort(byT).map(publicEdit)
     },
@@ -185,10 +182,6 @@ export function createSqliteRoutineEdits(db) {
       await ready()
       const rows = await rowsOf('SELECT * FROM routine_edits WHERE rid = ?', [rid])
       return rows.length ? publicEdit(rows[0]) : null
-    },
-    async list() {
-      await ready()
-      return (await rowsOf('SELECT * FROM routine_edits ORDER BY t ASC, rid ASC')).map(publicEdit)
     },
     async listPending() {
       await ready()
