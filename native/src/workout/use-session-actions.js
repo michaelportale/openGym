@@ -6,7 +6,7 @@ import { createActionGate } from './action-gate'
 import { pendingRest, restMsFor } from './rest-after'
 import { shownAfterComplete, withTargets } from './session-screen'
 import { carriedWeight, lockedWeight, shownValues } from './workout-view'
-import { NO_NOTICES, addSetCall, addWarmupCall, completeAfterCommit, completeCall, dockKeypadField, draftCall, editCall, findSet, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightRefusal, primaryAction, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, thrown, undoWrite } from './set-calls'
+import { NO_NOTICES, addSetCall, addWarmupCall, completeAfterCommit, completeCall, dockKeypadField, draftCall, editCall, findSet, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightRefusal, primaryAction, removeWarmupCall, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, thrown, undoWrite } from './set-calls'
 
 const sideLabel = { L: 'Complete left', R: 'Complete right' }
 
@@ -172,6 +172,8 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
       side,
       perSide,
       warmup: row.warmup,
+      // A warm-up not done yet offers Remove warm-up: only where the tap would write.
+      removable: removeWarmupCall(view, { setId, now: Date.now() }) !== null,
       initial: shownValues(found.slot, side, carriedWeight(found.entry, setId)),
       initialField: keypadField(field, perSide, side),
       // A half-done per-side set's weight stays the one its first side was logged at.
@@ -208,6 +210,11 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
     onComplete: async values => settle(await complete({ setId: sheet.setId, side: sheet.side, values }), sheet.key, sheet.warmup ? 'complete-warmup' : 'complete'),
     // Undo also clears a draft a failed clear left on the set, first, in the same gated write.
     onUndo: async () => settle(await write((view, now) => undoWrite(session, view, { setId: sheet.setId, eventId: createEventId(), now })), sheet.key, sheet.warmup ? 'undo-warmup' : 'undo'),
+    // Remove warm-up takes a mis-tapped warm-up off again, through the gate like every write.
+    onRemove: async () => settle(await write(async (view, now) => {
+      const call = removeWarmupCall(view, { setId: sheet.setId, eventId: createEventId(), now })
+      return call ? session.removeSet(call) : null
+    }), sheet.key, 'remove-warmup'),
     // Swiping the sheet away (or Close) after typing keeps a draft for any set not done yet; on a
     // done set it cancels. The sheet is gone, so a refusal shows on the screen.
     onClose: async (values, changed) => {

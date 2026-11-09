@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { NO_NOTICES, OVERNIGHT_NOTICE, PAST_MIDNIGHT, addSetCall, addWarmupCall, completeAfterCommit, completeCall, completeResult, dockKeypadField, draftCall, editCall, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightNow, overnightRefusal, primaryAction, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, thrown, undoCall, undoWrite, writeOutcome, findSet } from './set-calls.js'
+import { NO_NOTICES, OVERNIGHT_NOTICE, PAST_MIDNIGHT, addSetCall, addWarmupCall, completeAfterCommit, completeCall, completeResult, dockKeypadField, draftCall, editCall, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightNow, overnightRefusal, primaryAction, removeWarmupCall, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, thrown, undoCall, undoWrite, writeOutcome, findSet } from './set-calls.js'
 import { shownValues, workoutScreen } from './workout-view.js'
 import { pendingRest, restEventId, restMsFor } from './rest-after.js'
 import { withTargets } from './session-screen.js'
@@ -21,7 +21,7 @@ const view = entries => ({ status: 'active', entries, rest: null })
 const bench = sets => ({ id: '0289', target: { restSec: 120 }, sets })
 const lateral = sets => ({ id: '0300', target: {}, sets })
 // A warm-up as the engine holds it after addWarmupCall: its own row, phase 'warmup'.
-const warm = (setId, row) => slot(setId, { ...row, phase: 'warmup', warmup: true }, { warmup: true })
+const warm = (setId, row, extra = {}) => slot(setId, { ...row, phase: 'warmup', warmup: true }, { warmup: true, ...extra })
 
 describe('shownValues', () => {
   test('the draft over the row', () => {
@@ -254,6 +254,35 @@ describe('addWarmupCall', () => {
   test('an exercise not in the view adds nothing', () => {
     expect(addWarmupCall(view([]), '0289', 'e9')).toBeNull()
     expect(addWarmupCall(null, '0289', 'e9')).toBeNull()
+  })
+})
+
+describe('removeWarmupCall', () => {
+  const T = Date.parse('2026-11-09T18:00:00.000Z')
+  const v = view([bench([warm('w0', todo(null, null)), warm('w1', done(45, 10)), slot('b0', todo(75, 8))])])
+  test('a warm-up not done yet comes off, named by the tap', () => {
+    expect(removeWarmupCall(v, { setId: 'w0', eventId: 'e9', now: T })).toEqual({ eventId: 'e9', exerciseId: '0289', setId: 'w0' })
+    // Numbers typed for it (a draft, or kept after an Undo) do not stop it: nothing of it was logged.
+    const typed = view([bench([warm('w0', todo(45, 10), { draft: { w: 50 } }), slot('b0', todo(75, 8))])])
+    expect(removeWarmupCall(typed, { setId: 'w0', eventId: 'e9', now: T })).not.toBeNull()
+  })
+  test('never a work set, a done warm-up (Undo is its way back), or a row not in the view', () => {
+    expect(removeWarmupCall(v, { setId: 'b0', eventId: 'e9', now: T })).toBeNull()
+    expect(removeWarmupCall(v, { setId: 'w1', eventId: 'e9', now: T })).toBeNull()
+    expect(removeWarmupCall(v, { setId: 'gone', eventId: 'e9', now: T })).toBeNull()
+    expect(removeWarmupCall(null, { setId: 'w0', eventId: 'e9', now: T })).toBeNull()
+  })
+  test('overnight it refuses, as every write does', () => {
+    const night = { ...v, disposition: { kind: 'overnight', actions: ['resume', 'finish', 'discard'], suggestedEnd: 5000 } }
+    expect(removeWarmupCall(night, { setId: 'w0', eventId: 'e9', now: T })).toBeNull()
+    const drawn = { ...v, disposition: { kind: 'active', actions: [], suggestedEnd: null }, activityAt: T, timeZone: 'UTC' }
+    expect(removeWarmupCall(drawn, { setId: 'w0', eventId: 'e9', now: T + 60_000 })).not.toBeNull()
+    expect(removeWarmupCall(drawn, { setId: 'w0', eventId: 'e9', now: Date.parse('2026-11-10T00:10:00.000Z') })).toBeNull()
+  })
+  test('a refusal says what was not removed, then why; the rest line stays', () => {
+    expect(resultNotice({ ok: false, saved: false, error: { code: 'last-set' } }, 'remove-warmup')).toBe('Warm-up not removed. An exercise needs at least one set.')
+    expect(resultNotice({ ok: false, saved: false, error: { code: 'unknown-set' } }, 'remove-warmup')).toBe('Warm-up not removed. That set is no longer in this workout.')
+    expect(noticesAfter({ notice: null, rest: "Saved. Rest didn't start." }, { ok: true, saved: true }, 'remove-warmup')).toEqual({ notice: null, rest: "Saved. Rest didn't start." })
   })
 })
 
@@ -917,6 +946,31 @@ describe.each(SQLITE_DRIVERS)('%s: the calls drive the engine', (_name, createDb
     expect(screen.card.rows.map(r => [r.label, r.status])).toEqual([['W', 'done'], ['1', 'current'], ['2', 'pending']])
     expect(screen.dock).toMatchObject({ lead: 'Set 1 · 75 lb × 8', setId: benchSet })
     expect(screen.header.progress).toBe(0)
+  })
+
+  // A mis-tapped Add warm-up comes off again, with anything typed for it, and stays off.
+  test('a warm-up: add, type, remove, kill; the row and its numbers are gone, the dock is on set 1', async () => {
+    clock = T0 + 1000
+    let db = createDb()
+    const first = await open(db)
+    const add = addWarmupCall(current(first), 'bench', 'w1', clock)
+    expect((await first.call('addSet', add)).saved).toBe(true)
+    const typed = draftCall(current(first), { setId: add.setId, values: { w: 45, r: null }, now: clock })
+    expect((await first.call('putDraft', typed.setId, typed.values)).saved).toBe(true)
+    expect((await createSqliteSessionStorage(db).readDrafts())[add.setId]).toEqual({ w: 45, r: null })
+    const remove = removeWarmupCall(current(first), { setId: add.setId, eventId: 'x1', now: clock })
+    expect(remove).toEqual({ eventId: 'x1', exerciseId: 'bench', setId: 'warm:bench:w1' })
+    expect((await first.call('removeSet', remove)).saved).toBe(true)
+    expect(findSet(current(first), add.setId)).toBeNull()
+    db = db.reopen()
+    clock = T0 + 5000
+    const view = current(await open(db, false))
+    expect(findSet(view, add.setId)).toBeNull()
+    expect(view.entries[0].sets.map(s => s.setId)).toEqual([benchSet, plannedSetId('bench', 1)])
+    expect((await createSqliteSessionStorage(db).readDrafts())[add.setId]).toBeUndefined()
+    const screen = workoutScreen(view, { names: {}, lastTimes: {} })
+    expect(screen.card.rows.map(r => [r.label, r.status])).toEqual([['1', 'current'], ['2', 'pending']])
+    expect(screen.dock).toMatchObject({ lead: 'Set 1 · 75 lb × 8', setId: benchSet })
   })
 
   // The draft the 'inactive' wrote is in the engine's view as the same numbers, so the

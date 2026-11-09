@@ -179,6 +179,17 @@ export function addWarmupCall(view, exerciseId, eventId, now) {
   return { eventId, exerciseId: entry.id, setId: `warm:${entry.id}:${eventId}`, fields: { phase: 'warmup', warmup: true, w: null, r: null } }
 }
 
+// A mis-tapped Add warm-up comes off again: the engine's removeSet drops the row and any numbers
+// typed for it, so no blank warm-up is saved into history. Only a warm-up not done yet; a done one
+// goes back through Undo first. Null for a work set, a done warm-up, a row not in the view, or
+// overnight.
+export function removeWarmupCall(view, { setId, eventId, now }) {
+  if (overnightNow(view, now)) return null
+  const found = findSet(view, setId)
+  if (!found || !isWarmup(found.slot) || isDone(found.slot)) return null
+  return { eventId, exerciseId: found.entry.id, setId }
+}
+
 const PRIMARY = { ready: 'complete', 'enter-weight': 'keypad', 'enter-reps': 'keypad', 'exercise-done': 'follow', 'all-done': 'finish' }
 
 // What the dock's primary button does in each mode. Ready logs the set as shown with no sheet;

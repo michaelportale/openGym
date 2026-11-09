@@ -50,13 +50,14 @@ const keyHint = key => (key === 'back' ? 'Deletes the last character.' : 'Types 
 // whether to store a draft. `initialField` is 'w', 'r', or per side 'L.r'/'R.r' (a tapped reps box
 // opens on reps). `weightTitle` is 'Lb each' for a per-hand exercise, which also passes `perHand`
 // so the weight field is spoken "pounds each". A done set passes saveLabel 'Update', onUndo, and
-// no onComplete. `notice` shows a write that was refused.
+// no onComplete. A warm-up not done yet passes onRemove, its Remove warm-up. `notice` shows a
+// write that was refused.
 // `side` is the side Complete logs on a per-side set; Complete waits for its reps and the weight.
 // `weightSetWith` ('L' or 'R') is the side a half-done per-side set's weight was logged with: the
 // weight field and the weight chips take no input, and the sheet opens on the other side's reps.
 // While open, every app state change calls onAppState(next, values, changed), so the caller can
 // keep typed numbers when the app leaves the front (a kill from the app switcher follows).
-export default function KeypadSheet({ visible, title, initial, perSide, side = null, initialField = 'w', weightSetWith = null, weightTitle = 'Lb', perHand = false, saveLabel = 'Save', completeLabel = 'Complete', notice, onSave, onComplete, onUndo, onClose, onAppState }) {
+export default function KeypadSheet({ visible, title, initial, perSide, side = null, initialField = 'w', weightSetWith = null, weightTitle = 'Lb', perHand = false, saveLabel = 'Save', completeLabel = 'Complete', notice, onSave, onComplete, onUndo, onRemove, onClose, onAppState }) {
   const [state, setState] = useState(() => keypadState(initial, initialField, { weightSetWith }))
   useEffect(() => {
     if (visible) setState(keypadState(initial, initialField, { weightSetWith }))
@@ -122,8 +123,13 @@ export default function KeypadSheet({ visible, title, initial, perSide, side = n
           ) : null}
         </View>
         {onUndo ? (
-          <ScaleButton accessibilityLabel="Undo set" accessibilityHint="Marks this set as not done." onPress={onUndo} faceStyle={styles.undo}>
+          <ScaleButton accessibilityLabel="Undo set" accessibilityHint="Marks this set as not done." onPress={onUndo} faceStyle={styles.quiet}>
             <AppText variant="button" color={color.textSecondary}>Undo set</AppText>
+          </ScaleButton>
+        ) : null}
+        {onRemove ? (
+          <ScaleButton accessibilityLabel="Remove warm-up" accessibilityHint="Takes this warm-up out of the workout." onPress={onRemove} faceStyle={styles.quiet}>
+            <AppText variant="button" color={color.textSecondary}>Remove warm-up</AppText>
           </ScaleButton>
         ) : null}
       </View>
@@ -148,5 +154,5 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', gap: space.sm },
   action: { flex: 1 },
   save: { minHeight: touch.primary, alignItems: 'center', justifyContent: 'center', backgroundColor: color.control, borderColor: color.stroke, borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.md },
-  undo: { minHeight: touch.min, alignItems: 'center', justifyContent: 'center' }
+  quiet: { minHeight: touch.min, alignItems: 'center', justifyContent: 'center' }
 })

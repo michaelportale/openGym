@@ -15,6 +15,7 @@ const NOT_DONE = {
   'undo-warmup': 'Warm-up not undone.',
   'add-set': 'Set not added.',
   'add-warmup': 'Warm-up not added.',
+  'remove-warmup': 'Warm-up not removed.',
   'add-time': 'Time not added.',
   'skip-rest': 'Rest not skipped.',
   resume: 'Workout not resumed.',

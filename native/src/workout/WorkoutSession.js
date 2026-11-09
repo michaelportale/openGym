@@ -172,6 +172,7 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
         onSave={sheet.onSave}
         onComplete={sheet.mode === 'current' ? sheet.onComplete : undefined}
         onUndo={sheet.mode === 'done' ? sheet.onUndo : undefined}
+        onRemove={sheet.removable ? sheet.onRemove : undefined}
         onClose={sheet.onClose}
         onAppState={sheet.onAppState}
       />
