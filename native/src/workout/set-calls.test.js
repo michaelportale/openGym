@@ -25,6 +25,13 @@ describe('shownValues', () => {
     expect(shownValues(slot('a', todo(75, 8), { draft: { w: 80 } }), null)).toEqual({ w: 80, r: 8 })
     expect(shownValues(slot('a', todo(null, 12)), null)).toEqual({ w: null, r: 12 })
   })
+  test('a carried weight sits under the draft and over the row', () => {
+    expect(shownValues(slot('a', todo(75, 8)), null, 80)).toEqual({ w: 80, r: 8 })
+    expect(shownValues(slot('a', todo(75, 8), { draft: { w: 77.5 } }), null, 80)).toEqual({ w: 77.5, r: 8 })
+    expect(shownValues(slot('a', todo(75, 8)), null, undefined)).toEqual({ w: 75, r: 8 })
+    const row = sided(7.5, { r: 10, done: false }, { r: 10, done: false })
+    expect(shownValues(slot('s', row), 'L', 10)).toEqual({ w: 10, sides: { L: { r: 10 }, R: { r: 10 } } })
+  })
   test('per side: one weight, reps for each side, the draft over the row', () => {
     const row = sided(7.5, { r: 10, done: false }, { r: 10, done: false })
     expect(shownValues(slot('s', row), 'L')).toEqual({ w: 7.5, sides: { L: { r: 10 }, R: { r: 10 } } })
@@ -52,6 +59,32 @@ describe('completeCall', () => {
     expect(completeCall(v, { setId: 'b1', side: null, eventId: 'e1' })).toEqual({
       eventId: 'e1', exerciseId: '0289', setId: 'b1', fields: { w: 80, r: 8 },
     })
+  })
+  test('logs the weight carried from the set before it, as the screen shows it', () => {
+    const v = view([bench([slot('b0', done(80, 10)), slot('b1', todo(75, 8)), slot('b2', todo(null, 8))])])
+    expect(completeCall(v, { setId: 'b1', side: null, eventId: 'e1' }).fields).toEqual({ w: 80, r: 8 })
+    const next = view([bench([slot('b0', done(80, 10)), slot('b1', done(80, 8)), slot('b2', todo(null, 8))])])
+    expect(completeCall(next, { setId: 'b2', side: null, eventId: 'e2' }).fields).toEqual({ w: 80, r: 8 })
+  })
+  test('a draft weight beats the carried one', () => {
+    const v = view([bench([slot('b0', done(80, 10)), slot('b1', todo(75, 8), { draft: { w: 77.5 } })])])
+    expect(completeCall(v, { setId: 'b1', side: null, eventId: 'e1' }).fields).toEqual({ w: 77.5, r: 8 })
+  })
+  test('per side: the carried weight is logged on both sides', () => {
+    const v = view([lateral([
+      slot('s0', sided(10, { r: 12, done: true }, { r: 12, done: true })),
+      slot('s1', sided(7.5, { r: 12, done: false }, { r: 12, done: false })),
+    ])])
+    expect(completeCall(v, { setId: 's1', side: 'L', eventId: 'e1' }).fields).toEqual({
+      w: 10, sides: { L: { w: 10, r: 12, done: true }, R: { w: 10, r: 12, done: false } },
+    })
+  })
+  test('per side: the second side keeps the weight its first side was logged at', () => {
+    const v = view([lateral([
+      slot('s0', sided(10, { r: 12, done: true }, { r: 12, done: true })),
+      slot('s1', sided(12.5, { r: 12, done: true }, { r: 12, done: false }), { completed: true }),
+    ])])
+    expect(completeCall(v, { setId: 's1', side: 'R', eventId: 'e1' }).fields.w).toBe(12.5)
   })
   test('logs what the sheet hands over', () => {
     const v = view([bench([slot('b0', todo(75, 8))])])

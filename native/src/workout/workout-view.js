@@ -15,11 +15,44 @@ export function isDone(slot) {
 const workSets = entry => (entry.sets || []).filter(slot => !slot.warmup)
 const hasOpenWork = entry => workSets(entry).some(slot => !isDone(slot))
 
+// Exactly one side of a per-side set logged.
+const sideDoneOf = row => {
+  if (!isSideSet(row)) return null
+  const l = row.sides.L?.done === true
+  const r = row.sides.R?.done === true
+  return l === r ? null : l ? 'L' : 'R'
+}
+const halfDoneNow = entry => {
+  const current = workSets(entry).find(slot => !isDone(slot))
+  return current != null && sideDoneOf(current.row) !== null
+}
+
+// Which exercise is not stored, so a reopen picks it: one whose current set has one side done
+// (a kill between the sides), else the first with a set left.
 export function currentExerciseIndex(view) {
   const entries = view?.entries || []
+  const half = entries.findIndex(halfDoneNow)
+  if (half >= 0) return half
   const index = entries.findIndex(hasOpenWork)
   if (index >= 0) return index
   return Math.max(0, entries.length - 1)
+}
+
+// The weight a set with nothing logged yet opens at: the last done work set before it in the
+// exercise (sets are done in order, so the latest lifted), as the web cascades a changed weight
+// onto the sets after it. Undefined when there is none, or the set has a side or all of it
+// logged: its own weight stands. A draft weight still beats it.
+export function carriedWeight(entry, setId) {
+  let carried
+  for (const slot of entry?.sets ?? []) {
+    if (slot.setId === setId) {
+      return isDone(slot) || sideDoneOf(slot.row) !== null ? undefined : carried
+    }
+    if (slot.warmup || !isDone(slot)) continue
+    const w = slot.row.w ?? slot.row.sides?.L?.w
+    if (w != null) carried = w
+  }
+  return undefined
 }
 
 function num(value) {
@@ -42,20 +75,20 @@ function nextSide(row) {
   return row.sides.L?.done === true ? 'R' : 'L'
 }
 
-// The numbers a row shows: the draft's fields over the row's. A per-side row shows the
-// side being worked (or both sides' reps once neither is pending).
-function shown(slot, side) {
+// The numbers a row shows: the draft's fields, then the carried weight, then the row's. A
+// per-side row shows the side being worked (or both sides' reps once neither is pending).
+function shown(slot, side, carry) {
   const { row, draft } = slot
   const d = draft || {}
   if (isSideSet(row)) {
     const own = side ? row.sides[side] : row.sides.L
     const dSide = side && d.sides && d.sides[side] ? d.sides[side] : {}
     return {
-      w: dSide.w ?? d.w ?? own.w ?? row.w,
+      w: dSide.w ?? d.w ?? carry ?? own.w ?? row.w,
       r: dSide.r ?? d.r ?? own.r,
     }
   }
-  return { w: d.w ?? row.w, r: d.r ?? row.r }
+  return { w: d.w ?? carry ?? row.w, r: d.r ?? row.r }
 }
 
 function repsText(slot) {
@@ -98,7 +131,7 @@ function dockFor(view, entry, entries, index, current, number) {
   const resting = rest && (rest.status === 'running' || rest.status === 'paused')
   const target = entry?.target
   const side = current && isSideSet(current.row) ? nextSide(current.row) : null
-  const figures = current ? shown(current, side) : null
+  const figures = current ? shown(current, side, carriedWeight(entry, current.setId)) : null
   const figureText = figures ? `${loadText(figures.w, target)} × ${num(figures.r)}` : ''
 
   if (resting) {
@@ -160,7 +193,7 @@ export function workoutScreen(view, { names = {}, lastTimes = {}, exerciseIndex,
     rows.push({
       setId: slot.setId,
       number: counter,
-      weightText: num(shown(slot, isCurrent && perSide ? nextSide(slot.row) : null).w),
+      weightText: num(shown(slot, isCurrent && perSide ? nextSide(slot.row) : null, carriedWeight(entry, slot.setId)).w),
       repsText: repsText(slot),
       lastText: lastText(last, counter - 1),
       status: finished ? 'done' : isCurrent ? 'current' : 'pending',

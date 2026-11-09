@@ -5,6 +5,7 @@ import { createEventId } from '../session/ids'
 import { createActionGate } from './action-gate'
 import { pendingRest, restMsFor } from './rest-after'
 import { shownAfterComplete, withTargets } from './session-screen'
+import { carriedWeight } from './workout-view'
 import { addSetCall, completeCall, dockKeypadField, draftCall, editCall, findSet, keypadField, overnightNotice, primaryAction, restAfterComplete, resultNotice, sheetCloseCall, sheetMode, sheetOutcome, shownValues, undoCall } from './set-calls'
 
 const sideLabel = { L: 'Complete left', R: 'Complete right' }
@@ -105,7 +106,7 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
       mode,
       side,
       perSide,
-      initial: shownValues(found.slot, side),
+      initial: shownValues(found.slot, side, carriedWeight(found.entry, setId)),
       initialField: keypadField(field, perSide, side),
       title: `${screen.card.name} · Set ${row.number}`,
       completeLabel: sideLabel[side] ?? `Complete set ${row.number}`,

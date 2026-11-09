@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { currentExerciseIndex, workoutScreen } from './workout-view.js'
+import { carriedWeight, currentExerciseIndex, workoutScreen } from './workout-view.js'
 
 const set = (setId, row, extra = {}) => ({
   setId, completed: row.done === true, warmup: false, draft: null, row, ...extra,
@@ -153,5 +153,86 @@ describe('currentExerciseIndex', () => {
     expect(currentExerciseIndex(v)).toBe(1)
     expect(currentExerciseIndex(view([bench([set('a', done(1, 1))]), bench([set('b', done(1, 1))])]))).toBe(1)
     expect(currentExerciseIndex(view([]))).toBe(0)
+  })
+  // A kill between the two sides reopens on that set, even with an earlier exercise left open.
+  test('an exercise whose current set has one side done comes first', () => {
+    const half = { id: '0300', target: {}, sets: [set('s1', sided(7.5, { r: 20, done: true }, { r: 18, done: false }), { completed: true })] }
+    expect(currentExerciseIndex(view([bench([set('b', todo(75, 8))]), half]))).toBe(1)
+    const rightOnly = { id: '0300', target: {}, sets: [set('s1', sided(7.5, { r: 20, done: false }, { r: 18, done: true }), { completed: true })] }
+    expect(currentExerciseIndex(view([bench([set('b', todo(75, 8))]), rightOnly]))).toBe(1)
+  })
+  test('a half-done set that is not the current one does not count', () => {
+    const later = { id: '0300', target: {}, sets: [
+      set('s1', sided(7.5, { r: 20, done: false }, { r: 18, done: false })),
+      set('s2', sided(7.5, { r: 20, done: true }, { r: 18, done: false }), { completed: true }),
+    ] }
+    expect(currentExerciseIndex(view([bench([set('b', todo(75, 8))]), later]))).toBe(0)
+  })
+})
+
+// A changed weight carries to the sets after it, as the web's cascade does: a not-done set with
+// no draft weight shows, and Complete logs, the weight of the last done work set before it.
+describe('carry forward', () => {
+  const three = (first, second, third) => view([bench([set('a', first), set('b', second), set('c', third)])])
+  test('a set done at a new weight carries to the sets after it', () => {
+    const s = screen(three(done(80, 10), todo(75, 8), todo(75, 5)))
+    expect(s.card.rows.map(r => r.weightText)).toEqual(['80', '80', '80'])
+    expect(s.dock.lead).toBe('Set 2 · 80 lb × 8')
+    expect(screen({ ...three(done(80, 10), todo(75, 8), todo(75, 5)), rest: { status: 'running', remainingMs: 5000 } }).dock.sub).toBe('Next: set 2 · 80 lb × 8')
+  })
+  test('the latest done set wins', () => {
+    expect(screen(three(done(80, 10), done(85, 8), todo(75, 5))).card.rows.map(r => r.weightText)).toEqual(['80', '85', '85'])
+  })
+  test('a set with its own draft weight keeps it; the reps still come from the set', () => {
+    const v = three(done(80, 10), todo(75, 8), todo(75, 5))
+    v.entries[0].sets[1].draft = { w: 77.5 }
+    const s = screen(v)
+    expect(s.card.rows.map(r => r.weightText)).toEqual(['80', '77.5', '80'])
+    expect(s.dock.lead).toBe('Set 2 · 77.5 lb × 8')
+  })
+  test('a blank planned weight takes the weight just lifted', () => {
+    const s = screen(three(done(100, 8), todo(null, 8), todo(null, 8)))
+    expect(s.dock).toMatchObject({ mode: 'ready', lead: 'Set 2 · 100 lb × 8' })
+  })
+  test('no done set: the planned weight, or blank', () => {
+    expect(screen(three(todo(75, 10), todo(75, 8), todo(75, 5))).card.rows.map(r => r.weightText)).toEqual(['75', '75', '75'])
+    expect(screen(three(todo(null, 10), todo(null, 8), todo(null, 5))).dock.mode).toBe('enter-weight')
+  })
+  test('only sets before it carry: an undone set keeps its own weight', () => {
+    expect(screen(three(todo(80, 10), done(85, 8), todo(75, 5))).card.rows.map(r => r.weightText)).toEqual(['80', '85', '85'])
+  })
+  test('per side: the done set\'s shared weight carries', () => {
+    const v = view([{ id: '0300', target: {}, sets: [
+      set('s1', sided(10, { r: 12, done: true }, { r: 12, done: true })),
+      set('s2', sided(7.5, { r: 12, done: false }, { r: 12, done: false })),
+    ] }])
+    const s = screen(v)
+    expect(s.card.rows.map(r => r.weightText)).toEqual(['10', '10'])
+    expect(s.dock).toMatchObject({ lead: 'Set 2 · 10 lb × 12', side: 'L' })
+  })
+  test('per side: a set with one side logged keeps its logged weight', () => {
+    const v = view([{ id: '0300', target: {}, sets: [
+      set('s1', sided(10, { r: 12, done: true }, { r: 12, done: true })),
+      set('s2', sided(12.5, { r: 12, done: true }, { r: 12, done: false }), { completed: true }),
+    ] }])
+    expect(screen(v).dock.lead).toBe('Set 2 · 12.5 lb × 12')
+    expect(carriedWeight(v.entries[0], 's2')).toBeUndefined()
+  })
+  test('carriedWeight: undefined for a done set, the first set, or an unknown one', () => {
+    const entry = three(done(80, 10), todo(75, 8), todo(75, 5)).entries[0]
+    expect(carriedWeight(entry, 'b')).toBe(80)
+    expect(carriedWeight(entry, 'a')).toBeUndefined()
+    expect(carriedWeight(entry, 'nope')).toBeUndefined()
+    expect(carriedWeight(null, 'b')).toBeUndefined()
+  })
+  test('a done set shows what was logged, never a carried weight', () => {
+    expect(screen(three(done(80, 10), done(75, 8), todo(75, 5))).card.rows[1].weightText).toBe('75')
+  })
+  test('warm-ups neither carry nor take a carry', () => {
+    const v = view([bench([
+      set('w', { w: 40, r: 10, done: true, warmup: true }, { warmup: true }),
+      set('a', todo(75, 8)),
+    ])])
+    expect(screen(v).card.rows[0].weightText).toBe('75')
   })
 })

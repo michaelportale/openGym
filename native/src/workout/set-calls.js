@@ -1,6 +1,6 @@
 import { workoutModel } from '../shared/training.js'
 import { completeFields, restEventId } from './rest-after.js'
-import { isDone } from './workout-view.js'
+import { carriedWeight, isDone } from './workout-view.js'
 
 // Which engine call a tap makes, and with what. Each returns null when the tap must not write.
 
@@ -25,15 +25,15 @@ export function findSet(view, setId) {
   return null
 }
 
-// What the screen shows for a set (the draft over the row, as workoutScreen reads it), in the
-// keypad's shape: { w, r }, or per side { w, sides: { L: { r }, R: { r } } }.
-export function shownValues(slot, side) {
+// What the screen shows for a set (the draft, then `carry` from carriedWeight, then the row, as
+// workoutScreen reads it), in the keypad's shape: { w, r }, or per side { w, sides: { L: { r }, R: { r } } }.
+export function shownValues(slot, side, carry) {
   const { row } = slot
   const d = slot.draft || {}
-  if (!isSideSet(row)) return { w: d.w ?? row.w ?? null, r: d.r ?? row.r ?? null }
+  if (!isSideSet(row)) return { w: d.w ?? carry ?? row.w ?? null, r: d.r ?? row.r ?? null }
   const own = row.sides[side === 'R' ? 'R' : 'L']
   const reps = s => d.sides?.[s]?.r ?? d.r ?? row.sides[s].r ?? null
-  return { w: d.w ?? own.w ?? row.w ?? null, sides: { L: { r: reps('L') }, R: { r: reps('R') } } }
+  return { w: d.w ?? carry ?? own.w ?? row.w ?? null, sides: { L: { r: reps('L') }, R: { r: reps('R') } } }
 }
 
 // The field the keypad opens on: the reps box opens on reps (the side being worked, per side).
@@ -50,7 +50,7 @@ export function completeCall(view, { setId, side, values, eventId }) {
   const found = findSet(view, setId)
   if (!found || isDone(found.slot)) return null
   const { entry, slot } = found
-  const shown = values ?? shownValues(slot, side)
+  const shown = values ?? shownValues(slot, side, carriedWeight(entry, setId))
   if (shown.w == null) return null
   const call = fields => ({ eventId, exerciseId: entry.id, setId, fields })
   if (!isSideSet(slot.row)) {
