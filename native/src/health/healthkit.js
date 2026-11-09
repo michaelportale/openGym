@@ -6,7 +6,6 @@ import {
   currentAppSource,
   deleteObjects,
   queryQuantitySamples,
-  querySources,
   queryWorkoutSamples,
   requestAuthorization,
   saveWorkoutSample
@@ -70,34 +69,31 @@ export async function findWorkoutsBySyncId(id) {
   })
 }
 
-export async function findOwnWorkouts(bundleId) {
-  const sources = await querySources(WORKOUT)
+// The app's own source comes from currentAppSource(), not querySources: the source query may
+// return nothing when only write access is granted for a type.
+export async function findOwnWorkouts() {
+  const source = currentAppSource()
   try {
-    const own = sources.filter(s => s.bundleIdentifier === bundleId)
-    // The library treats an empty source list as no filter, which would read every app's workouts.
-    if (own.length === 0) return []
-    const workouts = await queryWorkoutSamples({ limit: 0, filter: { sources: own } })
+    const workouts = await queryWorkoutSamples({ limit: 0, filter: { sources: [source] } })
     return workouts.map(w => {
       try {
-        return { uuid: w.uuid, bundleId: w.sourceRevision?.source?.bundleIdentifier, syncId: syncIdOf(w.metadata) }
+        return { ...toOwnWorkout(w), bundleId: w.sourceRevision?.source?.bundleIdentifier }
       } finally {
         w.dispose()
       }
     })
   } finally {
-    sources.forEach(s => s.dispose())
+    source.dispose()
   }
 }
 
 export async function deleteWorkoutsBySyncId(syncId) {
-  const bundleId = await ownBundleId()
-  const sources = await querySources(WORKOUT)
+  const source = currentAppSource()
   try {
-    const filter = syncIdFilter(syncId, sources.filter(s => s.bundleIdentifier === bundleId), ComparisonPredicateOperator.equalTo)
-    if (!filter) return 0
+    const filter = syncIdFilter(syncId, [source], ComparisonPredicateOperator.equalTo)
     return await deleteObjects(WORKOUT, filter)
   } finally {
-    sources.forEach(s => s.dispose())
+    source.dispose()
   }
 }
 
