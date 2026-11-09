@@ -10,32 +10,35 @@ import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { nativeSourceFiles, scanNativeBoundary, scanSharedGraph } from './shared-lib-graph.mjs'
 
-const ENTRY = fileURLToPath(new URL('../src/shared/training.js', import.meta.url))
+const ENTRIES = ['training.js', 'exercise-text.js'].map(f => fileURLToPath(new URL(`../src/shared/${f}`, import.meta.url)))
 
 const NATIVE = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const FRONTEND = fileURLToPath(new URL('../../frontend', import.meta.url))
 
 let failed = 0
 
-try {
-  await import(ENTRY)
-  console.log('  ok    training.js loads under plain node')
-} catch (e) {
-  failed++
-  console.error(`  FAIL  training.js — ${e.message}`)
+for (const entry of ENTRIES) {
+  const name = entry.split('/').pop()
+  try {
+    await import(entry)
+    console.log(`  ok    ${name} loads under plain node`)
+  } catch (e) {
+    failed++
+    console.error(`  FAIL  ${name} — ${e.message}`)
+  }
+
+  const { files, violations } = scanSharedGraph(entry)
+  console.log(`  ${name}: scanned ${files.length} files`)
+  for (const v of violations) {
+    failed++
+    console.error(`  FAIL  ${v.file} — ${v.token}`)
+  }
 }
 
-const { files, violations } = scanSharedGraph(ENTRY)
-console.log(`  scanned ${files.length} files`)
-for (const v of violations) {
-  failed++
-  console.error(`  FAIL  ${v.file} — ${v.token}`)
-}
-
-const nativeFiles = nativeSourceFiles(NATIVE).filter(f => f !== ENTRY)
+const nativeFiles = nativeSourceFiles(NATIVE).filter(f => !ENTRIES.includes(f))
 for (const v of scanNativeBoundary(nativeFiles, FRONTEND)) {
   failed++
-  console.error(`  FAIL  ${v.file} — imports ${v.spec} (only training.js may import frontend/)`)
+  console.error(`  FAIL  ${v.file} — imports ${v.spec} (only training.js and exercise-text.js may import frontend/)`)
 }
 console.log(`  checked ${nativeFiles.length} native files for direct frontend/ imports`)
 
