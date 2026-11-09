@@ -44,7 +44,7 @@ export function statusText(status, { now, server, formatTime = defaultTime, form
     const words = PROBLEMS[s.problem]
     return words ? words(host, s) : 'Saved on this phone. Syncing stopped on a problem; it will try again.'
   }
-  if (s.pending > 0) return `Saved on this phone. It will sync when ${host} is reachable.`
+  if (s.pending > 0 || s.pendingRoutineEdits > 0) return `Saved on this phone. It will sync when ${host} is reachable.`
   const at = Date.parse(s.lastSyncedAt ?? '')
   const synced = Number.isFinite(at)
   // Nothing to send: say what is true, not that something is waiting.

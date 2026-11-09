@@ -85,7 +85,7 @@ describe('canPair', () => {
 describe('serverLines', () => {
   const base = { paired: true, state: 'idle', pending: 0, server: 'https://gym.example.com:8443/x', profile: 'Mo' }
   test('host without scheme or port, profile, pending count', () => {
-    expect(serverLines({ ...base, pending: 1 })).toEqual({ host: 'gym.example.com', profile: 'Mo', pending: '1 workout waiting', weighIns: null, canResend: false, lastSynced: true })
+    expect(serverLines({ ...base, pending: 1 })).toEqual({ host: 'gym.example.com', profile: 'Mo', pending: '1 workout waiting', weighIns: null, routineEdits: null, canResend: false, lastSynced: true })
     expect(serverLines({ ...base, pending: 3 }).pending).toBe('3 workouts waiting')
     expect(serverLines(base).pending).toBeNull()
   })
@@ -94,6 +94,13 @@ describe('serverLines', () => {
     expect(serverLines({ ...base, pendingWeighIns: 3 }).weighIns).toBe('3 weigh-ins waiting')
     expect(serverLines({ ...base, pendingWeighIns: 0 }).weighIns).toBeNull()
     expect(serverLines({ ...base, pendingWeighIns: 2 }).pending).toBeNull()
+  })
+  test('routine edits waiting are their own line (spec 7C rule 7)', () => {
+    expect(serverLines({ ...base, pendingRoutineEdits: 1 }).routineEdits).toBe('1 routine edit waiting')
+    expect(serverLines({ ...base, pendingRoutineEdits: 3 }).routineEdits).toBe('3 routine edits waiting')
+    expect(serverLines({ ...base, pendingRoutineEdits: 0 }).routineEdits).toBeNull()
+    expect(serverLines(base).routineEdits).toBeNull()
+    expect(serverLines({ ...base, pendingRoutineEdits: 2 }).pending).toBeNull()
   })
   test('send again only for server-older', () => {
     expect(serverLines({ ...base, state: 'problem', problem: 'server-older' }).canResend).toBe(true)
