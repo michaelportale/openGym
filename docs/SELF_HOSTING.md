@@ -93,10 +93,13 @@ cd api && DATA_DIR=../data node scripts/pair-code.mjs        # bare metal (add P
 ```
 
 It prints `Pairing code: XXXXXXXX`; enter it on the phone within 5 minutes, exactly as you would
-the code from Settings. With more than one profile, say which: `--user <name>` (a profile id works
-too); without it the command lists the names and stops. It needs the server running, refuses a
-disabled profile, and prints only the code — never the secret or a session token. A code made this
-way is the same as one made in Settings, so "sign out everywhere" unpairs the phone the same way.
+the code from Settings. Plain http (the app takes it only for a private address) sends the sign-in
+token unencrypted, so it is only for a server and phone that stay on your own network; otherwise
+enter the https address you open the web app at. With more than one profile, say which:
+`--user <name>` (a profile id works too); without it the command lists the names and stops. It
+needs the server running, refuses a disabled profile, and prints only the code — never the secret
+or a session token. A code made this way is the same as one made in Settings, so "sign out
+everywhere" unpairs the phone the same way.
 To rehearse pairing and restore against a copy of `data/` before relying on it, follow
 [the native checklist's restore rehearsal](sprints/2026-11-native-first-workout-checklist.md#10-pairing-and-restore-on-a-copy).
 
