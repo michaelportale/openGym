@@ -4,9 +4,11 @@
 // document's rev and wid, and anything unexpected stops it with every workout kept on the phone.
 //
 // Everything is injected: `client` (api-client.js), `credentials` (the Keychain token),
-// `copy` and `meta` (server-copy.js), `workouts` (the finished-workout store) and `now`
+// `copy` and `meta` (server-copy.js), `workouts` (the finished-workout store), `weighIns` (the weigh-in day operations) and `now`
 // (ms since epoch). It never touches the session journal and logs nothing.
 
+import { applyDayOps } from '../body/day-ops.js'
+import { createMemoryWeighIns } from '../body/weigh-ins.js'
 import { buildPush } from './outbox.js'
 import { readCopy } from './server-copy.js'
 import { normalizeServer } from './server-address.js'
@@ -56,7 +58,7 @@ function pairError(result, base) {
   return `${host} answered, but not like an openGym server. Check the address.`
 }
 
-export function createSync({ client, credentials, copy, workouts, meta, now }) {
+export function createSync({ client, credentials, copy, workouts, weighIns = createMemoryWeighIns(), meta, now }) {
   const iso = () => new Date(now()).toISOString()
 
   // pair, forget, resendAll and a sync never interleave.
@@ -97,6 +99,11 @@ export function createSync({ client, credentials, copy, workouts, meta, now }) {
     const gone = goneFrom(state)
     const ids = (await workouts.listPending()).map(w => w.id).filter(id => held.has(id) || gone(id))
     if (ids.length) await workouts.markAcked(ids, iso())
+    // A weigh-in is settled once the stored copy already has it (done) or its day guard says it
+    // can never apply (superseded). One that would still apply stays pending.
+    const days = applyDayOps(state.bodyweight, await weighIns.listPending())
+    const settled = [...days.done, ...days.superseded]
+    if (settled.length) await weighIns.markAcked(settled, iso())
   }
 
   async function store(state, rev) {
@@ -186,7 +193,7 @@ export function createSync({ client, credentials, copy, workouts, meta, now }) {
     }
 
     for (let tries = 0; ; tries++) {
-      const plan = buildPush(held, await workouts.listPending())
+      const plan = buildPush(held, await workouts.listPending(), await weighIns.listPending())
       if (!plan) return synced()
       if (tries === 2) return stuck('conflict')
       const res = await client.push(ctx.base, ctx.token, { state: plan.state, baseRev: plan.baseRev, baseWid: plan.baseWid })
@@ -214,6 +221,7 @@ export function createSync({ client, credentials, copy, workouts, meta, now }) {
     let problem = await meta.get('problem')
     const httpStatus = Number(await meta.get('httpStatus')) || null
     const pending = (await workouts.listPending()).length
+    const pendingWeighIns = (await weighIns.listPending()).length
     // The rev and wid alone: this runs on every state change, and the body can be megabytes.
     const held = await copy.key().catch(() => null)
     const isPaired = !!auth && !!server
@@ -231,6 +239,7 @@ export function createSync({ client, credentials, copy, workouts, meta, now }) {
       ...(problem && httpStatus ? { httpStatus } : {}),
       ...(lastSyncedAt ? { lastSyncedAt } : {}),
       pending,
+      pendingWeighIns,
       ...(isPaired && held ? { copyKey: `${held.rev}|${held.wid ?? ''}` } : {}),
       ...(server ? { server } : {}),
       ...(profile ? { profile } : {}),
@@ -241,7 +250,7 @@ export function createSync({ client, credentials, copy, workouts, meta, now }) {
     try {
       return await status()
     } catch {
-      return { paired: false, state: 'problem', problem: 'error', pending: 0 }
+      return { paired: false, state: 'problem', problem: 'error', pending: 0, pendingWeighIns: 0 }
     }
   }
 
@@ -290,6 +299,7 @@ export function createSync({ client, credentials, copy, workouts, meta, now }) {
         await meta.clear()
         // Every workout on this phone goes to this server; it keeps one copy per id.
         await workouts.resetAcked()
+        await weighIns.resetAcked()
         await meta.set('server', address.base)
         await meta.set('profile', typeof r.user?.name === 'string' ? r.user.name : '')
         await credentials.set({ token: r.token })
@@ -311,6 +321,7 @@ export function createSync({ client, credentials, copy, workouts, meta, now }) {
         await copy.clear()
         await meta.clear()
         await workouts.resetAcked()
+        await weighIns.resetAcked()
         outcome = null
       })
     } catch {
@@ -335,6 +346,7 @@ export function createSync({ client, credentials, copy, workouts, meta, now }) {
           const p = await client.pull(ctx.base, ctx.token)
           if (!p.ok) return failed(p)
           await workouts.resetAcked()
+          await weighIns.resetAcked()
           await store(p.state, p.rev)
           await meta.set('problem', null)
           outcome = null

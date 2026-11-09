@@ -65,6 +65,7 @@ export default function ServerSection() {
             <AppText variant="body" accessibilityLiveRegion="polite">{text}</AppText>
             {lines.lastSynced ? <AppText variant="body" color={color.textSecondary}>{lastSyncedLine(status)}</AppText> : null}
             {lines.pending ? <AppText variant="body" color={color.textSecondary}>{lines.pending}</AppText> : null}
+            {lines.weighIns ? <AppText variant="body" color={color.textSecondary}>{lines.weighIns}</AppText> : null}
           </Card>
           <PrimaryButton
             label={syncing ? 'Syncing…' : 'Sync now'}

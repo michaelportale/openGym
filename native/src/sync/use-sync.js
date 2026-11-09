@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import * as SecureStore from 'expo-secure-store'
 import { openAppDatabase } from '../storage/database'
+import { createSqliteWeighIns } from '../body/weigh-ins'
 import { createSqliteFinishedWorkouts } from '../session/finished-workouts'
 import { createApiClient } from './api-client'
 import { createCredentials } from './credentials'
@@ -27,6 +28,7 @@ export function getSync() {
           copy: createSqliteServerCopy(db),
           meta: createSqliteSyncMeta(db),
           workouts: createSqliteFinishedWorkouts(db),
+          weighIns: createSqliteWeighIns(db),
           now: Date.now,
         })
         sync.subscribe(refresh)
