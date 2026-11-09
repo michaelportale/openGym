@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest'
-import { OVERNIGHT_NOTICE, addSetCall, completeCall, dockKeypadField, draftCall, editCall, keypadField, overnightNotice, primaryAction, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, shownValues, undoCall } from './set-calls.js'
+import { OVERNIGHT_NOTICE, addSetCall, completeCall, dockKeypadField, draftCall, editCall, keypadField, overnightNotice, primaryAction, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, undoCall } from './set-calls.js'
+import { shownValues } from './workout-view.js'
 import { restEventId, restMsFor } from './rest-after.js'
 import { withTargets } from './session-screen.js'
 import { SQLITE_DRIVERS } from '../../scripts/node-sqlite.mjs'

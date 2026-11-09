@@ -25,9 +25,6 @@ export function findSet(view, setId) {
   return null
 }
 
-// Complete logs what the screen shows (workout-view.js), and the keypad opens on it.
-export { shownValues }
-
 // The field the keypad opens on: the reps box opens on reps (the side being worked, per side).
 export function keypadField(field, perSide, side) {
   if (field !== 'r') return 'w'
