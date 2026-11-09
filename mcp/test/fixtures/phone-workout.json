@@ -1,0 +1,76 @@
+{
+  "id": "6f1c2d0e-5b8a-4c53-9a47-1d2e3f405162",
+  "d": "2026-11-07",
+  "start": 1794063600000,
+  "end": 1794063900000,
+  "routineIds": [
+    "routine-1"
+  ],
+  "routineId": "routine-1",
+  "name": "Phone Push",
+  "bw": 80,
+  "entries": [
+    {
+      "id": "0025",
+      "sets": [
+        {
+          "w": 65,
+          "r": 8,
+          "done": true,
+          "phase": "warmup",
+          "at": 1794063660000
+        },
+        {
+          "w": 60,
+          "r": 5,
+          "done": true,
+          "rir": 3,
+          "at": 1794063720000
+        },
+        {
+          "w": 62.5,
+          "r": 5,
+          "done": true,
+          "rir": 1,
+          "at": 1794063780000
+        }
+      ],
+      "topW": 62.5,
+      "target": {
+        "sets": 3,
+        "reps": 5,
+        "weight": 60
+      }
+    },
+    {
+      "id": "0986",
+      "sets": [
+        {
+          "w": 10,
+          "r": 10,
+          "done": true,
+          "sides": {
+            "L": {
+              "w": 10,
+              "r": 10,
+              "done": true
+            },
+            "R": {
+              "w": 10,
+              "r": 10,
+              "done": true
+            }
+          },
+          "at": 1794063840000
+        }
+      ],
+      "topW": 10,
+      "target": {
+        "sets": 1,
+        "reps": 10
+      }
+    }
+  ],
+  "prs": [],
+  "vol": 812.5
+}
