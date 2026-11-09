@@ -41,7 +41,7 @@ export default function RestPanel({ lead, sub, label, paused, onPause, onResume,
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: space.sm },
   figures: { flexShrink: 1 },
-  controls: { flexDirection: 'row', gap: space.sm },
+  controls: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, rowGap: space.sm },
   why: { minWidth: touch.min, minHeight: touch.min },
   whyFace: { minWidth: touch.min, minHeight: touch.min, paddingHorizontal: space.sm, alignItems: 'center', justifyContent: 'center' }
 })

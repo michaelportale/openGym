@@ -21,7 +21,7 @@ Nothing is blocked on the shell or the journal any more. What was blocked now sh
 - **Warm-up prompt.** On the first exercise for each body part in a session, while there is no warm-up row and no work set is done. It shows 40% and 80% of the first work set's weight, 6 reps each, never under the bar. Add warm-ups adds both rows, not done. Ignoring it skips it.
 - **Reps left.** An optional 0 to 5 row in the keypad for work sets, with 5 shown as "5+". It saves with Complete or Update, on both sides of a per-side set, and never changes a load.
 - **Next time.** After Finish, the saved screen lists a line per exercise that used double progression and has a completed work row. The next session opens at that weight and reps, and the target is stamped to match.
-- **Why sheets.** About rest times on the resting dock, Why these steps? under the keypad's ±5 and ±10 chips, Why? and Why offered? on the warm-up prompt, Why? on a Next time line, and Why? on the effort note and the keypad's reps-left row.
+- **Why sheets.** About rest times on the resting dock, About load steps under the keypad's ±5 and ±10 chips, Why? and Why offered? on the warm-up prompt, Why? on a Next time line, and Why? on the effort note and the keypad's reps-left row.
 
 Lines are double-only. Linear, Greyskull, triple, pyramid, off, excluded, timed, drop-set and rest-pause exercises get no line and open exactly as before Phase 4: the weight follows last time, and the reps, drops and bursts stay as the shared builder made them. That holds under any policy, including none named. A deload line opens the new `deload` Why kind, which shows the `deload-after-misses` entry.
 

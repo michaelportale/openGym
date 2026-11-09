@@ -133,8 +133,8 @@ export default function KeypadSheet({ visible, title, initial, perSide, side = n
               <Key key={chip} text={chip.replace('-', '−')} label={`${chip.startsWith('-') ? 'Minus' : 'Plus'} ${chip.slice(1)} pounds`} hint="Changes the weight." style={styles.chip} disabled={state.lock !== null} onPress={press(`chip:${chip}`)} />
             ))}
           </View>
-          <ScaleButton accessibilityLabel="Why these steps?" accessibilityHint="Shows where this number comes from." onPress={() => setWhy(true)} style={styles.why} faceStyle={styles.whyFace}>
-            <AppText variant="label" color={color.textSecondary}>Why these steps?</AppText>
+          <ScaleButton accessibilityLabel="About load steps" accessibilityHint="Shows where this number comes from." onPress={() => setWhy(true)} style={styles.why} faceStyle={styles.whyFace}>
+            <AppText variant="label" color={color.textSecondary}>About load steps</AppText>
           </ScaleButton>
           <View style={styles.grid}>
             {KEYS.map(key => (
@@ -160,9 +160,9 @@ export default function KeypadSheet({ visible, title, initial, perSide, side = n
                       accessibilityState={{ selected }}
                       onPress={() => setReps(current => ({ rir: toggleRir(current.rir, n), touched: true }))}
                       style={styles.effortChip}
-                      faceStyle={[styles.keyFace, selected && styles.fieldActive]}
+                      faceStyle={[styles.keyFace, selected && styles.chipSelected]}
                     >
-                      <AppText variant="value">{rirChipText(n)}</AppText>
+                      <AppText variant="value" color={selected ? color.onAccent : color.text}>{rirChipText(n)}</AppText>
                     </ScaleButton>
                   )
                 })}
@@ -218,6 +218,8 @@ const styles = StyleSheet.create({
   fieldSlot: { flex: 1 },
   field: { flexGrow: 1, minHeight: touch.primary, gap: space.xs, padding: space.md, backgroundColor: color.field, borderColor: color.stroke, borderWidth: size.stroke, borderRadius: radius.md },
   fieldActive: { borderColor: color.text },
+  // The primary button's face (accent fill, dark label) with a heavier border: selected reads without colour alone.
+  chipSelected: { backgroundColor: color.accent, borderColor: color.text, borderWidth: size.stroke * 2 },
   chips: { flexDirection: 'row', gap: space.sm },
   chip: { flex: 1 },
   why: { alignSelf: 'flex-start', minHeight: touch.min, justifyContent: 'center' },
