@@ -83,6 +83,21 @@ you're poking at the API directly:
 - A request body has to be sent as `Content-Type: application/json`; any other type gets a
   `415`. `curl -d` sends a form type, so a script needs `-H 'Content-Type: application/json'`.
 
+### Pair the phone from the Mac
+
+No browser on hand? The machine that runs the server can print a pairing code itself:
+
+```bash
+docker compose exec api node scripts/pair-code.mjs          # Docker
+cd api && DATA_DIR=../data node scripts/pair-code.mjs        # bare metal (add PORT=… if not 3000)
+```
+
+It prints `Pairing code: XXXXXXXX`; enter it on the phone within 5 minutes, exactly as you would
+the code from Settings. With more than one profile, say which: `--user <name>` (a profile id works
+too); without it the command lists the names and stops. It needs the server running, refuses a
+disabled profile, and prints only the code — never the secret or a session token. A code made this
+way is the same as one made in Settings, so "sign out everywhere" unpairs the phone the same way.
+
 ## 3. Expose it over HTTPS on your own domain
 
 > Want HTTPS **without** exposing anything to the internet — a valid certificate on a LAN-only address? See [SELF_HOSTING_HTTPS.md](./SELF_HOSTING_HTTPS.md) (wildcard cert via a DNS challenge, Caddy in front).

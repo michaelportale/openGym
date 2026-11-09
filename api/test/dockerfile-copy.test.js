@@ -33,3 +33,7 @@ test('every root-level module server.js needs is on the Dockerfile COPY line', (
   assert.deepEqual(missing, [], `add ${missing.join(', ')} to the COPY line in api/Dockerfile`);
   for (const f of copied) assert.ok(fs.existsSync(path.join(API, f)), `${f} is copied but does not exist`);
 });
+
+test('the Mac pairing command is in the image, so `docker compose exec api node scripts/pair-code.mjs` works', () => {
+  assert.match(read('Dockerfile'), /^COPY\s+scripts\/pair-code\.mjs\s+\.\/scripts\/\s*$/m);
+});
