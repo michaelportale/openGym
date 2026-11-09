@@ -11,8 +11,9 @@ const CODES = [
   'not-saved', 'failed',
 ]
 // What the screen was doing when the write was refused; undefined is a caller that did not say.
-// 'rest' is the rest restored on open, 'start-rest' the Start rest tap.
-const ACTIONS = ['complete', 'complete-warmup', 'rest', 'start-rest', 'draft', 'edit', 'undo', 'undo-warmup', 'add-set', 'add-warmup', 'remove-warmup', 'add-time', 'skip-rest', 'resume', 'discard', 'finish', undefined]
+// 'open' is the session failing to open; 'rest' is the rest restored on open, 'start-rest' the
+// Start rest tap.
+const ACTIONS = ['open', 'complete', 'complete-warmup', 'rest', 'start-rest', 'draft', 'edit', 'undo', 'undo-warmup', 'add-set', 'add-warmup', 'remove-warmup', 'add-time', 'skip-rest', 'resume', 'discard', 'finish', undefined]
 const GENERIC = 'Something went wrong. Try again.'
 
 describe('failureText', () => {
@@ -62,6 +63,9 @@ describe('failureText', () => {
     expect(failureText('discarded', { action: 'complete' })).toBe('Set not saved. This workout was deleted.')
     expect(failureText('send', { action: 'finish' })).toBe("Workout not saved. It didn't reach your history. Try again.")
     expect(failureText('not-saved', { action: 'finish' })).toBe("Workout not saved. The save wasn't confirmed. Try again.")
+    // The screen a session that failed to open shows: never the engine's own message.
+    expect(failureText('storage', { action: 'open' })).toBe("Workout didn't open. The phone couldn't write it. Try again.")
+    expect(failureText(undefined, { action: 'open' })).toBe(`Workout didn't open. ${GENERIC}`)
   })
 
   test('an overnight refusal keeps the stage-1 sentence, whatever was tapped', () => {

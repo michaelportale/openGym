@@ -10,6 +10,7 @@ import PrimaryButton from '../ui/PrimaryButton'
 import ProgressBar from '../ui/ProgressBar'
 import { dockFits } from './dock-layout'
 import ExerciseCard from './ExerciseCard'
+import { failureText } from './failure-text'
 import FinishSheet from './FinishSheet'
 import KeypadSheet from './KeypadSheet'
 import SavedScreen from './SavedScreen'
@@ -73,9 +74,9 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
     return (
       <View style={styles.message}>
         <AppText variant="body" color={color.textSecondary} accessibilityLiveRegion="polite">
-          {failed ? `Could not open this workout: ${session.error?.message ?? 'unknown error'}` : 'Opening workout'}
+          {failed ? failureText(session.error?.code, { action: 'open' }) : 'Opening workout'}
         </AppText>
-        {failed ? <PrimaryButton label="Retry" onPress={onExit} /> : null}
+        {failed ? <PrimaryButton label="Retry" accessibilityHint="Tries to open the workout again." onPress={onExit} /> : null}
       </View>
     )
   }

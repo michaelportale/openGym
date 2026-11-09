@@ -5,6 +5,7 @@ export const OVERNIGHT_NOTICE = 'Choose Resume, Finish or Discard first.'
 
 // What the screen was doing when the write was refused.
 const NOT_DONE = {
+  open: "Workout didn't open.",
   complete: 'Set not saved.',
   'complete-warmup': 'Warm-up not saved.',
   rest: "Rest didn't start.",
