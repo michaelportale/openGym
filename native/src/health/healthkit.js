@@ -10,7 +10,7 @@ import {
   requestAuthorization,
   saveWorkoutSample
 } from '@kingstinct/react-native-healthkit'
-import { syncIdFilter, syncIdOf, syncMetadata, toBodyMassReading, toOwnWorkout } from './gates.js'
+import { syncIdFilter, syncMetadata, toBodyMassReading, toOwnWorkout } from './gates.js'
 
 const WORKOUT = 'HKWorkoutTypeIdentifier'
 const BODY_MASS = 'HKQuantityTypeIdentifierBodyMass'

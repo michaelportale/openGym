@@ -4,6 +4,7 @@ import { Stack, ThemeProvider, DarkTheme, router } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { onRestAlertTap, setRestAlertHandler } from '../notify/notifications'
 import { syncOnForeground } from '../sync/use-sync'
+import { healthOnForeground } from '../health/use-health'
 import { color } from '../theme/tokens'
 
 export const unstable_settings = { anchor: '(tabs)' }
@@ -23,8 +24,9 @@ export default function RootLayout() {
   // Back in the app: sync if paired (at most once a minute). It touches no session write.
   useEffect(() => {
     syncOnForeground()
+    healthOnForeground()
     const sub = AppState.addEventListener('change', state => {
-      if (state === 'active') syncOnForeground()
+      if (state === 'active') { syncOnForeground(); healthOnForeground() }
     })
     return () => sub.remove()
   }, [])

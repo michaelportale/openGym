@@ -4,6 +4,7 @@ import { deleteDatabaseAsync, openDatabaseAsync } from 'expo-sqlite'
 import { color, radius, space, touch } from '../theme/tokens'
 import AppText from '../ui/AppText'
 import ServerSection from '../sync/ServerSection'
+import HealthSection from '../health/HealthSection'
 import { readVerdict } from '../health/gates'
 import { toSessionDbHandle } from '../storage/db-handle'
 import { runStorageCheck } from '../storage/probe'
@@ -105,6 +106,7 @@ export default function Diagnostics() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} alwaysBounceVertical={false}>
       <ServerSection />
+      <HealthSection />
       <AppText variant="value">e1RM {e1rm}</AppText>
       <AppText variant="body" color={color.textSecondary}>{catalogueSize} exercises</AppText>
       <AppText variant="body" color={color.textSecondary}>training.js load: {loadMs} ms</AppText>
