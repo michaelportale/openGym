@@ -205,6 +205,29 @@ test('disable during a slow save switches off at once and no further save happen
   expect(await store.state.get('on')).toBe('0')
 })
 
+test('disable during a slow remove stops the pass before its next remove', async () => {
+  const { adapter, store, health } = await setup([])
+  await store.state.set('on', '1')
+  for (const key of ['o1', 'o2']) {
+    await store.links.put({ kind: 'w', key, syncId: 'opengym-w-' + key, version: 1, hash: 'h', state: 'exported', error: null, updatedAt: 1 })
+  }
+  let release
+  const slow = new Promise(resolve => (release = resolve))
+  const original = adapter.deleteWorkoutsBySyncId
+  adapter.deleteWorkoutsBySyncId = async syncId => {
+    const result = await original(syncId)
+    await slow
+    return result
+  }
+  const running = health.run()
+  await new Promise(r => setTimeout(r, 0))
+  expect(adapter.calls.filter(c => c[0] === 'delete')).toHaveLength(1)
+  const off = health.disable({ remove: false })
+  release()
+  await Promise.all([running, off])
+  expect(adapter.calls.filter(c => c[0] === 'delete')).toHaveLength(1)
+})
+
 test('enable then disable without awaiting ends off with no saves', async () => {
   const { adapter, store, health } = await setup(['w1'])
   const a = health.enable()
