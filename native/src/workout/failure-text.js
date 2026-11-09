@@ -52,6 +52,9 @@ const WHY = {
   'not-saved': "The save wasn't confirmed. Try again.",
 }
 
+// Opening reads the journal, so storage failing there could not read it, not write it.
+const OPEN_WHY = { storage: "The phone couldn't read it. Try again." }
+
 const GENERIC = 'Something went wrong. Try again.'
 
 // Own keys only: a code such as 'constructor' must not find Object.prototype's.
@@ -61,5 +64,6 @@ const lookup = (table, key) => (typeof key === 'string' && Object.hasOwn(table, 
 // An overnight refusal keeps stage 1's sentence whatever was tapped.
 export function failureText(code, { action } = {}) {
   if (code === 'overnight') return OVERNIGHT_NOTICE
-  return `${lookup(NOT_DONE, action) ?? 'Not saved.'} ${lookup(WHY, code) ?? GENERIC}`
+  const why = (action === 'open' ? lookup(OPEN_WHY, code) : null) ?? lookup(WHY, code) ?? GENERIC
+  return `${lookup(NOT_DONE, action) ?? 'Not saved.'} ${why}`
 }

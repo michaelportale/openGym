@@ -64,7 +64,9 @@ describe('failureText', () => {
     expect(failureText('send', { action: 'finish' })).toBe("Workout not saved. It didn't reach your history. Try again.")
     expect(failureText('not-saved', { action: 'finish' })).toBe("Workout not saved. The save wasn't confirmed. Try again.")
     // The screen a session that failed to open shows: never the engine's own message.
-    expect(failureText('storage', { action: 'open' })).toBe("Workout didn't open. The phone couldn't write it. Try again.")
+    expect(failureText('storage', { action: 'open' })).toBe("Workout didn't open. The phone couldn't read it. Try again.")
+    expect(failureText('storage', { action: 'complete' })).toBe("Set not saved. The phone couldn't write it. Try again.")
+    expect(failureText('not-ready', { action: 'open' })).toBe("Workout didn't open. This workout isn't open yet.")
     expect(failureText(undefined, { action: 'open' })).toBe(`Workout didn't open. ${GENERIC}`)
   })
 
