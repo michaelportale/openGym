@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { AppState, ScrollView, StyleSheet, View } from 'react-native'
+import Animated from 'react-native-reanimated'
 import { hapticFor, restEndedNow } from '../feedback/haptics'
 import { playHaptic } from '../feedback/haptics-adapter'
 import { useRestAlerts } from '../notify/use-rest-alerts'
@@ -23,6 +24,7 @@ import { useSessionActions } from './use-session-actions'
 import { deviceTimeZone } from './use-workout-home'
 import { currentExerciseIndex, workoutScreen } from './workout-view'
 import WorkoutDock from './WorkoutDock'
+import { useFadeIn } from '../ui/use-fade-in'
 
 const nameOf = (names, id) => names[id]?.name ?? `Unknown exercise (${id})`
 
@@ -48,6 +50,7 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
   const index = shownIndex == null ? currentExerciseIndex(view) : Math.min(shownIndex, Math.max(0, count - 1))
   const screen = view ? workoutScreen(view, { names, lastTimes, exerciseIndex: index, title: base?.name }) : null
   const shownEntry = view?.entries?.[index] ?? null
+  const cardEntering = useFadeIn(index)
   // The rest alert follows the journal: reconciled when the session opens or ends (saved,
   // discarded), on each return to the app, and after every write.
   const alerts = useRestAlerts({ session, sessionId: base?.id, names })
@@ -174,7 +177,9 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
       <ScrollView style={styles.screen} contentContainerStyle={{ paddingBottom: dockHeight }} scrollIndicatorInsets={{ bottom: dockHeight }}>
         {pinned ? null : head}
         <View style={styles.body}>
-          <ExerciseCard {...card} onPressRow={actions.openSheet} onAddSet={actions.addSet} onAddWarmup={actions.addWarmup} />
+          <Animated.View key={index} entering={cardEntering}>
+            <ExerciseCard {...card} onPressRow={actions.openSheet} onAddSet={actions.addSet} onAddWarmup={actions.addWarmup} />
+          </Animated.View>
           {upNext ? <UpNextRow name={nameOf(names, upNext.id)} onPress={() => move(1)} /> : null}
         </View>
         {pinned ? null : dock}

@@ -1,8 +1,13 @@
+import { useEffect, useRef } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
 import { color, radius, size, space, touch } from '../theme/tokens'
 import NativeSymbol from '../ui/NativeSymbol'
 import AppText from '../ui/AppText'
 import ScaleButton from '../ui/ScaleButton'
+import { becameDone } from '../ui/done-transition'
+import { useMotion } from '../ui/use-motion'
+import { motion } from '../theme/tokens'
 import { setRowView } from './set-row-view'
 
 const MARKERS = {
@@ -48,6 +53,23 @@ function Box({ text, label, hint, look, onPress }) {
 // Last value and the done mark, so those cells are not stops of their own.
 const HIDDEN = { accessibilityElementsHidden: true, importantForAccessibility: 'no-hide-descendants' }
 
+// The marker, popping in (scale and fade) when the row becomes done in the view, which only
+// happens after the durable write. Nothing waits on it; a new pop retargets the running one.
+function Marker({ status, children }) {
+  const { duration } = useMotion()
+  const previous = useRef(undefined)
+  const progress = useSharedValue(1)
+  useEffect(() => {
+    if (becameDone(previous.current, status) && duration('press') > 0) {
+      progress.value = 0
+      progress.value = withTiming(1, { duration: motion.press })
+    }
+    previous.current = status
+  }, [status])
+  const style = useAnimatedStyle(() => ({ opacity: 0.4 + 0.6 * progress.value, transform: [{ scale: 0.7 + 0.3 * progress.value }] }))
+  return <Animated.View style={style}>{children}</Animated.View>
+}
+
 const plain = (text, tone) => <AppText variant="value" color={tone}>{text}</AppText>
 
 // Takes a row of `workoutScreen(...).card.rows`. `onPress(setId, field)` opens the keypad
@@ -90,7 +112,9 @@ export default function SetRow({ setId, number, label, warmup, perSide, perHand,
             {view.sideMark.text}
           </AppText>
         ) : (
-          <NativeSymbol name={marker.name} tintColor={marker.tint} weight={marker.weight} size={size.marker} />
+          <Marker status={status}>
+            <NativeSymbol name={marker.name} tintColor={marker.tint} weight={marker.weight} size={size.marker} />
+          </Marker>
         )}
       </View>
     </>

@@ -1,10 +1,12 @@
 import { StyleSheet, View } from 'react-native'
+import Animated from 'react-native-reanimated'
 import { color, radius, space, touch } from '../theme/tokens'
 import AppText from '../ui/AppText'
 import GlassPanel from '../ui/GlassPanel'
 import PrimaryButton from '../ui/PrimaryButton'
 import ScaleButton from '../ui/ScaleButton'
 import RestPanel from './RestPanel'
+import { useFadeIn } from '../ui/use-fade-in'
 import { spokenLead, spokenPrimaryHint } from './spoken'
 
 const OPENS_KEYPAD = ['ready', 'enter-weight', 'enter-reps']
@@ -16,10 +18,14 @@ const OPENS_KEYPAD = ['ready', 'enter-weight', 'enter-reps']
 export default function WorkoutDock({ dock, perHand, onLayout, inline, onPrimary, onPressLead, onPause, onResume, onAddTime, onSkip, busy, children }) {
   const tappable = OPENS_KEYPAD.includes(dock.mode)
   const spoken = spokenLead(dock, { perHand })
+  const resting = dock.mode === 'resting'
+  const entering = useFadeIn(resting)
   return (
     <View onLayout={onLayout} style={inline ? null : styles.pinned}>
       <GlassPanel style={styles.panel}>
-        {dock.mode === 'resting' ? (
+        {/* One mode is mounted at a time, so the measured height is never doubled; the new one fades in. */}
+        <Animated.View key={resting ? 'rest' : 'set'} entering={entering} style={styles.mode}>
+        {resting ? (
           <RestPanel lead={dock.lead} sub={dock.sub} label={spoken} paused={dock.paused} onPause={onPause} onResume={onResume} onAddTime={onAddTime} onSkip={onSkip} />
         ) : (
           <>
@@ -39,12 +45,14 @@ export default function WorkoutDock({ dock, perHand, onLayout, inline, onPrimary
             {children}
           </>
         )}
+        </Animated.View>
       </GlassPanel>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
+  mode: { gap: space.md },
   lead: { minHeight: touch.min, justifyContent: 'center' },
   pinned: { position: 'absolute', left: 0, right: 0, bottom: 0 },
   panel: {
