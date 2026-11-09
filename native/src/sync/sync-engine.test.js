@@ -167,7 +167,7 @@ describe('syncNow', () => {
     const r = await t.sync.syncNow()
     expect(t.server.calls).toEqual(['me', 'rev', 'pull'])
     expect(await t.copy.get()).toEqual({ state: initialDoc(), rev: 3, wid: 'wid-3', pulledAt: iso(T0) })
-    expect(r).toEqual({ paired: true, state: 'idle', lastSyncedAt: iso(T0), pending: 0, server: BASE, profile: 'Mo' })
+    expect(r).toEqual({ paired: true, state: 'idle', lastSyncedAt: iso(T0), pending: 0, copyKey: '3|wid-3', server: BASE, profile: 'Mo' })
     expect(t.server.pushes).toEqual([])
   })
 
@@ -657,7 +657,7 @@ describe('pair', () => {
     expect(await t.meta.get('profile')).toBe('Mo')
     expect(t.serverIds()).toEqual(['web-1', 'p1', 'p2'])
     expect((await t.copy.get()).state).toEqual(t.server.doc)
-    expect(await t.sync.status()).toEqual({ paired: true, state: 'idle', lastSyncedAt: iso(T0), pending: 0, server: BASE, profile: 'Mo' })
+    expect(await t.sync.status()).toEqual({ paired: true, state: 'idle', lastSyncedAt: iso(T0), pending: 0, copyKey: '4|wid-s1', server: BASE, profile: 'Mo' })
   })
 
   test('the old token is removed before the new address is written, and the new token is written last', async () => {
@@ -785,5 +785,22 @@ describe('subscribe', () => {
     const afterResend = calls
     await t.sync.forget()
     expect(calls).toBeGreaterThan(afterResend)
+  })
+})
+
+describe('copyKey in status', () => {
+  test('is the stored copy rev and wid; a no-op sync keeps it, a pull changes it, forget removes it', async () => {
+    const t = await setup()
+    expect((await t.sync.status()).copyKey).toBeUndefined()
+    const first = await t.sync.syncNow()
+    expect(first.copyKey).toBe('3|wid-3')
+    t.tick(60_000)
+    const noop = await t.sync.syncNow()
+    expect(noop.lastSyncedAt).not.toBe(first.lastSyncedAt)
+    expect(noop.copyKey).toBe(first.copyKey)
+    t.server.webAdds(web('web-2'))
+    const pulled = await t.sync.syncNow()
+    expect(pulled.copyKey).not.toBe(first.copyKey)
+    expect((await t.sync.forget()).copyKey).toBeUndefined()
   })
 })

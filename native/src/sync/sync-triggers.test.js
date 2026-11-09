@@ -14,21 +14,23 @@ describe('shouldSyncOnForeground', () => {
   })
 })
 
-describe('shouldReloadHome', () => {
-  const k = (over = {}) => homeKey({ paired: true, server: 'https://g.example.com', lastSyncedAt: 'a', ...over })
+describe('homeKey / shouldReloadHome', () => {
+  const st = (over = {}) => ({ paired: true, server: 'https://g.example.com', copyKey: '4|w4', lastSyncedAt: 'a', ...over })
+  const k = over => homeKey(st(over))
   test('the first status only records the key', () => {
     expect(shouldReloadHome({ prev: undefined, next: k(), homeStatus: 'start' })).toBe(false)
   })
-  test('a new sync, pairing or forgetting reloads the start screen', () => {
-    expect(shouldReloadHome({ prev: k(), next: k({ lastSyncedAt: 'b' }), homeStatus: 'start' })).toBe(true)
+  test('a new server copy, pairing or forgetting reloads the start screen', () => {
+    expect(shouldReloadHome({ prev: k(), next: k({ copyKey: '5|w5' }), homeStatus: 'start' })).toBe(true)
     expect(shouldReloadHome({ prev: k(), next: homeKey({ paired: false }), homeStatus: 'start' })).toBe(true)
+    expect(shouldReloadHome({ prev: homeKey({ paired: false }), next: k(), homeStatus: 'start' })).toBe(true)
   })
-  test('nothing changed: no reload', () => {
-    expect(shouldReloadHome({ prev: k(), next: k(), homeStatus: 'start' })).toBe(false)
+  test('a no-op sync (same rev and wid, new lastSyncedAt) does not reload', () => {
+    expect(shouldReloadHome({ prev: k(), next: k({ lastSyncedAt: 'b' }), homeStatus: 'start' })).toBe(false)
   })
   test('never while a session is open, loading or failed', () => {
     for (const homeStatus of ['session', 'loading', 'error']) {
-      expect(shouldReloadHome({ prev: k(), next: k({ lastSyncedAt: 'b' }), homeStatus })).toBe(false)
+      expect(shouldReloadHome({ prev: k(), next: k({ copyKey: '5|w5' }), homeStatus })).toBe(false)
     }
   })
   test('no status yet: no reload', () => {

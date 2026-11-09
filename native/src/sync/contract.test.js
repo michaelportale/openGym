@@ -196,7 +196,7 @@ describe.skipIf(!HAS_API_DEPS)(TITLE, { timeout: 30_000 }, () => {
     expect(stored.rev).toBe(12)
     expect(stored.wid).toBe(fixture()._wid)
     expect(await app.sync.status()).toEqual({
-      paired: true, state: 'idle', lastSyncedAt: new Date(T0).toISOString(), pending: 0, server: server.api, profile: 'Owner',
+      paired: true, state: 'idle', lastSyncedAt: new Date(T0).toISOString(), pending: 0, copyKey: `${stored.rev}|${stored.wid}`, server: server.api, profile: 'Owner',
     })
     // the token is in the Keychain and nowhere in SQLite
     const token = app.keychain.m.get('opengym.token')

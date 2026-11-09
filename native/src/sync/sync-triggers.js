@@ -12,10 +12,10 @@ export function shouldSyncOnForeground({ paired, lastAt, now }) {
   return now - lastAt >= FOREGROUND_GAP_MS
 }
 
-// What the Workout tab's data depends on from sync: who it is paired with and when it last pulled.
+// What the Workout tab's data depends on from sync: who it is paired with and which server copy it holds (rev and wid), not when it last synced.
 export function homeKey(status) {
   if (!status) return null
-  return `${status.paired ? 1 : 0}|${status.server ?? ''}|${status.lastSyncedAt ?? ''}`
+  return `${status.paired ? 1 : 0}|${status.server ?? ''}|${status.copyKey ?? ''}`
 }
 
 // Reload the start screen when the key moved. Never while a session is open (or loading or failed):
