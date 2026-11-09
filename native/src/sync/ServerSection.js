@@ -1,13 +1,10 @@
-import { useState } from 'react'
 import { Alert, Pressable, StyleSheet, View } from 'react-native'
 import { color, radius, space, touch } from '../theme/tokens'
 import AppText from '../ui/AppText'
 import Card from '../ui/Card'
 import PrimaryButton from '../ui/PrimaryButton'
-import PairSheet from './PairSheet'
 import { defaultDay, defaultTime } from './sync-status'
 import { serverLines } from './sync-triggers'
-import { useSync } from './use-sync'
 
 function SecondaryButton({ label, accessibilityHint, disabled, onPress }) {
   return (
@@ -34,9 +31,10 @@ function lastSyncedLine(status) {
 }
 
 // "Your server": pair, see how syncing stands, sync now, forget. The token is never shown.
-export default function ServerSection() {
-  const { status, text, pair, forget, syncNow, resendAll } = useSync()
-  const [pairing, setPairing] = useState(false)
+// The screen owns useSync and the pair sheet (a Modal rendered beside its ScrollView, so a tap
+// with the keyboard up is not swallowed); `sync` is useSync()'s result, onPair opens the sheet.
+export default function ServerSection({ sync, onPair }) {
+  const { status, text, forget, syncNow, resendAll } = sync
 
   if (!status) return <View style={styles.section}><AppText variant="heading" accessibilityRole="header">Your server</AppText></View>
 
@@ -90,10 +88,9 @@ export default function ServerSection() {
       ) : (
         <>
           <AppText variant="body" color={color.textSecondary}>{text}</AppText>
-          <PrimaryButton label="Pair with your server" accessibilityHint="Opens a form for the server address and pairing code." onPress={() => setPairing(true)} />
+          <PrimaryButton label="Pair with your server" accessibilityHint="Opens a form for the server address and pairing code." onPress={onPair} />
         </>
       )}
-      <PairSheet visible={pairing} onPair={pair} onClose={() => setPairing(false)} />
     </View>
   )
 }
