@@ -2,7 +2,7 @@
 // server, best and last-session lines, and the media credit. Pure; the screen renders it.
 import { exercises, history } from '../shared/training.js'
 import { cap } from '../sync/source.js'
-import { shortDate } from '../ui/dates.js'
+import { dayLabel } from '../ui/dates.js'
 
 export const MEDIA_CREDIT = 'Exercise media © Aliaksandr Makatserchyk, Gym visual, gymvisual.com. Media licensed for use in openGym only; see NOTICE.md'
 
@@ -16,7 +16,7 @@ export function findExercise(state, id) {
 
 const join = (server, path) => `${server.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`
 
-export function exerciseDetail({ state, id, server }) {
+export function exerciseDetail({ state, id, server, now = Date.now() }) {
   const ex = findExercise(state, id)
   if (!ex) return null
   const S = state || {}
@@ -36,7 +36,7 @@ export function exerciseDetail({ state, id, server }) {
   let last = null
   if (entry) {
     const s = entry.sets?.[0]
-    last = `Last time: ${shortDate(entry.d)}` + (s && s.w > 0 && s.r > 0 ? ` · ${s.w} lb × ${s.r}` : '')
+    last = `Last time: ${dayLabel(entry.d, now)}` + (s && s.w > 0 && s.r > 0 ? ` · ${s.w} lb × ${s.r}` : '')
   }
   return {
     id: ex.id,

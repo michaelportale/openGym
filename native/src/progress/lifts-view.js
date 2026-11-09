@@ -48,10 +48,6 @@ export function liftRows(state) {
   return lifts
 }
 
-export function liftsView(state, { now }) {
-  return { trend: strengthRows(state, { now }), lifts: liftRows(state) }
-}
-
 // What Your lifts shows: the rows once they are worked out; before that none, read as loading
 // when there is history to work through.
 export function liftsCard(state, rows) {

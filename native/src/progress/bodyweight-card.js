@@ -16,7 +16,7 @@ export function bodyweightCard({ bodyweight, range, now, targetW = null }) {
   const list = Array.isArray(bodyweight) ? bodyweight : []
   const v = bwView.bodyweightView(list, { range, now, targetW })
   const need = bwTrend.BW_TREND_MIN - v.points.length
-  const recent = list.slice(-7).reverse().map(e => ({
+  const recent = v.last7.map(e => ({
     d: e.d, label: dayLabel(e.d, now), weight: lb(e.w), health: e.src === 'health',
   }))
   return {

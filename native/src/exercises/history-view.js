@@ -18,8 +18,9 @@ function setText(s, mode) {
 export function exerciseHistoryView(state, id, { metric = 'top', now = Date.now() } = {}) {
   const h = exerciseHistory.exerciseHistory(state || {}, id)
   if (!h.sessions.length) return null
-  // The chart needs two points: with one session there is nothing for Est. 1RM to change.
-  const canToggle = h.e1rmPoints.length > 1
+  // The chart needs two points: with one session there is nothing for Est. 1RM to change. Only a
+  // weight chart has an Est. 1RM to switch to: a timed or cardio chart plots seconds or minutes.
+  const canToggle = h.metric === 'weight' && h.e1rmPoints.length > 1
   const shown = canToggle && metric === 'e1rm' ? 'e1rm' : 'top'
   return {
     chart: { points: shown === 'e1rm' ? h.e1rmPoints : h.points },

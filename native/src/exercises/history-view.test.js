@@ -50,6 +50,17 @@ describe('exerciseHistoryView', () => {
     expect(exerciseHistoryView(state, lift.id, { now: NOW }).sessions.map(s => s.label)).toEqual(['Nov 8', 'Mar 4, 2025'])
   })
 
+  it('cannot toggle an exercise now logged as holds, whatever it was before', () => {
+    const state = { workouts: [
+      wk(9, [{ id: lift.id, sets: [set(25, 10)] }]),
+      wk(8, [{ id: lift.id, sets: [set(25, 10)] }]),
+      wk(1, [{ id: lift.id, target: { mode: 'time' }, sets: [{ done: true, sec: 45 }] }]),
+    ] }
+    const v = exerciseHistoryView(state, lift.id, { metric: 'e1rm', now: NOW })
+    expect(v.canToggle).toBe(false)
+    expect(v.metric).toBe('top')
+  })
+
   it('cannot toggle a reps-only lift', () => {
     const state = { workouts: [wk(3, [{ id: lift.id, sets: [set(0, 12), set(0, 10)] }])] }
     const v = exerciseHistoryView(state, lift.id, { metric: 'e1rm' })

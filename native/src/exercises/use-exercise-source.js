@@ -14,13 +14,13 @@ const LOADING = { status: 'loading', state: null, server: null, error: null }
 // Workout tab reads (the server copy when paired, else the bundled snapshot); `server` is the paired
 // server's address, or null. While the tab is focused a Health pass or a server sync that changes
 // something reloads it. Reloads are coalesced (one at a time, at most one waiting), and one whose
-// source key (sync/source-key.js) is unchanged keeps the same object. Pairing and forgetting both
-// replace the copy, so the address cannot change under an unchanged key.
+// source key (sync/source-key.js) is unchanged keeps the same object. The key carries the server
+// address too: pairing or forgetting moves it before any sync has stored a copy.
 export function useExerciseSource() {
   const [source, setSource] = useState(LOADING)
 
   const [reload] = useState(() => {
-    const load = keyed(readSourceKey, async ({ finished, serverCopy, meta }) => {
+    const load = keyed(async s => `${await readSourceKey(s)}|${(await s.meta.get('server')) || ''}`, async ({ finished, serverCopy, meta }) => {
       const { state } = await readScreenSource({ finished, serverCopy, bundled: snapshot })
       const server = (await meta.get('server')) || null
       return { status: 'ready', state, server, error: null }
