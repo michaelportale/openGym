@@ -1,12 +1,13 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useFocusEffect } from 'expo-router'
 import { openAppDatabase } from '../storage/database'
 import { createSqliteWeighIns } from './weigh-ins'
 import { applyDayOps } from './day-ops'
+import { coalesced } from './coalesce'
 import { readCopy, createSqliteServerCopy } from '../sync/server-copy'
 import { localDate } from '../session/timing'
-import { healthAfterFinish } from '../health/use-health'
-import { syncAfterFinish } from '../sync/use-sync'
+import { getHealth, healthAfterFinish } from '../health/use-health'
+import { getSync, syncAfterFinish } from '../sync/use-sync'
 import { canRemove, saveOp, todayLine } from './weigh-in-view'
 
 const CHANGED = "That weight changed. Check today's weight and try again."
@@ -32,23 +33,40 @@ async function readToday(db) {
 }
 
 // { entry, line, removable, save(w), remove() }. save and remove resolve { ok } and never throw;
-// the Health pass and the server sync run after the write and are never awaited.
+// the Health pass and the server sync run after the write and are never awaited. While the tab is
+// focused, a Health pass or a server sync that changes something reloads the line. Reloads are
+// coalesced (one at a time, at most one waiting), so back-to-back changes read the copy once.
 export function useWeighIns() {
   const [view, setView] = useState({ entry: null, row: null })
-  const readNo = useRef(0)
 
-  const reload = useCallback(async () => {
-    const no = ++readNo.current
+  const [reload] = useState(() => coalesced(async () => {
     try {
       const db = await openAppDatabase()
       const { entry, row } = await readToday(db)
-      if (no === readNo.current) setView({ entry, row })
+      setView({ entry, row })
     } catch {
       // Keep what the screen shows.
     }
-  }, [])
+  }))
 
-  useFocusEffect(useCallback(() => { reload() }, [reload]))
+  useFocusEffect(useCallback(() => {
+    let focused = true
+    const offs = []
+    const listen = engine => engine
+      .then(e => {
+        const off = e.subscribe(() => { reload() })
+        if (focused) offs.push(off)
+        else off() // blurred while the engine was being built
+      })
+      .catch(() => {})
+    reload()
+    listen(getHealth())
+    listen(getSync())
+    return () => {
+      focused = false
+      for (const off of offs.splice(0)) off()
+    }
+  }, [reload]))
 
   const write = async build => {
     try {

@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { canRemove, parseWeight, saveOp, todayLine } from './weigh-in-view.js'
+import { canRemove, parseWeight, saveOp, sheetButtons, todayLine } from './weigh-in-view.js'
 
 test('parseWeight accepts dot or comma, trims, rounds to 0.1', () => {
   expect(parseWeight('182.4')).toBe(182.4)
@@ -55,4 +55,11 @@ test('saveOp goes past a deletion stamp, and takes the max of all three', () => 
   expect(saveOp({ d, w: 180, now: 1000, entry: { d, w: 181, t: 5000 }, deleted: { [d]: 3000 } }).t).toBe(5001)
   expect(saveOp({ d, w: 180, now: 1000, entry: { d, w: 181, t: 2000 }, deleted: { [d]: 3000 } }).t).toBe(3001)
   expect(saveOp({ d, w: 180, now: 1000, entry: { d, w: 181, t: 'x' }, deleted: { [d]: 'y' } }).t).toBe(1000)
+})
+
+test('sheetButtons: the busy action\'s button says what is happening, in text and to VoiceOver', () => {
+  const idle = { save: { label: 'Save', a11y: 'Save' }, remove: { label: "Remove today's weight", a11y: "Remove today's weight" } }
+  expect(sheetButtons(null)).toEqual(idle)
+  expect(sheetButtons('save')).toEqual({ ...idle, save: { label: 'Saving…', a11y: 'Saving' } })
+  expect(sheetButtons('remove')).toEqual({ ...idle, remove: { label: 'Removing…', a11y: 'Removing' } })
 })

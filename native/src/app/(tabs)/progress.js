@@ -14,15 +14,19 @@ const copy = destinationCopy('progress')
 export default function Progress() {
   const { line, removable, save, remove } = useWeighIns()
   const [open, setOpen] = useState(false)
+  // The sheet sits beside the screen's ScrollView, not in it: inside, the ScrollView took the first
+  // tap while the keyboard was up, so Save or Remove only dismissed the keyboard.
   return (
-    <UnbuiltScreen title={copy.title} phaseLabel={copy.phaseLabel} summary={copy.summary} status={copy.status}>
-      <Card style={styles.card}>
-        <AppText variant="body" accessibilityLiveRegion="polite" color={color.text}>{line}</AppText>
-        <PrimaryButton label="Log weight" accessibilityHint="Opens a sheet to type today's weight." onPress={() => setOpen(true)} />
-      </Card>
-      <View style={styles.gap} />
+    <>
+      <UnbuiltScreen title={copy.title} phaseLabel={copy.phaseLabel} summary={copy.summary} status={copy.status}>
+        <Card style={styles.card}>
+          <AppText variant="body" accessibilityLiveRegion="polite" color={color.text}>{line}</AppText>
+          <PrimaryButton label="Log weight" accessibilityHint="Opens a sheet to type today's weight." onPress={() => setOpen(true)} />
+        </Card>
+        <View style={styles.gap} />
+      </UnbuiltScreen>
       <LogWeightSheet visible={open} canRemove={removable} onSave={save} onRemove={remove} onClose={() => setOpen(false)} />
-    </UnbuiltScreen>
+    </>
   )
 }
 

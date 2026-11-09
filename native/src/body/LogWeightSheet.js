@@ -3,13 +3,13 @@ import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleShee
 import { color, radius, space, touch } from '../theme/tokens'
 import AppText from '../ui/AppText'
 import PrimaryButton from '../ui/PrimaryButton'
-import { parseWeight } from './weigh-in-view'
+import { parseWeight, sheetButtons } from './weigh-in-view'
 
-function SecondaryButton({ label, accessibilityHint, disabled, onPress }) {
+function SecondaryButton({ label, accessibilityLabel, accessibilityHint, disabled, onPress }) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={accessibilityLabel ?? label}
       accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled: Boolean(disabled) }}
       disabled={disabled}
@@ -25,7 +25,7 @@ function SecondaryButton({ label, accessibilityHint, disabled, onPress }) {
 // and keeps the sheet open. "Remove today's weight" shows only when `canRemove`.
 export default function LogWeightSheet({ visible, canRemove, onSave, onRemove, onClose }) {
   const [text, setText] = useState('')
-  const [busy, setBusy] = useState(false)
+  const [busy, setBusy] = useState(null) // 'save' or 'remove' while that action runs
   const [error, setError] = useState(null)
 
   const close = () => {
@@ -35,8 +35,8 @@ export default function LogWeightSheet({ visible, canRemove, onSave, onRemove, o
     onClose()
   }
 
-  const run = async action => {
-    setBusy(true)
+  const run = async (kind, action) => {
+    setBusy(kind)
     setError(null)
     let result
     try {
@@ -44,7 +44,7 @@ export default function LogWeightSheet({ visible, canRemove, onSave, onRemove, o
     } catch {
       result = { ok: false }
     }
-    setBusy(false)
+    setBusy(null)
     if (result?.ok) {
       setText('')
       onClose()
@@ -60,9 +60,10 @@ export default function LogWeightSheet({ visible, canRemove, onSave, onRemove, o
       setError('Enter a weight in pounds.')
       return
     }
-    run(() => onSave(w))
+    run('save', () => onSave(w))
   }
 
+  const buttons = sheetButtons(busy)
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" allowSwipeDismissal={!busy} onRequestClose={close}>
       <KeyboardAvoidingView style={styles.sheet} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -90,16 +91,22 @@ export default function LogWeightSheet({ visible, canRemove, onSave, onRemove, o
           </View>
           {error ? <AppText variant="body" accessibilityRole="alert" accessibilityLiveRegion="polite" color={color.text}>{error}</AppText> : null}
           <PrimaryButton
-            label={busy ? 'Saving…' : 'Save'}
-            accessibilityLabel={busy ? 'Saving' : 'Save'}
+            label={buttons.save.label}
+            accessibilityLabel={buttons.save.a11y}
             accessibilityHint="Saves today's weight."
-            disabled={busy}
+            disabled={busy !== null}
             onPress={save}
           />
           {canRemove ? (
-            <SecondaryButton label="Remove today's weight" accessibilityHint="Removes the weight you logged today." disabled={busy} onPress={() => run(onRemove)} />
+            <SecondaryButton
+              label={buttons.remove.label}
+              accessibilityLabel={buttons.remove.a11y}
+              accessibilityHint="Removes the weight you logged today."
+              disabled={busy !== null}
+              onPress={() => run('remove', onRemove)}
+            />
           ) : null}
-          <SecondaryButton label="Cancel" accessibilityHint="Closes without saving." disabled={busy} onPress={close} />
+          <SecondaryButton label="Cancel" accessibilityHint="Closes without saving." disabled={busy !== null} onPress={close} />
         </ScrollView>
       </KeyboardAvoidingView>
     </Modal>

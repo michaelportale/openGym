@@ -29,3 +29,12 @@ export function saveOp({ d, w, now, entry, deleted }) {
   const floors = [now, entry && !entry.src ? Number(entry.t) + 1 : NaN, Number(deleted?.[d]) > 0 ? Number(deleted[d]) + 1 : NaN]
   return { d, op: 'set', w: roundLb(w), t: Math.max(...floors.filter(Number.isFinite)) }
 }
+
+// The sheet's two action buttons; busy is 'save', 'remove' or null. The busy one says what is happening.
+export function sheetButtons(busy) {
+  const remove = "Remove today's weight"
+  return {
+    save: busy === 'save' ? { label: 'Saving…', a11y: 'Saving' } : { label: 'Save', a11y: 'Save' },
+    remove: busy === 'remove' ? { label: 'Removing…', a11y: 'Removing' } : { label: remove, a11y: remove },
+  }
+}
