@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
+import { afterGatedWrite, alertsOffNotice } from '../workout/after-write.js'
+import { ALERTS_OFF_NOTICE } from './permission.js'
 import { ASK_WAIT_MS, JOB_WAIT_MS, createRestAlerts, restStartWaits } from './rest-alerts-core.js'
 
 const NOW = Date.parse('2026-11-07T15:00:00.000Z')
@@ -106,7 +108,7 @@ describe('asking when a rest starts', () => {
     expect(adapter.request).not.toHaveBeenCalled()
   })
 
-  test('a prompt that never answers: the write waits the bounded time, then counts as off', async () => {
+  test('a prompt that never answers: the write waits the bounded time, then goes on with no answer', async () => {
     vi.useFakeTimers()
     const adapter = fakeAdapter({ permissions: async () => ask, request: () => new Promise(() => {}) })
     const alerts = make(adapter)
@@ -115,7 +117,7 @@ describe('asking when a rest starts', () => {
     await vi.advanceTimersByTimeAsync(ASK_WAIT_MS - 1)
     expect(result).toBeUndefined()
     await vi.advanceTimersByTimeAsync(1)
-    expect(result).toEqual({ step: 'off', asked: false })
+    expect(result).toBeNull()
   })
 
   test('the unanswered prompt does not block the queue', async () => {
@@ -339,5 +341,53 @@ describe('only the rest start that may ask waits for its reconcile', () => {
     release()
     await vi.advanceTimersByTimeAsync(0)
     expect(next).toEqual({ step: 'off', asked: false })
+  })
+})
+
+describe('a prompt answered after the wait, through the write path', () => {
+  const denied = { status: 'denied', granted: false, ios: { status: 1 } }
+  // One rest-starting Complete: afterGatedWrite asks the core, alertsOffNotice decides the words.
+  const complete = (alerts, told) => afterGatedWrite({ ok: true, saved: true }, {
+    afterWrite: options => alerts.reconcile(journal('active'), options),
+    before: null,
+    after: () => running,
+    now: NOW + 1000,
+  }).then(result => alertsOffNotice(result, 'complete', 's1', told))
+
+  async function timedOutThenAnswered(answer) {
+    vi.useFakeTimers()
+    let current = ask
+    let reply
+    const adapter = fakeAdapter({ permissions: async () => current, request: () => new Promise(resolve => { reply = resolve }) })
+    const alerts = make(adapter)
+    const told = new Set()
+    let first
+    complete(alerts, told).then(text => { first = text })
+    await vi.advanceTimersByTimeAsync(ASK_WAIT_MS)
+    current = answer
+    reply(answer)
+    await vi.advanceTimersByTimeAsync(0)
+    return { alerts, told, first }
+  }
+
+  test('the timed-out write says nothing and the session stays untold; a late Allow keeps it so', async () => {
+    const { alerts, told, first } = await timedOutThenAnswered(granted)
+    expect(first).toBeNull()
+    expect(told.size).toBe(0)
+    let next
+    complete(alerts, told).then(text => { next = text })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(next).toBeNull()
+    expect(told.size).toBe(0)
+  })
+
+  test('a late Don\'t Allow: the next rest start says alerts are off, once', async () => {
+    const { alerts, told, first } = await timedOutThenAnswered(denied)
+    expect(first).toBeNull()
+    let next
+    complete(alerts, told).then(text => { next = text })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(next).toBe(ALERTS_OFF_NOTICE)
+    expect(told.has('s1')).toBe(true)
   })
 })

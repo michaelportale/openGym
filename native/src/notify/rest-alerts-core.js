@@ -6,7 +6,9 @@ import { reconcileRestAlerts, restAlertPossible } from './rest-alert.js'
 // imports expo-notifications.
 
 // How long a rest-starting write waits for the system prompt to be answered before it carries on
-// as if alerts were off. The prompt itself is never waited on inside the queue.
+// with no answer: it says nothing about alerts, so a late Allow never leaves a false "alerts are
+// off" on screen. A late Don't Allow is known by the next rest start, which says so. The prompt
+// itself is never waited on inside the queue.
 export const ASK_WAIT_MS = 30_000
 
 // How long one queued job (a reconcile's native calls) may take before the queue moves on without
@@ -135,7 +137,7 @@ export function createRestAlerts({ adapter, now = Date.now, waitMs = ASK_WAIT_MS
       const timeout = new Promise(resolve => { timer = setTimeout(() => resolve(null), waitMs) })
       const step = await Promise.race([out.pending, timeout])
       clearTimeout(timer)
-      return step == null ? { step: 'off', asked: false } : { step, asked: true }
+      return step == null ? null : { step, asked: true }
     })
   }
 
