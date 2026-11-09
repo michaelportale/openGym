@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -64,6 +64,8 @@ export default function RoutineScreen() {
   const saveRef = useRef(null)
   saveRef.current = next => plan.save({ rid: id, routine: next.routine, copyRoutine: next.base, fresh: next.fresh })
   const [chain] = useState(() => createWriteChain(next => saveRef.current(next), setAhead))
+  // Each stored routine this screen renders: the chain's last write stays ahead until one holds it.
+  useEffect(() => { chain.seen({ routine: stored }) }, [chain, stored])
   const routine = stored ? ahead?.routine ?? stored : null
   // Read when a tap lands or the picker answers, not when the handler was made.
   const latest = useRef(null)
