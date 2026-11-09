@@ -29,7 +29,7 @@ export default function RestPanel({ lead, sub, label, paused, onPause, onResume,
         <IconButton label="+30s" accessibilityLabel="Add 30 seconds" accessibilityHint="Rests 30 seconds longer." onPress={onAddTime} />
         <IconButton label="Skip" accessibilityLabel="Skip rest" accessibilityHint="Ends the rest now." onPress={onSkip} />
         {/* Quiet, same row: the dock keeps one height. A Modal takes no layout space. */}
-        <ScaleButton accessibilityLabel="About rest times" accessibilityHint="Shows where this number comes from." onPress={() => setWhy(true)} style={styles.why} faceStyle={styles.whyFace}>
+        <ScaleButton accessibilityLabel="About rest times" accessibilityHint="Explains where the default rest times come from." onPress={() => setWhy(true)} style={styles.why} faceStyle={styles.whyFace}>
           <AppText variant="button" color={color.textSecondary}>About rest times</AppText>
         </ScaleButton>
       </View>
