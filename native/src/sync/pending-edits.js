@@ -28,11 +28,15 @@ const isMap = v => !!v && typeof v === 'object' && !Array.isArray(v)
 // What each kind's value is: a routine and a day are objects; a setting (nutritionTargets,
 // supplements) an object or a list.
 const VALUE_OK = { routine: isMap, nutritionDay: isMap, setting: v => !!v && typeof v === 'object' }
+// A setting row replaces state[key] whole in a push (edit-guard.js): only the two the Nutrition
+// screen owns, never a container such as routines, nutritionDays or edited.
+const SETTING_KEYS = new Set(['nutritionTargets', 'supplements'])
 
 function normalized(edit) {
   if (!isMap(edit)) throw new Error('pending edit must be an object')
   if (!Object.hasOwn(VALUE_OK, edit.kind)) throw new Error('pending edit needs a known kind')
   if (typeof edit.key !== 'string' || edit.key === '') throw new Error('pending edit needs a key')
+  if (edit.kind === 'setting' && !SETTING_KEYS.has(edit.key)) throw new Error('pending setting edit needs nutritionTargets or supplements as its key')
   if (!VALUE_OK[edit.kind](edit.value)) throw new Error(`pending ${edit.kind} edit needs an object value`)
   if (!Number.isFinite(edit.t)) throw new Error('pending edit needs a time')
   if (edit.baseTs != null && !Number.isFinite(edit.baseTs)) throw new Error('pending edit baseTs must be a number')

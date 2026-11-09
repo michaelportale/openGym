@@ -234,19 +234,19 @@ describe.each(Object.entries(makers))('%s pending edits', (_, make) => {
 
   test('every kind keeps its value as put; the same key under two kinds is two rows', async () => {
     const s = make()
-    await s.put({ kind: 'routine', key: 'k', baseTs: 1, value: r1, t: 1 })
+    await s.put({ kind: 'routine', key: 'supplements', baseTs: 1, value: r1, t: 1 })
     await s.put({ kind: 'nutritionDay', key: '2026-11-09', baseTs: null, value: day, t: 2 })
     await s.put({ kind: 'setting', key: 'nutritionTargets', baseTs: 7, value: targets, t: 3 })
     await s.put({ kind: 'setting', key: 'supplements', baseTs: null, value: supps, t: 4 })
-    await s.put({ kind: 'setting', key: 'k', baseTs: null, value: [], t: 5 })
+    await s.put({ kind: 'nutritionDay', key: '2026-11-08', baseTs: null, value: {}, t: 5 })
     expect(await s.get('nutritionDay', '2026-11-09')).toEqual({ kind: 'nutritionDay', key: '2026-11-09', baseTs: null, value: day, sent: null, t: 2 })
     expect(await s.get('setting', 'supplements')).toEqual({ kind: 'setting', key: 'supplements', baseTs: null, value: supps, sent: null, t: 4 })
-    expect((await s.get('routine', 'k')).value).toEqual(r1)
-    expect((await s.get('setting', 'k')).value).toEqual([])
-    expect(await s.get('nutritionDay', 'k')).toBeNull()
-    await s.markAcked([{ kind: 'setting', key: 'k', t: 5 }], 'a')
+    expect((await s.get('routine', 'supplements')).value).toEqual(r1)
+    expect((await s.get('nutritionDay', '2026-11-08')).value).toEqual({})
+    expect(await s.get('nutritionDay', 'supplements')).toBeNull()
+    await s.markAcked([{ kind: 'nutritionDay', key: '2026-11-08', t: 5 }], 'a')
     expect((await s.listPending()).map(e => [e.kind, e.key])).toEqual([
-      ['routine', 'k'], ['nutritionDay', '2026-11-09'], ['setting', 'nutritionTargets'], ['setting', 'supplements'],
+      ['routine', 'supplements'], ['nutritionDay', '2026-11-09'], ['setting', 'nutritionTargets'], ['setting', 'supplements'],
     ])
   })
 
@@ -265,17 +265,17 @@ describe.each(Object.entries(makers))('%s pending edits', (_, make) => {
 
   test('markSent, rebase, markSuperseded and dismiss act on their own kind only', async () => {
     const s = make()
-    await s.put({ kind: 'routine', key: 'k', baseTs: 1, value: r1, t: 1 })
-    await s.put({ kind: 'setting', key: 'k', baseTs: 1, value: targets, t: 1 })
-    await s.markSent([{ kind: 'setting', key: 'k', baseTs: 1, value: { sent: true } }])
-    expect((await s.get('routine', 'k')).sent).toBeNull()
-    await s.rebase([{ kind: 'setting', key: 'k', t: 1, baseTs: 5 }])
-    expect(await s.get('routine', 'k')).toMatchObject({ baseTs: 1 })
-    expect(await s.get('setting', 'k')).toMatchObject({ baseTs: 5, sent: null })
-    await s.markSuperseded([{ kind: 'routine', key: 'k', t: 1, reason: 'changed' }], 'x')
+    await s.put({ kind: 'routine', key: 'nutritionTargets', baseTs: 1, value: r1, t: 1 })
+    await s.put({ kind: 'setting', key: 'nutritionTargets', baseTs: 1, value: targets, t: 1 })
+    await s.markSent([{ kind: 'setting', key: 'nutritionTargets', baseTs: 1, value: { sent: true } }])
+    expect((await s.get('routine', 'nutritionTargets')).sent).toBeNull()
+    await s.rebase([{ kind: 'setting', key: 'nutritionTargets', t: 1, baseTs: 5 }])
+    expect(await s.get('routine', 'nutritionTargets')).toMatchObject({ baseTs: 1 })
+    expect(await s.get('setting', 'nutritionTargets')).toMatchObject({ baseTs: 5, sent: null })
+    await s.markSuperseded([{ kind: 'routine', key: 'nutritionTargets', t: 1, reason: 'changed' }], 'x')
     expect((await s.listPending()).map(e => e.kind)).toEqual(['setting'])
-    await s.markSuperseded([{ kind: 'setting', key: 'k', t: 1, reason: 'changed' }], 'y')
-    await s.dismiss('setting', 'k')
+    await s.markSuperseded([{ kind: 'setting', key: 'nutritionTargets', t: 1, reason: 'changed' }], 'y')
+    await s.dismiss('setting', 'nutritionTargets')
     expect((await s.listNotices()).map(n => n.kind)).toEqual(['routine'])
   })
 
@@ -306,6 +306,18 @@ describe.each(Object.entries(makers))('%s pending edits', (_, make) => {
     await expect(s.put({ kind: 'setting', key: 'supplements', baseTs: null, value: null, t: 1 })).rejects.toThrow()
     await expect(s.put({ kind: 'setting', key: 'supplements', baseTs: null, value: 3, t: 1 })).rejects.toThrow()
     expect(await s.listPending()).toEqual([])
+  })
+
+  // A setting row replaces state[key] whole in a push: only the two the Nutrition screen owns.
+  test('a setting key other than nutritionTargets or supplements throws, and nothing is stored', async () => {
+    const s = make()
+    for (const key of ['k', 'routines', 'nutritionDays', 'edited', 'deleted', 'unit', 'workouts', '__proto__']) {
+      await expect(s.put({ kind: 'setting', key, baseTs: null, value: {}, t: 1 }), key).rejects.toThrow(/setting/)
+    }
+    expect(await s.listPending()).toEqual([])
+    await s.put({ kind: 'setting', key: 'nutritionTargets', baseTs: null, value: {}, t: 2 })
+    await s.put({ kind: 'setting', key: 'supplements', baseTs: null, value: [], t: 3 })
+    expect((await s.listPending()).map(e => e.key)).toEqual(['nutritionTargets', 'supplements'])
   })
 })
 
