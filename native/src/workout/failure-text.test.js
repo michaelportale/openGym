@@ -13,7 +13,7 @@ const CODES = [
 // What the screen was doing when the write was refused; undefined is a caller that did not say.
 // 'open' is the session failing to open; 'rest' is the rest restored on open, 'start-rest' the
 // Start rest tap.
-const ACTIONS = ['open', 'complete', 'complete-warmup', 'rest', 'start-rest', 'draft', 'edit', 'undo', 'undo-warmup', 'add-set', 'add-warmup', 'remove-warmup', 'add-time', 'skip-rest', 'resume', 'discard', 'finish', undefined]
+const ACTIONS = ['open', 'complete', 'complete-warmup', 'rest', 'start-rest', 'draft', 'edit', 'undo', 'undo-warmup', 'add-set', 'add-warmup', 'remove-warmup', 'add-time', 'skip-rest', 'pause-rest', 'resume-rest', 'resume', 'discard', 'finish', undefined]
 const GENERIC = 'Something went wrong. Try again.'
 
 describe('failureText', () => {
@@ -58,6 +58,8 @@ describe('failureText', () => {
     expect(failureText('no-rest', { action: 'add-time' })).toBe('Time not added. No rest is running.')
     expect(failureText('bad-extend', { action: 'add-time' })).toBe("Time not added. The rest can't get any longer.")
     expect(failureText('no-rest', { action: 'skip-rest' })).toBe('Rest not skipped. No rest is running.')
+    expect(failureText('no-rest', { action: 'pause-rest' })).toBe('Rest not paused. No rest is running.')
+    expect(failureText('no-rest', { action: 'resume-rest' })).toBe('Rest not resumed. No rest is running.')
     expect(failureText('not-overnight', { action: 'resume' })).toBe('Workout not resumed. This workout is already running.')
     expect(failureText('finished', { action: 'discard' })).toBe('Workout not deleted. This workout has already ended.')
     expect(failureText('discarded', { action: 'complete' })).toBe('Set not saved. This workout was deleted.')

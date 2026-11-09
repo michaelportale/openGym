@@ -61,6 +61,9 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
   // after a kill) so an overnight session asks before any set is logged.
   useEffect(() => {
     const sub = AppState.addEventListener('change', next => {
+      // The 1-second tick is suspended in the background: the first frame back reads the clock
+      // now, so the rest and elapsed time are current rather than a tick behind.
+      if (next === 'active') setNow(Date.now())
       const zone = read.current.view?.timeZone ?? deviceTimeZone()
       if (next === 'active' && read.current.view && localDate(Date.now(), zone) !== localDate(read.current.at, zone)) onExit()
     })

@@ -73,7 +73,7 @@ function setWords({ number, figures, side }, perHand) {
 // unsaved docks, whose lead already says it).
 export function spokenLead(dock, { perHand = false } = {}) {
   if (dock.mode === 'resting') {
-    const rest = `Rest, ${spokenDuration(dock.remainingMs)} left`
+    const rest = `Rest${dock.paused ? ' paused' : ''}, ${spokenDuration(dock.remainingMs)} left`
     return dock.figures ? `${rest}. Next, set ${setWords(dock, perHand)}` : rest
   }
   if (SET_MODES.includes(dock.mode) && dock.figures) return `Set ${setWords(dock, perHand)}`

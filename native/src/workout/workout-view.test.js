@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'vitest'
+import { liveView } from './session-screen.js'
+import { projectRest } from '../session/timing.js'
 import { carriedWeight, currentExerciseIndex, lockedWeight, shownValues, workoutScreen } from './workout-view.js'
 
 const set = (setId, row, extra = {}) => ({
@@ -59,6 +61,21 @@ describe('dock', () => {
   test('resting', () => {
     const { dock } = screen({ ...mid(), rest: { status: 'running', remainingMs: 64_000, deadline: 1 } })
     expect(dock).toMatchObject({ mode: 'resting', lead: '1:04', sub: 'Next: set 2 · 75 lb × 8' })
+  })
+  test('a paused rest keeps its frozen time and says Paused, whatever the clock does', () => {
+    const rest = { status: 'paused', remainingMs: 64_000, deadline: 1, totalMs: 120_000 }
+    const early = screen(liveView({ ...mid(), rest }, 0, 10_000)).dock
+    const late = screen(liveView({ ...mid(), rest }, 0, 9_000_000)).dock
+    expect(early).toMatchObject({ mode: 'resting', paused: true, lead: '1:04', sub: 'Paused', remainingMs: 64_000 })
+    expect(late).toEqual(early)
+    expect(screen({ ...mid(), rest: { status: 'running', remainingMs: 64_000, deadline: 1 } }).dock.paused).toBe(false)
+  })
+  test('a rest whose deadline passed while away is complete, never a negative time', () => {
+    const rest = { status: 'running', remainingMs: 64_000, deadline: 100_000, totalMs: 120_000 }
+    const back = liveView({ ...mid(), rest }, 40_000, 5_000_000)
+    expect(back.rest).toMatchObject({ status: 'complete', remainingMs: 0 })
+    expect(screen(back).dock.mode).toBe('ready')
+    expect(projectRest({ ...rest, status: 'running' }, 5_000_000)).toMatchObject({ status: 'complete', remainingMs: 0 })
   })
   test('rounds the countdown up and treats complete as not resting', () => {
     expect(screen({ ...mid(), rest: { status: 'paused', remainingMs: 59_001 } }).dock.lead).toBe('1:00')

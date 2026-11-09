@@ -71,6 +71,12 @@ describe('spokenLead', () => {
     expect(spokenLead({ mode: 'resting', lead: '1:04', remainingMs: 64_000, number: 2, figures: { w: 75, r: 8 }, side: null }, { perHand: true }))
       .toBe('Rest, 1 minute 4 seconds left. Next, set 2, 75 pounds each, 8 reps')
   })
+  test('a paused rest says so', () => {
+    expect(spokenLead({ mode: 'resting', paused: true, lead: '1:04', remainingMs: 64_000, number: null, figures: null, side: null }))
+      .toBe('Rest paused, 1 minute 4 seconds left')
+    expect(spokenLead({ mode: 'resting', paused: true, lead: '1:04', remainingMs: 64_000, number: 2, figures: { w: 75, r: 8 }, side: null }))
+      .toBe('Rest paused, 1 minute 4 seconds left. Next, set 2, 75 pounds, 8 reps')
+  })
   test('with no set up, the lead says it already', () => {
     expect(spokenLead({ mode: 'exercise-done', lead: 'Exercise done', number: null, figures: null })).toBe('Exercise done')
     expect(spokenLead({ mode: 'all-done', lead: 'All sets done' })).toBe('All sets done')

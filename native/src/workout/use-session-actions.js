@@ -7,7 +7,7 @@ import { completeLabels } from './keypad'
 import { pendingRest, restMsFor } from './rest-after'
 import { shownAfterComplete, withTargets } from './session-screen'
 import { carriedWeight, lockedWeight, shownValues } from './workout-view'
-import { NO_NOTICES, addSetCall, addWarmupCall, completeAfterCommit, completeCall, dockKeypadField, draftCall, editCall, findSet, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightRefusal, primaryAction, removeWarmupCall, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, sheetSide, thrown, undoWrite } from './set-calls'
+import { NO_NOTICES, addSetCall, addWarmupCall, completeAfterCommit, completeCall, dockKeypadField, draftCall, editCall, findSet, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightRefusal, pauseRestCall, primaryAction, removeWarmupCall, restAfterComplete, resultNotice, resumeRestCall, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, sheetSide, thrown, undoWrite } from './set-calls'
 
 // Every write the session screen makes, through one action gate: a tap while a write is in
 // flight is dropped, so a double tap on Complete logs one set. `view` is this render's view (with
@@ -268,6 +268,17 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
     },
     onPressLead: () => openSheet(screen.dock.setId, dockKeypadField(screen.dock.mode)),
     onAddTime: async () => report(await write(() => session.extendRest({ eventId: createEventId(), byMs: 30_000 })), 'add-time'),
+    // Pause freezes the time left; Resume starts it counting again from now. Both are decided on the
+    // engine's latest view at the clock as the write runs, so a tap on a rest that ended, or one
+    // already paused, writes nothing.
+    onPause: async () => report(await write(async (view, now) => {
+      const call = pauseRestCall(view, now, createEventId())
+      return call ? session.pauseRest(call) : null
+    }), 'pause-rest'),
+    onResume: async () => report(await write(async (view, now) => {
+      const call = resumeRestCall(view, now, createEventId())
+      return call ? session.startRest(call) : null
+    }), 'resume-rest'),
     onSkip: async () => report(await write(() => session.cancelRest({ eventId: createEventId() })), 'skip-rest'),
   }
 

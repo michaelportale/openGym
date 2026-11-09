@@ -164,10 +164,12 @@ function dockFor(view, entry, entries, index, current, number) {
   const figureText = figures ? `${loadText(figures.w, perHandOf(entry))} × ${num(figures.r)}` : ''
 
   if (resting) {
+    const paused = rest.status === 'paused'
     return {
       mode: 'resting',
+      paused,
       lead: countdown(rest.remainingMs),
-      sub: current ? `Next: set ${number} · ${figureText}` : '',
+      sub: paused ? 'Paused' : current ? `Next: set ${number} · ${figureText}` : '',
       primaryLabel: '',
       setId: current ? current.setId : null,
       side,
