@@ -101,13 +101,27 @@ test('done is checked before rebased, and rebased before applied', () => {
   expect(same.rebased).toEqual([])
 })
 
-test('non-object entries are kept and never match; the first routine with an id counts', () => {
-  const list = [null, 'x', routine('a', 'First', { _ts: 1 }), routine('a', 'Second', { _ts: 1 })]
+test('non-object entries are kept and never match', () => {
+  const list = [null, 'x', routine('a', 'First', { _ts: 1 }), routine('b', 'Other', { _ts: 1 })]
   const r = applyRoutineEdits(list, [edit('a', routine('a', 'Mine'), { baseTs: 1 })])
   expect(r.next[0]).toBeNull()
   expect(r.next[1]).toBe('x')
   expect(r.next[2].name).toBe('Mine')
-  expect(r.next[3].name).toBe('Second')
+  expect(r.next[3]).toBe(list[3])
+})
+
+// The API pairs the last routine with an id and the guard the first: never send an edit of one.
+test('a routine id twice in the copy makes an edit that would go unsafe; one already there is done, and the first counts for that', () => {
+  const list = [routine('a', 'First', { _ts: 1 }), routine('a', 'Second', { _ts: 1 })]
+  const r = applyRoutineEdits(list, [edit('a', routine('a', 'Mine'), { baseTs: 1, t: 4 })])
+  expect(r.superseded).toEqual([{ rid: 'a', t: 4, kind: 'unsafe' }])
+  expect(r.applied).toEqual([])
+  expect(r.next).toBe(list)
+  const sent = routine('a', 'Sent')
+  const rebasing = applyRoutineEdits([{ ...sent, _ts: 2 }, routine('a', 'Second')], [edit('a', routine('a', 'Mine'), { baseTs: 1, sent, t: 5 })])
+  expect(rebasing.superseded).toEqual([{ rid: 'a', t: 5, kind: 'unsafe' }])
+  expect(rebasing.rebased).toEqual([])
+  expect(applyRoutineEdits(list, [edit('a', routine('a', 'First'), { baseTs: 0, t: 6 })]).done).toEqual([{ rid: 'a', t: 6 }])
 })
 
 test('a non-array routines reads as empty; nothing applying returns the input array itself', () => {

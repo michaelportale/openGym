@@ -47,7 +47,9 @@ function onCopyStamps(routine, copy) {
 }
 
 // routines: the server's list (a non-array reads as empty). edits: from listPending().
-// Matched by id, first routine wins. Returns { next, done, rebased, applied, superseded };
+// Matched by id, first routine wins. A routine whose id the list holds twice is malformed, and the
+// API would pair the last of them, not the first: an edit of it that would go is unsafe.
+// Returns { next, done, rebased, applied, superseded };
 // next is a new array only when something applies or rebases, and untouched routines keep
 // their identity. Inputs are never mutated.
 export function applyRoutineEdits(routines, edits) {
@@ -64,11 +66,12 @@ export function applyRoutineEdits(routines, edits) {
   for (const edit of Array.isArray(edits) ? edits : []) {
     const index = list.findIndex((r) => r && typeof r === 'object' && r.id === edit.rid)
     const copy = index < 0 ? null : list[index]
+    const twice = index >= 0 && list.some((r, i) => i > index && r && typeof r === 'object' && r.id === edit.rid)
     const ref = { rid: edit.rid, t: edit.t }
     const rebase = !!copy && !!edit.sent && sameRoutine(copy, edit.sent)
     const apply = !!copy && (copy._ts ?? null) === edit.baseTs
     if (copy && sameRoutine(copy, edit.routine)) done.push(ref)
-    else if ((rebase || apply) && putBackChanges(copy, edit.routine)) superseded.push({ ...ref, kind: 'unsafe' })
+    else if ((rebase || apply) && (twice || putBackChanges(copy, edit.routine))) superseded.push({ ...ref, kind: 'unsafe' })
     else if (rebase) {
       rebased.push({ ...ref, baseTs: copy._ts ?? null })
       swap(index, onCopyStamps(edit.routine, copy))
