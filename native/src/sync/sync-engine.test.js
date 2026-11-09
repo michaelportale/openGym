@@ -1,10 +1,12 @@
 import { describe, expect, test } from 'vitest'
 import { createNodeSqliteDb } from '../../scripts/node-sqlite.mjs'
+import { resetIdsOf } from '../../../frontend/src/lib/sync-merge.js'
 import { createSqliteFinishedWorkouts } from '../session/finished-workouts.js'
 import { createCredentials } from './credentials.js'
 import { buildPush } from './outbox.js'
 import { createSqliteServerCopy, createSqliteSyncMeta } from './server-copy.js'
-import { createSync } from './sync-engine.js'
+import { screenSource } from './source.js'
+import { SERVER_WID_KEEP, createSync } from './sync-engine.js'
 
 const BASE = 'https://gym.example.com'
 const T0 = Date.parse('2026-11-09T09:14:00.000Z')
@@ -95,21 +97,23 @@ function fakeServer(doc = initialDoc()) {
       srv.calls.push('rev')
       const h = await hook('rev', [base, token]); if (h) return h
       if (!authed(token)) return UNAUTHORIZED
-      return { ok: true, rev: srv.doc._rev, ...(srv.doc._wid ? { wid: srv.doc._wid } : {}) }
+      return { ok: true, rev: srv.doc._rev ?? 0, ...(srv.doc._wid ? { wid: srv.doc._wid } : {}) }
     },
     async pull(base, token) {
       srv.calls.push('pull')
       const h = await hook('pull', [base, token]); if (h) return h
       if (!authed(token)) return UNAUTHORIZED
-      return { ok: true, state: clone(srv.doc), rev: srv.doc._rev }
+      return { ok: true, state: clone(srv.doc), rev: srv.doc._rev ?? 0 }
     },
     async push(base, token, body) {
       srv.calls.push('push')
       srv.pushes.push(clone(body))
       const h = await hook('push', [base, token, body]); if (h) return h
       if (!authed(token)) return UNAUTHORIZED
-      if (body.baseRev !== srv.doc._rev || body.baseWid !== srv.doc._wid) {
-        return { ok: false, kind: 'conflict', state: clone(srv.doc), rev: srv.doc._rev }
+      // the same test as server.js: the wid is compared only when both sides have one
+      const curRev = srv.doc._rev ?? 0
+      if (body.baseRev !== curRev || (typeof body.baseWid === 'string' && srv.doc._wid && body.baseWid !== srv.doc._wid)) {
+        return { ok: false, kind: 'conflict', state: clone(srv.doc), rev: curRev }
       }
       const state = clone(body.state)
       const held = new Set((srv.doc.workouts ?? []).map(w => w.id))
@@ -383,6 +387,125 @@ describe('syncNow', () => {
     expect(t.serverIds()).toEqual(['web-1', 'p1'])
   })
 
+  test('a 200 whose follow-up pull fails leaves the workout pending and on screen; the next sync acks it without resending', async () => {
+    const t = await setup()
+    await t.sync.syncNow()
+    await t.workouts.put(phone('p1'))
+    t.server.once.pull = [OFFLINE]
+    const r = await t.sync.syncNow()
+    expect(t.serverIds()).toEqual(['web-1', 'p1'])
+    expect(r).toMatchObject({ state: 'waiting', pending: 1 })
+    expect(await t.pendingIds()).toEqual(['p1'])
+    const shown = screenSource({ copy: await t.copy.get(), bundled: { names: {} }, pending: await t.workouts.listPending() })
+    expect(shown.state.workouts.map(w => w.id)).toContain('p1')
+
+    t.fresh()
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pending: 0 })
+    expect(t.server.calls).toEqual(['rev', 'pull'])
+    expect(t.server.pushes).toHaveLength(1)
+    expect(t.serverIds()).toEqual(['web-1', 'p1'])
+  })
+
+  test('killed between storing the copy and reconciling: the next sync at the same rev acks the held ids', async () => {
+    const t = await setup({ local: [phone('p1')] })
+    // the PUT landed and a pull stored the server's document, then the app died before the ack
+    t.server.write({ ...t.server.doc, workouts: [...t.server.doc.workouts, phone('p1')] })
+    await t.copy.put({ state: clone(t.server.doc), rev: t.server.doc._rev, wid: t.server.doc._wid, pulledAt: 'x' })
+    expect(await t.pendingIds()).toEqual(['p1'])
+    const r = await t.sync.syncNow()
+    expect(t.server.calls).toEqual(['me', 'rev'])
+    expect(r).toMatchObject({ state: 'idle', pending: 0 })
+    expect(t.server.pushes).toEqual([])
+  })
+
+  test('a document without a wid at the copy\'s rev is pulled, not pushed over', async () => {
+    const t = await setup()
+    await t.sync.syncNow()
+    const held = await t.copy.get()
+    // the data folder replaced by an unrelated file from before write ids, at the same revision
+    const other = { unit: 'lb', workouts: [{ id: 'other', d: '2026-01-01', entries: [] }], routines: [], _rev: held.rev }
+    t.server.doc = clone(other)
+    await t.workouts.put(phone('p1'))
+    t.fresh()
+    const r = await t.sync.syncNow()
+    expect(t.server.calls).toEqual(['rev', 'pull'])
+    expect(t.server.pushes).toEqual([])
+    expect(t.server.doc).toEqual(other)
+    expect(r).toMatchObject({ state: 'problem', problem: 'server-older', pending: 1 })
+    expect(await t.copy.get()).toEqual(held)
+  })
+
+  test('a server whose window of write ids has moved past the copy\'s is not taken for an older one', async () => {
+    const t = await setup({ local: [phone('p1')] })
+    await t.sync.syncNow()
+    for (let i = 0; i < 60; i++) t.server.webAdds(web(`web-x${i}`))
+    expect(t.server.doc._wids).toHaveLength(SERVER_WID_KEEP)
+    await t.workouts.put(phone('p2', '2026-11-09'))
+    const r = await t.sync.syncNow()
+    expect(r).toMatchObject({ state: 'idle', pending: 0 })
+    expect(r.problem).toBeUndefined()
+    expect(t.serverIds()).toHaveLength(1 + 1 + 60 + 1)
+    expect(t.serverIds().slice(-1)).toEqual(['p2'])
+  })
+
+  test('the window constant is the server\'s WID_KEEP', () => {
+    expect(SERVER_WID_KEEP).toBe(50)
+  })
+
+  test('a server at a lower rev is older, even when its wid list is full', async () => {
+    const t = await setup()
+    await t.sync.syncNow()
+    for (let i = 0; i < 60; i++) t.server.webAdds(web(`web-x${i}`))
+    await t.sync.syncNow()
+    const synced = await t.copy.get()
+    t.server.doc = { ...clone(t.server.doc), _rev: synced.rev - 1, _wid: 'restored', _wids: Array.from({ length: 50 }, (_, i) => `old-${i}`) }
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'problem', problem: 'server-older' })
+    expect(await t.copy.get()).toEqual(synced)
+  })
+
+  test('a new profile with no document yet: the phone starts it with its own workouts', async () => {
+    const server = fakeServer({})
+    const t = await setup({ server, local: [phone('p1')] })
+    const r = await t.sync.syncNow()
+    expect(r).toMatchObject({ state: 'idle', pending: 0 })
+    expect(t.server.pushes[0]).toEqual({ state: { workouts: [phone('p1')] }, baseRev: 0, baseWid: null })
+    expect(t.serverIds()).toEqual(['p1'])
+    expect((await t.copy.get()).rev).toBe(1)
+  })
+
+  test('pairing again after a web "Reset everything" does not bring back the workouts it wiped', async () => {
+    const t = await setup({ local: [phone('p1')] })
+    await t.sync.syncNow()
+    expect(t.serverIds()).toEqual(['web-1', 'p1'])
+    // the web wipes the profile: an empty copy stamped with what it wiped (sync-merge.js resetIdsOf)
+    const wiped = resetIdsOf(t.server.doc)
+    expect(wiped.workouts).toEqual(['web-1', 'p1'])
+    t.server.write({ unit: 'kg', routines: [], workouts: [], resetAt: T0 + 1000, resetIds: wiped })
+    // later the owner signs out everywhere and pairs this phone again: every ack is reset
+    expect(await t.sync.pair('gym.example.com', 'GOODCODE')).toEqual({ ok: true })
+    expect(t.serverIds()).toEqual([])
+    expect(await t.pendingIds()).toEqual([])
+    expect(t.server.pushes).toHaveLength(1)
+  })
+
+  test.each([
+    ['push', 403],
+    ['rev', 404],
+    ['pull', 400],
+  ])('a %s refused with %i is a refused problem that keeps the status and every workout', async (method, status) => {
+    const t = await setup({ local: [phone('p1')] })
+    t.server.once[method] = [{ ok: false, kind: 'refused', status }]
+    const r = await t.sync.syncNow()
+    expect(r).toMatchObject({ state: 'problem', problem: 'refused', httpStatus: status, pending: 1 })
+    expect(await t.meta.get('problem')).toBe('refused')
+    expect(await t.pendingIds()).toEqual(['p1'])
+
+    const again = await t.sync.syncNow()
+    expect(again).toMatchObject({ state: 'idle', pending: 0 })
+    expect(again.problem).toBeUndefined()
+    expect(again.httpStatus).toBeUndefined()
+  })
+
   test('a pending workout the server has deleted is acked, not sent back', async () => {
     const doc = initialDoc()
     doc.deleted.workouts.p9 = 1730000000500
@@ -393,7 +516,7 @@ describe('syncNow', () => {
     expect(t.serverIds()).toEqual(['web-1', 'p1'])
   })
 
-  test('a call while a sync runs gets the same promise, and the state is syncing meanwhile', async () => {
+  test('calls before a sync starts join it, and the state is syncing while it runs', async () => {
     const t = await setup()
     const g = gate()
     t.server.once.rev = [async () => { await g.shut }]
@@ -410,6 +533,30 @@ describe('syncNow', () => {
     const c = t.sync.syncNow()
     expect(c).not.toBe(a)
     await c
+  })
+
+  test('calls during a run schedule exactly one follow-up, which sends a workout finished meanwhile', async () => {
+    const t = await setup({ local: [phone('p1')] })
+    const g = gate()
+    t.server.once.push = [async () => { await g.shut }]
+    const first = t.sync.syncNow()
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(t.server.calls).toEqual(['me', 'rev', 'pull', 'push'])
+    // a workout is finished while the push is on its way, and the screen asks for a sync
+    await t.workouts.put(phone('p2', '2026-11-09'))
+    const next = t.sync.syncNow()
+    expect(next).not.toBe(first)
+    for (let i = 0; i < 3; i++) expect(t.sync.syncNow()).toBe(next)
+    g.open()
+    await first
+    const r = await next
+    expect(t.server.calls.filter(c => c === 'rev')).toHaveLength(2)
+    expect(t.server.pushes.map(b => b.state.workouts.map(w => w.id))).toEqual([['web-1', 'p1'], ['web-1', 'p1', 'p2']])
+    expect(r).toMatchObject({ state: 'idle', pending: 0 })
+    expect(t.serverIds()).toEqual(['web-1', 'p1', 'p2'])
+    // nothing more was scheduled
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(t.server.calls.filter(c => c === 'rev')).toHaveLength(2)
   })
 
   test('a local storage failure never rejects; it shows as a problem that is not stored', async () => {
@@ -476,7 +623,8 @@ describe('pair', () => {
   test.each([
     ['a wrong or expired code', { ok: false, kind: 'invalid-code' }, /code/i],
     ['an unreachable server', OFFLINE, /reach gym\.example\.com/],
-    ['a server that is not openGym', { ok: false, kind: 'server', status: 404 }, /gym\.example\.com/],
+    ['a server that is not openGym', { ok: false, kind: 'server', status: 502 }, /gym\.example\.com/],
+    ['an address that refuses the pairing route', { ok: false, kind: 'refused', status: 404 }, /gym\.example\.com answered, but not like an openGym server/],
   ])('%s is said in words, and the current pairing is untouched', async (_n, answer, words) => {
     const t = await setup({ local: [phone('p1')] })
     await t.sync.syncNow()

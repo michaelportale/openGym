@@ -13,14 +13,31 @@ import { hostOf } from './sync-status.js'
 
 const DAY = 24 * 3600_000
 
+// How many ancestors' write ids a server document keeps in `_wids`: WID_KEEP in api/server.js
+// (L168). Once the list is this long the oldest ids drop off, so a copy's id missing from a full
+// list only means the server has been written that many times since; it says nothing about age.
+export const SERVER_WID_KEEP = 50
+
 const isMap = v => !!v && typeof v === 'object' && !Array.isArray(v)
 
-// Whether `state` is the document the copy was, or a later write on top of it. A server keeps
-// each write's id (`_wid`) and its ancestors' (`_wids`); one whose history lacks the copy's id
-// went back in time (restored from an older backup), or is another server or profile.
-function descends(prev, state) {
-  if (!prev?.wid) return true
-  return state._wid === prev.wid || (Array.isArray(state._wids) && state._wids.includes(prev.wid))
+// Whether a document from the server (a pull or a 409) is older than the copy: restored from an
+// older backup, or another server or profile. Its revision went back; or the copy's write id is
+// in neither its `_wid` nor a `_wids` list short enough to still hold every ancestor.
+function wentBack(prev, state, rev) {
+  if (!prev) return false
+  if (typeof prev.rev === 'number' && rev < prev.rev) return true
+  if (!prev.wid || state._wid === prev.wid) return false
+  const ancestors = Array.isArray(state._wids) ? state._wids : []
+  return !ancestors.includes(prev.wid) && ancestors.length < SERVER_WID_KEEP
+}
+
+// The names of the workouts a server document says are gone: deleted (sync-stamps.js DEL_LISTS:
+// key -> stamp, positive while deleted) or wiped by "Reset everything" (sync-merge.js resetIdsOf:
+// resetIds.workouts is a list of keys).
+function goneFrom(state) {
+  const removed = isMap(state.deleted) && isMap(state.deleted.workouts) ? state.deleted.workouts : {}
+  const wiped = new Set(isMap(state.resetIds) && Array.isArray(state.resetIds.workouts) ? state.resetIds.workouts.map(String) : [])
+  return id => Number(removed[id]) > 0 || wiped.has(String(id))
 }
 
 function pairError(result, base) {
@@ -41,7 +58,7 @@ export function createSync({ client, credentials, copy, workouts, meta, now }) {
     return run
   }
 
-  let shared = null // the running syncNow promise
+  let waiting = null // a sync queued but not yet started: later callers join it
   let running = false
   let outcome = null // in memory only: 'waiting' (server not reached) or 'error' (local failure)
 
@@ -59,12 +76,13 @@ export function createSync({ client, credentials, copy, workouts, meta, now }) {
     }
   }
 
-  // Every pending workout the server already holds is the server's now (this covers a kill
-  // between a 200 and markAcked), and so is one it records as deleted: it is not sent back.
+  // The only place a workout is acked: once a stored copy of the server's document holds it, the
+  // workout is the server's (so the Workout tab still shows it from the copy). One the server
+  // records as deleted or wiped by a reset is the server's too, and is not sent back.
   async function reconcile(state) {
     const held = new Set((Array.isArray(state.workouts) ? state.workouts : []).map(w => w?.id))
-    const removed = isMap(state.deleted) && isMap(state.deleted.workouts) ? state.deleted.workouts : {}
-    const ids = (await workouts.listPending()).map(w => w.id).filter(id => held.has(id) || Number(removed[id]) > 0)
+    const gone = goneFrom(state)
+    const ids = (await workouts.listPending()).map(w => w.id).filter(id => held.has(id) || gone(id))
     if (ids.length) await workouts.markAcked(ids, iso())
   }
 
@@ -77,18 +95,20 @@ export function createSync({ client, credentials, copy, workouts, meta, now }) {
 
   // A document from the server (a pull or a 409) becomes the copy, unless it went back in time.
   async function take(prev, state, rev) {
-    if (!descends(prev, state)) return null
+    if (wentBack(prev, state, rev)) return null
     return store(state, rev)
   }
 
   async function synced() {
     await meta.set('lastSyncedAt', iso())
     await meta.set('problem', null)
+    await meta.set('httpStatus', null)
     outcome = null
   }
 
-  async function stuck(problem) {
+  async function stuck(problem, httpStatus = null) {
     await meta.set('problem', problem)
+    await meta.set('httpStatus', httpStatus == null ? null : String(httpStatus))
     outcome = null
   }
 
@@ -102,7 +122,9 @@ export function createSync({ client, credentials, copy, workouts, meta, now }) {
       return
     }
     if (result.kind === 'too-large') return stuck('too-large')
-    outcome = 'waiting' // offline, or the server answered with an error: try again later
+    // A 4xx (other than the ones above) says the same thing every time: say so, keep everything.
+    if (result.kind === 'refused') return stuck('refused', result.status)
+    outcome = 'waiting' // offline, or a 5xx: try again later
   }
 
   // At most once a day, /api/me hands back a fresh token when the current one is past half
@@ -138,11 +160,16 @@ export function createSync({ client, credentials, copy, workouts, meta, now }) {
     let held = await readCopy()
     const r = await client.rev(ctx.base, ctx.token)
     if (!r.ok) return failed(r)
-    if (!held || r.rev !== held.rev || (r.wid && r.wid !== held.wid)) {
+    // The same document only when the rev and the write id both match; no wid on one side and a
+    // wid on the other is a different document.
+    if (!held || r.rev !== held.rev || (r.wid ?? null) !== (held.wid ?? null)) {
       const p = await client.pull(ctx.base, ctx.token)
       if (!p.ok) return failed(p)
       held = await take(held, p.state, p.rev)
       if (!held) return stuck('server-older')
+    } else {
+      // The copy may have been stored by a sync killed before it reconciled.
+      await reconcile(held.state)
     }
 
     for (let tries = 0; ; tries++) {
@@ -151,8 +178,9 @@ export function createSync({ client, credentials, copy, workouts, meta, now }) {
       if (tries === 2) return stuck('conflict')
       const res = await client.push(ctx.base, ctx.token, { state: plan.state, baseRev: plan.baseRev, baseWid: plan.baseWid })
       if (res.ok) {
-        await workouts.markAcked(plan.added, iso())
-        // The server stamps what it stores, so the copy is its document, not the one sent.
+        // Not acked yet: until a stored copy holds them, the pending rows are what shows them.
+        // The pull stores the server's document (it stamps what it stores) and reconcile acks
+        // them; if it fails, the next sync sees the moved rev, pulls, and acks without resending.
         const p = await client.pull(ctx.base, ctx.token)
         if (!p.ok) return failed(p)
         if (!(await take(held, p.state, p.rev))) return stuck('server-older')
@@ -171,6 +199,7 @@ export function createSync({ client, credentials, copy, workouts, meta, now }) {
     const profile = await meta.get('profile')
     const lastSyncedAt = await meta.get('lastSyncedAt')
     let problem = await meta.get('problem')
+    const httpStatus = Number(await meta.get('httpStatus')) || null
     const pending = (await workouts.listPending()).length
     const isPaired = !!auth && !!server
     let state
@@ -184,6 +213,7 @@ export function createSync({ client, credentials, copy, workouts, meta, now }) {
       paired: isPaired,
       state,
       ...(problem ? { problem } : {}),
+      ...(problem && httpStatus ? { httpStatus } : {}),
       ...(lastSyncedAt ? { lastSyncedAt } : {}),
       pending,
       ...(server ? { server } : {}),
@@ -199,12 +229,14 @@ export function createSync({ client, credentials, copy, workouts, meta, now }) {
     }
   }
 
-  // A call while a sync runs (or waits its turn) gets that sync's promise. It resolves to
-  // status() and never rejects. The sync stops being shared the moment its work ends, not after
-  // the status read, so pair()'s own sync is never mistaken for one that ran before the pairing.
+  // A call while a sync waits its turn joins it. A call while one runs schedules one more run
+  // after it (any number of such calls, one run), since what it lists as pending may already be
+  // out of date: a workout finished meanwhile is sent without another trigger. Resolves to
+  // status() and never rejects.
   function syncNow() {
-    if (!shared) {
-      shared = exclusive(async () => {
+    if (!waiting) {
+      waiting = exclusive(async () => {
+        waiting = null // started: from here on a call schedules the next run
         running = true
         try {
           await runSync()
@@ -212,11 +244,10 @@ export function createSync({ client, credentials, copy, workouts, meta, now }) {
           outcome = 'error'
         } finally {
           running = false
-          shared = null
         }
       }).then(safeStatus)
     }
-    return shared
+    return waiting
   }
 
   async function pair(serverInput, code) {

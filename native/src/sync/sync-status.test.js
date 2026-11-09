@@ -62,11 +62,18 @@ describe('statusText', () => {
   test.each([
     ['server-older', 'gym.example.com has older data than this phone last saw, as if restored from a backup. Nothing was sent. Your workouts are safe on this phone; send them again to put them back.'],
     ['conflict', 'gym.example.com kept changing while this phone synced. Your workouts are safe on this phone; it will try again.'],
-    ['too-large', 'gym.example.com refused the update as too large. Your workouts are safe on this phone.'],
+    ['too-large', 'Your server refused the upload because it is too large. Your workouts stay on this phone. If a proxy sits in front of the server, raise its upload limit to at least 5 MB (see the self-hosting guide).'],
     ['error', 'Saved on this phone. Syncing stopped on an error here; it will try again.'],
     ['something-new', 'Saved on this phone. Syncing stopped on a problem; it will try again.'],
   ])('problem %s has its own sentence', (problem, words) => {
     expect(statusText(paired({ state: 'problem', problem, pending: 1 }), opts)).toBe(words)
+  })
+
+  test('a refusal names the HTTP status', () => {
+    expect(statusText(paired({ state: 'problem', problem: 'refused', httpStatus: 403, pending: 1 }), opts))
+      .toBe("Your server refused this phone's workouts (error 403). Nothing was overwritten. They stay on this phone.")
+    expect(statusText(paired({ state: 'problem', problem: 'refused', pending: 1 }), opts))
+      .toBe("Your server refused this phone's workouts. Nothing was overwritten. They stay on this phone.")
   })
 
   test('never shows the full address', () => {
@@ -76,7 +83,7 @@ describe('statusText', () => {
       paired({ server, state: 'waiting' }),
       paired({ server, state: 'syncing' }),
       paired({ server }),
-      ...['server-older', 'conflict', 'too-large'].map(problem => paired({ server, state: 'problem', problem })),
+      ...['server-older', 'conflict'].map(problem => paired({ server, state: 'problem', problem })),
       { paired: false, state: 'unpaired', problem: 'unpaired', pending: 0, server },
     ]
     for (const s of states) {

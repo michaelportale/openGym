@@ -11,7 +11,11 @@ const PROBLEMS = {
   unpaired: host => `${host} signed this phone out. Saved on this phone; pair again to sync.`,
   'server-older': host => `${host} has older data than this phone last saw, as if restored from a backup. Nothing was sent. ${SAFE}; send them again to put them back.`,
   conflict: host => `${host} kept changing while this phone synced. ${SAFE}; it will try again.`,
-  'too-large': host => `${host} refused the update as too large. ${SAFE}.`,
+  // The API takes a document up to 5 MB (api/server.js MAX_BODY), as does the bundled nginx on
+  // /api; a proxy in front with a smaller body limit is what an owner can change
+  // (docs/SELF_HOSTING.md, Troubleshooting: 413).
+  'too-large': () => 'Your server refused the upload because it is too large. Your workouts stay on this phone. If a proxy sits in front of the server, raise its upload limit to at least 5 MB (see the self-hosting guide).',
+  refused: (_host, s) => `Your server refused this phone's workouts${s.httpStatus ? ` (error ${s.httpStatus})` : ''}. Nothing was overwritten. They stay on this phone.`,
   error: () => 'Saved on this phone. Syncing stopped on an error here; it will try again.',
 }
 
@@ -36,7 +40,7 @@ export function statusText(status, { now, server, formatTime = defaultTime, form
   if (s.state === 'syncing') return `Syncing with ${host}…`
   if (s.state === 'problem') {
     const words = PROBLEMS[s.problem]
-    return words ? words(host) : 'Saved on this phone. Syncing stopped on a problem; it will try again.'
+    return words ? words(host, s) : 'Saved on this phone. Syncing stopped on a problem; it will try again.'
   }
   if (s.state === 'waiting' || s.pending > 0) return `Saved on this phone. It will sync when ${host} is reachable.`
   const at = Date.parse(s.lastSyncedAt ?? '')
