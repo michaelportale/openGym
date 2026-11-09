@@ -1,0 +1,31 @@
+import { writeOutcome } from '../workout/set-calls.js'
+
+// Which system haptic an event earns, or null. Three events only: a set saved, a rest that ends
+// while the app is open, a write that failed. Pure; haptics-adapter.js plays it.
+const KINDS = { 'set-saved': 'success', 'rest-ended': 'warning', 'write-failed': 'error' }
+export const hapticFor = event => KINDS[event] ?? null
+
+const SET_ACTIONS = new Set(['complete', 'complete-warmup'])
+
+// The haptic a settled write earns. A Complete that committed is a saved set (even if its rest did
+// not start or a warning shows); any write whose failure notice shows is a failure (the same
+// classification as the screen's notice); nothing else makes one. A dropped tap makes none.
+export function hapticForWrite(action, result) {
+  if (!result || result.ignored) return null
+  if (writeOutcome(result, action)?.kind === 'failed') return hapticFor('write-failed')
+  if (SET_ACTIONS.has(action) && result.saved === true && result.ok !== false) return hapticFor('set-saved')
+  return null
+}
+
+// True only on a live crossing: the previous tick was running with time left, this one is complete
+// with the same deadline, and the app is in front. No `prev` (the first tick after returning from
+// the background, or no rest before) is never a crossing; a paused rest never ends.
+export function restEndedNow(prev, next, appActive) {
+  return (
+    appActive === true &&
+    prev?.status === 'running' &&
+    prev.remainingMs > 0 &&
+    next?.status === 'complete' &&
+    next.deadline === prev.deadline
+  )
+}

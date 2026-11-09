@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { AppState, ScrollView, StyleSheet, View } from 'react-native'
+import { hapticFor, restEndedNow } from '../feedback/haptics'
+import { playHaptic } from '../feedback/haptics-adapter'
 import { useRestAlerts } from '../notify/use-rest-alerts'
-import { localDate } from '../session/timing'
+import { localDate, projectRest } from '../session/timing'
 import { useActiveSession } from '../session/use-active-session'
 import { color, space } from '../theme/tokens'
 import AppText from '../ui/AppText'
@@ -51,6 +53,16 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
   const alerts = useRestAlerts({ session, sessionId: base?.id, names })
   const actions = useSessionActions({ session, base, restSec: state.restSec ?? 90, view, screen, shownEntry, setShownIndex, afterWrite: alerts })
 
+  // A rest that ends while the app is open buzzes once (the foreground alert is suppressed, so
+  // this is the only signal). `prev` is the last tick's projection; returning from the background
+  // clears it, so a rest that expired meanwhile does not buzz.
+  const lastRest = useRef(null)
+  const restNow = projectRest(view?.rest, now)
+  useEffect(() => {
+    if (restEndedNow(lastRest.current, restNow, AppState.currentState === 'active')) playHaptic(hapticFor('rest-ended'))
+    lastRest.current = restNow
+  }, [now])
+
   const restored = useRef(false)
   useEffect(() => {
     if (session.status !== 'loading') alerts()
@@ -68,6 +80,7 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
     const sub = AppState.addEventListener('change', next => {
       // The 1-second tick is suspended in the background: the first frame back reads the clock
       // now, so the rest and elapsed time are current rather than a tick behind.
+      lastRest.current = null
       if (next === 'active') {
         setNow(Date.now())
         alerts()

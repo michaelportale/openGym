@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { AccessibilityInfo, Alert } from 'react-native'
 import { workoutModel } from '../shared/training.js'
+import { hapticForWrite } from '../feedback/haptics'
+import { playHaptic } from '../feedback/haptics-adapter'
 import { createEventId } from '../session/ids'
 import { createActionGate } from './action-gate'
 import { afterGatedWrite, alertsOffNotice } from './after-write'
@@ -66,7 +68,10 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
   // The journal's rest, read as the write begins (inside the gate) and again once it has settled:
   // a rest that began in between is what may ask for notification permission (afterGatedWrite).
   const restOf = () => session.getState().view?.rest ?? null
-  const act = fn => {
+  // After the gate frees, a saved set or a failed write plays its haptic (hapticForWrite); never part
+  // of the write. `action` is what was tapped; `quiet` is a write the owner did not tap (the rest
+  // restored on open).
+  const act = (fn, action, quiet = false) => {
     let before = null
     return gate.current(async () => {
       setBusy(true)
@@ -80,7 +85,11 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
       } finally {
         setBusy(false)
       }
-    }).then(result => afterGatedWrite(result, { afterWrite, before, after: restOf, now: Date.now() }))
+    }).then(async result => {
+      const settled = await afterGatedWrite(result, { afterWrite, before, after: restOf, now: Date.now() })
+      if (!quiet) playHaptic(hapticForWrite(action, settled))
+      return settled
+    })
   }
   // A write that started a rest with alerts off says so, once for each session, unless it has
   // something else to say: a failure or a warning is never replaced.
@@ -100,11 +109,11 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
   // says to choose first.
   // `build(view, now)` makes the write from the engine's latest view through a decision helper
   // given that same clock.
-  const write = build => act(async () => {
+  const write = (build, action) => act(async () => {
     const view = latest()
     const now = Date.now()
     return overnightRefusal(view, now) ?? build(view, now)
-  })
+  }, action)
 
   // setId and side come from the tap. The commit is awaited first; its rest is named and timed
   // by the row's `at` in the view the commit produced (one side of a per-side set, or a warm-up,
@@ -126,7 +135,7 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
       await session.refresh()
       return refused
     })
-  })
+  }, 'complete')
 
   // The rest the latest completed work set earned and has not had: on open ('rest'), the one a
   // kill between Complete and rest left unstarted; on the Start rest tap ('start-rest'), the one a
@@ -140,7 +149,7 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
     const pending = pendingRest(opened, now, id => restMsOf(opened.entries.find(entry => entry.id === id)))
     if (!pending) return null
     return overnightRefusal(opened, now) ?? session.startRest(pending)
-  }).then(result => report(result, action))
+  }, action, action === 'rest').then(result => report(result, action))
   const restoreRest = () => startPendingRest('rest')
 
   const putDraft = (setId, values) => async (view, now) => {
@@ -277,7 +286,7 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
 
   const discardNow = async () => {
     setFinishing(null)
-    report(await act(() => session.discard()), 'discard')
+    report(await act(() => session.discard(), 'discard'), 'discard')
   }
 
   const dockActions = {
@@ -328,7 +337,7 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
       close: () => setFinishing(null),
       confirm: async () => {
         const end = finishing?.end
-        const result = await act(() => session.finishSession({ sender: async () => ({ saved: true }), ...(end != null ? { end } : {}) }))
+        const result = await act(() => session.finishSession({ sender: async () => ({ saved: true }), ...(end != null ? { end } : {}) }), 'finish')
         if (result?.ignored) return
         // Opened before midnight, saved after it: refused, and the view is reloaded. The sheet
         // takes the overnight end and says why; the next Save is the overnight Finish.
