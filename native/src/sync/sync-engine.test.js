@@ -943,6 +943,30 @@ describe('weigh-ins', () => {
     expect(await t.weighIns.listPending()).toEqual([])
   })
 
+  test('a Health op replaces only the entry it names: the web edits that entry in place, arriving in a 409, and it stays', async () => {
+    const imported = { d: '2026-11-08', w: 185, t: T0 - 50, src: 'health', hk: 'X' }
+    const editedOnWeb = { ...imported, w: 182, t: T0 - 20 } // the web's sheet keeps src and hk
+    for (const op of [healthSet('2026-11-08', 186, T0 - 9, 'Y', { baseT: T0 - 50 }), { d: '2026-11-08', op: 'remove', t: T0 - 9, src: 'health', baseT: T0 - 50 }]) {
+      const t = await setup({ server: fakeServer({ ...initialDoc(), bodyweight: [imported] }) })
+      await t.sync.syncNow()
+      await t.weighIns.put(op)
+      t.server.once.push = [async () => {
+        const s = clone(t.server.doc)
+        s.bodyweight = [editedOnWeb]
+        t.server.write(s)
+        return undefined
+      }]
+      expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingWeighIns: 0 })
+      expect(t.server.doc.bodyweight).toEqual([editedOnWeb])
+    }
+    // With no edit in between, the same ops apply.
+    const t = await setup({ server: fakeServer({ ...initialDoc(), bodyweight: [imported] }) })
+    await t.sync.syncNow()
+    await t.weighIns.put(healthSet('2026-11-08', 186, T0 - 9, 'Y', { baseT: T0 - 50 }))
+    await t.sync.syncNow()
+    expect(t.server.doc.bodyweight).toEqual([{ d: '2026-11-08', w: 186, t: T0 - 9, src: 'health', hk: 'Y' }])
+  })
+
   test('a 409 still applies an op that the new document does not contradict', async () => {
     const t = await setup()
     await t.sync.syncNow()

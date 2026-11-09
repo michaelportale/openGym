@@ -76,19 +76,16 @@ export function createMemoryWeighIns() {
       acked.delete(stored.d)
       return { ok: true, d: stored.d, t: stored.t }
     },
-    // A Health op never replaces a typed set; over a pending typed remove it keeps that
-    // remove's baseT, so it still names the entry the owner meant to remove.
+    // A Health op never replaces a pending typed set (the owner's unsent weight). With no baseT
+    // of its own it keeps the baseT of the pending row it replaces, so the entry an unsent typed
+    // removal names stays named while the server copy is unknown (unpaired, after Forget).
     async putFromHealth(op) {
       requireHealth(op)
       const stored = normalized(op)
       const existing = rows.get(stored.d)
-      if (existing && existing.op === 'set' && existing.src == null) return { written: false }
-      if (existing && existing.op === 'remove' && existing.src == null && !acked.has(stored.d)) {
-        // A Health remove never drops the owner's pending removal; a Health set inherits its target.
-        if (stored.op === 'remove') return { written: false }
-        if (existing.baseT != null) stored.baseT = existing.baseT
-        else delete stored.baseT
-      }
+      const pending = existing && !acked.has(stored.d)
+      if (pending && existing.op === 'set' && existing.src == null) return { written: false }
+      if (pending && stored.baseT == null && existing.baseT != null) stored.baseT = existing.baseT
       const final = bumped(stored, existing)
       rows.set(final.d, final)
       acked.delete(final.d)
@@ -157,14 +154,13 @@ export function createSqliteWeighIns(db) {
       )
       return { ok: true, d: s.d, t: s.t }
     },
-    // One conditional upsert: never replaces a typed set; over a pending typed remove the
-    // row keeps that remove's base_t (SET sees the old row's value).
+    // One conditional upsert, the memory store's rules: never over a pending typed set; an op
+    // with no base_t keeps a pending row's (SET sees the old row's values).
     async putFromHealth(op) {
       requireHealth(op)
       await ready()
       const s = normalized(op)
-      const pendingTypedRemove = "weigh_ins.op = 'remove' AND weigh_ins.src IS NULL AND weigh_ins.acked_at IS NULL"
-      const finalBaseT = `CASE WHEN ${pendingTypedRemove} THEN weigh_ins.base_t ELSE excluded.base_t END`
+      const finalBaseT = 'CASE WHEN excluded.base_t IS NULL AND weigh_ins.acked_at IS NULL THEN weigh_ins.base_t ELSE excluded.base_t END'
       const { changes } = await db.run(
         `INSERT INTO weigh_ins (d, op, w, t, src, hk, base_t, acked_at) VALUES (?, ?, ?, ?, ?, ?, ?, NULL)
          ON CONFLICT(d) DO UPDATE SET op = excluded.op, w = excluded.w, src = excluded.src,
@@ -175,8 +171,7 @@ export function createSqliteWeighIns(db) {
                     THEN excluded.t + 1 ELSE excluded.t END,
            base_t = ${finalBaseT},
            acked_at = NULL
-         WHERE NOT (weigh_ins.op = 'set' AND weigh_ins.src IS NULL)
-           AND NOT (excluded.op = 'remove' AND ${pendingTypedRemove})`,
+         WHERE NOT (weigh_ins.op = 'set' AND weigh_ins.src IS NULL AND weigh_ins.acked_at IS NULL)`,
         [s.d, s.op, s.w ?? null, s.t, s.src, s.hk ?? null, s.baseT ?? null],
       )
       if (!(changes > 0)) return { written: false }

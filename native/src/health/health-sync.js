@@ -250,13 +250,18 @@ export function createHealthSync({ adapter, store, workouts, now, weighIns, read
       days.add(cached.d)
     }
 
-    const doc = (await readCopy())?.state ?? {}
+    const copy = await readCopy()
+    const doc = copy?.state ?? {}
     const removals = doc.deleted?.bodyweight
     const deleted = removals && typeof removals === 'object' && !Array.isArray(removals) ? removals : {}
     const rows = await weighIns.list()
     const pending = await weighIns.listPending()
+    const copyByDay = {}
+    for (const entry of applyDayOps(doc.bodyweight, [], deleted).next) copyByDay[entry.d] = entry
+    // Unknown is not deleted: with no readable copy, this phone's acked ops count too, so a synced
+    // typed weight still wins its day. With no copy at all (unpaired, after Forget) none is acked.
     const entryByDay = {}
-    for (const entry of applyDayOps(doc.bodyweight, pending, deleted).next) entryByDay[entry.d] = entry
+    for (const entry of applyDayOps(doc.bodyweight, copy ? pending : rows, deleted).next) entryByDay[entry.d] = entry
     const unacked = new Set(pending.map((o) => o.d + '@' + o.t))
     const firstDay = localDate(since, zone)
     const localOpByDay = {}
@@ -266,8 +271,14 @@ export function createHealthSync({ adapter, store, workouts, now, weighIns, read
       if (row.op === 'remove' && row.src == null && row.d >= firstDay && !entryByDay[row.d]) days.add(row.d)
     }
     const readingsByDay = {}
-    for (const d of days) readingsByDay[d] = (await readings.listDay(d)).filter((r) => !gone.has(r.uuid))
-    const ops = dayOpsFromReadings({ days: [...days], readingsByDay, entryByDay, localOpByDay, deleted, now: now() })
+    const lbByHk = {} // the readings the days' Health entries name, read before deleted ones leave the cache
+    for (const d of days) {
+      readingsByDay[d] = (await readings.listDay(d)).filter((r) => !gone.has(r.uuid))
+      const hk = entryByDay[d]?.src === 'health' ? entryByDay[d].hk : null
+      const cached = hk != null ? await readings.get(hk) : null
+      if (cached) lbByHk[hk] = cached.lb
+    }
+    const ops = dayOpsFromReadings({ days: [...days], readingsByDay, entryByDay, copyByDay, lbByHk, localOpByDay, deleted, now: now() })
 
     let written = 0
     try {

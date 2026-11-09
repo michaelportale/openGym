@@ -1,6 +1,8 @@
 import { expect, test } from 'vitest'
 import { applyDayOps } from '../body/day-ops.js'
+import { canRemove, todayLine } from '../body/weigh-in-view.js'
 import { createMemoryWeighIns } from '../body/weigh-ins.js'
+import { buildPush } from '../sync/outbox.js'
 import { createMemoryFinishedWorkouts } from '../session/finished-workouts.js'
 import { createMemoryHealthStore } from './health-store.js'
 import { createHealthSync } from './health-sync.js'
@@ -98,6 +100,37 @@ test('plan: a set on a day with a removal on record takes a t past it', () => {
   expect(plan({ readingsByDay, deleted: { [DAY]: 0 } })[0].t).toBe(NOW)
 })
 
+test('plan: every Health op names the server copy\'s entry for its day (baseT); none when the copy has none', () => {
+  const readingsByDay = { [DAY]: [r('b', 181, hour(9))] }
+  const copied = { d: DAY, w: 180, t: 40, src: 'health', hk: 'a' }
+  expect(plan({ readingsByDay, entryByDay: { [DAY]: copied }, copyByDay: { [DAY]: copied } })[0]).toEqual({ d: DAY, op: 'set', w: 181, t: NOW, src: 'health', hk: 'b', baseT: 40 })
+  expect(plan({ entryByDay: { [DAY]: copied }, copyByDay: { [DAY]: copied } })).toEqual([{ d: DAY, op: 'remove', t: NOW, src: 'health', baseT: 40 }])
+  expect(plan({ readingsByDay })[0]).not.toHaveProperty('baseT')
+  // After this phone's unsent typed removal the day is empty here, and the op names the typed entry.
+  expect(plan({ readingsByDay, copyByDay: { [DAY]: { d: DAY, w: 182, t: 500 } } })[0].baseT).toBe(500)
+  // The copy's entry, not a pending op's: this phone's unsent import shows here at its own t.
+  const mine = { d: DAY, w: 179, t: 900, src: 'health', hk: 'a' }
+  expect(plan({ readingsByDay, entryByDay: { [DAY]: mine }, copyByDay: { [DAY]: copied } })[0].baseT).toBe(40)
+  expect(plan({ readingsByDay, copyByDay: { [DAY]: { ...copied, t: '41' } } })[0].baseT).toBe(41)
+  expect(plan({ readingsByDay, copyByDay: { [DAY]: { ...copied, t: undefined } } })[0]).not.toHaveProperty('baseT')
+})
+
+test('plan: C1, a Health entry whose weight is not its reading\'s was edited in place and is typed', () => {
+  const edited = { d: DAY, w: 182, t: 50, src: 'health', hk: 'X' }
+  const day = { entryByDay: { [DAY]: edited }, copyByDay: { [DAY]: edited } }
+  const second = { [DAY]: [r('X', 185, hour(7)), r('Y', 186, hour(10))] }
+  expect(plan({ ...day, readingsByDay: second, lbByHk: { X: 185 } })).toEqual([]) // a second reading: no set
+  expect(plan({ ...day, lbByHk: { X: 185 } })).toEqual([]) // X deleted (still cached this pass): no remove
+  // Its reading left the cache: this phone's own import of X still tells the weight it imported.
+  const imported = { d: DAY, op: 'set', w: 185, t: 10, src: 'health', hk: 'X', acked: true }
+  expect(plan({ ...day, readingsByDay: { [DAY]: [r('Y', 186, hour(10))] }, localOpByDay: { [DAY]: imported } })).toEqual([])
+  // The same weight, or a reading this phone does not know: still Health.
+  expect(plan({ ...day, readingsByDay: second, lbByHk: { X: 182.04 } })[0].hk).toBe('Y')
+  expect(plan({ ...day, readingsByDay: second })[0]).toMatchObject({ hk: 'Y', baseT: 50 })
+  expect(plan({ ...day, readingsByDay: second, localOpByDay: { [DAY]: { ...imported, hk: 'Z' } } })[0].hk).toBe('Y')
+  expect(plan(day)).toEqual([{ d: DAY, op: 'remove', t: NOW, src: 'health', baseT: 50 }])
+})
+
 // ---- the import pass ----
 
 const scale = (uuid, lb, at, over = {}) => ({ uuid, lb, at, bundleId: SCALE, syncId: null, ...over })
@@ -185,6 +218,13 @@ test('the latest reading of a day wins, and an earlier one arriving later change
   await health.run()
   expect(await weighIns.list()).toEqual([{ d: DAY, op: 'set', w: 180.3, t: NOW, src: 'health', hk: 'late' }])
   expect(world.pokes).toBe(1)
+  await pushed(weighIns, world)
+  // A later reading, once the first is on the server, replaces it there.
+  adapter.reads.push(changes([scale('later', 179, hour(10))]))
+  world.clock += 1000
+  await health.run()
+  await pushed(weighIns, world)
+  expect(world.copy.state.bodyweight).toEqual([{ d: DAY, w: 179, t: NOW + 2000, src: 'health', hk: 'later' }])
 })
 
 test('readings land on their local day', async () => {
@@ -212,8 +252,10 @@ test('a deleted reading falls back to the day\'s next', async () => {
   world.clock += 1000
   adapter.reads.push(changes([], ['a']))
   await health.run()
-  expect(await weighIns.get(DAY)).toEqual({ d: DAY, op: 'set', w: 181, t: NOW + 1000, src: 'health', hk: 'b' })
+  expect(await weighIns.get(DAY)).toEqual({ d: DAY, op: 'set', w: 181, t: NOW + 1000, src: 'health', hk: 'b', baseT: NOW })
   expect((await store.readings.listDay(DAY)).map(x => x.uuid)).toEqual(['b'])
+  await pushed(weighIns, world)
+  expect(world.copy.state.bodyweight).toEqual([{ d: DAY, w: 181, t: NOW + 1000, src: 'health', hk: 'b' }])
 })
 
 test('the last reading deleted removes an imported day', async () => {
@@ -224,9 +266,11 @@ test('the last reading deleted removes an imported day', async () => {
   world.clock += 1000
   adapter.reads.push(changes([], ['a', 'unknown']))
   await health.run()
-  expect(await weighIns.get(DAY)).toEqual({ d: DAY, op: 'remove', t: NOW + 1000, src: 'health' })
+  expect(await weighIns.get(DAY)).toEqual({ d: DAY, op: 'remove', t: NOW + 1000, src: 'health', baseT: NOW })
   expect(await store.readings.listDay(DAY)).toEqual([])
   expect(world.pokes).toBe(2)
+  await pushed(weighIns, world)
+  expect(world.copy.state.bodyweight).toEqual([])
 })
 
 test('a sample added and deleted in one read leaves no trace', async () => {
@@ -259,6 +303,23 @@ test('after this phone\'s typed removal the day\'s reading comes back, with no n
   await health.run() // the read returns nothing new
   expect(await weighIns.get(DAY)).toEqual({ d: DAY, op: 'set', w: 180, t: NOW, src: 'health', hk: 'a', baseT: 500 })
   expect(world.pokes).toBe(1)
+  await pushed(weighIns, world)
+  expect(world.copy.state.bodyweight).toEqual([{ d: DAY, w: 180, t: NOW, src: 'health', hk: 'a' }])
+})
+
+test('after this phone\'s typed removal of a synced weight, the reading replaces it on the server', async () => {
+  const { adapter, weighIns, health, world } = await setup()
+  await weighIns.put({ d: DAY, op: 'set', w: 182, t: 500 })
+  await pushed(weighIns, world)
+  adapter.reads.push(changes([scale('a', 180, hour(9))]))
+  await health.run()
+  expect(await weighIns.listPending()).toEqual([])
+  await weighIns.put({ d: DAY, op: 'remove', t: 600, baseT: 500 })
+  world.clock += 1000
+  await health.run()
+  expect(await weighIns.get(DAY)).toEqual({ d: DAY, op: 'set', w: 180, t: NOW + 1000, src: 'health', hk: 'a', baseT: 500 })
+  await pushed(weighIns, world)
+  expect(world.copy.state.bodyweight).toEqual([{ d: DAY, w: 180, t: NOW + 1000, src: 'health', hk: 'a' }])
 })
 
 test('after an acked typed removal the reading comes back with a t past the removal on record (clock skew)', async () => {
@@ -374,21 +435,24 @@ test('a reading deleted while the anchored read failed: the full re-read falls b
   adapter.reads.push(new Error('transient'), changes([scale('P', 181, hour(7))]))
   await health.run()
   expect(adapter.calls.slice(1).map(c => c.anchor)).toEqual(['anchor-1', null])
-  expect(await weighIns.get(DAY)).toEqual({ d: DAY, op: 'set', w: 181, t: NOW + 1000, src: 'health', hk: 'P' })
+  expect(await weighIns.get(DAY)).toEqual({ d: DAY, op: 'set', w: 181, t: NOW + 1000, src: 'health', hk: 'P', baseT: NOW })
   expect((await store.readings.listDay(DAY)).map(x => x.uuid)).toEqual(['P'])
   await pushed(weighIns, world)
+  expect(world.copy.state.bodyweight).toEqual([{ d: DAY, w: 181, t: NOW + 1000, src: 'health', hk: 'P' }])
   // A full read that sees no external reading at all cannot tell a deletion from hidden data:
   // P stays. An anchored read that reports P's deletion then removes the day, not falls back to Q.
   world.clock += 1000
   adapter.reads.push(new Error('transient'), changes([]))
   await health.run()
-  expect(await weighIns.get(DAY)).toEqual({ d: DAY, op: 'set', w: 181, t: NOW + 1000, src: 'health', hk: 'P' })
+  expect(await weighIns.get(DAY)).toEqual({ d: DAY, op: 'set', w: 181, t: NOW + 1000, src: 'health', hk: 'P', baseT: NOW })
   expect(await store.state.get('bwAnchor')).toBe('anchor-3')
   adapter.reads.push(changes([], ['P']))
   await health.run()
   expect(adapter.calls.at(-1).anchor).toBe('anchor-3')
-  expect(await weighIns.get(DAY)).toEqual({ d: DAY, op: 'remove', t: NOW + 2000, src: 'health' })
+  expect(await weighIns.get(DAY)).toEqual({ d: DAY, op: 'remove', t: NOW + 2000, src: 'health', baseT: NOW + 1000 })
   expect(await store.readings.listDay(DAY)).toEqual([])
+  await pushed(weighIns, world)
+  expect(world.copy.state.bodyweight).toEqual([])
 })
 
 test('a full read that sees no external reading over a non-empty cache cannot see: no day removed, cache and anchor kept', async () => {
@@ -625,4 +689,163 @@ test('the own bundle id is looked up once per engine; a missing one stops the im
   await health.run()
   expect(lookups).toBe(2)
   expect(adapter.calls).toHaveLength(2)
+})
+
+// ---- final-review fixes: Health ops name the entry they replace ----
+
+// The owner types a weight on the web for a day the phone imported: the web's sheet edits the
+// entry in place (ex.w = n; ex.t = Date.now()), keeping src 'health' and hk.
+async function importedThenEditedOnWeb() {
+  const env = await setup({ now: hour(8) })
+  const { adapter, weighIns, health, world } = env
+  adapter.reads.push(changes([scale('X', 185, hour(7))]))
+  await health.run()
+  await pushed(weighIns, world)
+  const ex = world.copy.state.bodyweight.find(b => b.d === DAY)
+  ex.w = 182
+  ex.t = hour(9)
+  world.clock = hour(10)
+  return env
+}
+const serverAfterPush = async (weighIns, world) => {
+  const push = buildPush(world.copy, [], await weighIns.listPending())
+  return push ? push.state.bodyweight : world.copy.state.bodyweight
+}
+const edited = { d: DAY, w: 182, t: hour(9), src: 'health', hk: 'X' }
+
+test('C1: the reading of a day edited on the web is deleted in Health: no remove, the web weight stays', async () => {
+  const { adapter, weighIns, health, world } = await importedThenEditedOnWeb()
+  adapter.reads.push(changes([], ['X']))
+  await health.run()
+  expect(await weighIns.listPending()).toEqual([])
+  expect(await serverAfterPush(weighIns, world)).toEqual([edited])
+})
+
+test('C1: a second reading on a day edited on the web: no set, the web weight stays', async () => {
+  const { adapter, weighIns, health, world } = await importedThenEditedOnWeb()
+  adapter.reads.push(changes([scale('Y', 186, hour(10))]))
+  await health.run()
+  expect(await weighIns.listPending()).toEqual([])
+  expect(await serverAfterPush(weighIns, world)).toEqual([edited])
+})
+
+test('C1: the reading deleted, then a second one: the web weight still stays', async () => {
+  const { adapter, store, weighIns, health, world } = await importedThenEditedOnWeb()
+  adapter.reads.push(changes([], ['X']))
+  await health.run()
+  expect(await store.readings.get('X')).toBeNull()
+  world.clock += 1000
+  adapter.reads.push(changes([scale('Y', 186, hour(11))]))
+  await health.run()
+  expect(await weighIns.listPending()).toEqual([])
+  expect(await serverAfterPush(weighIns, world)).toEqual([edited])
+})
+
+test('C1 race: the import saw a Health entry; the web edits it before the push: the Health op is dropped', async () => {
+  const { adapter, weighIns, health, world } = await setup({ now: hour(8) })
+  adapter.reads.push(changes([scale('X', 185, hour(7))]))
+  await health.run()
+  await pushed(weighIns, world)
+  world.clock = hour(10)
+  adapter.reads.push(changes([scale('Y', 186, hour(10))]))
+  await health.run()
+  const op = await weighIns.get(DAY)
+  expect(op).toMatchObject({ op: 'set', hk: 'Y', baseT: hour(8) })
+  // The web edits the day in place before the phone pushes; the phone's next pull brings it.
+  const ex = world.copy.state.bodyweight.find(b => b.d === DAY)
+  ex.w = 182
+  ex.t = hour(10) + 500
+  expect(applyDayOps(world.copy.state.bodyweight, [op], {}).superseded).toEqual([{ d: DAY, t: op.t }])
+  expect(buildPush(world.copy, [], [op])).toBeNull()
+  // A Health remove planned the same way is dropped too.
+  const removal = { d: DAY, op: 'remove', t: hour(11), src: 'health', baseT: hour(8) }
+  expect(buildPush(world.copy, [], [removal])).toBeNull()
+})
+
+// I1: a synced typed weight, removed while the push can't go out, then Health changes for the day.
+async function typedRemovedOffline() {
+  const env = await setup()
+  const { weighIns, world } = env
+  await weighIns.put({ d: DAY, op: 'set', w: 182.4, t: 1000 })
+  await pushed(weighIns, world)
+  await weighIns.put({ d: DAY, op: 'remove', t: NOW, baseT: 1000 })
+  const view = async () => {
+    const entry = applyDayOps(world.copy.state.bodyweight, await weighIns.listPending(), {}).next.find(e => e.d === DAY) ?? null
+    return { line: todayLine(entry), removable: canRemove(entry, await weighIns.get(DAY)) }
+  }
+  return { ...env, view }
+}
+
+test('I1: two readings after an unsent typed removal: the push still removes the typed weight', async () => {
+  const { adapter, weighIns, health, world, view } = await typedRemovedOffline()
+  expect(await view()).toEqual({ line: 'No weight logged today.', removable: false })
+  adapter.reads.push(changes([scale('X', 185, hour(9))]))
+  world.clock += 1000
+  await health.run()
+  expect(await view()).toEqual({ line: 'Today: 185.0 lb (from Apple Health)', removable: false })
+  adapter.reads.push(changes([scale('Y', 186, hour(10))]))
+  world.clock += 1000
+  await health.run()
+  expect(await weighIns.get(DAY)).toMatchObject({ op: 'set', hk: 'Y', baseT: 1000 })
+  expect(await view()).toEqual({ line: 'Today: 186.0 lb (from Apple Health)', removable: false })
+  expect(await serverAfterPush(weighIns, world)).toEqual([{ d: DAY, w: 186, t: NOW + 2000, src: 'health', hk: 'Y' }])
+})
+
+test('I1: a reading after an unsent typed removal, then deleted in Health: the push still removes the typed weight', async () => {
+  const { adapter, weighIns, health, world, view } = await typedRemovedOffline()
+  adapter.reads.push(changes([scale('X', 185, hour(9))]))
+  world.clock += 1000
+  await health.run()
+  adapter.reads.push(changes([], ['X']))
+  world.clock += 1000
+  await health.run()
+  expect(await weighIns.get(DAY)).toEqual({ d: DAY, op: 'remove', t: NOW + 2000, src: 'health', baseT: 1000 })
+  expect(await view()).toEqual({ line: 'No weight logged today.', removable: false })
+  expect(await serverAfterPush(weighIns, world)).toEqual([])
+})
+
+test('m2: a synced typed weight the web then deleted no longer blocks a later reading', async () => {
+  const { adapter, weighIns, health, world } = await setup()
+  await weighIns.put({ d: DAY, op: 'set', w: 182, t: 500 })
+  await pushed(weighIns, world)
+  // The web edits it, then deletes the day; the phone pulls.
+  world.copy = { state: { bodyweight: [], deleted: { bodyweight: { [DAY]: NOW - 100 } } }, rev: 2, wid: 'w' }
+  adapter.reads.push(changes([scale('X', 185, hour(11))]))
+  await health.run()
+  expect(await weighIns.get(DAY)).toEqual({ d: DAY, op: 'set', w: 185, t: NOW, src: 'health', hk: 'X' })
+  await pushed(weighIns, world, { [DAY]: NOW - 100 })
+  expect(world.copy.state.bodyweight).toEqual([{ d: DAY, w: 185, t: NOW, src: 'health', hk: 'X' }])
+})
+
+test('an unreadable copy: a synced typed weight still wins its day', async () => {
+  const { adapter, weighIns, health, world } = await setup()
+  await weighIns.put({ d: DAY, op: 'set', w: 182, t: 500 })
+  await pushed(weighIns, world)
+  world.copy = null // a corrupt copy reads as none until the next pull
+  adapter.reads.push(changes([scale('X', 185, hour(9))]))
+  await health.run()
+  expect(await weighIns.get(DAY)).toEqual({ d: DAY, op: 'set', w: 182, t: 500 })
+  expect(await weighIns.listPending()).toEqual([])
+  expect(world.pokes).toBe(0)
+})
+
+test('C1: a web edit that beat a planned reading stays through the next reading (the cache knows the edited hk)', async () => {
+  const { adapter, weighIns, health, world } = await setup({ now: hour(8) })
+  adapter.reads.push(changes([scale('X', 185, hour(7))]))
+  await health.run()
+  await pushed(weighIns, world)
+  world.clock = hour(10)
+  adapter.reads.push(changes([scale('Y', 186, hour(10))]))
+  await health.run()
+  // The web edits X's entry before the phone pushes Y; the pull settles Y as superseded.
+  const ex = world.copy.state.bodyweight.find(b => b.d === DAY)
+  ex.w = 182
+  ex.t = hour(10) + 500
+  await pushed(weighIns, world)
+  expect(world.copy.state.bodyweight).toEqual([{ d: DAY, w: 182, t: hour(10) + 500, src: 'health', hk: 'X' }])
+  world.clock = hour(11)
+  adapter.reads.push(changes([scale('Z', 187, hour(11))]))
+  await health.run()
+  expect(await weighIns.listPending()).toEqual([])
+  expect(await serverAfterPush(weighIns, world)).toEqual([{ d: DAY, w: 182, t: hour(10) + 500, src: 'health', hk: 'X' }])
 })

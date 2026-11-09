@@ -37,32 +37,51 @@ function latest(readings) {
   return best
 }
 
+// The baseT a Health op carries: the t of the server copy's entry it replaces, or none.
+function baseOf(copied) {
+  const t = Number(copied?.t)
+  return copied && Number.isFinite(t) ? { baseT: t } : {}
+}
+
+// Typed: no src 'health', or a Health entry whose weight is not its reading's. The web's sheet edits
+// an entry in place, keeping src and hk, so the owner's typed weight looks imported. The reading's
+// weight is the cache's, or else this phone's own import of it; an hk known to neither stays Health.
+function isTyped(entry, lbByHk, local) {
+  if (entry.src !== 'health') return true
+  if (entry.hk == null) return false
+  const lb = lbByHk[entry.hk] ?? (local?.op === 'set' && local.src === 'health' && local.hk === entry.hk ? local.w : undefined)
+  return lb != null && Number(entry.w) !== roundLb(lb)
+}
+
 // For each changed day, the weigh-in op the import writes, if any. Inputs are keyed by day:
 // readingsByDay - the day's cached external readings ({ uuid, lb, at }), deleted ones left out;
 // entryByDay - the effective entry (the server copy with this phone's pending ops applied);
+// copyByDay - the server copy's own entry, which every op names by its t (baseT), so the push
+// replaces or removes only that entry (and an unsent typed removal is carried on);
+// lbByHk - hk -> lb of the cached readings the days' entries name (deleted ones included);
 // localOpByDay - this phone's row for the day ({ op, src, hk, ... , acked });
 // deleted - the copy's deleted.bodyweight (day -> removal stamp).
-// An entry without src 'health' is typed and wins its day. A reading this phone imported and
+// A typed entry wins its day. A reading this phone imported and
 // another device then removed is not imported again; another reading is. That is the day being
 // absent while this phone's row is a Health set with that hk which is acked, or which the
-// removal on record already beats (deleted[d] >= its t: the push would supersede it). A pending
-// typed removal's baseT is not set here: putFromHealth carries it over atomically.
-export function dayOpsFromReadings({ days, readingsByDay = {}, entryByDay = {}, localOpByDay = {}, deleted = {}, now }) {
+// removal on record already beats (deleted[d] >= its t: the push would supersede it).
+export function dayOpsFromReadings({ days, readingsByDay = {}, entryByDay = {}, copyByDay = {}, lbByHk = {}, localOpByDay = {}, deleted = {}, now }) {
   const ops = []
   for (const d of days) {
     const entry = entryByDay[d] ?? null
-    if (entry && entry.src !== 'health') continue
     const local = localOpByDay[d]
+    if (entry && isTyped(entry, lbByHk, local)) continue
     const beaten = local && (local.acked || Number(deleted[d]) >= local.t)
     const refused = !entry && beaten && local.op === 'set' && local.src === 'health' ? local.hk : null
     const best = latest((readingsByDay[d] ?? []).filter(r => r.uuid !== refused))
+    const base = baseOf(copyByDay[d])
     if (best) {
       const w = roundLb(best.lb)
       if (entry && entry.hk === best.uuid && entry.w === w) continue
       const removed = Number(deleted[d]) || 0
-      ops.push({ d, op: 'set', w, t: removed > 0 ? Math.max(now, removed + 1) : now, src: 'health', hk: best.uuid })
+      ops.push({ d, op: 'set', w, t: removed > 0 ? Math.max(now, removed + 1) : now, src: 'health', hk: best.uuid, ...base })
     } else if (entry) {
-      ops.push({ d, op: 'remove', t: now, src: 'health' })
+      ops.push({ d, op: 'remove', t: now, src: 'health', ...base })
     }
   }
   return ops

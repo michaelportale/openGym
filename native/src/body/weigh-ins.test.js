@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest'
 import { createNodeSqliteDb, createNodeSqliteFileDb } from '../../scripts/node-sqlite.mjs'
+import { applyDayOps } from './day-ops.js'
 import { createMemoryWeighIns, createSqliteWeighIns } from './weigh-ins.js'
 
 const typed = { d: '2026-01-02', op: 'set', w: 180.5, t: 10 }
@@ -65,24 +66,35 @@ async function fromHealth(store) {
   const newer = { ...imported, w: 180, t: 6, hk: 'uuid-2' }
   expect(await store.putFromHealth(newer)).toMatchObject({ written: true })
   expect(await store.listPending()).toEqual([newer])
-  // never over a typed set, acked or not
+  // never over a pending typed set (the owner's unsent weight)
   await store.put(typed)
   const intruder = { d: typed.d, op: 'set', w: 150, t: 99, src: 'health', hk: 'x' }
   expect(await store.putFromHealth(intruder)).toEqual({ written: false })
-  await store.markAcked([{ d: typed.d, t: typed.t }], 'at')
-  expect(await store.putFromHealth(intruder)).toEqual({ written: false })
   expect(await store.get(typed.d)).toEqual(typed)
-  // over a pending typed remove: keeps that remove's baseT
+  // over an acked one it writes (m2): the push guard keeps a typed entry the server still holds
+  await store.markAcked([{ d: typed.d, t: typed.t }], 'at')
+  expect(await store.putFromHealth(intruder)).toEqual({ written: true, t: 99 })
+  expect(await store.get(typed.d)).toEqual(intruder)
+  expect((await store.listPending()).map(o => o.d)).toContain(typed.d)
+  // over a pending typed remove: an op with no baseT keeps that remove's; the op's own baseT
+  // (the server copy's entry the import saw) wins
   await store.put(removal)
-  const over = { d: removal.d, op: 'set', w: 160, t: 20, src: 'health', hk: 'y', baseT: 77 }
+  const over = { d: removal.d, op: 'set', w: 160, t: 20, src: 'health', hk: 'y' }
   expect(await store.putFromHealth(over)).toMatchObject({ written: true })
   expect(await store.get(removal.d)).toEqual({ ...over, baseT: 3 })
   expect((await store.listPending()).map(o => o.d)).toContain(removal.d)
-  // over an acked typed remove: uses the op's own baseT
+  await store.put(removal)
+  expect(await store.putFromHealth({ ...over, baseT: 77 })).toMatchObject({ written: true })
+  expect(await store.get(removal.d)).toEqual({ ...over, baseT: 77 })
+  // over an acked typed remove: the op's own baseT, or none
   await store.put({ d: '2026-01-09', op: 'remove', t: 7, baseT: 3 })
   await store.markAcked([{ d: '2026-01-09', t: 7 }], 'at')
   expect(await store.putFromHealth({ d: '2026-01-09', op: 'set', w: 160, t: 21, src: 'health', hk: 'z', baseT: 55 })).toMatchObject({ written: true })
   expect((await store.get('2026-01-09')).baseT).toBe(55)
+  await store.put({ d: '2026-01-11', op: 'remove', t: 7, baseT: 3 })
+  await store.markAcked([{ d: '2026-01-11', t: 7 }], 'at')
+  await store.putFromHealth({ d: '2026-01-11', op: 'set', w: 160, t: 21, src: 'health', hk: 'z' })
+  expect(await store.get('2026-01-11')).toEqual({ d: '2026-01-11', op: 'set', w: 160, t: 21, src: 'health', hk: 'z' })
   // a Health remove replaces too, and clears the ack
   await store.put({ d: '2026-01-10', op: 'set', w: 1, t: 1, src: 'health', hk: 'h' })
   await store.markAcked([{ d: '2026-01-10', t: 1 }], 'at')
@@ -92,13 +104,15 @@ async function fromHealth(store) {
 }
 
 async function healthEdges(store) {
-  // a Health remove never replaces a pending typed remove (the owner's removal stays)
+  // a Health remove over a pending typed remove carries the owner's removal on (its baseT)
   await store.put(removal)
-  expect(await store.putFromHealth({ d: removal.d, op: 'remove', t: 30, src: 'health' })).toEqual({ written: false })
-  expect(await store.get(removal.d)).toEqual(removal)
-  // but over an acked typed remove it writes
+  expect(await store.putFromHealth({ d: removal.d, op: 'remove', t: 30, src: 'health' })).toEqual({ written: true, t: 30 })
+  expect(await store.get(removal.d)).toEqual({ d: removal.d, op: 'remove', t: 30, src: 'health', baseT: 3 })
+  // over an acked typed remove it writes as it is
+  await store.put(removal)
   await store.markAcked([{ d: removal.d, t: removal.t }], 'at')
   expect((await store.putFromHealth({ d: removal.d, op: 'remove', t: 30, src: 'health' })).written).toBe(true)
+  expect(await store.get(removal.d)).toEqual({ d: removal.d, op: 'remove', t: 30, src: 'health' })
   // equal t, different content: the stored t moves up one and is returned
   await store.putFromHealth({ d: '2026-03-01', op: 'set', w: 150, t: 50, src: 'health', hk: 'a' })
   await store.markAcked([{ d: '2026-03-01', t: 50 }], 'at')
@@ -108,9 +122,39 @@ async function healthEdges(store) {
   expect((await store.listPending()).map(o => o.d)).toContain('2026-03-01')
   // identical content keeps t
   expect(await store.putFromHealth({ d: '2026-03-01', op: 'set', w: 151, t: 51, src: 'health', hk: 'b' })).toEqual({ written: true, t: 51 })
-  // a Health set over a pending typed remove: bump compares the inherited baseT
+  // a Health set over a pending typed remove at the same t: the op changed, so t moves up
   await store.put({ d: '2026-03-02', op: 'remove', t: 60, baseT: 3 })
   expect((await store.putFromHealth({ d: '2026-03-02', op: 'set', w: 1, t: 60, src: 'health', hk: 'c', baseT: 9 })).t).toBe(61)
+  // the bump compares the inherited baseT: the same op with no baseT over its pending self is identical
+  await store.putFromHealth({ d: '2026-03-03', op: 'set', w: 1, t: 70, src: 'health', hk: 'c', baseT: 3 })
+  expect(await store.putFromHealth({ d: '2026-03-03', op: 'set', w: 1, t: 70, src: 'health', hk: 'c' })).toEqual({ written: true, t: 70 })
+  expect(await store.putFromHealth({ d: '2026-03-03', op: 'set', w: 1, t: 70, src: 'health', hk: 'c', baseT: 4 })).toEqual({ written: true, t: 71 })
+}
+
+// I1: the owner's typed removal of a synced weight is unsent; Health changes for that day land
+// before the push. Every Health op keeps naming the removed entry, so the push still removes it.
+async function typedRemovalThenHealth(make) {
+  const D = '2026-11-09'
+  const T1 = 1000 // the typed weight, synced
+  const synced = async () => {
+    const s = make()
+    await s.put({ d: D, op: 'set', w: 182.4, t: T1 })
+    await s.markAcked([{ d: D, t: T1 }], 'a')
+    await s.put({ d: D, op: 'remove', t: 2000, baseT: T1 })
+    await s.putFromHealth({ d: D, op: 'set', w: 185, t: 3000, src: 'health', hk: 'X' })
+    return s
+  }
+  const copy = [{ d: D, w: 182.4, t: T1 }]
+  // a second reading
+  const a = await synced()
+  await a.putFromHealth({ d: D, op: 'set', w: 186, t: 4000, src: 'health', hk: 'Y' })
+  expect(await a.get(D)).toEqual({ d: D, op: 'set', w: 186, t: 4000, src: 'health', hk: 'Y', baseT: T1 })
+  expect(applyDayOps(copy, await a.listPending(), {}).next).toEqual([{ d: D, w: 186, t: 4000, src: 'health', hk: 'Y' }])
+  // the reading deleted in Health
+  const b = await synced()
+  await b.putFromHealth({ d: D, op: 'remove', t: 4000, src: 'health' })
+  expect(await b.get(D)).toEqual({ d: D, op: 'remove', t: 4000, src: 'health', baseT: T1 })
+  expect(applyDayOps(copy, await b.listPending(), {})).toMatchObject({ next: [], applied: [{ d: D, t: 4000 }] })
 }
 
 test('memory store: validation, same-t puts and putFromHealth', async () => {
@@ -125,6 +169,11 @@ test('real sqlite: validation, same-t puts and putFromHealth', async () => {
   await sameTime(createSqliteWeighIns(createNodeSqliteDb()))
   await fromHealth(createSqliteWeighIns(createNodeSqliteDb()))
   await healthEdges(createSqliteWeighIns(createNodeSqliteDb()))
+})
+
+test('I1, memory and real sqlite: Health changes after an unsent typed removal still remove the typed weight', async () => {
+  await typedRemovalThenHealth(() => createMemoryWeighIns())
+  await typedRemovalThenHealth(() => createSqliteWeighIns(createNodeSqliteDb()))
 })
 
 test('memory store round trips, replaces per day and ignores a stale ack', async () => {

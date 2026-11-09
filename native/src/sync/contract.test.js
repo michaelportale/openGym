@@ -313,6 +313,45 @@ describe.skipIf(!HAS_API_DEPS)(TITLE, { timeout: 30_000 }, () => {
     expect(byDay['2026-11-09']).toMatchObject({ w: 181, t: T0 })
   })
 
+  test('the web edits an imported day in place between the pull and the push: a Health op naming the old entry is dropped', async () => {
+    const server = await startServer()
+    const plain = createApiClient({ fetch: globalThis.fetch, timeoutMs: 10_000 })
+    let race = false
+    const client = {
+      ...plain,
+      async push(...args) {
+        if (race) {
+          race = false
+          // The web's weight sheet edits today's entry in place: ex.w = n; ex.t = Date.now().
+          const cookie = webCookie()
+          const got = await (await fetch(`${server.api}/api/data`, { headers: cookie })).json()
+          const bodyweight = got.state.bodyweight.map(e => (e.d === '2026-11-08' ? { ...e, w: 182, t: T0 + 500 } : e))
+          const res = await fetch(`${server.api}/api/data`, {
+            method: 'PUT',
+            headers: { ...cookie, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ state: { ...got.state, bodyweight }, baseRev: got.rev, baseWid: got.state._wid, stamped: true }),
+          })
+          expect(res.status).toBe(200)
+        }
+        return plain.push(...args)
+      },
+    }
+    const app = await paired(server, undefined, { client })
+    await app.weighIns.put({ d: '2026-11-08', op: 'set', w: 185, t: T0, src: 'health', hk: 'X' })
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingWeighIns: 0 })
+    expect(server.file().bodyweight.find(e => e.d === '2026-11-08')).toEqual({ d: '2026-11-08', w: 185, t: T0, src: 'health', hk: 'X' })
+
+    race = true
+    await app.weighIns.put({ d: '2026-11-08', op: 'remove', t: T0 + 1000, src: 'health', baseT: T0 })
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingWeighIns: 0 })
+    const kept = { d: '2026-11-08', w: 182, t: T0 + 500, src: 'health', hk: 'X' }
+    expect(server.file().bodyweight.find(e => e.d === '2026-11-08')).toEqual(kept)
+    await app.weighIns.put({ d: '2026-11-08', op: 'set', w: 186, t: T0 + 2000, src: 'health', hk: 'Y', baseT: T0 })
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingWeighIns: 0 })
+    expect(server.file().bodyweight.find(e => e.d === '2026-11-08')).toEqual(kept)
+    expect((await app.copy.get()).state.bodyweight.find(e => e.d === '2026-11-08')).toEqual(kept)
+  })
+
   test('a day deleted on the web stays deleted after the phone forgets and pairs again', async () => {
     const server = await startServer()
     const app = await paired(server)

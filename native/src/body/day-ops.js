@@ -1,7 +1,7 @@
 // Pure day rules for weigh-ins. A weigh-in operation is one day's change: set the day's
 // weight, or remove the day. applyDayOps lays a phone's pending operations over the
-// server's bodyweight list under per-day guards, so a Health import never overwrites a
-// typed entry and a removal only removes the entry the phone saw. No I/O.
+// server's bodyweight list under per-day guards, so a Health op only replaces or removes the
+// entry the import saw and a typed removal only removes the entry the phone saw. No I/O.
 
 export function roundLb(x) {
   const n = typeof x === 'string' && x.trim() !== '' ? Number(x) : x
@@ -26,19 +26,25 @@ function reflected(op, entry) {
   return entry.w === op.w && entry.t === op.t && (entry.src ?? null) === (op.src ?? null) && (entry.hk ?? null) === (op.hk ?? null)
 }
 
+// A Health op names the entry it replaces or removes: baseT is the t of the server copy's entry
+// the import saw, whatever its source. An entry changed since (a web edit keeps src and hk) is kept.
+function names(op, entry) {
+  return op.baseT != null && Number(entry.t) === op.baseT
+}
+
 // removed: the stamp the document records for the day's removal (deleted.bodyweight[d]), or 0.
 function canApply(op, entry, removed) {
   const health = isHealth(op)
   if (op.op === 'set') {
     // A removal on record beats a set made before it (the web's merge rule); a day with an
     // entry is decided by the entry guards below.
-    if (!entry && removed > 0 && removed >= op.t) return false
+    if (!entry) return !(removed > 0 && removed >= op.t)
+    if (health) return names(op, entry)
     // Between typed entries the later edit wins (as the web's merge does); equal t applies.
-    if (!health) return !entry || isHealth(entry) || !(Number(entry.t) > op.t)
-    return !entry || isHealth(entry) || (op.baseT != null && entry.t === op.baseT)
+    return isHealth(entry) || !(Number(entry.t) > op.t)
   }
   if (!entry) return true
-  if (health) return isHealth(entry)
+  if (health) return names(op, entry)
   return op.baseT != null && entry.t === op.baseT
 }
 
