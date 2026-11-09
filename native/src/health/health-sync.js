@@ -28,7 +28,16 @@ export function createHealthSync({ adapter, store, workouts, now }) {
     return () => { listeners.delete(listener) }
   }
 
-  let lastError = null // a failure no link carries: enable, or a pass that broke before saving
+  let lastError = null // a pass that broke before it could store the error on a link
+  let heldError = null // an enable or disable failure whose write to health_state failed
+  // Bumped by every enable and disable the moment it is called. A pass, an enable's queued work
+  // or a disable's queued remove that sees a newer number belongs to an earlier call: it stops.
+  let generation = 0
+
+  async function keepError(text) {
+    heldError = text
+    try { await state.set('error', text); heldError = null } catch { /* kept in memory */ }
+  }
 
   const isOn = async () => (await state.get('on')) === '1'
 
@@ -39,6 +48,7 @@ export function createHealthSync({ adapter, store, workouts, now }) {
   }
 
   async function pass() {
+    const mine = generation
     if (!(await isOn())) return
     const rows = await workouts.list()
     const current = await links.list('w')
@@ -47,6 +57,7 @@ export function createHealthSync({ adapter, store, workouts, now }) {
     const docOf = new Map(rows.map((d) => [d.id, d]))
 
     for (const { key, syncId } of plan.remove) {
+      if (generation !== mine) return
       try {
         await adapter.deleteWorkoutsBySyncId(syncId)
       } catch (error) {
@@ -74,6 +85,7 @@ export function createHealthSync({ adapter, store, workouts, now }) {
     for (const { key, syncId, version, hash, doc } of plan.save) {
       const pending = { kind: 'w', key, syncId, version, hash, state: 'pending', error: null, updatedAt: now() }
       await links.put(pending)
+      if (generation !== mine) return
       try {
         await adapter.saveStrengthWorkout({
           id: syncId,
@@ -113,50 +125,51 @@ export function createHealthSync({ adapter, store, workouts, now }) {
   }
 
   async function enable() {
+    const mine = ++generation
     await exclusive(async () => {
+      if (generation !== mine) return
       try {
         await adapter.requestHealthAccess()
-        await state.set('error', '')
+        if (generation !== mine) return
         await state.set('on', '1')
-        lastError = null
+        if (generation !== mine) await state.set('on', '0')
+        else {
+          heldError = null
+          await state.set('error', '')
+        }
       } catch (error) {
-        lastError = message(error)
-        try { await state.set('error', lastError) } catch { /* kept in memory */ }
+        if (generation === mine) await keepError(message(error))
       }
       emit()
     })
-    return run()
+    return generation === mine ? run() : status()
   }
 
   async function disable({ remove } = {}) {
-    await exclusive(async () => {
+    const mine = ++generation
+    // Queued first, so a later enable's work runs after this one's.
+    const queued = exclusive(async () => {
       try {
         await state.set('on', '0')
-        if (remove) {
-          const all = await links.list('w')
-          for (const link of all) {
-            if (link.state !== 'skipped') {
-              try {
-                await adapter.deleteWorkoutsBySyncId(link.syncId)
-              } catch (error) {
-                await fail(link, error)
-                return
-              }
-            }
-            await links.remove('w', link.key)
-          }
+        if (remove && generation === mine) {
+          await adapter.deleteAllOwnWorkouts()
+          await links.clear('w')
         }
       } catch (error) {
-        lastError = message(error)
+        await keepError(message(error))
       } finally {
         emit()
       }
     })
+    // Off at once, outside the queue, so a kill during a running pass cannot lose it.
+    const early = (async () => state.set('on', '0'))().catch(() => {})
+    emit()
+    await Promise.all([early, queued])
     return status()
   }
 
   async function status() {
-    const result = { on: false, write: 'unknown', exported: 0, waiting: 0, skipped: 0, error: lastError }
+    const result = { on: false, write: 'unknown', exported: 0, waiting: 0, skipped: 0, error: lastError || heldError }
     try {
       result.write = adapter.workoutWriteAccess()
     } catch {
@@ -168,9 +181,14 @@ export function createHealthSync({ adapter, store, workouts, now }) {
       result.exported = current.filter((l) => l.state === 'exported').length
       const rows = await workouts.list()
       result.skipped = rows.filter((d) => !exportable(d)).length
-      if (result.on) result.waiting = planWorkoutExport({ rows, links: current, now: now() }).save.length
-      const failed = current.filter((l) => l.error).sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))[0]
-      result.error = failed ? failed.error : lastError || (await state.get('error')) || null
+      // Only links a fresh plan would act on: a failure that no longer matters does not stick.
+      const plan = planWorkoutExport({ rows, links: current, now: now() })
+      if (result.on) result.waiting = plan.save.length
+      const removing = new Set(plan.remove.map((r) => r.key))
+      const failed = current
+        .filter((l) => l.error && (l.state === 'pending' || removing.has(l.key)))
+        .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))[0]
+      result.error = failed ? failed.error : lastError || (await state.get('error')) || heldError || null
     } catch {
       // keep what was read so far
     }

@@ -97,6 +97,16 @@ export async function deleteWorkoutsBySyncId(syncId) {
   }
 }
 
+// Every workout this app's source wrote, linked or not.
+export async function deleteAllOwnWorkouts() {
+  const source = currentAppSource()
+  try {
+    return await deleteObjects(WORKOUT, { sources: [source] })
+  } finally {
+    source.dispose()
+  }
+}
+
 export function deleteWorkout(uuid) {
   return deleteObjects(WORKOUT, { uuid })
 }

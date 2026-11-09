@@ -41,6 +41,11 @@ function fakeAdapter() {
       if (adapter.failDelete) throw adapter.failDelete
       return 1
     },
+    async deleteAllOwnWorkouts() {
+      calls.push(['deleteAll'])
+      if (adapter.failDelete) throw adapter.failDelete
+      return 2
+    },
   }
   return adapter
 }
@@ -125,21 +130,28 @@ test('stops at the first failure', async () => {
   expect(status.error).toBe('denied')
 })
 
-test('concurrent runs coalesce into one follow-up', async () => {
+test('concurrent runs coalesce into exactly one follow-up pass', async () => {
   const { adapter, workouts, store, health } = await setup(['w1'])
   await store.state.set('on', '1')
+  let emits = 0
+  health.subscribe(() => { emits++ })
   let release
   adapter.gate = new Promise(resolve => (release = resolve))
   const first = health.run()
   await new Promise(r => setTimeout(r, 0))
   await workouts.put(doc('w2'))
-  const others = [health.run(), health.run(), health.run()]
+  const p2 = health.run()
+  const p3 = health.run()
+  const p4 = health.run()
+  expect(p3).toBe(p2)
+  expect(p4).toBe(p2)
+  expect(p2).not.toBe(first)
   await new Promise(r => setTimeout(r, 0))
   release()
-  await Promise.all([first, ...others])
+  await Promise.all([first, p2, p3, p4])
+  expect(emits).toBe(4) // two passes, each a start and an end
   expect(adapter.maxInFlight).toBe(1)
   expect(saves(adapter).map(s => s.id).sort()).toEqual(['opengym-w-w1', 'opengym-w-w2'])
-  expect(saves(adapter)).toHaveLength(2)
 })
 
 test('disable without remove keeps links; enabling again saves nothing', async () => {
@@ -153,25 +165,64 @@ test('disable without remove keeps links; enabling again saves nothing', async (
   expect(saves(adapter)).toHaveLength(1)
 })
 
-test('disable with remove deletes every opengym-w- object and clears links; finished workouts untouched', async () => {
+test('disable with remove deletes everything the app wrote and clears links; finished workouts untouched', async () => {
   const { adapter, store, workouts, health } = await setup(['w1', 'w2'])
   await health.enable()
   const before = await workouts.list()
   await health.disable({ remove: true })
-  expect(adapter.calls.filter(c => c[0] === 'delete').map(c => c[1]).sort()).toEqual(['opengym-w-w1', 'opengym-w-w2'])
+  expect(adapter.calls.filter(c => c[0] === 'deleteAll')).toHaveLength(1)
   expect(await store.links.list('w')).toEqual([])
   expect(await workouts.list()).toEqual(before)
   expect((await health.status()).on).toBe(false)
 })
 
-test('a failed remove on disable keeps that link and its error', async () => {
+test('a failed remove on disable keeps the links and the error until the next good enable and run', async () => {
   const { adapter, store, health } = await setup(['w1', 'w2'])
   await health.enable()
   adapter.failDelete = new Error('locked')
   await health.disable({ remove: true })
-  const links = await store.links.list('w')
-  expect(links).toHaveLength(2)
-  expect(links.filter(l => l.error === 'locked')).toHaveLength(1)
+  expect(await store.links.list('w')).toHaveLength(2)
+  expect((await store.links.list('w')).every(l => l.error === null)).toBe(true)
+  expect((await health.status()).error).toBe('locked')
+  adapter.failDelete = null
+  await health.enable()
+  expect(await health.status()).toMatchObject({ on: true, error: null, exported: 2, waiting: 0 })
+})
+
+test('disable during a slow save switches off at once and no further save happens', async () => {
+  const { adapter, store, health } = await setup(['w1', 'w2', 'w3'])
+  await store.state.set('on', '1')
+  let release
+  adapter.gate = new Promise(resolve => (release = resolve))
+  const running = health.run()
+  await new Promise(r => setTimeout(r, 0))
+  expect(saves(adapter)).toHaveLength(1)
+  const off = health.disable({ remove: false })
+  expect(await store.state.get('on')).toBe('0') // before disable is awaited
+  release()
+  await Promise.all([running, off])
+  expect(saves(adapter)).toHaveLength(1)
+  expect(await store.state.get('on')).toBe('0')
+})
+
+test('enable then disable without awaiting ends off with no saves', async () => {
+  const { adapter, store, health } = await setup(['w1'])
+  const a = health.enable()
+  const b = health.disable({ remove: false })
+  await Promise.all([a, b])
+  expect(await store.state.get('on')).toBe('0')
+  expect(saves(adapter)).toHaveLength(0)
+})
+
+test('disable with remove then enable without awaiting ends on, removes nothing and exports once', async () => {
+  const { adapter, store, health } = await setup(['w1'])
+  await health.enable()
+  const b = health.disable({ remove: true })
+  const a = health.enable()
+  await Promise.all([a, b])
+  expect(await store.state.get('on')).toBe('1')
+  expect(adapter.calls.some(c => c[0] === 'deleteAll')).toBe(false)
+  expect(saves(adapter)).toHaveLength(1)
 })
 
 test('a request-access failure leaves Health off with the error in status', async () => {
@@ -184,6 +235,18 @@ test('a request-access failure leaves Health off with the error in status', asyn
   adapter.failAccess = null
   await health.enable()
   expect(await health.status()).toMatchObject({ on: true, error: null })
+})
+
+test('an enable error survives the run that follows, even when health_state cannot be written', async () => {
+  const { adapter, store, health } = await setup()
+  adapter.failAccess = new Error('not available')
+  const set = store.state.set
+  store.state.set = async (key, value) => {
+    if (key === 'error') throw new Error('disk')
+    return set(key, value)
+  }
+  await health.enable()
+  expect((await health.status()).error).toBe('not available')
 })
 
 test('an invalid workout is skipped, shown as skipped and not retried', async () => {
