@@ -57,9 +57,10 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
   const alerts = useRestAlerts({ session, sessionId: base?.id, names })
   const actions = useSessionActions({ session, base, restSec: state.restSec ?? 90, view, screen, shownEntry, setShownIndex, afterWrite: alerts })
 
-  // A rest that ends while the app is open buzzes once (the foreground alert is suppressed, so
-  // this is the only signal). `prev` is the last tick's projection; returning from the background
-  // clears it, so a rest that expired meanwhile does not buzz.
+  // A rest that ends while the app is active buzzes once (the alert is suppressed while active, so
+  // this is the only signal; in front but inactive, the alert shows instead). `prev` is the last
+  // tick's projection; returning from the background clears it, so a rest that expired meanwhile
+  // does not buzz.
   const lastRest = useRef(null)
   const restNow = projectRest(view?.rest, now)
   useEffect(() => {

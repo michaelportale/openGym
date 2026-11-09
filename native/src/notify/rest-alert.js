@@ -103,12 +103,19 @@ export async function reconcileRestAlerts({ sessionId, status, view, nextLabel, 
   return { ...plan, dismiss }
 }
 
-// A rest alert arriving while the app is open is not presented: the dock already shows the rest
-// ending. Expo SDK 58 presents foreground notifications with sound unless told otherwise. Any other
-// notification (the app sends none today) shows in the banner and list, without sound or badge.
+// A rest alert arriving while the app is active is not presented: the dock already shows the rest
+// ending and the rest-end haptic plays. Expo SDK 58 presents foreground notifications with sound
+// unless told otherwise. With the app in front but inactive (Control Center, Notification Centre,
+// the app switcher) that haptic does not play, so the alert shows as it would in the background.
+// Any other notification (the app sends none today) shows in the banner and list, without sound or
+// badge. `appActive` is AppState.currentState === 'active' as the notification arrives.
 const SILENT = { shouldShowBanner: false, shouldShowList: false, shouldPlaySound: false, shouldSetBadge: false }
+const SHOWN = { shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }
 const QUIET = { shouldShowBanner: true, shouldShowList: true, shouldPlaySound: false, shouldSetBadge: false }
-export const foregroundBehavior = data => (data?.kind === 'rest' ? SILENT : QUIET)
+export const foregroundBehavior = (data, appActive) => {
+  if (data?.kind !== 'rest') return QUIET
+  return appActive === true ? SILENT : SHOWN
+}
 
 // A tap on a rest alert opens the Workout tab and does nothing else.
 export const isRestAlertResponse = response => response?.notification?.request?.content?.data?.kind === 'rest'

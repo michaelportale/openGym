@@ -205,9 +205,16 @@ describe('nextSetLabel', () => {
 })
 
 describe('foreground and tap', () => {
-  test('a rest alert arriving with the app open is not presented: no banner, list, sound or badge', () => {
-    expect(foregroundBehavior({ kind: 'rest', sessionId: 's1', deadline: T0 }))
+  const REST = { kind: 'rest', sessionId: 's1', deadline: T0 }
+  test('a rest alert arriving with the app active is not presented: no banner, list, sound or badge', () => {
+    expect(foregroundBehavior(REST, true))
       .toEqual({ shouldShowBanner: false, shouldShowList: false, shouldPlaySound: false, shouldSetBadge: false })
+  })
+
+  test('with the app in front but inactive (Control Center, the app switcher) it shows as in the background', () => {
+    const shown = { shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }
+    expect(foregroundBehavior(REST, false)).toEqual(shown)
+    expect(foregroundBehavior(REST, undefined)).toEqual(shown)
   })
 
   test('any other notification shows quietly', () => {

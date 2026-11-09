@@ -1,4 +1,5 @@
 import * as Notifications from 'expo-notifications'
+import { AppState } from 'react-native'
 import { foregroundBehavior, isRestAlertResponse } from './rest-alert'
 
 // The thin adapter over expo-notifications. Decisions live in rest-alert.js (tested); this only
@@ -30,11 +31,12 @@ export const restAlerts = {
   dismiss: identifier => Notifications.dismissNotificationAsync(identifier),
 }
 
-// Once, at module load of the root layout: a rest alert arriving with the app open is not shown.
+// Once, at module load of the root layout: a rest alert arriving with the app active is not shown;
+// with the app in front but inactive it is (foregroundBehavior).
 export function setRestAlertHandler() {
   try {
     Notifications.setNotificationHandler({
-      handleNotification: async notification => foregroundBehavior(notification?.request?.content?.data),
+      handleNotification: async notification => foregroundBehavior(notification?.request?.content?.data, AppState.currentState === 'active'),
     })
   } catch (error) {
     console.warn('Rest alert handler not set:', error?.message ?? error)
