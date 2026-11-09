@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { NO_NOTICES, OVERNIGHT_NOTICE, PAST_MIDNIGHT, addSetCall, addWarmupCall, completeAfterCommit, completeCall, completeResult, dockKeypadField, draftCall, editCall, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightNow, overnightRefusal, pauseRestCall, resumeRestCall, primaryAction, removeWarmupCall, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, sheetSide, thrown, undoCall, undoWrite, writeOutcome, findSet } from './set-calls.js'
+import { NO_NOTICES, OVERNIGHT_NOTICE, PAST_MIDNIGHT, addSetCall, addWarmupCall, addWarmupsCall, completeAfterCommit, completeCall, completeResult, dockKeypadField, draftCall, editCall, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightNow, overnightRefusal, pauseRestCall, resumeRestCall, primaryAction, removeWarmupCall, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, sheetSide, thrown, undoCall, undoWrite, writeOutcome, findSet } from './set-calls.js'
 import { shownValues, workoutScreen } from './workout-view.js'
 import { pendingRest, restEventId, restMsFor } from './rest-after.js'
 import { withTargets } from './session-screen.js'
@@ -265,6 +265,24 @@ describe('addWarmupCall', () => {
   test('an exercise not in the view adds nothing', () => {
     expect(addWarmupCall(view([]), '0289', 'e9')).toBeNull()
     expect(addWarmupCall(null, '0289', 'e9')).toBeNull()
+  })
+})
+
+describe('addWarmupsCall', () => {
+  const sets = [{ w: 30, r: 6 }, { w: 60, r: 6 }]
+  test('one prefilled warm-up row per load, each named by its own event', () => {
+    const v = view([bench([slot('b0', todo(80, 8))])])
+    expect(addWarmupsCall(v, '0289', ['e1', 'e2'], sets)).toEqual([
+      { eventId: 'e1', exerciseId: '0289', setId: 'warm:0289:e1', fields: { phase: 'warmup', warmup: true, w: 30, r: 6 } },
+      { eventId: 'e2', exerciseId: '0289', setId: 'warm:0289:e2', fields: { phase: 'warmup', warmup: true, w: 60, r: 6 } },
+    ])
+  })
+  test('null for an unknown exercise, overnight, or ids that do not match the loads', () => {
+    const v = view([bench([slot('b0', todo(80, 8))])])
+    expect(addWarmupsCall(view([]), '0289', ['e1', 'e2'], sets)).toBeNull()
+    expect(addWarmupsCall({ ...v, disposition: { kind: 'overnight' } }, '0289', ['e1', 'e2'], sets)).toBeNull()
+    expect(addWarmupsCall(v, '0289', ['e1'], sets)).toBeNull()
+    expect(addWarmupsCall(v, '0289', ['e1', 'e2'], [])).toBeNull()
   })
 })
 
@@ -984,6 +1002,26 @@ describe.each(SQLITE_DRIVERS)('%s: the calls drive the engine', (_name, createDb
     const added = (await open(db, false)).getState().view.entries[1].sets[1]
     expect(added.setId).toBe('add:lat:a1')
     expect(added.row.sides).toEqual({ L: { w: 7.5, r: 10, done: false }, R: { w: 7.5, r: 10, done: false } })
+  })
+
+  test('Add warm-ups: two prefilled rows survive a kill, not done, no rest, the dock still on work set 1', async () => {
+    clock = T0 + 1000
+    let db = createDb()
+    const first = await open(db)
+    for (const call of addWarmupsCall(current(first), 'bench', ['p1', 'p2'], [{ w: 30, r: 6 }, { w: 60, r: 6 }], clock)) {
+      expect((await first.call('addSet', call)).saved).toBe(true)
+    }
+    db = db.reopen()
+    clock = T0 + 5000
+    const view = current(await open(db, false))
+    const warmups = view.entries[0].sets.filter(s => s.warmup || s.row.phase === 'warmup')
+    expect(warmups.map(s => [s.setId, s.row.w, s.row.r, s.row.done])).toEqual([['warm:bench:p1', 30, 6, false], ['warm:bench:p2', 60, 6, false]])
+    expect(pendingRest(view, clock, () => 120_000)).toBeNull()
+    expect(view.rest).toBeNull()
+    const screen = workoutScreen(view, { names: {}, lastTimes: {} })
+    expect(screen.card.rows.map(r => [r.label, r.weightText, r.status])).toEqual([['W', '30', 'current'], ['W', '60', 'pending'], ['1', '75', 'current'], ['2', '75', 'pending']])
+    expect(screen.dock).toMatchObject({ lead: 'Set 1 · 75 lb × 8', setId: benchSet })
+    expect(screen.header.progress).toBe(0)
   })
 
   test('a warm-up: add, complete, kill; still a warm-up, no rest, out of the numbers', async () => {

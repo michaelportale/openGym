@@ -198,6 +198,16 @@ export function addWarmupCall(view, exerciseId, eventId, now) {
   return { eventId, exerciseId: entry.id, setId: `warm:${entry.id}:${eventId}`, fields: { phase: 'warmup', warmup: true, w: null, r: null } }
 }
 
+// The prompt's two warm-ups: one prefilled row per suggested load, in order, each named by its own
+// event. Prefilled is not done: the owner completes each. Null overnight, for an unknown exercise,
+// or when `eventIds` and `sets` do not pair up.
+export function addWarmupsCall(view, exerciseId, eventIds, sets, now) {
+  if (!Array.isArray(sets) || sets.length === 0 || !Array.isArray(eventIds) || eventIds.length !== sets.length) return null
+  const calls = sets.map((set, i) => addWarmupCall(view, exerciseId, eventIds[i], now))
+  if (calls.some(call => call === null)) return null
+  return calls.map((call, i) => ({ ...call, fields: { ...call.fields, w: sets[i].w, r: sets[i].r } }))
+}
+
 // A mis-tapped Add warm-up comes off again: the engine's removeSet drops the row and any numbers
 // typed for it, so no blank warm-up is saved into history. Only a warm-up not done yet; a done one
 // goes back through Undo first. Null for a work set, a done warm-up, a row not in the view, or

@@ -11,7 +11,7 @@ import { completeLabels } from './keypad'
 import { pendingRest, restMsFor } from './rest-after'
 import { shownAfterComplete, withTargets } from './session-screen'
 import { carriedWeight, lockedWeight, shownValues } from './workout-view'
-import { NO_NOTICES, addSetCall, addWarmupCall, completeAfterCommit, completeCall, dockKeypadField, draftCall, editCall, findSet, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightRefusal, pauseRestCall, primaryAction, removeWarmupCall, restAfterComplete, resultNotice, resumeRestCall, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, sheetSide, thrown, undoWrite } from './set-calls'
+import { NO_NOTICES, addSetCall, addWarmupCall, addWarmupsCall, completeAfterCommit, completeCall, dockKeypadField, draftCall, editCall, findSet, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightRefusal, pauseRestCall, primaryAction, removeWarmupCall, restAfterComplete, resultNotice, resumeRestCall, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, sheetSide, thrown, undoWrite } from './set-calls'
 
 // The sessions already told that rest alerts are off. In memory: a relaunch tells again.
 const explainedAlertsOff = new Set()
@@ -25,7 +25,7 @@ const explainedAlertsOff = new Set()
 // Overnight is checked inside the gate as each write runs, against the clock then, not when the
 // view was last drawn (write).
 // `afterWrite` runs once each gated write settles (useRestAlerts' reconcile), outside the gate.
-export function useSessionActions({ session, base, restSec, view, screen, shownEntry, setShownIndex, afterWrite }) {
+export function useSessionActions({ session, base, restSec, view, screen, shownEntry, setShownIndex, afterWrite, promptFor }) {
   const gate = useRef(null)
   if (gate.current == null) gate.current = createActionGate()
   const [busy, setBusy] = useState(false)
@@ -301,6 +301,25 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
     }), action)
   }
 
+  // The prompt's Add warm-ups: both rows in one gated action, decided on the engine's latest view
+  // (a tap that lands after the first add finds the prompt gone and writes nothing). The adds run
+  // in order; if the second is refused the first stays, and that refusal is what is reported.
+  const addWarmups = async () => {
+    if (!shownEntry) return
+    report(await write(async (view, now) => {
+      const prompt = promptFor?.(view, shownEntry.id)
+      if (!prompt) return null
+      const calls = addWarmupsCall(view, shownEntry.id, prompt.sets.map(() => createEventId()), prompt.sets, now)
+      if (!calls) return null
+      let result = null
+      for (const call of calls) {
+        result = await session.addSet(call)
+        if (result?.saved !== true) return result
+      }
+      return result
+    }), 'add-warmup')
+  }
+
   const openFinish = end => {
     setFinishNotice(null)
     setFinishing({ end: end ?? null })
@@ -348,6 +367,7 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
     openSheet,
     addSet: addRow(addSetCall, 'add-set'),
     addWarmup: addRow(addWarmupCall, 'add-warmup'),
+    addWarmups,
     resume: async () => report(await act(() => session.resume({ eventId: createEventId() })), 'resume'),
     dock: dockActions,
     sheet: { ...sheet, open: sheetOpen, notice: sheetNotice?.text ?? null, ...sheetActions },
