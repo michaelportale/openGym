@@ -1,4 +1,5 @@
 import { workoutModel } from '../shared/training.js'
+import { OVERNIGHT_NOTICE, failureText } from './failure-text.js'
 import { completeFields, restEventId } from './rest-after.js'
 import { carriedWeight, isDone, isWarmup, shownValues } from './workout-view.js'
 
@@ -7,7 +8,7 @@ import { carriedWeight, isDone, isWarmup, shownValues } from './workout-view.js'
 const { isSideSet } = workoutModel
 const SIDES = ['L', 'R']
 
-export const OVERNIGHT_NOTICE = 'Choose Resume, Finish or Discard first.'
+export { OVERNIGHT_NOTICE }
 
 // A session left open overnight logs nothing until the owner picks Resume, Finish or Discard
 // (the engine would take the set and fold it into last night's workout).
@@ -164,23 +165,70 @@ export function sheetBackgroundCall(appState, mode, changed) {
   return LEAVING.includes(appState) ? sheetCloseCall(mode, changed) : 'none'
 }
 
-const reason = error => error?.message || error?.code || 'unknown error'
+export const SAVED_REST_FAILED = "Saved. Rest didn't start."
+const DRAFT_NOT_CLEARED = "The typed numbers for this set couldn't be cleared."
+const TIME_NOT_UPDATED = "The workout time couldn't be updated, so it may be off after a restart."
+const NOT_CLOSED = "The workout isn't closed yet. Tap Save workout again."
+
+// A Complete is two writes: the set, then its rest. The set's result is what the Complete
+// reports; a rest refused after the set saved is `restFailed` on it, never a "not saved". A set
+// that did not save stays not saved whatever the rest did.
+export function completeResult(commit, started) {
+  if (commit?.saved !== true || started == null) return commit
+  if (started.ok === false) return { ...commit, restFailed: true }
+  if (started.checkpointError && !commit.checkpointError) return { ...commit, checkpointError: started.checkpointError }
+  return commit
+}
+
+// What a write's result means for the owner, or null when there is nothing to say (a save, a
+// repeat, no change, a dropped tap). `action` is what was tapped (failureText's). Kinds:
+// 'failed' (nothing saved; or a workout saved but not closed), 'saved-rest-failed' (the set
+// saved, its rest did not start) and 'warning' (saved, but its draft did not clear or the timer
+// checkpoint failed). A result that did not save is never shown as saved, whatever it carries.
+export function writeOutcome(result, action) {
+  if (!result || result.ignored) return null
+  if (result.saved !== true) {
+    if (result.ok !== true) return { kind: 'failed', text: failureText(result.error?.code, { action }) }
+    return result.checkpointError ? { kind: 'warning', text: TIME_NOT_UPDATED } : null
+  }
+  if (result.ok === false) return { kind: 'failed', text: NOT_CLOSED }
+  const warnings = [result.draftError ? DRAFT_NOT_CLEARED : null, result.checkpointError ? TIME_NOT_UPDATED : null].filter(Boolean)
+  if (result.restFailed) return { kind: 'saved-rest-failed', text: [SAVED_REST_FAILED, ...warnings].join(' ') }
+  return warnings.length ? { kind: 'warning', text: ['Saved.', ...warnings].join(' ') } : null
+}
+
+// What the screen says after a write, as text.
+export function resultNotice(result, action) {
+  return writeOutcome(result, action)?.text ?? null
+}
+
+export const NO_NOTICES = { notice: null, rest: null }
+
+// The screen's two notices after a write. `notice` is what the last write said (null clears
+// it). `rest` is the line that carries the Start rest button: set by a Complete whose set saved
+// but whose rest was refused (or by a rest that failed to start), gone once a rest runs, another
+// set is completed or a set is undone (its "Saved." would no longer hold), and kept through every
+// other write. A dropped tap changes nothing.
+export function noticesAfter(notices, result, action) {
+  if (result?.ignored) return notices
+  const outcome = writeOutcome(result, action)
+  if (action === 'rest') {
+    // Started, already running, or nothing left to start (`result` null): the line goes.
+    if (outcome?.kind === 'failed') return { notice: notices.notice, rest: outcome.text }
+    return { notice: outcome?.text ?? notices.notice, rest: null }
+  }
+  if (outcome?.kind === 'saved-rest-failed') return { notice: null, rest: outcome.text }
+  const moved = result?.saved === true && (action === 'complete' || action === 'undo')
+  return { notice: outcome?.text ?? null, rest: moved ? null : notices.rest }
+}
 
 // Where a sheet write's outcome shows. A refusal stays in the sheet, with the typed numbers, only
 // while that same sheet is still open; once it has closed the screen shows it, so a failed write
 // is never hidden. A set saved with a refused rest closes the sheet and shows on the screen.
-// `screen` undefined leaves the screen's notice as it is.
-export function sheetOutcome(result, stillOpen) {
+// `screen` false leaves the screen's notices as they are; true hands the result to noticesAfter.
+export function sheetOutcome(result, stillOpen, action) {
   if (result?.ignored) return null
-  const text = resultNotice(result)
-  if (text && stillOpen && !result.committed) return { close: false, sheet: text, screen: undefined }
-  return { close: stillOpen, sheet: null, screen: text }
-}
-
-// What the screen says after a write. Nothing for a save, a repeat, no change, or a dropped tap.
-export function resultNotice(result) {
-  if (!result || result.ignored) return null
-  if (result.saved === false && result.ok !== true) return `Not saved: ${reason(result.error)}`
-  if (result.saved === true && result.ok === false) return `Saved, but the workout did not close: ${reason(result.error)}`
-  return null
+  const outcome = writeOutcome(result, action)
+  if (outcome?.kind === 'failed' && stillOpen) return { close: false, sheet: outcome.text, screen: false }
+  return { close: stillOpen, sheet: null, screen: true }
 }

@@ -115,6 +115,15 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
           <AppText variant="body">{actions.notice}</AppText>
         </Card>
       ) : null}
+      {/* A set saved but its rest did not start: Start rest starts that same rest, through the gate. */}
+      {actions.restNotice ? (
+        <Card accessibilityLiveRegion="polite" style={[styles.notice, styles.restNotice]}>
+          <AppText variant="body">{actions.restNotice}</AppText>
+          <View style={styles.restAction}>
+            <IconButton label="Start rest" accessibilityLabel="Start rest" accessibilityHint="Starts the rest after your last set." onPress={actions.startRest} />
+          </View>
+        </Card>
+      ) : null}
     </View>
   )
 
@@ -188,6 +197,8 @@ const styles = StyleSheet.create({
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   navRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   notice: { padding: space.md },
+  restNotice: { gap: space.sm },
+  restAction: { alignSelf: 'flex-start' },
   choices: { flexDirection: 'row', justifyContent: 'space-between', gap: space.sm },
   body: { gap: space.md, paddingHorizontal: space.lg, paddingBottom: space.lg }
 })
