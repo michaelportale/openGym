@@ -134,6 +134,8 @@ function progressOf(entries) {
   return all === 0 ? 0 : finished / all
 }
 
+// `number` and `figures` ({ w, r } of the side being worked) are the set the lead shows, and
+// `remainingMs` the rest it counts down, so the spoken lead is built from them, not the text.
 function dockFor(view, entry, entries, index, current, number) {
   const rest = view.rest
   const resting = rest && (rest.status === 'running' || rest.status === 'paused')
@@ -150,6 +152,9 @@ function dockFor(view, entry, entries, index, current, number) {
       primaryLabel: '',
       setId: current ? current.setId : null,
       side,
+      number: current ? number : null,
+      figures,
+      remainingMs: rest.remainingMs,
     }
   }
   if (current) {
@@ -168,12 +173,14 @@ function dockFor(view, entry, entries, index, current, number) {
       primaryLabel: label,
       setId: current.setId,
       side,
+      number,
+      figures,
     }
   }
   const othersLeft = entries.some((other, i) => i !== index && hasOpenWork(other))
   return othersLeft
-    ? { mode: 'exercise-done', lead: 'Exercise done', sub: '', primaryLabel: 'Next exercise', setId: null, side: null }
-    : { mode: 'all-done', lead: 'All sets done', sub: '', primaryLabel: 'Finish workout', setId: null, side: null }
+    ? { mode: 'exercise-done', lead: 'Exercise done', sub: '', primaryLabel: 'Next exercise', setId: null, side: null, number: null, figures: null }
+    : { mode: 'all-done', lead: 'All sets done', sub: '', primaryLabel: 'Finish workout', setId: null, side: null, number: null, figures: null }
 }
 
 // `title` is the routine name; the engine view does not carry it, so the caller passes it.

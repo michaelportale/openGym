@@ -4,10 +4,11 @@ import AppText from '../ui/AppText'
 import IconButton from '../ui/IconButton'
 
 // The resting dock: the countdown is the largest figure on the screen, "Next: ..." under it.
-export default function RestPanel({ lead, sub, onAddTime, onSkip }) {
+// `label` is the whole of it in words (spokenLead).
+export default function RestPanel({ lead, sub, label, onAddTime, onSkip }) {
   return (
     <View style={styles.row}>
-      <View accessible accessibilityLabel={`Rest, ${lead} left. ${sub}`} style={styles.figures}>
+      <View accessible accessibilityLabel={label} style={styles.figures}>
         <AppText variant="label" color={color.textSecondary}>Rest</AppText>
         <AppText variant="timer">{lead}</AppText>
         {sub ? <AppText variant="value" color={color.textSecondary}>{sub}</AppText> : null}

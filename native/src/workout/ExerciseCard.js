@@ -19,8 +19,9 @@ function AddRow({ label, hint, onPress, style }) {
 }
 
 // Props come from `workoutScreen(...).card`. `onPressRow(setId, field)` opens the keypad. Warm-ups
-// come before the work sets, so their add control sits above the table.
-export default function ExerciseCard({ name, category, noHistory, rows, weightTitle, onPressRow, onAddSet, onAddWarmup }) {
+// come before the work sets, so their add control sits above the table. `perHand` makes the rows
+// say "each" after the weight.
+export default function ExerciseCard({ name, category, noHistory, rows, weightTitle, perHand, onPressRow, onAddSet, onAddWarmup }) {
   return (
     <Card style={styles.card}>
       <View style={styles.heading}>
@@ -30,7 +31,7 @@ export default function ExerciseCard({ name, category, noHistory, rows, weightTi
       </View>
       <AddRow label="Add warm-up" hint="Adds a warm-up set. Warm-ups do not count as sets." onPress={onAddWarmup} style={styles.addWarmup} />
       <SetTableHeader weightTitle={weightTitle} />
-      {rows.map(row => <SetRow key={row.setId} {...row} onPress={onPressRow} />)}
+      {rows.map(row => <SetRow key={row.setId} {...row} perHand={perHand} onPress={onPressRow} />)}
       <AddRow label="Add set" hint="Adds one more set to this exercise." onPress={onAddSet} style={styles.addSet} />
     </Card>
   )

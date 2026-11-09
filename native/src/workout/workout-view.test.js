@@ -73,13 +73,23 @@ describe('dock', () => {
     const all = view([bench([set('a', done(75, 10))])])
     expect(screen(all).dock).toMatchObject({ mode: 'all-done', primaryLabel: 'Finish workout' })
   })
+  // The spoken lead is built from these, not by reading the lead text back.
+  test('carries the set number, figures and time left that the lead shows', () => {
+    expect(screen(mid()).dock).toMatchObject({ number: 2, figures: { w: 75, r: 8 } })
+    expect(screen(view([bench([set('a', todo(null, 12))])])).dock).toMatchObject({ number: 1, figures: { w: null, r: 12 } })
+    expect(screen({ ...mid(), rest: { status: 'running', remainingMs: 64_000 } }).dock)
+      .toMatchObject({ mode: 'resting', remainingMs: 64_000, number: 2, figures: { w: 75, r: 8 } })
+    const last = view([bench([set('a', done(75, 10))])], { rest: { status: 'running', remainingMs: 5_000 } })
+    expect(screen(last).dock).toMatchObject({ mode: 'resting', remainingMs: 5_000, number: null, figures: null })
+    expect(screen(view([bench([set('a', done(75, 10))])])).dock).toMatchObject({ number: null, figures: null })
+  })
 })
 
 describe('per-side sets', () => {
   const lateral = (L, R) => view([{ id: '0300', target: {}, sets: [set('s1', sided(7.5, { r: 20, done: L }, { r: 18, done: R }), { completed: L || R })] }])
   test('left first, then right', () => {
-    expect(screen(lateral(false, false)).dock).toMatchObject({ primaryLabel: 'Complete left', side: 'L' })
-    expect(screen(lateral(true, false)).dock).toMatchObject({ primaryLabel: 'Complete right', side: 'R' })
+    expect(screen(lateral(false, false)).dock).toMatchObject({ primaryLabel: 'Complete left', side: 'L', figures: { w: 7.5, r: 20 } })
+    expect(screen(lateral(true, false)).dock).toMatchObject({ primaryLabel: 'Complete right', side: 'R', figures: { w: 7.5, r: 18 } })
   })
   test('blank reps on the side being worked ask for the reps', () => {
     const blankRight = view([{ id: '0300', target: {}, sets: [set('s1', {
@@ -289,10 +299,11 @@ describe('warm-ups', () => {
     const v = view([bench([set('a', done(75, 8)), warm('w', todo(45, 10))])])
     expect(screen(v).dock).toMatchObject({ mode: 'all-done', setId: null })
   })
+  // Counted, the warm-ups here would make progress 3 of 5 (0.6) and keep the screen on the bench.
   test('progress and the exercise the screen follows ignore warm-ups', () => {
     const v = view([
       bench([set('a', done(75, 8)), warm('w', todo(45, 10))]),
-      { id: '0300', target: {}, sets: [warm('w2', done(5, 10)), set('b', todo(10, 12))] },
+      { id: '0300', target: {}, sets: [warm('w2', done(5, 10)), warm('w3', done(7.5, 8)), set('b', todo(10, 12))] },
     ])
     expect(currentExerciseIndex(v)).toBe(1)
     expect(screen(v).header.progress).toBe(0.5)

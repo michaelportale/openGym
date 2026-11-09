@@ -89,7 +89,8 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
   const overnight = view.disposition?.kind === 'overnight'
   // An overnight session ends at its last logged work; the engine refuses a finish without an end.
   const finishEnd = overnight ? view.disposition.suggestedEnd ?? view.startedAt : null
-  const weightTitle = shownEntry?.target?.dbLoad === 'each' ? 'Lb each' : 'Lb'
+  const perHand = shownEntry?.target?.dbLoad === 'each'
+  const weightTitle = perHand ? 'Lb each' : 'Lb'
   const upNext = view.entries[index + 1]
   const move = step => setShownIndex(Math.max(0, Math.min(count - 1, index + step)))
   const { sheet, finish } = actions
@@ -101,12 +102,12 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
         <IconButton label="Finish" accessibilityLabel="Finish workout" accessibilityHint="Shows the summary before saving." onPress={() => finish.show(finishEnd)} />
       </View>
       <View style={styles.navRow}>
-        <IconButton label="‹" accessibilityLabel="Previous exercise" onPress={() => move(-1)} />
+        <IconButton label="‹" accessibilityLabel="Previous exercise" accessibilityHint="Shows the exercise before this one." onPress={() => move(-1)} />
         <AppText variant="body" color={color.textSecondary} style={styles.grow}>
           {`Exercise ${header.exerciseNumber} of ${header.exerciseCount}`}
         </AppText>
         <AppText variant="value" color={color.textSecondary} accessibilityLabel={`Elapsed ${header.elapsedText}`}>{header.elapsedText}</AppText>
-        <IconButton label="›" accessibilityLabel="Next exercise" onPress={() => move(1)} />
+        <IconButton label="›" accessibilityLabel="Next exercise" accessibilityHint="Shows the exercise after this one." onPress={() => move(1)} />
       </View>
       <ProgressBar value={header.progress} />
       {actions.notice ? (
@@ -130,7 +131,7 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
     // Finished in the journal but not yet stored (a kill between the two): Save completes it.
     <WorkoutDock dock={{ mode: 'finished', lead: 'Not saved yet', primaryLabel: 'Save workout' }} onLayout={measure('dock')} inline={!pinned} onPrimary={() => finish.show(null)} busy={actions.busy} />
   ) : (
-    <WorkoutDock dock={screen.dock} onLayout={measure('dock')} inline={!pinned} busy={actions.busy} {...actions.dock} />
+    <WorkoutDock dock={screen.dock} perHand={perHand} onLayout={measure('dock')} inline={!pinned} busy={actions.busy} {...actions.dock} />
   )
 
   return (
@@ -139,7 +140,7 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
       <ScrollView style={styles.screen} contentContainerStyle={{ paddingBottom: dockHeight }} scrollIndicatorInsets={{ bottom: dockHeight }}>
         {pinned ? null : head}
         <View style={styles.body}>
-          <ExerciseCard {...card} weightTitle={weightTitle} onPressRow={actions.openSheet} onAddSet={actions.addSet} onAddWarmup={actions.addWarmup} />
+          <ExerciseCard {...card} weightTitle={weightTitle} perHand={perHand} onPressRow={actions.openSheet} onAddSet={actions.addSet} onAddWarmup={actions.addWarmup} />
           {upNext ? <UpNextRow name={nameOf(names, upNext.id)} onPress={() => move(1)} /> : null}
         </View>
         {pinned ? null : dock}
@@ -154,6 +155,7 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
         side={sheet.side}
         initialField={sheet.initialField}
         weightTitle={weightTitle}
+        perHand={perHand}
         saveLabel={sheet.mode === 'done' ? 'Update' : 'Save'}
         completeLabel={sheet.completeLabel}
         notice={sheet.notice}

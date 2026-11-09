@@ -1,35 +1,40 @@
-import { Pressable, StyleSheet, View } from 'react-native'
-import { color, radius, space } from '../theme/tokens'
+import { StyleSheet, View } from 'react-native'
+import { color, radius, space, touch } from '../theme/tokens'
 import AppText from '../ui/AppText'
 import GlassPanel from '../ui/GlassPanel'
 import PrimaryButton from '../ui/PrimaryButton'
+import ScaleButton from '../ui/ScaleButton'
 import RestPanel from './RestPanel'
+import { spokenLead } from './spoken'
 
 const OPENS_KEYPAD = ['ready', 'enter-weight', 'enter-reps']
 
 // Renders `workoutScreen(...).dock`. `inline` drops the pin so the dock can sit at the end of
-// the scroll at large text sizes. The lead figure opens the keypad while a set is up.
+// the scroll at large text sizes. The lead figure is a button that opens the keypad while a set
+// is up, and plain text otherwise. `perHand` makes the spoken lead say "each" after the weight.
 // `children` sit under the primary button (the overnight prompt's other two choices).
-export default function WorkoutDock({ dock, onLayout, inline, onPrimary, onPressLead, onAddTime, onSkip, busy, children }) {
+export default function WorkoutDock({ dock, perHand, onLayout, inline, onPrimary, onPressLead, onAddTime, onSkip, busy, children }) {
   const tappable = OPENS_KEYPAD.includes(dock.mode)
-  const lead = <AppText variant="lead" color={color.text}>{dock.lead}</AppText>
+  const spoken = spokenLead(dock, { perHand })
   return (
     <View onLayout={onLayout} style={inline ? null : styles.pinned}>
       <GlassPanel style={styles.panel}>
         {dock.mode === 'resting' ? (
-          <RestPanel lead={dock.lead} sub={dock.sub} onAddTime={onAddTime} onSkip={onSkip} />
+          <RestPanel lead={dock.lead} sub={dock.sub} label={spoken} onAddTime={onAddTime} onSkip={onSkip} />
         ) : (
           <>
             {tappable ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={dock.lead}
+              <ScaleButton
+                accessibilityLabel={spoken}
                 accessibilityHint="Opens the keypad to change the weight or reps."
                 onPress={onPressLead}
+                faceStyle={styles.lead}
               >
-                {lead}
-              </Pressable>
-            ) : lead}
+                <AppText variant="lead" color={color.text}>{dock.lead}</AppText>
+              </ScaleButton>
+            ) : (
+              <AppText variant="lead" color={color.text} accessibilityLabel={spoken}>{dock.lead}</AppText>
+            )}
             <PrimaryButton label={dock.primaryLabel} disabled={busy} onPress={onPrimary} />
             {children}
           </>
@@ -40,6 +45,7 @@ export default function WorkoutDock({ dock, onLayout, inline, onPrimary, onPress
 }
 
 const styles = StyleSheet.create({
+  lead: { minHeight: touch.min, justifyContent: 'center' },
   pinned: { position: 'absolute', left: 0, right: 0, bottom: 0 },
   panel: {
     gap: space.md,

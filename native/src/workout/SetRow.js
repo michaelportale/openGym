@@ -1,11 +1,8 @@
-import { useState } from 'react'
-import { Platform, Pressable, StyleSheet, View } from 'react-native'
-import Animated from 'react-native-reanimated'
+import { Pressable, StyleSheet, View } from 'react-native'
 import { color, radius, size, space, touch } from '../theme/tokens'
 import NativeSymbol from '../ui/NativeSymbol'
 import AppText from '../ui/AppText'
-import { focusRingStyle } from '../ui/focus-ring'
-import { usePressScale } from '../ui/use-press-scale'
+import ScaleButton from '../ui/ScaleButton'
 import { setRowView } from './set-row-view'
 
 const MARKERS = {
@@ -37,50 +34,43 @@ export function SetTableHeader({ weightTitle = 'Lb' }) {
   )
 }
 
-// A boxed number on the current row. It opens the keypad on its own field.
-function Box({ text, label, hint, onPress }) {
-  const press = usePressScale()
-  const [focused, setFocused] = useState(false)
+// A number in a box on an open row. It opens the keypad on its own field. `look` is 'boxed' on the
+// current work set and 'filled' on an open warm-up, which must not look current beside it.
+function Box({ text, label, hint, look, onPress }) {
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityHint={hint}
-      onPress={onPress}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
-      style={styles.amount}
-      {...press.handlers}
-    >
-      <Animated.View style={[styles.boxed, focusRingStyle(focused, Platform.OS, color.accent), press.style]}>
-        <AppText variant="value">{text}</AppText>
-      </Animated.View>
-    </Pressable>
+    <ScaleButton accessibilityLabel={label} accessibilityHint={hint} onPress={onPress} style={styles.amount} faceStyle={styles[look]}>
+      <AppText variant="value">{text}</AppText>
+    </ScaleButton>
   )
 }
+
+// On an open row VoiceOver stops on the summary and the two boxes; the summary already says the
+// Last value and the done mark, so those cells are not stops of their own.
+const HIDDEN = { accessibilityElementsHidden: true, importantForAccessibility: 'no-hide-descendants' }
 
 const plain = (text, tone) => <AppText variant="value" color={tone}>{text}</AppText>
 
 // Takes a row of `workoutScreen(...).card.rows`. `onPress(setId, field)` opens the keypad
 // ('w' or 'r'); on a done or pending row the whole row is the target. `sideDone` marks a
-// per-side set with one side logged. `label` is the set number, or 'W' on a warm-up.
-export default function SetRow({ setId, number, label, warmup, weightText, repsText, lastText, status, sideDone, onPress }) {
-  const view = setRowView({ number, weight: weightText, reps: repsText, status, lastText, sideDone, warmup })
+// per-side set with one side logged. `label` is the set number, or 'W' on a warm-up. `perHand`
+// says the weight is per hand.
+export default function SetRow({ setId, number, label, warmup, perSide, perHand, weightText, repsText, lastText, status, sideDone, onPress }) {
+  const view = setRowView({ number, weight: weightText, reps: repsText, status, lastText, sideDone, warmup, perSide, perHand })
   const marker = MARKERS[view.marker]
   const tone = status === 'done' ? color.textSecondary : color.text
-  const current = view.fields === 'boxed'
+  const open = view.fields !== 'plain'
   const cells = (
     <>
       <View
-        {...(current ? { accessible: true, accessibilityLabel: view.accessibilityLabel } : null)}
+        {...(open ? { accessible: true, accessibilityLabel: view.accessibilityLabel } : null)}
         style={styles.number}
       >
         {plain(label ?? number, color.textSecondary)}
       </View>
-      {current ? (
+      {open ? (
         <>
-          <Box text={view.weightText} label={`Weight, ${weightText === '–' ? 'not set' : `${weightText} pounds`}`} hint="Opens the keypad." onPress={() => onPress?.(setId, 'w')} />
-          <Box text={view.repsText} label={`Reps, ${repsText}`} hint="Opens the keypad." onPress={() => onPress?.(setId, 'r')} />
+          <Box text={view.weightText} label={view.weightLabel} hint="Opens the keypad." look={view.fields} onPress={() => onPress?.(setId, 'w')} />
+          <Box text={view.repsText} label={view.repsLabel} hint="Opens the keypad." look={view.fields} onPress={() => onPress?.(setId, 'r')} />
         </>
       ) : (
         <>
@@ -89,14 +79,14 @@ export default function SetRow({ setId, number, label, warmup, weightText, repsT
         </>
       )}
       {/* One line: a long or per-side value shrinks to fit rather than wrapping. */}
-      <View style={styles.last}>
+      <View {...(open ? HIDDEN : null)} style={styles.last}>
         <AppText variant="value" color={color.textMuted} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6} style={styles.lastText}>
           {view.lastText}
         </AppText>
       </View>
-      <View style={[styles.done, styles.marker]}>
+      <View {...(open ? HIDDEN : null)} style={[styles.done, styles.marker]}>
         {view.sideMark ? (
-          <AppText variant="value" color={color.accent} numberOfLines={1} adjustsFontSizeToFit accessibilityLabel={view.sideMark.label}>
+          <AppText variant="value" color={color.accent} numberOfLines={1} adjustsFontSizeToFit>
             {view.sideMark.text}
           </AppText>
         ) : (
@@ -105,11 +95,11 @@ export default function SetRow({ setId, number, label, warmup, weightText, repsT
       </View>
     </>
   )
-  if (current) {
+  if (open) {
     // The boxed numbers are their own buttons, so the row itself must not swallow them;
-    // the set number carries the spoken summary.
+    // the set number carries the spoken summary. Only the current work set is highlighted.
     return (
-      <View accessible={false} style={[styles.columns, styles.row, styles.currentRow]}>
+      <View accessible={false} style={[styles.columns, styles.row, view.fields === 'boxed' ? styles.currentRow : styles.openRow]}>
         {cells}
       </View>
     )
@@ -137,6 +127,7 @@ const styles = StyleSheet.create({
   title: { textAlign: 'center' },
   row: { minHeight: touch.row, borderRadius: radius.sm },
   currentRow: { paddingVertical: space.sm, backgroundColor: color.surfaceActive },
+  openRow: { paddingVertical: space.sm },
   number: { flex: 1, alignItems: 'center' },
   amount: { flex: 2, alignItems: 'center', justifyContent: 'center' },
   last: { flex: 2, alignItems: 'center' },
@@ -149,6 +140,18 @@ const styles = StyleSheet.create({
     backgroundColor: color.field,
     borderColor: color.strokeStrong,
     borderWidth: size.stroke,
+    borderRadius: radius.sm
+  },
+  // An open warm-up: a quiet field, not the current set. A hairline, as on a keypad key, where the
+  // current set has a full-width strong border on a highlighted row.
+  filled: {
+    minWidth: '100%',
+    minHeight: touch.row,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: color.field,
+    borderColor: color.stroke,
+    borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radius.sm
   },
   done: { flex: 1, minWidth: touch.min },
