@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { NO_NOTICES, OVERNIGHT_NOTICE, addSetCall, addWarmupCall, completeCall, completeResult, dockKeypadField, draftCall, editCall, keypadField, noticeAnnouncement, noticesAfter, overnightNotice, primaryAction, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, undoCall, writeOutcome } from './set-calls.js'
+import { NO_NOTICES, OVERNIGHT_NOTICE, addSetCall, addWarmupCall, completeCall, completeResult, dockKeypadField, draftCall, editCall, keypadField, noticeAnnouncement, noticesAfter, overnightNotice, overnightNow, overnightRefusal, primaryAction, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, undoCall, writeOutcome } from './set-calls.js'
 import { shownValues, workoutScreen } from './workout-view.js'
 import { pendingRest, restEventId, restMsFor } from './rest-after.js'
 import { withTargets } from './session-screen.js'
@@ -7,6 +7,7 @@ import { SQLITE_DRIVERS } from '../../scripts/node-sqlite.mjs'
 import { createSessionController } from '../session/session-controller.js'
 import { sessionOptionsFrom } from '../session/use-active-session.js'
 import { plannedSetId } from '../session/ids.js'
+import { createSqliteSessionStorage } from '../session/sqlite-storage.js'
 
 const slot = (setId, row, extra = {}) => ({ setId, completed: row.done === true, warmup: false, draft: null, row, ...extra })
 const todo = (w, r) => ({ w, r, done: false })
@@ -293,6 +294,80 @@ describe('overnight', () => {
     expect(editCall(v, { setId: 'b0', values: { w: 80, r: 9 }, eventId: 'e1' })).not.toBeNull()
     expect(undoCall(v, { setId: 'b0', eventId: 'e1' })).not.toBeNull()
     expect(draftCall(v, { setId: 'b1', values: { w: 80, r: 8 } })).not.toBeNull()
+  })
+})
+
+// The engine reads the clock only when an action runs, so a screen left open across midnight
+// still holds the view it drew before. Each write checks overnight against the clock as it runs,
+// in the session's own zone (the view's, the one the engine decides in), not the device's.
+describe('overnight at write time', () => {
+  const zone = 'America/New_York'
+  const at2350 = Date.parse('2026-11-09T23:50:00-05:00')
+  const at2359 = Date.parse('2026-11-09T23:59:59-05:00')
+  const at0010 = Date.parse('2026-11-10T00:10:00-05:00')
+  const active = { kind: 'active', actions: [], suggestedEnd: null }
+  // Drawn at 23:50, right after a set logged then.
+  const drawn = (extra = {}) => ({
+    ...view([bench([slot('b0', done(75, 10, at2350)), slot('b1', todo(75, 8))])]),
+    disposition: active, activityAt: at2350, timeZone: zone, ...extra,
+  })
+  test('a view drawn at 23:50 is not overnight then or at 23:59; the same view at 00:10 the next local day is', () => {
+    expect(overnightNow(drawn(), at2350)).toBe(false)
+    expect(overnightNow(drawn(), at2359)).toBe(false)
+    expect(overnightNow(drawn(), at0010)).toBe(true)
+  })
+  test("the day is the session's zone, not the device's", () => {
+    // 23:50 and 00:10 in New York are 04:50 and 05:10 the same UTC day.
+    expect(overnightNow(drawn(), at0010, 'UTC')).toBe(false)
+    expect(overnightNow(drawn({ timeZone: 'UTC' }), at0010)).toBe(false)
+    // 18:50 and 19:10 in New York straddle midnight in UTC, but not in the session's zone.
+    const evening = drawn({ activityAt: Date.parse('2026-11-09T18:50:00-05:00') })
+    const later = Date.parse('2026-11-09T19:10:00-05:00')
+    expect(overnightNow(evening, later)).toBe(false)
+    expect(overnightNow(evening, later, 'UTC')).toBe(true)
+  })
+  test('a view the engine already called overnight stays so; a finished or discarded one never is; no clock keeps what the view said', () => {
+    expect(overnightNow(drawn({ disposition: { kind: 'overnight', actions: ['resume', 'finish', 'discard'], suggestedEnd: at2350 } }), at2350)).toBe(true)
+    expect(overnightNow(drawn({ status: 'finished', disposition: { kind: 'finished', actions: [], suggestedEnd: null } }), at0010)).toBe(false)
+    expect(overnightNow(drawn({ status: 'discarded', disposition: { kind: 'discarded', actions: [], suggestedEnd: null }, activityAt: null }), at0010)).toBe(false)
+    expect(overnightNow(drawn(), undefined)).toBe(false)
+    expect(overnightNow(drawn({ activityAt: null }), at0010)).toBe(false)
+    expect(overnightNow(null, at0010)).toBe(false)
+  })
+  test('at 00:10 complete, add, add warm-up, edit, undo and draft all refuse; at 23:55 they go through', () => {
+    const calls = now => [
+      completeCall(drawn(), { setId: 'b1', side: null, eventId: 'e1', now }),
+      completeCall(drawn(), { setId: 'b1', side: null, values: { w: 80, r: 8 }, eventId: 'e1', now }),
+      addSetCall(drawn(), '0289', 'e1', now),
+      addWarmupCall(drawn(), '0289', 'e1', now),
+      editCall(drawn(), { setId: 'b0', values: { w: 80, r: 9 }, eventId: 'e1', now }),
+      undoCall(drawn(), { setId: 'b0', eventId: 'e1', now }),
+      draftCall(drawn(), { setId: 'b1', values: { w: 80, r: 8 }, now }),
+    ]
+    expect(calls(at0010)).toEqual([null, null, null, null, null, null, null])
+    for (const call of calls(at2350 + 5 * 60_000)) expect(call).not.toBeNull()
+  })
+  test('the notice reads the clock too', () => {
+    expect(overnightNotice(drawn(), at0010)).toBe(OVERNIGHT_NOTICE)
+    expect(overnightNotice(drawn(), at2359)).toBeNull()
+  })
+  test('a write refused overnight is a refusal that says the one sentence, whatever was tapped', () => {
+    expect(overnightRefusal(drawn(), at0010)).toEqual({ ok: false, saved: false, error: { code: 'overnight' } })
+    expect(overnightRefusal(drawn(), at2359)).toBeNull()
+    for (const action of ['complete', 'draft', 'edit', 'undo', 'add-set', 'add-warmup', 'add-time', 'skip-rest', 'rest', 'start-rest']) {
+      expect(resultNotice(overnightRefusal(drawn(), at0010), action), action).toBe(OVERNIGHT_NOTICE)
+    }
+  })
+  test('a rest refused overnight says so in the notice and leaves the Start rest line as it was', () => {
+    const refusal = overnightRefusal(drawn(), at0010)
+    expect(noticesAfter({ notice: null, rest: SAVED_REST }, refusal, 'start-rest')).toEqual({ notice: OVERNIGHT_NOTICE, rest: SAVED_REST })
+    expect(noticesAfter(NO_NOTICES, refusal, 'rest')).toEqual({ notice: OVERNIGHT_NOTICE, rest: null })
+    expect(noticesAfter({ notice: null, rest: SAVED_REST }, refusal, 'complete')).toEqual({ notice: OVERNIGHT_NOTICE, rest: SAVED_REST })
+  })
+  test("a set saved just before midnight whose rest is refused just after reads as saved, rest didn't start", () => {
+    const result = completeResult({ ok: true, saved: true }, overnightRefusal(drawn(), at0010))
+    expect(result).toEqual({ ok: true, saved: true, restFailed: true })
+    expect(noticesAfter(NO_NOTICES, result, 'complete')).toEqual({ notice: null, rest: SAVED_REST })
   })
 })
 
@@ -818,5 +893,93 @@ describe.each(SQLITE_DRIVERS)('%s: the calls drive the engine', (_name, createDb
     expect(commit).toMatchObject({ ok: true, saved: true, checkpointError: { code: 'storage' } })
     expect(writeOutcome(completeResult(commit, null), 'complete'))
       .toEqual({ kind: 'warning', text: "Saved. The workout time couldn't be updated, so it may be off after a restart." })
+  })
+})
+
+// A workout left on screen across midnight, on real SQLite: the view drawn before midnight takes
+// no write after it, through the same decision helpers the screen's hook calls inside its gate.
+describe.each(SQLITE_DRIVERS)('%s: a view drawn before midnight takes no write after it', (_name, createDb) => {
+  const zone = 'America/New_York'
+  const start = Date.parse('2026-11-09T23:00:00-05:00')
+  const at2350 = Date.parse('2026-11-09T23:50:00-05:00')
+  const at0010 = Date.parse('2026-11-10T00:10:00-05:00')
+  const engineBase = () => ({
+    id: 'sess-night', d: '2026-11-09', start, name: 'Push A', routineIds: ['push-a'],
+    entries: [{ id: 'bench', target: { restSec: 120 }, sets: [todo(75, 8), todo(75, 8)] }],
+  })
+  let clock = start
+  const open = async (db, timeZone, withBase = true) => {
+    const controller = createSessionController(sessionOptionsFrom({ db, base: withBase ? engineBase() : null, now: () => clock, timeZone }))
+    await controller.open()
+    return controller
+  }
+  const current = controller => withTargets(controller.getState().view, engineBase())
+  const stored = async db => {
+    const storage = createSqliteSessionStorage(db)
+    return { events: (await storage.readAll()).map(event => event.id), drafts: await storage.readDrafts() }
+  }
+  const set0 = plannedSetId('bench', 0)
+  const set1 = plannedSetId('bench', 1)
+
+  test('every write refuses at 00:10, nothing lands, the engine agrees once asked, and Resume lets the set in', async () => {
+    clock = start
+    let db = createDb()
+    const first = await open(db, zone)
+    clock = at2350
+    expect((await first.call('commitSet', completeCall(current(first), { setId: set0, side: null, eventId: 'c1', now: clock }))).saved).toBe(true)
+    // The phone is now in another zone; the app reopens at 23:55. The session keeps New York's day.
+    db = db.reopen()
+    clock = at2350 + 5 * 60_000
+    const session = await open(db, 'UTC', false)
+    const drawn = current(session)
+    expect(drawn).toMatchObject({ timeZone: zone, activityAt: at2350, disposition: { kind: 'active' } })
+    const before = await stored(db)
+
+    // Nothing is touched until 00:10: the screen still holds the view drawn at 23:55.
+    clock = at0010
+    expect(current(session).disposition.kind).toBe('active')
+    expect(overnightNow(drawn, clock)).toBe(true)
+    // The device's zone would have missed it: both instants fall on the same UTC day.
+    expect(overnightNow(drawn, clock, 'UTC')).toBe(false)
+    // The view alone (stage 1's check) would have taken the next set into last night's workout.
+    expect(completeCall(drawn, { setId: set1, side: null, eventId: 'c2' })).not.toBeNull()
+
+    // Each write as the hook builds it inside the gate, with the clock now: no call is built, so
+    // nothing goes to the engine, and the refusal is the stage-1 sentence.
+    const now = clock
+    const writes = [
+      ['commitSet', completeCall(drawn, { setId: set1, side: null, eventId: 'c2', now })],
+      ['commitSet', completeCall(drawn, { setId: set1, side: null, values: { w: 80, r: 8 }, eventId: 'c3', now })],
+      ['editSet', editCall(drawn, { setId: set0, values: { w: 80, r: 8 }, eventId: 'e1', now })],
+      ['undoSet', undoCall(drawn, { setId: set0, eventId: 'u1', now })],
+      ['addSet', addSetCall(drawn, 'bench', 'a1', now)],
+      ['addSet', addWarmupCall(drawn, 'bench', 'w1', now)],
+    ]
+    for (const [name, call] of writes) {
+      if (call) await session.call(name, call)
+    }
+    const draft = draftCall(drawn, { setId: set1, values: { w: 80, r: 8 }, now })
+    if (draft) await session.call('putDraft', draft.setId, draft.values)
+    expect([...writes.map(([, call]) => call), draft]).toEqual([null, null, null, null, null, null, null])
+    expect(resultNotice(overnightRefusal(drawn, now), 'complete')).toBe(OVERNIGHT_NOTICE)
+    expect(await stored(db)).toEqual(before)
+
+    // The refusal reloads the view, writing nothing, and the engine says overnight too.
+    const executed = db.executed.length
+    await session.refresh()
+    expect(db.executed.length).toBe(executed)
+    expect(current(session).disposition.kind).toBe('overnight')
+    db = db.reopen()
+    const killed = await open(db, 'UTC', false)
+    expect(current(killed).entries[0].sets.map(s => s.row.done)).toEqual([true, false])
+    expect(current(killed).disposition.kind).toBe('overnight')
+
+    // Resume, and the same set goes in on the new day.
+    expect((await killed.call('resume', { eventId: 'r1' })).saved).toBe(true)
+    const resumed = current(killed)
+    expect(overnightNow(resumed, clock)).toBe(false)
+    expect((await killed.call('commitSet', completeCall(resumed, { setId: set1, side: null, eventId: 'c2', now: clock }))).saved).toBe(true)
+    db = db.reopen()
+    expect(current(await open(db, 'UTC', false)).entries[0].sets.map(s => s.row.done)).toEqual([true, true])
   })
 })

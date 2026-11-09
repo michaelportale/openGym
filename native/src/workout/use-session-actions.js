@@ -6,7 +6,7 @@ import { createActionGate } from './action-gate'
 import { pendingRest, restMsFor } from './rest-after'
 import { shownAfterComplete, withTargets } from './session-screen'
 import { carriedWeight, shownValues } from './workout-view'
-import { NO_NOTICES, addSetCall, addWarmupCall, completeCall, completeResult, dockKeypadField, draftCall, editCall, findSet, keypadField, noticeAnnouncement, noticesAfter, overnightNotice, primaryAction, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, undoCall } from './set-calls'
+import { NO_NOTICES, addSetCall, addWarmupCall, completeCall, completeResult, dockKeypadField, draftCall, editCall, findSet, keypadField, noticeAnnouncement, noticesAfter, overnightNotice, overnightRefusal, primaryAction, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, undoCall } from './set-calls'
 
 const sideLabel = { L: 'Complete left', R: 'Complete right' }
 const failed = error => ({ ok: false, saved: false, error: { code: 'storage', message: error?.message || String(error) } })
@@ -17,6 +17,8 @@ const failed = error => ({ ok: false, saved: false, error: { code: 'storage', me
 // inside the gate, not this render's: a tap landing after the gate frees but before the re-render
 // then finds its set already done and writes nothing. A refused write says what was not done and
 // why in plain words (failureText), and the screen keeps showing the set as it is stored.
+// Overnight is checked inside the gate as each write runs, against the clock then, not when the
+// view was last drawn (write).
 export function useSessionActions({ session, base, restSec, view, screen, shownEntry, setShownIndex }) {
   const gate = useRef(null)
   if (gate.current == null) gate.current = createActionGate()
@@ -44,11 +46,14 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
   const restMsOf = entry => restMsFor(entry, restSec)
   const latest = () => withTargets(session.getState().view, base)
 
-  // A throw from storage is a refused write too, never an uncaught promise.
+  // A throw from storage is a refused write too, never an uncaught promise. A write refused
+  // overnight reloads the view (writing nothing), so the overnight dock shows without another tap.
   const act = fn => gate.current(async () => {
     setBusy(true)
     try {
-      return await fn()
+      const result = await fn()
+      if (result?.error?.code === 'overnight') await session.refresh()
+      return result
     } catch (error) {
       return failed(error)
     } finally {
@@ -57,12 +62,26 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
   })
   const report = (result, action) => setNotices(current => noticesAfter(current, result, action))
 
+  // Every write but the three overnight choices (Resume, Finish, Discard). Right before it writes,
+  // inside the gate, overnight is checked against the clock now in the session's own zone: a
+  // workout left on screen across midnight takes nothing into last night's session, and the tap
+  // says to choose first.
+  // `build(view, now)` makes the write from the engine's latest view through a decision helper
+  // given that same clock.
+  const write = build => act(async () => {
+    const view = latest()
+    const now = Date.now()
+    return overnightRefusal(view, now) ?? build(view, now)
+  })
+
   // setId and side come from the tap. The commit is awaited first; its rest is named and timed
   // by the row's `at` in the view the commit produced (one side of a per-side set, or a warm-up,
   // earns none). The set is saved either way: a refused (or thrown) rest is `restFailed` on the
   // set's result, shown as "Saved. Rest didn't start." with Start rest; a reopen rebuilds it too.
-  const complete = ({ setId, side, values }) => act(async () => {
-    const call = completeCall(latest(), { setId, side, values, eventId: createEventId() })
+  // The rest is a write of its own, so it is checked again: a midnight between the commit and it
+  // refuses it (and reloads the view) like any other.
+  const complete = ({ setId, side, values }) => write(async (view, now) => {
+    const call = completeCall(view, { setId, side, values, eventId: createEventId(), now })
     if (!call) return null
     const result = await session.commitSet(call)
     if (!result?.saved) return result
@@ -70,36 +89,44 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
     setShownIndex(index => shownAfterComplete(next, index, setId))
     const rest = restAfterComplete(next, setId, restMsOf)
     if (!rest) return result
-    return completeResult(result, await session.startRest(rest).catch(failed))
+    const refused = overnightRefusal(next, Date.now())
+    if (refused) await session.refresh()
+    return completeResult(result, refused ?? await session.startRest(rest).catch(failed))
   })
 
   // The rest the latest completed work set earned and has not had: on open ('rest'), the one a
   // kill between Complete and rest left unstarted; on the Start rest tap ('start-rest'), the one a
   // refused rest left. It is named restEventId(setId, at), the id its Complete used, so a rest that
   // did land, or one the owner skipped, is not started again. Its time runs from the set's own
-  // `at`; null when it has run out.
+  // `at`; null when it has run out. Overnight a rest due is refused like any write; none due says
+  // nothing (on open, the overnight dock already asks).
   const startPendingRest = action => act(async () => {
     const opened = latest()
-    const pending = pendingRest(opened, Date.now(), id => restMsOf(opened.entries.find(entry => entry.id === id)))
-    return pending ? session.startRest(pending) : null
+    const now = Date.now()
+    const pending = pendingRest(opened, now, id => restMsOf(opened.entries.find(entry => entry.id === id)))
+    if (!pending) return null
+    return overnightRefusal(opened, now) ?? session.startRest(pending)
   }).then(result => report(result, action))
   const restoreRest = () => startPendingRest('rest')
 
-  const draft = (setId, values) => act(async () => {
-    const call = draftCall(latest(), { setId, values })
+  const draft = (setId, values) => write(async (view, now) => {
+    const call = draftCall(view, { setId, values, now })
     return call ? session.putDraft(call.setId, call.values) : null
   })
-  const edit = (setId, values) => act(async () => {
-    const call = editCall(latest(), { setId, values, eventId: createEventId() })
+  const edit = (setId, values) => write(async (view, now) => {
+    const call = editCall(view, { setId, values, eventId: createEventId(), now })
     return call ? session.editSet(call) : null
   })
 
   // Left open overnight: a row, a boxed number or the lead figure says what to pick first and
-  // opens nothing, so no set is logged into last night's workout.
+  // opens nothing, so no set is logged into last night's workout. Read at the clock now; a view
+  // drawn before midnight is reloaded so the overnight dock shows.
   const blockedOvernight = () => {
-    const text = overnightNotice(latest())
-    if (text) setNotices(current => ({ ...current, notice: text }))
-    return text != null
+    const text = overnightNotice(latest(), Date.now())
+    if (text == null) return false
+    setNotices(current => ({ ...current, notice: text }))
+    session.refresh()
+    return true
   }
 
   const openSheet = (setId, field) => {
@@ -148,8 +175,8 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
       settle(done ? await edit(sheet.setId, values) : await draft(sheet.setId, values), sheet.key, done ? 'edit' : 'draft')
     },
     onComplete: async values => settle(await complete({ setId: sheet.setId, side: sheet.side, values }), sheet.key, 'complete'),
-    onUndo: async () => settle(await act(async () => {
-      const call = undoCall(latest(), { setId: sheet.setId, eventId: createEventId() })
+    onUndo: async () => settle(await write(async (view, now) => {
+      const call = undoCall(view, { setId: sheet.setId, eventId: createEventId(), now })
       return call ? session.undoSet(call) : null
     }), sheet.key, 'undo'),
     // Swiping the sheet away (or Close) after typing keeps a draft for any set not done yet; on a
@@ -174,9 +201,9 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
   // Add set and Add warm-up append a row to the exercise on screen; `callFor` builds it from the
   // engine's latest view.
   const addRow = (callFor, action) => async () => {
-    if (blockedOvernight() || !shownEntry) return
-    report(await act(async () => {
-      const call = callFor(latest(), shownEntry.id, createEventId())
+    if (!shownEntry) return
+    report(await write(async (view, now) => {
+      const call = callFor(view, shownEntry.id, createEventId(), now)
       return call ? session.addSet(call) : null
     }), action)
   }
@@ -201,8 +228,8 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
       else if (action === 'finish') openFinish(null)
     },
     onPressLead: () => openSheet(screen.dock.setId, dockKeypadField(screen.dock.mode)),
-    onAddTime: async () => report(await act(() => session.extendRest({ eventId: createEventId(), byMs: 30_000 })), 'add-time'),
-    onSkip: async () => report(await act(() => session.cancelRest({ eventId: createEventId() })), 'skip-rest'),
+    onAddTime: async () => report(await write(() => session.extendRest({ eventId: createEventId(), byMs: 30_000 })), 'add-time'),
+    onSkip: async () => report(await write(() => session.cancelRest({ eventId: createEventId() })), 'skip-rest'),
   }
 
   return {

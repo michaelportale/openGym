@@ -59,6 +59,12 @@ export function useActiveSession(options) {
     // The state as of the last settled action. After `await commitSet(...)` the hook value in a
     // closure is still the old render, and the screen needs the new row's `at` to start its rest.
     actions.getState = () => controller.getState()
+    // The view at the clock now; writes nothing (the controller's refresh).
+    actions.refresh = async () => {
+      const next = await controller.refresh()
+      if (liveRef.current) setState(controller.getState())
+      return next
+    }
     actionsRef.current = actions
   }
 

@@ -1,4 +1,5 @@
 import { workoutModel } from '../shared/training.js'
+import { isOvernight } from '../session/timing.js'
 import { OVERNIGHT_NOTICE, failureText } from './failure-text.js'
 import { completeFields, restEventId } from './rest-after.js'
 import { carriedWeight, isDone, isWarmup, shownValues } from './workout-view.js'
@@ -11,11 +12,25 @@ const SIDES = ['L', 'R']
 export { OVERNIGHT_NOTICE }
 
 // A session left open overnight logs nothing until the owner picks Resume, Finish or Discard
-// (the engine would take the set and fold it into last night's workout).
-const isOvernight = view => view?.disposition?.kind === 'overnight'
+// (the engine would take the set and fold it into last night's workout). The engine reads the
+// clock only when an action runs, so a screen left open across midnight still holds a view drawn
+// before it: overnight is checked again at `now`, the clock as the write runs, from the view's
+// last activity in `timeZone`, the session's own (the view's; the engine decides in it, so a
+// zone change mid-session reads as it does there). A view the engine already called overnight
+// stays so. Without a clock, what the view said when drawn.
+export function overnightNow(view, now, timeZone = view?.timeZone) {
+  if (view?.disposition?.kind === 'overnight') return true
+  return view?.status === 'active' && isOvernight(view.activityAt, now, timeZone)
+}
 
-export function overnightNotice(view) {
-  return isOvernight(view) ? OVERNIGHT_NOTICE : null
+export function overnightNotice(view, now) {
+  return overnightNow(view, now) ? OVERNIGHT_NOTICE : null
+}
+
+// What a write refused at `now` returns: the overnight refusal (failureText's sentence for every
+// tap), or null when the session is not overnight.
+export function overnightRefusal(view, now) {
+  return overnightNow(view, now) ? { ok: false, saved: false, error: { code: 'overnight' } } : null
 }
 
 export function findSet(view, setId) {
@@ -34,9 +49,10 @@ export function keypadField(field, perSide, side) {
 
 // Complete logs the current set only. A done set changes through editCall, never a second
 // commit: that would move row.at and bring back a rest the owner skipped. A blank weight or
-// blank reps (per side, the side being completed) is never logged.
-export function completeCall(view, { setId, side, values, eventId }) {
-  if (isOvernight(view)) return null
+// blank reps (per side, the side being completed) is never logged. `now` is the clock as the
+// write runs (overnightNow), as for every call below.
+export function completeCall(view, { setId, side, values, eventId, now }) {
+  if (overnightNow(view, now)) return null
   const found = findSet(view, setId)
   if (!found || isDone(found.slot)) return null
   const { entry, slot } = found
@@ -71,8 +87,8 @@ export function restAfterComplete(view, setId, restMsOf) {
 const kept = (value, logged) => value ?? logged
 
 // editSet keeps row.at and done. A per-side edit writes both sides in full (sides replaces).
-export function editCall(view, { setId, values, eventId }) {
-  if (isOvernight(view)) return null
+export function editCall(view, { setId, values, eventId, now }) {
+  if (overnightNow(view, now)) return null
   const found = findSet(view, setId)
   if (!found || !isDone(found.slot)) return null
   const { entry, slot: { row } } = found
@@ -89,8 +105,8 @@ export function editCall(view, { setId, values, eventId }) {
   return { eventId, exerciseId: entry.id, setId, fields }
 }
 
-export function undoCall(view, { setId, eventId }) {
-  if (isOvernight(view)) return null
+export function undoCall(view, { setId, eventId, now }) {
+  if (overnightNow(view, now)) return null
   const found = findSet(view, setId)
   if (!found || !isDone(found.slot)) return null
   return { eventId, exerciseId: found.entry.id, setId }
@@ -98,16 +114,16 @@ export function undoCall(view, { setId, eventId }) {
 
 // A draft (Save, or typed numbers kept on close) is for a set not done yet; a done set changes
 // only through editCall.
-export function draftCall(view, { setId, values }) {
-  if (isOvernight(view)) return null
+export function draftCall(view, { setId, values, now }) {
+  if (overnightNow(view, now)) return null
   const found = findSet(view, setId)
   if (!found || isDone(found.slot)) return null
   return { setId, values }
 }
 
 // One more set like the last work set, as the web's Add set does; per side stays per side.
-export function addSetCall(view, exerciseId, eventId) {
-  if (isOvernight(view)) return null
+export function addSetCall(view, exerciseId, eventId, now) {
+  if (overnightNow(view, now)) return null
   const entry = (view?.entries ?? []).find(e => e.id === exerciseId)
   if (!entry) return null
   const work = (entry.sets ?? []).filter(s => !isWarmup(s))
@@ -124,8 +140,8 @@ export function addSetCall(view, exerciseId, eventId) {
 // A blank warm-up row of its own: phase 'warmup' (and the old flag, for older readers) keeps it
 // out of every count. One plain row even on a per-side exercise. The owner types its numbers in
 // the keypad; nulls leave the row without a weight or reps.
-export function addWarmupCall(view, exerciseId, eventId) {
-  if (isOvernight(view)) return null
+export function addWarmupCall(view, exerciseId, eventId, now) {
+  if (overnightNow(view, now)) return null
   const entry = (view?.entries ?? []).find(e => e.id === exerciseId)
   if (!entry) return null
   return { eventId, exerciseId: entry.id, setId: `warm:${entry.id}:${eventId}`, fields: { phase: 'warmup', warmup: true, w: null, r: null } }
@@ -213,11 +229,13 @@ export const NO_NOTICES = { notice: null, rest: null }
 // but whose rest was refused (or by a rest that failed to start), gone once a rest runs, another
 // set is completed or a set is undone (its "Saved." would no longer hold), and kept through every
 // other write. 'rest' is the rest restored on open, 'start-rest' the Start rest tap; `result`
-// null there means no rest was left to start. A dropped tap changes nothing.
+// null there means no rest was left to start. A rest refused overnight says so as the notice and
+// leaves the line as it was: its Start rest works again after Resume. A dropped tap changes nothing.
 export function noticesAfter(notices, result, action) {
   if (result?.ignored) return notices
   const outcome = writeOutcome(result, action)
   if (action === 'rest' || action === 'start-rest') {
+    if (outcome?.kind === 'failed' && result?.error?.code === 'overnight') return { notice: outcome.text, rest: notices.rest }
     if (outcome?.kind === 'failed') return { notice: notices.notice, rest: outcome.text }
     // The tap found that rest already over: say so rather than let the line just vanish.
     if (result == null && action === 'start-rest') return { notice: REST_RAN_OUT, rest: null }

@@ -74,6 +74,26 @@ test('an unchanged edit leaves the screen without an error', async () => {
   expect(await storage.readAll()).toEqual([])
 })
 
+// The engine reads the clock only when something asks it. A write refused overnight on a view
+// drawn before midnight asks again, so the overnight choices show; asking writes nothing.
+test('refresh recomputes the view at the clock now and writes nothing', async () => {
+  const storage = createMemoryStorage()
+  let now = Date.parse('2026-11-07T23:50:00.000Z')
+  const active = controller(storage, () => now)
+  expect(await active.refresh()).toMatchObject({ status: 'loading', view: null })
+  await active.open()
+  await active.call('commitSet', { eventId: 'c1', exerciseId: 'bench', setId: plannedSetId('bench', 0), fields: { w: 60, r: 5 } })
+  const events = await storage.readAll()
+  const seen = await storage.readLastSeen()
+  now = Date.parse('2026-11-08T00:10:00.000Z')
+  expect(active.getState().view.disposition.kind).toBe('active')
+  const refreshed = await active.refresh()
+  expect(refreshed).toMatchObject({ status: 'ready', error: null, view: { disposition: { kind: 'overnight' } } })
+  expect(active.getState().view.disposition.kind).toBe('overnight')
+  expect(await storage.readAll()).toEqual(events)
+  expect(await storage.readLastSeen()).toBe(seen)
+})
+
 test('a storage failure is surfaced and the set is not saved', async () => {
   const storage = createMemoryStorage()
   const active = controller(storage)

@@ -688,6 +688,26 @@ test('finishing during rest clears the countdown and does not revive it on resto
   expect(restored.view().elapsedMs).toBe(session.view().elapsedMs)
 })
 
+// The screen checks overnight again when it writes, so the view carries the instant the engine
+// reads overnight from (activityAt) and the session's own zone.
+test('the view says when the session was last active, and in which zone', async () => {
+  const { session, clock, base } = await started({ timeZone: 'America/New_York' })
+  expect(session.view()).toMatchObject({ activityAt: base.start, timeZone: 'America/New_York' })
+  clock.advance(60_000)
+  await session.commitSet({ eventId: 'c1', exerciseId: 'bench', setId: bench0, fields: { w: 60, r: 5 } })
+  const committedAt = clock.now()
+  clock.advance(60_000)
+  // A look (its sample) and a draft are not journal events, so they are not activity.
+  expect(session.view().activityAt).toBe(committedAt)
+  await session.putDraft(bench1, { w: 65 })
+  expect(session.view().activityAt).toBe(committedAt)
+  clock.advance(60_000)
+  await session.startRest({ eventId: 'rest-1', durationMs: 90_000 })
+  expect(session.view().activityAt).toBe(clock.now())
+  await session.discard()
+  expect(session.view().activityAt).toBeNull()
+})
+
 test('an unfinished session that crosses local midnight offers resume, a chosen end, or discard', async () => {
   const clock = createClock(Date.parse('2026-11-07T23:10:00.000Z'))
   const storage = createMemoryStorage()
