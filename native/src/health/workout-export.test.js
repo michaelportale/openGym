@@ -78,3 +78,29 @@ test('a note or set change that Health does not carry: nothing', () => {
   const changed = doc({ entries: [{ sets: [1, 2, 3] }], note: 'felt good' })
   expect(planWorkoutExport({ rows: [changed], links: [link(d)], now: 2000 })).toEqual({ save: [], remove: [], skip: [] })
 })
+
+test.each(['exported', 'pending'])('a %s workout that became invalid is removed and then skipped', (state) => {
+  const d = doc()
+  const bad = doc({ end: 500 })
+  const plan = planWorkoutExport({ rows: [bad], links: [link(d, { state })], now: 2000 })
+  expect(plan).toEqual({ save: [], remove: [{ key: 'a1', syncId: 'opengym-w-a1' }], skip: [{ key: 'a1' }] })
+})
+
+test('a changed hash never gets a version at or below the stored one', () => {
+  const d = doc()
+  const changed = doc({ vol: 7 })
+  const at = planWorkoutExport({ rows: [changed], links: [link(d, { version: 900 })], now: 900 })
+  const below = planWorkoutExport({ rows: [changed], links: [link(d, { version: 900 })], now: 100 })
+  expect(at.save[0].version).toBe(901)
+  expect(below.save[0].version).toBe(901)
+})
+
+test('a pending link without a usable version gets now', () => {
+  const d = doc()
+  const plan = planWorkoutExport({ rows: [d], links: [link(d, { state: 'pending', version: undefined })], now: 2000 })
+  expect(plan.save[0].version).toBe(2000)
+})
+
+test('links of another kind are ignored', () => {
+  expect(planWorkoutExport({ rows: [], links: [{ kind: 'bw', key: 'x', syncId: 'opengym-bw-x', version: 1, hash: 'h', state: 'exported' }], now: 1 })).toEqual({ save: [], remove: [], skip: [] })
+})

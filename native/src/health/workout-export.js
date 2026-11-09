@@ -12,20 +12,24 @@ export const exportHash = (doc) => `${doc.start}|${doc.end}|${doc.vol}|${doc.vol
 export function planWorkoutExport({ rows, links, now }) {
   const linkOf = new Map(links.filter((l) => l.kind === 'w').map((l) => [l.key, l]))
   const save = []
+  const remove = []
   const skip = []
   for (const doc of rows) {
     const link = linkOf.get(doc.id)
     linkOf.delete(doc.id)
     const hash = exportHash(doc)
     if (!exportable(doc)) {
+      if (link && link.state !== 'skipped') remove.push({ key: doc.id, syncId: link.syncId })
       if (!(link && link.state === 'skipped' && link.hash === hash)) skip.push({ key: doc.id })
       continue
     }
     const same = link && link.hash === hash
     if (same && link.state === 'exported') continue
-    const version = same && link.state === 'pending' ? link.version : now
+    const stored = link && Number.isFinite(link.version) ? link.version : undefined
+    // Health replaces only on a greater sync version, so a new plan always outranks the stored one.
+    const version = stored === undefined ? now : same && link.state === 'pending' ? stored : Math.max(now, stored + 1)
     save.push({ key: doc.id, syncId: workoutSyncId(doc.id), version, hash, doc })
   }
-  const remove = [...linkOf.values()].map((l) => ({ key: l.key, syncId: l.syncId }))
+  for (const l of linkOf.values()) remove.push({ key: l.key, syncId: l.syncId })
   return { save, remove, skip }
 }
