@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { addSetCall, completeCall, dockKeypadField, editCall, keypadField, primaryAction, restAfterComplete, resultNotice, sheetCloseCall, sheetMode, sheetOutcome, shownValues, undoCall } from './set-calls.js'
+import { OVERNIGHT_NOTICE, addSetCall, completeCall, dockKeypadField, draftCall, editCall, keypadField, overnightNotice, primaryAction, restAfterComplete, resultNotice, sheetCloseCall, sheetMode, sheetOutcome, shownValues, undoCall } from './set-calls.js'
 import { restEventId, restMsFor } from './rest-after.js'
 import { withTargets } from './session-screen.js'
 import { SQLITE_DRIVERS } from '../../scripts/node-sqlite.mjs'
@@ -158,17 +158,65 @@ describe('editCall and undoCall', () => {
 
 describe('addSetCall', () => {
   test('a new set copies the last work set, as the web does', () => {
-    const entry = bench([slot('b0', done(75, 10)), slot('b1', done(75, 7))])
-    expect(addSetCall(entry, 'e9')).toEqual({ eventId: 'e9', exerciseId: '0289', setId: 'add:0289:e9', fields: { w: 75, r: 7 } })
+    const v = view([bench([slot('b0', done(75, 10)), slot('b1', done(75, 7))])])
+    expect(addSetCall(v, '0289', 'e9')).toEqual({ eventId: 'e9', exerciseId: '0289', setId: 'add:0289:e9', fields: { w: 75, r: 7 } })
   })
   test('a blank weight stays blank', () => {
-    expect(addSetCall(bench([slot('b0', todo(null, 12))]), 'e9').fields).toEqual({ r: 12 })
+    expect(addSetCall(view([bench([slot('b0', todo(null, 12))])]), '0289', 'e9').fields).toEqual({ r: 12 })
   })
   test('a per-side exercise adds a per-side set', () => {
-    const entry = lateral([slot('s', sided(7.5, { r: 10, done: true }, { r: 9, done: true }))])
-    expect(addSetCall(entry, 'e9').fields).toEqual({
+    const v = view([lateral([slot('s', sided(7.5, { r: 10, done: true }, { r: 9, done: true }))])])
+    expect(addSetCall(v, '0300', 'e9').fields).toEqual({
       w: 7.5, r: 19, sides: { L: { w: 7.5, r: 10 }, R: { w: 7.5, r: 9 } },
     })
+  })
+  test('an exercise not in the view adds nothing', () => {
+    expect(addSetCall(view([]), '0289', 'e9')).toBeNull()
+  })
+})
+
+describe('draftCall', () => {
+  test('a draft for a set not done yet', () => {
+    const v = view([bench([slot('b0', done(75, 10)), slot('b1', todo(75, 8)), slot('b2', todo(75, 8))])])
+    expect(draftCall(v, { setId: 'b1', values: { w: 80, r: 8 } })).toEqual({ setId: 'b1', values: { w: 80, r: 8 } })
+    expect(draftCall(v, { setId: 'b2', values: { w: 80, r: 6 } })).toEqual({ setId: 'b2', values: { w: 80, r: 6 } })
+  })
+  test('never on a done set (only Update changes it) or an unknown one', () => {
+    const v = view([bench([slot('b0', done(75, 10))])])
+    expect(draftCall(v, { setId: 'b0', values: { w: 80, r: 8 } })).toBeNull()
+    expect(draftCall(v, { setId: 'nope', values: { w: 80, r: 8 } })).toBeNull()
+  })
+})
+
+// While the engine says the session was left open overnight, nothing is logged until the owner
+// picks Resume, Finish or Discard.
+describe('overnight', () => {
+  const night = entries => ({ ...view(entries), disposition: { kind: 'overnight', actions: ['resume', 'finish', 'discard'], suggestedEnd: 5000 } })
+  const sets = () => [bench([slot('b0', done(75, 10, 5000)), slot('b1', todo(75, 8))]), lateral([slot('s', sided(7.5, { r: 10, done: false }, { r: 10, done: false }))])]
+  test('the notice names the three choices; an active session has none', () => {
+    expect(OVERNIGHT_NOTICE).toBe('Choose Resume, Finish or Discard first.')
+    expect(overnightNotice(night(sets()))).toBe(OVERNIGHT_NOTICE)
+    expect(overnightNotice({ ...view(sets()), disposition: { kind: 'active', actions: [], suggestedEnd: null } })).toBeNull()
+    expect(overnightNotice(view(sets()))).toBeNull()
+    expect(overnightNotice(null)).toBeNull()
+  })
+  test('complete, add, edit, undo and draft all refuse', () => {
+    const v = night(sets())
+    expect(completeCall(v, { setId: 'b1', side: null, eventId: 'e1' })).toBeNull()
+    expect(completeCall(v, { setId: 'b1', side: null, values: { w: 80, r: 8 }, eventId: 'e1' })).toBeNull()
+    expect(completeCall(v, { setId: 's', side: 'L', eventId: 'e1' })).toBeNull()
+    expect(addSetCall(v, '0289', 'e1')).toBeNull()
+    expect(editCall(v, { setId: 'b0', values: { w: 80, r: 9 }, eventId: 'e1' })).toBeNull()
+    expect(undoCall(v, { setId: 'b0', eventId: 'e1' })).toBeNull()
+    expect(draftCall(v, { setId: 'b1', values: { w: 80, r: 8 } })).toBeNull()
+  })
+  test('the same calls go through once the session is active again', () => {
+    const v = view(sets())
+    expect(completeCall(v, { setId: 'b1', side: null, eventId: 'e1' })).not.toBeNull()
+    expect(addSetCall(v, '0289', 'e1')).not.toBeNull()
+    expect(editCall(v, { setId: 'b0', values: { w: 80, r: 9 }, eventId: 'e1' })).not.toBeNull()
+    expect(undoCall(v, { setId: 'b0', eventId: 'e1' })).not.toBeNull()
+    expect(draftCall(v, { setId: 'b1', values: { w: 80, r: 8 } })).not.toBeNull()
   })
 })
 
@@ -336,8 +384,7 @@ describe.each(SQLITE_DRIVERS)('%s: the calls drive the engine', (_name, createDb
   test('Add set on a per-side exercise adds a per-side set that survives a kill', async () => {
     let db = createDb()
     const first = await open(db)
-    const entry = current(first).entries[1]
-    expect((await first.call('addSet', addSetCall(entry, 'a1'))).saved).toBe(true)
+    expect((await first.call('addSet', addSetCall(current(first), 'lat', 'a1'))).saved).toBe(true)
     db = db.reopen()
     const added = (await open(db, false)).getState().view.entries[1].sets[1]
     expect(added.setId).toBe('add:lat:a1')

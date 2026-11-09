@@ -5,7 +5,7 @@ import { createEventId } from '../session/ids'
 import { createActionGate } from './action-gate'
 import { pendingRest, restMsFor } from './rest-after'
 import { shownAfterComplete, withTargets } from './session-screen'
-import { addSetCall, completeCall, dockKeypadField, editCall, findSet, keypadField, primaryAction, restAfterComplete, resultNotice, sheetCloseCall, sheetMode, sheetOutcome, shownValues, undoCall } from './set-calls'
+import { addSetCall, completeCall, dockKeypadField, draftCall, editCall, findSet, keypadField, overnightNotice, primaryAction, restAfterComplete, resultNotice, sheetCloseCall, sheetMode, sheetOutcome, shownValues, undoCall } from './set-calls'
 
 const sideLabel = { L: 'Complete left', R: 'Complete right' }
 const failed = error => ({ ok: false, saved: false, error: { code: 'storage', message: error?.message || String(error) } })
@@ -72,13 +72,25 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
     return pending ? session.startRest(pending) : null
   }).then(report)
 
-  const draft = (setId, values) => act(() => session.putDraft(setId, values))
+  const draft = (setId, values) => act(async () => {
+    const call = draftCall(latest(), { setId, values })
+    return call ? session.putDraft(call.setId, call.values) : null
+  })
   const edit = (setId, values) => act(async () => {
     const call = editCall(latest(), { setId, values, eventId: createEventId() })
     return call ? session.editSet(call) : null
   })
 
+  // Left open overnight: a row, a boxed number or the lead figure says what to pick first and
+  // opens nothing, so no set is logged into last night's workout.
+  const blockedOvernight = () => {
+    const text = overnightNotice(latest())
+    if (text) setNotice(text)
+    return text != null
+  }
+
   const openSheet = (setId, field) => {
+    if (blockedOvernight()) return
     const found = findSet(view, setId)
     const row = screen.card.rows.find(r => r.setId === setId)
     if (!found || !row) return
@@ -162,7 +174,11 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
     restoreRest,
     openSheet,
     addSet: async () => {
-      if (shownEntry) report(await act(() => session.addSet(addSetCall(shownEntry, createEventId()))))
+      if (blockedOvernight() || !shownEntry) return
+      report(await act(async () => {
+        const call = addSetCall(latest(), shownEntry.id, createEventId())
+        return call ? session.addSet(call) : null
+      }))
     },
     resume: async () => report(await act(() => session.resume({ eventId: createEventId() }))),
     dock: dockActions,

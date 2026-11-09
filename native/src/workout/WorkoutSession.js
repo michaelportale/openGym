@@ -117,10 +117,12 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
     </View>
   )
 
+  // Overnight, the likely choice is to end last night's workout at its last set, so Finish is
+  // the filled button; Resume and Discard sit under it.
   const dock = overnight ? (
-    <WorkoutDock dock={{ mode: 'overnight', lead: 'Left open overnight', primaryLabel: 'Resume' }} onLayout={measure('dock')} inline={!pinned} onPrimary={actions.resume} busy={actions.busy}>
+    <WorkoutDock dock={{ mode: 'overnight', lead: 'Left open overnight', primaryLabel: 'Finish at last set' }} onLayout={measure('dock')} inline={!pinned} onPrimary={() => finish.show(finishEnd)} busy={actions.busy}>
       <View style={styles.choices}>
-        <IconButton label="Finish" accessibilityLabel="Finish at the last set" accessibilityHint="Shows the summary before saving." onPress={() => finish.show(finishEnd)} />
+        <IconButton label="Resume" accessibilityLabel="Resume workout" accessibilityHint="Keeps logging sets in this workout." onPress={actions.resume} />
         <IconButton label="Discard" accessibilityLabel="Discard workout" accessibilityHint="Asks before deleting this workout." onPress={actions.askDiscard} />
       </View>
     </WorkoutDock>

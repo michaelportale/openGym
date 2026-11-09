@@ -7,6 +7,16 @@ import { isDone } from './workout-view.js'
 const { isSideSet } = workoutModel
 const SIDES = ['L', 'R']
 
+export const OVERNIGHT_NOTICE = 'Choose Resume, Finish or Discard first.'
+
+// A session left open overnight logs nothing until the owner picks Resume, Finish or Discard
+// (the engine would take the set and fold it into last night's workout).
+const isOvernight = view => view?.disposition?.kind === 'overnight'
+
+export function overnightNotice(view) {
+  return isOvernight(view) ? OVERNIGHT_NOTICE : null
+}
+
 export function findSet(view, setId) {
   for (const entry of view?.entries ?? []) {
     const slot = (entry.sets ?? []).find(s => s.setId === setId)
@@ -36,6 +46,7 @@ export function keypadField(field, perSide, side) {
 // commit: that would move row.at and bring back a rest the owner skipped. A blank weight or
 // blank reps (per side, the side being completed) is never logged.
 export function completeCall(view, { setId, side, values, eventId }) {
+  if (isOvernight(view)) return null
   const found = findSet(view, setId)
   if (!found || isDone(found.slot)) return null
   const { entry, slot } = found
@@ -70,6 +81,7 @@ const kept = (value, logged) => value ?? logged
 
 // editSet keeps row.at and done. A per-side edit writes both sides in full (sides replaces).
 export function editCall(view, { setId, values, eventId }) {
+  if (isOvernight(view)) return null
   const found = findSet(view, setId)
   if (!found || !isDone(found.slot)) return null
   const { entry, slot: { row } } = found
@@ -87,13 +99,26 @@ export function editCall(view, { setId, values, eventId }) {
 }
 
 export function undoCall(view, { setId, eventId }) {
+  if (isOvernight(view)) return null
   const found = findSet(view, setId)
   if (!found || !isDone(found.slot)) return null
   return { eventId, exerciseId: found.entry.id, setId }
 }
 
+// A draft (Save, or typed numbers kept on close) is for a set not done yet; a done set changes
+// only through editCall.
+export function draftCall(view, { setId, values }) {
+  if (isOvernight(view)) return null
+  const found = findSet(view, setId)
+  if (!found || isDone(found.slot)) return null
+  return { setId, values }
+}
+
 // One more set like the last work set, as the web's Add set does; per side stays per side.
-export function addSetCall(entry, eventId) {
+export function addSetCall(view, exerciseId, eventId) {
+  if (isOvernight(view)) return null
+  const entry = (view?.entries ?? []).find(e => e.id === exerciseId)
+  if (!entry) return null
   const work = (entry.sets ?? []).filter(s => !s.warmup)
   const last = work.length ? work[work.length - 1].row : {}
   const fields = {}
