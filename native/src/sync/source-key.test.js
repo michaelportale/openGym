@@ -2,6 +2,7 @@ import { expect, test, vi } from 'vitest'
 import { createNodeSqliteDb } from '../../scripts/node-sqlite.mjs'
 import { createSqliteWeighIns } from '../body/weigh-ins.js'
 import { createSqliteFinishedWorkouts } from '../session/finished-workouts.js'
+import { createSqliteRoutineEdits } from '../plan/routine-edits.js'
 import { createSqliteServerCopy } from './server-copy.js'
 import { keyed, readSourceKey, sourceKey } from './source-key.js'
 
@@ -93,4 +94,27 @@ test('keyed retries a failed build on the next call', async () => {
   await expect(load()).rejects.toThrow('db')
   fail = false
   expect(await load()).toEqual({ ok: true })
+})
+
+test('a pending routine edit moves the key, by its rid and time', () => {
+  const key = sourceKey(base())
+  expect(sourceKey({ ...base(), routineEdits: [] })).toBe(key)
+  const one = sourceKey({ ...base(), routineEdits: [{ rid: 'a', t: 1 }] })
+  expect(one).not.toBe(key)
+  expect(sourceKey({ ...base(), routineEdits: [{ rid: 'a', t: 2 }] })).not.toBe(one)
+  expect(sourceKey({ ...base(), routineEdits: [{ rid: 'b', t: 1 }] })).not.toBe(one)
+})
+
+test('readSourceKey follows routine edits: put, and acked', async () => {
+  const db = createNodeSqliteDb()
+  const stores = { finished: createSqliteFinishedWorkouts(db), serverCopy: createSqliteServerCopy(db), routineEdits: createSqliteRoutineEdits(db) }
+  const read = () => readSourceKey({ ...stores, now: NOW })
+  const none = await read()
+  await stores.routineEdits.put({ rid: 'a', baseTs: null, routine: { id: 'a', name: 'A' }, t: 3 })
+  const put = await read()
+  expect(put).not.toBe(none)
+  await stores.routineEdits.markAcked([{ rid: 'a', t: 3 }], 'now')
+  expect(await read()).toBe(none)
+  // Without a store the edits read as none.
+  expect(await readSourceKey({ finished: stores.finished, serverCopy: stores.serverCopy, now: NOW })).toBe(none)
 })

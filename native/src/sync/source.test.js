@@ -6,6 +6,7 @@ import { nextRoutineId } from '../workout/next-up.js'
 import { createNodeSqliteDb } from '../../scripts/node-sqlite.mjs'
 import { createSqliteServerCopy } from './server-copy.js'
 import { exercises } from '../shared/training.js'
+import { createMemoryRoutineEdits } from '../plan/routine-edits.js'
 
 const builtIn = exercises.EXDB[0]
 const cap = s => s[0].toUpperCase() + s.slice(1)
@@ -182,4 +183,65 @@ test('readScreenSource reads the unsent workouts before the copy: a sync landing
   const serverCopy = { get: async () => { const r = copy; land(); return r } }
   const out = await readScreenSource({ finished, serverCopy, bundled })
   expect(out.state.workouts.map(x => x.id)).toEqual(['c1', 'p1'])
+})
+
+// Routine edits waiting to sync show over the routines the screen would otherwise have.
+const edit = (rid, routine, extra = {}) => ({ rid, baseTs: null, routine, sent: null, t: 5, ...extra })
+
+test('routine edits: unpaired, a pending edit to a snapshot routine shows, and the bundle is untouched', () => {
+  const before = JSON.stringify(bundled)
+  const out = screenSource({ copy: null, bundled, pending: [], routineEdits: [edit('r', { id: 'r', name: 'Mine', ex: [] })] })
+  expect(out.state.routines).toEqual([{ id: 'r', name: 'Mine', ex: [] }])
+  expect(out.state.workouts.map(x => x.id)).toEqual(['b1'])
+  expect(JSON.stringify(bundled)).toBe(before)
+})
+
+test('routine edits: paired, the edit shows over the copy on the copy\'s stamps, and the copy stays as stored', () => {
+  const copy = { state: { routines: [{ id: 'r', name: 'R', _ts: 4, ex: [] }, { id: 's', name: 'S', ex: [] }], workouts: [] }, rev: 2, wid: 'x' }
+  const before = JSON.stringify(copy)
+  const out = screenSource({ copy, bundled, pending: [], routineEdits: [edit('r', { id: 'r', name: 'Mine', ex: [] }, { baseTs: 4 })] })
+  expect(out.state.routines).toEqual([{ id: 'r', name: 'Mine', ex: [], _ts: 4 }, { id: 's', name: 'S', ex: [] }])
+  expect(JSON.stringify(copy)).toBe(before)
+})
+
+test('routine edits: a superseded edit does not show', () => {
+  const copy = { state: { routines: [{ id: 'r', name: 'Web', _ts: 9, ex: [] }], workouts: [] }, rev: 2, wid: 'x' }
+  const out = screenSource({ copy, bundled, pending: [], routineEdits: [edit('r', { id: 'r', name: 'Mine', ex: [] }, { baseTs: 4 })] })
+  expect(out.state.routines[0].name).toBe('Web')
+})
+
+test('routine edits: none leaves the routines and the state as they were', () => {
+  const out = screenSource({ copy: null, bundled, pending: [], routineEdits: [] })
+  expect(out.state).toEqual(sessionState(bundled, []))
+  expect(out.state.routines).toBe(bundled.state.routines)
+})
+
+test('routine edits: the next routine still follows the loop', () => {
+  const rs = [{ id: 'a', name: 'A', ex: [] }, { id: 'b', name: 'B', ex: [] }]
+  const base = { version: 1, example: false, state: { unit: 'lb', routines: rs, workouts: [] }, names: {} }
+  const plain = screenSource({ copy: null, bundled: base, pending: [] })
+  const edited = screenSource({ copy: null, bundled: base, pending: [], routineEdits: [edit('b', { id: 'b', name: 'B2', ex: [] })] })
+  expect(edited.state.routines.map(r => r.id)).toEqual(['a', 'b'])
+  expect(nextRoutineId(edited.state, 1e12)).toBe(nextRoutineId(plain.state, 1e12))
+})
+
+test('readScreenSource reads the routine edits before the copy and applies them, paired or not', async () => {
+  const s = stores({ copy: { state: { routines: [{ id: 'r', name: 'R', ex: [] }], workouts: [] }, rev: 1, wid: 'x' }, all: [], pending: [] })
+  const log = s.log
+  const routineEdits = { listPending: async () => { log.push('edits'); return [edit('r', { id: 'r', name: 'Mine', ex: [] })] } }
+  const paired = await readScreenSource({ ...s, routineEdits, bundled })
+  expect(paired.state.routines[0].name).toBe('Mine')
+  expect(log.indexOf('edits')).toBeLessThan(log.indexOf('copy'))
+  const unpaired = await readScreenSource({ ...stores({ copy: null, all: [], pending: [] }), routineEdits, bundled })
+  expect(unpaired.state.routines[0].name).toBe('Mine')
+  expect((await readScreenSource({ ...s, bundled })).state.routines[0].name).toBe('R')
+})
+
+test('readScreenSource over the real store: an edit shows, and goes once acked', async () => {
+  const routineEdits = createMemoryRoutineEdits()
+  await routineEdits.put(edit('r', { id: 'r', name: 'Mine', ex: [] }))
+  const s = stores({ copy: null, all: [], pending: [] })
+  expect((await readScreenSource({ ...s, routineEdits, bundled })).state.routines[0].name).toBe('Mine')
+  await routineEdits.markAcked([{ rid: 'r', t: 5 }], 'now')
+  expect((await readScreenSource({ ...s, routineEdits, bundled })).state.routines[0].name).toBe('R')
 })

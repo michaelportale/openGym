@@ -6,6 +6,7 @@ import { createSqliteSessionStorage } from '../session/sqlite-storage'
 import { homeKey, homeKeyStep } from '../sync/sync-triggers'
 import { useSync } from '../sync/use-sync'
 import { createSqliteServerCopy } from '../sync/server-copy'
+import { createSqliteRoutineEdits } from '../plan/routine-edits'
 import { readScreenSource } from '../sync/source'
 import { nextRoutineId } from './next-up'
 import { buildSessionBase } from './start-session'
@@ -33,6 +34,7 @@ export function useWorkoutHome() {
       const { state, names, example, workouts } = await readScreenSource({
         finished: createSqliteFinishedWorkouts(db),
         serverCopy: createSqliteServerCopy(db),
+        routineEdits: createSqliteRoutineEdits(db),
         bundled: snapshot,
       })
       const stored = await createSqliteSessionStorage(db).readBase()

@@ -2,7 +2,8 @@
 // unchanged keeps what it built instead of parsing the server copy and redoing every model.
 //
 // The key holds the copy's rev and wid (its body is never read here), the ids of the workouts
-// the server has not acked, this phone's pending weigh-ins (day, time, op) and today's date.
+// the server has not acked, this phone's pending weigh-ins (day, time, op), its pending routine
+// edits (routine id, time) and today's date.
 // That is enough because the sync engine stores each document whole with the server's rev and
 // write id, a finished workout is only ever added or acked (unpaired, every one is unacked), a
 // pending weigh-in's day and time change with its content (weigh-ins.js bumps t on a same-t
@@ -13,22 +14,24 @@ const localDay = now => {
   return `${x.getFullYear()}-${x.getMonth() + 1}-${x.getDate()}`
 }
 
-export function sourceKey({ copyKey, workouts, weighIns, now }) {
+export function sourceKey({ copyKey, workouts, weighIns, routineEdits, now }) {
   return JSON.stringify([
     copyKey ? [copyKey.rev ?? null, copyKey.wid ?? null] : null,
     (workouts ?? []).map(w => w?.id ?? null),
     (weighIns ?? []).map(r => [r.d, r.t, r.op]),
+    (routineEdits ?? []).map(e => [e.rid, e.t]),
     localDay(now),
   ])
 }
 
 // Read from the stores: `weighIns` may be null for a screen that shows none. The pending rows
 // come before the copy's key, as every reader here reads them (a sync stores the copy, then acks).
-export async function readSourceKey({ finished, serverCopy, weighIns = null, now }) {
+export async function readSourceKey({ finished, serverCopy, weighIns = null, routineEdits = null, now }) {
   const pendingWeighIns = weighIns ? await weighIns.listPending() : []
+  const pendingEdits = routineEdits ? await routineEdits.listPending() : []
   const workouts = finished ? await finished.listPending() : []
   const copyKey = await serverCopy.key()
-  return sourceKey({ copyKey, workouts, weighIns: pendingWeighIns, now })
+  return sourceKey({ copyKey, workouts, weighIns: pendingWeighIns, routineEdits: pendingEdits, now })
 }
 
 // A load that hands back its last result while readKey(...args) gives the same key, and runs

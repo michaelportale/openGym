@@ -3,6 +3,7 @@
 import { readCopy } from './server-copy.js'
 import { exercises } from '../shared/training.js'
 import { sessionState } from '../workout/history-state.js'
+import { applyRoutineEdits } from '../plan/routine-guard.js'
 
 export const cap = s => (s ? s[0].toUpperCase() + s.slice(1) : '')
 
@@ -49,13 +50,22 @@ function readable(state) {
   }
 }
 
+// Routine edits waiting to sync, laid over the routines the screen would otherwise show: the
+// guard's own `next`, so the screens show exactly what the push would send. The state it is given
+// is never changed; with no edit to show it comes back as it was.
+function withRoutineEdits(state, routineEdits) {
+  if (!routineEdits?.length) return state
+  const { next } = applyRoutineEdits(state.routines, routineEdits)
+  return next === state.routines ? state : { ...state, routines: next }
+}
+
 // `example`: whether the screen shows the example snapshot, and so its banner. Never over the copy.
-export function screenSource({ copy, bundled, pending }) {
-  if (!copy) return { state: sessionState(bundled, pending), names: bundled.names, example: bundled.example === true }
+export function screenSource({ copy, bundled, pending, routineEdits }) {
+  if (!copy) return { state: withRoutineEdits(sessionState(bundled, pending), routineEdits), names: bundled.names, example: bundled.example === true }
   const doc = readable(copy.state)
   // Acked workouts are in the copy and it wins; only unsent ones are added.
   const held = new Set((doc.workouts ?? []).map(w => w.id))
-  const state = sessionState({ state: doc }, (pending ?? []).filter(w => !held.has(w.id)))
+  const state = withRoutineEdits(sessionState({ state: doc }, (pending ?? []).filter(w => !held.has(w.id))), routineEdits)
   return { state, names: namesFor(state), example: false }
 }
 
@@ -64,18 +74,20 @@ export function screenSource({ copy, bundled, pending }) {
 // bundled snapshot plus every workout on the phone. `workouts` is every workout on the phone;
 // `copy` is the copy as read (null when there is none or it is corrupt), so nothing reads it twice.
 // A copy the screen still cannot build from reads as no copy, as a corrupt one does.
-// The unsent workouts are read before the copy: the sync engine stores a copy before it acks the
+// Routine edits not yet sent show over the routines (routineEdits may be left out: none).
+// The unsent workouts and routine edits are read before the copy: the sync engine stores a copy before it acks the
 // workouts that copy holds, so a sync landing between the two reads leaves each workout in one.
-export async function readScreenSource({ finished, serverCopy, bundled }) {
+export async function readScreenSource({ finished, serverCopy, bundled, routineEdits = null }) {
+  const edits = routineEdits ? await routineEdits.listPending() : []
   const workouts = await finished.list()
   const pending = await finished.listPending()
   const copy = await readCopy(serverCopy)
   if (copy) {
     try {
-      return { ...screenSource({ copy, bundled, pending }), workouts, copy }
+      return { ...screenSource({ copy, bundled, pending, routineEdits: edits }), workouts, copy }
     } catch {
       // falls through to the bundled snapshot
     }
   }
-  return { ...screenSource({ copy: null, bundled, pending: workouts }), workouts, copy }
+  return { ...screenSource({ copy: null, bundled, pending: workouts, routineEdits: edits }), workouts, copy }
 }
