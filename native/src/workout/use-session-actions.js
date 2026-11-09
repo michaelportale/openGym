@@ -6,7 +6,7 @@ import { createActionGate } from './action-gate'
 import { pendingRest, restMsFor } from './rest-after'
 import { shownAfterComplete, withTargets } from './session-screen'
 import { carriedWeight } from './workout-view'
-import { addSetCall, completeCall, dockKeypadField, draftCall, editCall, findSet, keypadField, overnightNotice, primaryAction, restAfterComplete, resultNotice, sheetCloseCall, sheetMode, sheetOutcome, shownValues, undoCall } from './set-calls'
+import { addSetCall, completeCall, dockKeypadField, draftCall, editCall, findSet, keypadField, overnightNotice, primaryAction, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, shownValues, undoCall } from './set-calls'
 
 const sideLabel = { L: 'Complete left', R: 'Complete right' }
 const failed = error => ({ ok: false, saved: false, error: { code: 'storage', message: error?.message || String(error) } })
@@ -137,11 +137,22 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
       const call = undoCall(latest(), { setId: sheet.setId, eventId: createEventId() })
       return call ? session.undoSet(call) : null
     }), sheet.key),
-    // Swiping the sheet away (or Close) after typing keeps a draft for the current set only;
-    // on a done or later set it cancels. The sheet is gone, so a refusal shows on the screen.
+    // Swiping the sheet away (or Close) after typing keeps a draft for any set not done yet; on a
+    // done set it cancels. The sheet is gone, so a refusal shows on the screen.
     onClose: async (values, changed) => {
       closeSheet()
       if (sheetCloseCall(sheet.mode, changed) === 'draft') report(await draft(sheet.setId, values))
+    },
+    // The app leaving the front with typed numbers keeps them as a draft through the same gate,
+    // so a kill from the app switcher loses nothing. The sheet stays open; a refusal shows in it
+    // while it is, else on the screen.
+    onAppState: async (appState, values, changed) => {
+      if (sheetBackgroundCall(appState, sheet.mode, changed) !== 'draft') return
+      const { key, setId } = sheet
+      const text = resultNotice(await draft(setId, values))
+      if (!text) return
+      if (openKey.current === key) setSheetNotice(text)
+      else setNotice(text)
     },
   }
 

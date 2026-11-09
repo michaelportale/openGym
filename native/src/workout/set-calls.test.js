@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { OVERNIGHT_NOTICE, addSetCall, completeCall, dockKeypadField, draftCall, editCall, keypadField, overnightNotice, primaryAction, restAfterComplete, resultNotice, sheetCloseCall, sheetMode, sheetOutcome, shownValues, undoCall } from './set-calls.js'
+import { OVERNIGHT_NOTICE, addSetCall, completeCall, dockKeypadField, draftCall, editCall, keypadField, overnightNotice, primaryAction, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, shownValues, undoCall } from './set-calls.js'
 import { restEventId, restMsFor } from './rest-after.js'
 import { withTargets } from './session-screen.js'
 import { SQLITE_DRIVERS } from '../../scripts/node-sqlite.mjs'
@@ -254,18 +254,38 @@ describe('overnight', () => {
 })
 
 describe('sheetCloseCall', () => {
-  test('closing after typing keeps a draft for the current set only', () => {
+  test('closing after typing keeps a draft for the current set', () => {
     expect(sheetCloseCall('current', true)).toBe('draft')
   })
   test('closing a done set cancels: only Update edits a logged set', () => {
     expect(sheetCloseCall('done', true)).toBe('none')
   })
-  test('closing a later set cancels too', () => {
-    expect(sheetCloseCall('pending', true)).toBe('none')
+  test('closing a later set after typing keeps a draft too, as its Save would', () => {
+    expect(sheetCloseCall('pending', true)).toBe('draft')
   })
   test('closing unchanged writes nothing', () => {
     expect(sheetCloseCall('current', false)).toBe('none')
+    expect(sheetCloseCall('pending', false)).toBe('none')
     expect(sheetCloseCall('done', false)).toBe('none')
+  })
+})
+
+// The app going to the background with the sheet open keeps the typed numbers, as a swipe would,
+// so a kill from the app switcher loses nothing.
+describe('sheetBackgroundCall', () => {
+  test('background or inactive with changed numbers on a set not done keeps a draft', () => {
+    for (const appState of ['background', 'inactive']) {
+      expect(sheetBackgroundCall(appState, 'current', true)).toBe('draft')
+      expect(sheetBackgroundCall(appState, 'pending', true)).toBe('draft')
+    }
+  })
+  test('never edits a done set, and unchanged numbers write nothing', () => {
+    expect(sheetBackgroundCall('background', 'done', true)).toBe('none')
+    expect(sheetBackgroundCall('background', 'current', false)).toBe('none')
+  })
+  test('coming back to the front writes nothing', () => {
+    expect(sheetBackgroundCall('active', 'current', true)).toBe('none')
+    expect(sheetBackgroundCall(undefined, 'current', true)).toBe('none')
   })
 })
 

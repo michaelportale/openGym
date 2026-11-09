@@ -150,10 +150,18 @@ export function sheetMode(status) {
   return status === 'done' || status === 'current' ? status : 'pending'
 }
 
-// Swiping the sheet away (or Close) after typing keeps a draft for the current set only, as its
-// Save would. On a done set it cancels: only Update edits a logged set. On a later set it cancels.
+// Swiping the sheet away (or Close) after typing keeps a draft for any set not done yet, as its
+// Save would. On a done set it cancels: only Update edits a logged set.
 export function sheetCloseCall(mode, changed) {
-  return changed && mode === 'current' ? 'draft' : 'none'
+  return changed && mode !== 'done' ? 'draft' : 'none'
+}
+
+const LEAVING = ['background', 'inactive']
+
+// The app leaving the front with the sheet open keeps the typed numbers as a swipe would, so a
+// kill from the app switcher loses nothing. The sheet stays open.
+export function sheetBackgroundCall(appState, mode, changed) {
+  return LEAVING.includes(appState) ? sheetCloseCall(mode, changed) : 'none'
 }
 
 const reason = error => error?.message || error?.code || 'unknown error'

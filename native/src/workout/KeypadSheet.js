@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Modal, Platform, Pressable, StyleSheet, View } from 'react-native'
+import { useEffect, useRef, useState } from 'react'
+import { AppState, Modal, Platform, Pressable, StyleSheet, View } from 'react-native'
 import Animated from 'react-native-reanimated'
 import { color, radius, size, space, touch } from '../theme/tokens'
 import AppText from '../ui/AppText'
@@ -56,7 +56,9 @@ function Field({ title, text, active, onPress }) {
 // opens on reps). `weightTitle` is 'Lb each' for a per-hand exercise. A done set passes
 // saveLabel 'Update', onUndo, and no onComplete. `notice` shows a write that was refused.
 // `side` is the side Complete logs on a per-side set; Complete waits for its reps and the weight.
-export default function KeypadSheet({ visible, title, initial, perSide, side = null, initialField = 'w', weightTitle = 'Lb', saveLabel = 'Save', completeLabel = 'Complete', notice, onSave, onComplete, onUndo, onClose }) {
+// While open, every app state change calls onAppState(next, values, changed), so the caller can
+// keep typed numbers when the app leaves the front (a kill from the app switcher follows).
+export default function KeypadSheet({ visible, title, initial, perSide, side = null, initialField = 'w', weightTitle = 'Lb', saveLabel = 'Save', completeLabel = 'Complete', notice, onSave, onComplete, onUndo, onClose, onAppState }) {
   const [state, setState] = useState(() => keypadState(initial, initialField))
   useEffect(() => {
     if (visible) setState(keypadState(initial, initialField))
@@ -65,7 +67,19 @@ export default function KeypadSheet({ visible, title, initial, perSide, side = n
   const blocked = completeBlocker(values, side)
   const press = key => () => setState(current => applyKey(current, key))
   const fields = perSide ? [['L.r', 'Left reps'], ['R.r', 'Right reps']] : [['r', 'Reps']]
-  const close = () => onClose(values, sheetCloseAction(keypadState(initial), state) === 'save')
+  const changed = () => sheetCloseAction(keypadState(initial), state) === 'save'
+  const close = () => onClose(values, changed())
+  // The listener outlives this render; it reads the numbers on screen when the app state changes.
+  const live = useRef(null)
+  live.current = { values, changed, onAppState }
+  useEffect(() => {
+    if (!visible) return
+    const sub = AppState.addEventListener('change', next => {
+      const now = live.current
+      now.onAppState?.(next, now.values, now.changed())
+    })
+    return () => sub.remove()
+  }, [visible])
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" allowSwipeDismissal onRequestClose={close}>
       <View style={styles.sheet}>

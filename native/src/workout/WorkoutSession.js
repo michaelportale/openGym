@@ -161,6 +161,7 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
         onComplete={sheet.mode === 'current' ? sheet.onComplete : undefined}
         onUndo={sheet.mode === 'done' ? sheet.onUndo : undefined}
         onClose={sheet.onClose}
+        onAppState={sheet.onAppState}
       />
       <FinishSheet
         visible={finish.open}
