@@ -33,12 +33,15 @@ const noticeOf = row => ({ rid: row.rid, name: typeof row.routine.name === 'stri
 const byT = (a, b) => a.t - b.t
 const byAt = (a, b) => (a.supersededAt < b.supersededAt ? -1 : a.supersededAt > b.supersededAt ? 1 : 0)
 
-// The row a put leaves. A pending row keeps its baseTs and sent; an acked or superseded one
-// starts fresh. The same t with different content moves up one, so an older ack keyed on
-// { rid, t } cannot settle the new content.
+// The row a put leaves. A pending row keeps its baseTs and sent. An acked one takes the caller's
+// baseTs, and its routine, known to be on the server, as sent: a save made on a copy read before
+// that ack is then rebased onto it, not taken for a change on the web. A superseded one starts
+// fresh. The same t with different content moves up one, so an older ack keyed on { rid, t }
+// cannot settle the new content.
 function merged(s, existing) {
   const keep = existing && isPending(existing)
-  const next = { ...s, baseTs: keep ? existing.baseTs : s.baseTs, sent: keep ? existing.sent : null,
+  const acked = existing && existing.ackedAt != null && existing.supersededAt == null
+  const next = { ...s, baseTs: keep ? existing.baseTs : s.baseTs, sent: keep ? existing.sent : acked ? existing.routine : null,
     ackedAt: null, supersededAt: null, supersededKind: null, dismissed: 0 }
   if (existing && existing.t === next.t &&
     (JSON.stringify(existing.routine) !== JSON.stringify(next.routine) || existing.baseTs !== next.baseTs)) next.t += 1

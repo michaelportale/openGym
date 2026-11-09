@@ -36,6 +36,7 @@ export function buildPush(copy, pending, pendingWeighIns = [], pendingRoutineEdi
     },
     baseRev: copy.rev,
     baseWid: copy.wid,
-    routineEdits: carried.map(({ rid, t }) => ({ rid, t, routine: pendingRoutineEdits.find(e => e.rid === rid && e.t === t).routine })),
+    // as it goes: the edit's content on the copy's stamps (routine-guard.js)
+    routineEdits: carried.map(({ rid, t }) => ({ rid, t, routine: plan.next.find(r => r?.id === rid) })),
   }
 }

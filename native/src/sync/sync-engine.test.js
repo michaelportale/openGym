@@ -1190,7 +1190,9 @@ describe('routine edits', () => {
     expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
     expect(t.server.calls).toEqual(['rev', 'push', 'pull'])
     expect(t.server.pushes[1].baseRev).toBe(4)
-    expect(t.server.pushes[1].state.routines[0]).toEqual(second.routine)
+    // the second routine, on the stamps of the landed push it goes on top of
+    expect(t.server.pushes[1].state.routines[0]).toEqual({ ...second.routine, _ts: landed })
+    expect(second.routine._ts).toBe(1000)
     expect(content(t.server.routine('r1'))).toEqual(content(second.routine))
     expect(t.server.routine('r1')._ts).toBeGreaterThan(landed)
     expect(await t.routineEdits.listPending()).toEqual([])
@@ -1329,6 +1331,33 @@ describe('routine edits', () => {
     expect(t.server.pushes[0].state.routines[0]).toEqual(first.routine)
     const landed = t.server.routine('r1')._ts
     expect(await t.routineEdits.listPending()).toEqual([{ rid: 'r1', baseTs: landed, routine: second.routine, sent: null, t: T0 + 2 }])
+    expect(await t.routineEdits.listNotices()).toEqual([])
+
+    t.fresh()
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+    expect(t.server.calls).toEqual(['rev', 'push', 'pull'])
+    expect(content(t.server.routine('r1'))).toEqual(content(second.routine))
+    expect(await t.routineEdits.listPending()).toEqual([])
+    expect(await t.routineEdits.listNotices()).toEqual([])
+  })
+
+  test('a save made on the copy from before the pull, landing just after markAcked, is pushed by the next sync with no notice', async () => {
+    const t = await planSetup()
+    const first = await t.edit('r1', setsOn(4))
+    const before = (await t.copy.get()).state.routines[0] // what the Plan screen read
+    const markAcked = t.routineEdits.markAcked
+    let second
+    t.routineEdits.markAcked = async (items, at) => {
+      const r = await markAcked(items, at)
+      if (!second) {
+        second = routineEdit(before, setsOn(5), T0 + 2)
+        await t.routineEdits.put(second)
+      }
+      return r
+    }
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 1 })
+    expect(content(t.server.routine('r1'))).toEqual(content(first.routine))
+    expect(await t.routineEdits.get('r1')).toEqual({ rid: 'r1', baseTs: 1000, routine: second.routine, sent: first.routine, t: T0 + 2 })
     expect(await t.routineEdits.listNotices()).toEqual([])
 
     t.fresh()

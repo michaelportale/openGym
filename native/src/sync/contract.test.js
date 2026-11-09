@@ -487,6 +487,65 @@ describe.skipIf(!HAS_API_DEPS)(TITLE, { timeout: 30_000 }, () => {
     expect(await app.routineEdits.listNotices()).toEqual([{ rid: 'r3', name: 'Bench day', kind: 'unsafe', at: new Date(T0).toISOString() }])
   })
 
+  test('a cross-swap the API would put keys back into is never sent: nothing stored, an unsafe notice', async () => {
+    const server = await startServer({ state: planned() })
+    const plain = createApiClient({ fetch: globalThis.fetch, timeoutMs: 10_000 })
+    const pushes = []
+    const client = { ...plain, async push(...args) { const r = await plain.push(...args); pushes.push(r.ok ? 200 : r.kind); return r } }
+    const app = await paired(server, undefined, { client })
+    const base = (await app.copy.get()).state.routines[0]
+    // the second slot becomes the first slot's exercise while the first becomes another: no id twice
+    const { pyramid, futureSlotKey, ...firstRest } = base.ex[0]
+    const cross = { ...base, ex: [{ ...firstRest, id: '0047', weight: 0 }, { ...base.ex[1], id: base.ex[0].id }] }
+    await app.routineEdits.put({ rid: 'r1', baseTs: base._ts, routine: cross, t: T0 })
+    const before = server.file()
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+    expect(pushes).toEqual([])
+    expect(server.file()).toEqual(before)
+    expect(await app.routineEdits.listNotices()).toEqual([{ rid: 'r1', name: 'Push', kind: 'unsafe', at: new Date(T0).toISOString() }])
+  })
+
+  test('an edit during the push, a web settings write, then a revert rebased on the landed push: stored as sent, acked, no loop', async () => {
+    const server = await startServer({ state: planned() })
+    const plain = createApiClient({ fetch: globalThis.fetch, timeoutMs: 10_000 })
+    const pushes = []
+    let during = null
+    const client = {
+      ...plain,
+      async push(...args) {
+        const r = await plain.push(...args)
+        pushes.push(r.ok ? 200 : r.kind)
+        if (during) { const go = during; during = null; await go() }
+        return r
+      },
+    }
+    const app = await paired(server, undefined, { client })
+    const base = (await app.copy.get()).state.routines[0]
+    const setsTo = n => ({ ...base, ex: [{ ...base.ex[0], sets: n }, base.ex[1]] })
+    await app.routineEdits.put({ rid: 'r1', baseTs: base._ts, routine: setsTo(4), t: T0 })
+    during = async () => {
+      // the owner puts it back to 3 on the copy they still see; then a web tab changes a setting
+      await app.routineEdits.put({ rid: 'r1', baseTs: base._ts, routine: setsTo(3), t: T0 + 1 })
+      const cookie = webCookie()
+      const got = await (await fetch(`${server.api}/api/data`, { headers: cookie })).json()
+      const state = { ...got.state, lang: 'de', edited: { ...got.state.edited, lang: T0 + 700 } }
+      const res = await fetch(`${server.api}/api/data`, { method: 'PUT', headers: { ...cookie, 'Content-Type': 'application/json' }, body: JSON.stringify({ state, baseRev: got.rev, baseWid: got.state._wid, stamped: true }) })
+      expect(res.status).toBe(200)
+    }
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 1 })
+    expect(server.file().routines[0].ex[0].sets).toBe(4)
+    expect(server.file().lang).toBe('de')
+
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+    const stored = server.file().routines[0]
+    expect(content(stored)).toEqual(content(setsTo(3)))
+    expect(await app.routineEdits.listNotices()).toEqual([])
+    expect(await app.routineEdits.listPending()).toEqual([])
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+    expect(pushes).toEqual([200, 200])
+    expect(server.file().routines[0]).toEqual(stored)
+  })
+
   test('a new profile with no document yet: pairing pulls an empty one and the first push starts it', async () => {
     const server = await startServer({ state: null })
     const app = await paired(server)

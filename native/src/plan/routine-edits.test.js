@@ -38,14 +38,19 @@ describe.each(Object.entries(makers))('%s routine edits', (_, make) => {
     expect(await s.get('r1')).toEqual({ rid: 'r1', baseTs: 100, routine: edited, sent: r1, t: 6 })
   })
 
-  test('a put on an acked row starts fresh', async () => {
+  test('a put on an acked row is pending again on the caller\'s base, with sent = the acked routine, known to be on the server', async () => {
     const s = make()
     await s.put({ rid: 'r1', baseTs: 100, routine: r1, t: 5 })
-    await s.markSent([{ rid: 'r1', t: 5, routine: r1 }])
+    await s.markSent([{ rid: 'r1', t: 5, routine: { ...r1, name: 'as sent' } }])
     await s.markAcked([{ rid: 'r1', t: 5 }], 'a')
     expect(await s.listPending()).toEqual([])
     await s.put({ rid: 'r1', baseTs: 300, routine: { ...r1, name: 'X' }, t: 7 })
-    expect(await s.listPending()).toEqual([{ rid: 'r1', baseTs: 300, routine: { ...r1, name: 'X' }, sent: null, t: 7 }])
+    expect(await s.listPending()).toEqual([{ rid: 'r1', baseTs: 300, routine: { ...r1, name: 'X' }, sent: r1, t: 7 }])
+    // acked without ever being sent from here (the server already had it): the same
+    await s.put({ rid: 'r2', baseTs: 1, routine: { id: 'r2' }, t: 1 })
+    await s.markAcked([{ rid: 'r2', t: 1 }], 'a')
+    await s.put({ rid: 'r2', baseTs: 2, routine: { id: 'r2', name: 'Y' }, t: 2 })
+    expect(await s.get('r2')).toEqual({ rid: 'r2', baseTs: 2, routine: { id: 'r2', name: 'Y' }, sent: { id: 'r2' }, t: 2 })
   })
 
   test('markAcked with an old t does nothing', async () => {

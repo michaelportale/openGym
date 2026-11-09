@@ -223,3 +223,11 @@ test('only the edits that go are carried, each with its own t', () => {
   expect(push.routineEdits).toEqual([{ rid: 'r1', t: 70, routine: mine }])
   expect(push.state.routines[1]).toBe(copy.state.routines[1])
 })
+
+test('an edit made on older stamps goes on the copy\'s, and is recorded for markSent as it goes', () => {
+  const copy = planCopy()
+  const { _f, ...stale } = { ...movedR1(), _ts: 1 }
+  const push = buildPush(copy, [], [], [routineEdit(stale)])
+  expect(push.state.routines[0]).toEqual({ ...stale, _ts: 1000, _f: { ex: 900 } })
+  expect(push.routineEdits).toEqual([{ rid: 'r1', t: 50, routine: push.state.routines[0] }])
+})

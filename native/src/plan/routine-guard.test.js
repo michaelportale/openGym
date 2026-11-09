@@ -34,7 +34,7 @@ test('an edit on the base it saw applies and replaces the routine at its index',
   const mine = routine('a', 'Mine')
   const r = applyRoutineEdits(list, [edit('a', mine, { baseTs: 3, t: 4 })])
   expect(r.applied).toEqual([{ rid: 'a', t: 4 }])
-  expect(r.next).toEqual([other, mine])
+  expect(r.next).toEqual([other, { ...mine, _ts: 3 }]) // on the copy's stamps
   expect(r.next[0]).toBe(other)
   expect(r.next).not.toBe(list)
   expect(list[1].name).toBe('Old')
@@ -81,7 +81,7 @@ test('in flight: the copy equals what was sent while the routine is newer, so th
   const r = applyRoutineEdits([copy], [edit('a', newer, { baseTs: 3, sent, t: 8 })])
   expect(r.rebased).toEqual([{ rid: 'a', t: 8, baseTs: 12 }])
   expect(r.applied).toEqual([])
-  expect(r.next).toEqual([newer])
+  expect(r.next).toEqual([{ ...newer, _ts: 12 }])
 })
 
 test('rebased reports a null baseTs when the copy has no _ts', () => {
@@ -118,22 +118,29 @@ test('a non-array routines reads as empty; nothing applying returns the input ar
   expect(applyRoutineEdits(list, undefined).next).toBe(list)
 })
 
-// Routines as the web keeps them: slots in `ex`, each with its exercise id. The server pairs the
-// slots of a routine that holds the same exercise twice by position (sync-stamps.js pairItems), so
-// a move or swap there could put one twin's keys on the other.
+// Routines as the web keeps them: slots in `ex`, each with its exercise id. The API puts back a
+// slot key the phone's push lacks, pairing the slots as api/sync-stamps.js pairItems does
+// (server-put-back.js); an edit it would change that way is held back as unsafe.
 const heavy = { id: 'bench', sets: 3, reps: 5, pyramid: [{ w: 60, r: 8 }], stationId: 'rack-2' }
 const backoff = { id: 'bench', sets: 3, reps: 10 }
 const row = { id: 'row', sets: 3, reps: 8 }
 const withEx = (ex, extra = {}) => ({ id: 'a', name: 'Push', ex, ...extra })
+const swapTo = (slot, id) => {
+  const { stationId, ...rest } = slot
+  return { ...rest, id }
+}
 
-test('a move in a routine holding the same exercise twice is unsafe, and is not in next', () => {
-  const list = [withEx([heavy, backoff, row], { _ts: 3 })]
-  const r = applyRoutineEdits(list, [edit('a', withEx([backoff, heavy, row]), { baseTs: 3, t: 4 })])
+test('an edit the API would put keys back into is unsafe and is not in next: a twin swap, a cross-swap', () => {
+  const twins = [withEx([heavy, backoff, row], { _ts: 3 })]
+  const r = applyRoutineEdits(twins, [edit('a', withEx([backoff, heavy, row]), { baseTs: 3, t: 4 })])
   expect(r.superseded).toEqual([{ rid: 'a', t: 4, kind: 'unsafe' }])
   expect(r.applied).toEqual([])
-  expect(r.next).toBe(list)
-  const twinsApart = applyRoutineEdits([withEx([heavy, row, backoff], { _ts: 3 })], [edit('a', withEx([row, heavy, backoff]), { baseTs: 3 })])
-  expect(twinsApart.superseded).toEqual([{ rid: 'a', t: 1, kind: 'unsafe' }])
+  expect(r.next).toBe(twins)
+  // no exercise twice on either side: row becomes bench while bench becomes incline
+  const plain = [withEx([heavy, row], { _ts: 3 })]
+  const cross = applyRoutineEdits(plain, [edit('a', withEx([swapTo(heavy, 'incline'), swapTo(row, 'bench')]), { baseTs: 3, t: 5 })])
+  expect(cross.superseded).toEqual([{ rid: 'a', t: 5, kind: 'unsafe' }])
+  expect(cross.next).toBe(plain)
 })
 
 test('a sets-only edit in a routine holding the same exercise twice applies', () => {
@@ -141,41 +148,20 @@ test('a sets-only edit in a routine holding the same exercise twice applies', ()
   const mine = withEx([heavy, { ...backoff, sets: 4 }, row])
   const r = applyRoutineEdits(list, [edit('a', mine, { baseTs: 3, t: 4 })])
   expect(r.applied).toEqual([{ rid: 'a', t: 4 }])
-  expect(r.next).toEqual([mine])
+  expect(r.next).toEqual([{ ...mine, _ts: 3 }])
 })
 
-test('a swap that makes the same exercise appear twice is unsafe', () => {
-  const list = [withEx([heavy, row], { _ts: 3 })]
-  const r = applyRoutineEdits(list, [edit('a', withEx([heavy, { ...row, id: 'bench' }]), { baseTs: 3, t: 4 })])
-  expect(r.superseded).toEqual([{ rid: 'a', t: 4, kind: 'unsafe' }])
-  expect(r.next).toBe(list)
-})
-
-test('a swap that takes one twin away is unsafe too: the copy repeats an id', () => {
-  const list = [withEx([heavy, backoff], { _ts: 3 })]
-  const r = applyRoutineEdits(list, [edit('a', withEx([heavy, { ...backoff, id: 'row' }]), { baseTs: 3 })])
-  expect(r.superseded).toEqual([{ rid: 'a', t: 1, kind: 'unsafe' }])
-})
-
-test('in a routine holding the same exercise twice, every field an edit changes goes, prog and repsMin removed included', () => {
-  const list = [withEx([{ ...heavy, prog: 'linear' }, { ...backoff, repsMin: 8 }, row], { _ts: 3 })]
-  const mine = withEx([{ ...heavy, sets: 5, reps: 6 }, { ...backoff, sec: 30, min: 2 }, row])
-  expect(applyRoutineEdits(list, [edit('a', mine, { baseTs: 3 })]).applied).toHaveLength(1)
-  // twins told apart only by those fields: a move looks like a field edit, and the API stores it as sent
+test('edits the API stores as sent apply: a move with unique ids, a swap to a new exercise, prog and repsMin off, twins told apart only by edit fields', () => {
+  const list = [withEx([{ ...heavy, prog: 'linear', repsMin: 4 }, row], { _ts: 3 })]
+  for (const mine of [withEx([row, list[0].ex[0]]), withEx([list[0].ex[0], swapTo(row, 'pullup')]), withEx([heavy, row])]) {
+    expect(applyRoutineEdits(list, [edit('a', mine, { baseTs: 3 })]).applied).toHaveLength(1)
+  }
   const a = { id: 'bench', sets: 3, reps: 5 }
   const b = { id: 'bench', sets: 4, reps: 10 }
   expect(applyRoutineEdits([withEx([a, b], { _ts: 3 })], [edit('a', withEx([b, a]), { baseTs: 3 })]).applied).toHaveLength(1)
 })
 
-test('a move or a swap in a routine without a repeated exercise applies', () => {
-  const list = [withEx([heavy, row], { _ts: 3 })]
-  const moved = withEx([row, heavy])
-  expect(applyRoutineEdits(list, [edit('a', moved, { baseTs: 3 })]).applied).toHaveLength(1)
-  const swapped = withEx([heavy, { ...row, id: 'pullup' }])
-  expect(applyRoutineEdits(list, [edit('a', swapped, { baseTs: 3 })]).next).toEqual([swapped])
-})
-
-test('an unsafe move already on the server is still done; a rebased one is unsafe against the copy it would go on', () => {
+test('an unsafe edit already on the server is still done; a rebased one is unsafe against the copy it would go on', () => {
   const moved = withEx([backoff, heavy, row])
   const done = applyRoutineEdits([{ ...moved, _ts: 9 }], [edit('a', moved, { baseTs: 3 })])
   expect(done.done).toEqual([{ rid: 'a', t: 1 }])
@@ -190,4 +176,33 @@ test('an edit that could not go anyway keeps its own kind: changed or deleted, n
   const moved = withEx([backoff, heavy, row])
   expect(applyRoutineEdits([withEx([heavy, backoff, row], { _ts: 8 })], [edit('a', moved, { baseTs: 3 })]).superseded[0].kind).toBe('changed')
   expect(applyRoutineEdits([], [edit('a', moved, { baseTs: 3 })]).superseded[0].kind).toBe('deleted')
+})
+
+// The API reads a routine's _f as the version its writer worked on (sync-stamps.js stampUnstamped):
+// stale stamps on a rebased push could make it put the phone's earlier value back.
+test('an applied routine goes in on the copy\'s _ts, _f and _u, each in its place, and the edit is not changed', () => {
+  const copy = { ...routine('a', 'Old'), _ts: 3, _f: { name: 2 }, _u: { name: [1, 2, 3] } }
+  const mine = { ...routine('a', 'Mine'), _ts: 1, _f: { slots: 1 } } // stamps of an older base
+  const r = applyRoutineEdits([copy], [edit('a', mine, { baseTs: 3 })])
+  expect(r.next[0]).toEqual({ ...routine('a', 'Mine'), _ts: 3, _f: { name: 2 }, _u: { name: [1, 2, 3] } })
+  expect(Object.keys(r.next[0])).toEqual([...Object.keys(mine), '_u'])
+  expect(mine).toEqual({ ...routine('a', 'Mine'), _ts: 1, _f: { slots: 1 } })
+})
+
+test('a stamp the copy lacks is taken off the routine that goes in', () => {
+  const mine = { ...routine('a', 'Mine'), _ts: 1, _f: { slots: 1 }, _u: { name: [1, 2] } }
+  const r = applyRoutineEdits([{ ...routine('a', 'Old'), _ts: 3 }], [edit('a', mine, { baseTs: 3 })])
+  expect(r.next[0]).toEqual({ ...routine('a', 'Mine'), _ts: 3 })
+  expect(Object.keys(r.next[0])).not.toContain('_f')
+  const bare = applyRoutineEdits([routine('a', 'Old')], [edit('a', mine, { baseTs: null })])
+  expect(bare.next[0]).toEqual(routine('a', 'Mine'))
+})
+
+test('a rebased routine goes in on the stamps of the phone\'s own landed push', () => {
+  const sent = routine('a', 'Sent')
+  const landed = { ...routine('a', 'Sent'), _ts: 12, _f: { name: 12 } }
+  const newer = { ...routine('a', 'Newer'), _ts: 3 }
+  const r = applyRoutineEdits([landed], [edit('a', newer, { baseTs: 3, sent, t: 8 })])
+  expect(r.rebased).toEqual([{ rid: 'a', t: 8, baseTs: 12 }])
+  expect(r.next[0]).toEqual({ ...routine('a', 'Newer'), _ts: 12, _f: { name: 12 } })
 })
