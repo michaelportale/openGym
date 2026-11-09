@@ -66,6 +66,10 @@ export function applyDayOps(bodyweight, ops) {
       applied.push(ref)
     }
   }
-  const next = [...byDay.values()].sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : 0))
+  const next = [...byDay.values()].sort((a, b) => {
+    const x = String(a.d)
+    const y = String(b.d)
+    return x < y ? -1 : x > y ? 1 : 0
+  })
   return { next, applied, done, superseded }
 }

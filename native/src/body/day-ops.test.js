@@ -164,3 +164,9 @@ test('one call can mix applied, done and superseded', () => {
   expect(r.applied).toEqual([{ d: '2026-01-03', t: 6 }])
   expect(r.next.map(e => e.d)).toEqual(['2026-01-01', '2026-01-02', '2026-01-03'])
 })
+
+test('mixed-type days sort consistently by String(d)', () => {
+  const entries = ['2026-01-03', 20260101, '2026-01-01', '2026-01-02'].map(d => ({ d, w: 1, t: 1 }))
+  const next = applyDayOps(entries, []).next.map(e => String(e.d))
+  expect(next).toEqual(['2026-01-01', '2026-01-02', '2026-01-03', '20260101'])
+})

@@ -84,12 +84,15 @@ export function createMemoryWeighIns() {
       const existing = rows.get(stored.d)
       if (existing && existing.op === 'set' && existing.src == null) return { written: false }
       if (existing && existing.op === 'remove' && existing.src == null && !acked.has(stored.d)) {
+        // A Health remove never drops the owner's pending removal; a Health set inherits its target.
+        if (stored.op === 'remove') return { written: false }
         if (existing.baseT != null) stored.baseT = existing.baseT
         else delete stored.baseT
       }
-      rows.set(stored.d, stored)
-      acked.delete(stored.d)
-      return { written: true }
+      const final = bumped(stored, existing)
+      rows.set(final.d, final)
+      acked.delete(final.d)
+      return { written: true, t: final.t }
     },
     async get(d) {
       const row = rows.get(d)
@@ -160,17 +163,25 @@ export function createSqliteWeighIns(db) {
       requireHealth(op)
       await ready()
       const s = normalized(op)
+      const pendingTypedRemove = "weigh_ins.op = 'remove' AND weigh_ins.src IS NULL AND weigh_ins.acked_at IS NULL"
+      const finalBaseT = `CASE WHEN ${pendingTypedRemove} THEN weigh_ins.base_t ELSE excluded.base_t END`
       const { changes } = await db.run(
         `INSERT INTO weigh_ins (d, op, w, t, src, hk, base_t, acked_at) VALUES (?, ?, ?, ?, ?, ?, ?, NULL)
-         ON CONFLICT(d) DO UPDATE SET op = excluded.op, w = excluded.w, t = excluded.t, src = excluded.src,
+         ON CONFLICT(d) DO UPDATE SET op = excluded.op, w = excluded.w, src = excluded.src,
            hk = excluded.hk,
-           base_t = CASE WHEN weigh_ins.op = 'remove' AND weigh_ins.src IS NULL AND weigh_ins.acked_at IS NULL
-                         THEN weigh_ins.base_t ELSE excluded.base_t END,
+           t = CASE WHEN weigh_ins.t = excluded.t AND (weigh_ins.op IS NOT excluded.op OR weigh_ins.w IS NOT excluded.w
+                      OR weigh_ins.src IS NOT excluded.src OR weigh_ins.hk IS NOT excluded.hk
+                      OR weigh_ins.base_t IS NOT (${finalBaseT}))
+                    THEN excluded.t + 1 ELSE excluded.t END,
+           base_t = ${finalBaseT},
            acked_at = NULL
-         WHERE NOT (weigh_ins.op = 'set' AND weigh_ins.src IS NULL)`,
+         WHERE NOT (weigh_ins.op = 'set' AND weigh_ins.src IS NULL)
+           AND NOT (excluded.op = 'remove' AND ${pendingTypedRemove})`,
         [s.d, s.op, s.w ?? null, s.t, s.src, s.hk ?? null, s.baseT ?? null],
       )
-      return { written: changes > 0 }
+      if (!(changes > 0)) return { written: false }
+      const rows = await db.getAll('SELECT t FROM weigh_ins WHERE d = ?', [s.d])
+      return { written: true, t: rows[0].t }
     },
     async get(d) {
       await ready()
