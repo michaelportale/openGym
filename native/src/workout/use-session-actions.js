@@ -17,7 +17,8 @@ import { NO_NOTICES, addSetCall, addWarmupCall, completeAfterCommit, completeCal
 // why in plain words (failureText), and the screen keeps showing the set as it is stored.
 // Overnight is checked inside the gate as each write runs, against the clock then, not when the
 // view was last drawn (write).
-export function useSessionActions({ session, base, restSec, view, screen, shownEntry, setShownIndex }) {
+// `afterWrite` runs once each gated write settles (useRestAlerts' reconcile), outside the gate.
+export function useSessionActions({ session, base, restSec, view, screen, shownEntry, setShownIndex, afterWrite }) {
   const gate = useRef(null)
   if (gate.current == null) gate.current = createActionGate()
   const [busy, setBusy] = useState(false)
@@ -54,6 +55,9 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
 
   // A throw from storage is a refused write too, never an uncaught promise. A write refused
   // overnight reloads the view (writing nothing), so the overnight dock shows without another tap.
+  // Once the gate is free, the rest alert is brought in line with the journal: after every write,
+  // not only those that touch rest, so none is missed. It is not awaited and never rejects, so it
+  // changes neither the result nor its notice. A dropped tap wrote nothing and reconciles nothing.
   const act = fn => gate.current(async () => {
     setBusy(true)
     try {
@@ -65,6 +69,9 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
     } finally {
       setBusy(false)
     }
+  }).then(result => {
+    if (!result?.ignored) afterWrite?.()
+    return result
   })
   const report = (result, action) => {
     const stamp = nextStamp()

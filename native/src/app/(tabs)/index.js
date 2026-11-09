@@ -1,5 +1,7 @@
+import { useEffect } from 'react'
 import { Platform, StyleSheet, View } from 'react-native'
 import { SafeAreaView } from 'react-native-screens/experimental'
+import { clearRestAlerts } from '../../notify/use-rest-alerts'
 import { screenFrame } from '../../shell/tabs'
 import { color, space } from '../../theme/tokens'
 import AppText from '../../ui/AppText'
@@ -61,6 +63,10 @@ export function ErrorBoundary({ error, retry }) {
 
 export default function Workout() {
   const home = useWorkoutHome()
+  // No workout open: a rest alert left pending (a kill right after Finish or Discard) is cancelled.
+  useEffect(() => {
+    if (home.status === 'start') clearRestAlerts()
+  }, [home.status])
   return (
     <SafeAreaView edges={{ top: true, bottom: true }} style={screenFrame(Platform.OS)}>
       {home.snapshot.example ? (

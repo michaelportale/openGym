@@ -1,0 +1,109 @@
+import { projectRest } from '../session/timing.js'
+import { currentExerciseIndex, workoutScreen } from '../workout/workout-view.js'
+
+// Rest alerts follow the journal, the only truth. The notification center is a cache of it: these
+// helpers compare "the alert the journal implies" with what is scheduled and say what to cancel and
+// what to schedule, and reconcileRestAlerts applies that through an adapter. Run again after every
+// write, at launch and on each return to the app, a kill between saving a rest and scheduling its
+// alert heals itself. Nothing here imports expo-notifications; notifications.js is the adapter.
+
+const PREFIX = 'rest-'
+
+// One identifier per session: scheduling it again replaces the pending request, so a session can
+// never have two.
+export const restAlertId = sessionId => `${PREFIX}${sessionId}`
+const isRestAlert = identifier => typeof identifier === 'string' && identifier.startsWith(PREFIX)
+const ended = status => status === 'finished' || status === 'discarded'
+
+// What the session is, for alerts, from the session hook's status and its view: 'active',
+// 'finished' (in the journal, or saved and cleared) or 'discarded'. Null while it is opening or
+// could not be opened: nothing is known, so nothing is changed.
+export function alertStatus(sessionStatus, view) {
+  if (sessionStatus === 'saved') return 'finished'
+  if (sessionStatus === 'discarded') return 'discarded'
+  if (sessionStatus === 'ready') return view?.status ?? null
+  return null
+}
+
+// The set the workout goes to next, in the dock's words: the exercise the screen follows and its
+// current work set. Null when every set is done.
+export function nextSetLabel(view, names) {
+  if (!view?.entries?.length) return null
+  const { card, dock } = workoutScreen(view, { names, exerciseIndex: currentExerciseIndex(view) })
+  return dock.number == null ? null : `Next: ${card.name}, set ${dock.number}`
+}
+
+// The alert the journal implies: one, at the deadline, while an active session's rest is running
+// and has not ended. The rest is read again at `now`, so a view drawn earlier asks for nothing once
+// its deadline has passed.
+export function desiredRestAlert({ sessionId, status, rest, now, nextLabel }) {
+  if (!sessionId || status !== 'active') return null
+  const projected = projectRest(rest, now)
+  if (projected?.status !== 'running' || !(projected.deadline > now)) return null
+  const { deadline } = projected
+  return {
+    identifier: restAlertId(sessionId),
+    date: deadline,
+    title: 'Rest over',
+    body: nextLabel || 'Back to your workout',
+    data: { kind: 'rest', sessionId, deadline },
+  }
+}
+
+// Exactly the desired alert: same identifier, deadline and words (an Undo during rest changes what
+// is next, so the alert is rewritten).
+const sameAlert = (request, desired) => desired != null
+  && request.identifier === desired.identifier
+  && Number(request.data?.deadline) === desired.data.deadline
+  && request.body === desired.body
+
+// `scheduled` is the pending requests ({ identifier, body, data }). Every rest alert that is not
+// exactly `desired` is cancelled (an old deadline, another session's, a stale one); `desired` is
+// scheduled unless it is already there. A request that is not a rest alert is never touched.
+// Cancels run before the schedule: the new request may reuse a cancelled identifier.
+export function planRestAlerts(desired, scheduled) {
+  const requests = scheduled ?? []
+  const cancel = requests.filter(r => isRestAlert(r.identifier) && !sameAlert(r, desired)).map(r => r.identifier)
+  const kept = requests.some(r => sameAlert(r, desired))
+  return { cancel, schedule: desired && !kept ? desired : null }
+}
+
+// A finished or discarded session's rest alert, already delivered, is taken out of the
+// notification list: it would call the owner back to a workout that is over.
+export function deliveredToDismiss(sessionId, delivered, status) {
+  if (!sessionId || !ended(status)) return []
+  const id = restAlertId(sessionId)
+  return (delivered ?? []).filter(n => n.identifier === id).map(n => n.identifier)
+}
+
+// Plan, then apply through the adapter. `status` is alertStatus (or 'none' with no session open:
+// every rest alert goes). Without permission ('granted') nothing is scheduled and any rest alert
+// left is cancelled. Adapter errors reach the caller, which logs them; they never touch a write.
+export async function reconcileRestAlerts({ sessionId, status, view, nextLabel, now, adapter, permission }) {
+  if (status == null) return { cancel: [], schedule: null, dismiss: [] }
+  const desired = permission === 'granted'
+    ? desiredRestAlert({ sessionId, status, rest: view?.rest, now, nextLabel })
+    : null
+  const plan = planRestAlerts(desired, await adapter.listScheduled())
+  for (const id of plan.cancel) await adapter.cancel(id)
+  if (plan.schedule) await adapter.schedule(plan.schedule)
+  const dismiss = sessionId && ended(status) ? deliveredToDismiss(sessionId, await adapter.listDelivered(), status) : []
+  for (const id of dismiss) await adapter.dismiss(id)
+  return { ...plan, dismiss }
+}
+
+// A rest alert arriving while the app is open is not presented: the dock already shows the rest
+// ending. Expo SDK 58 presents foreground notifications with sound unless told otherwise. Any other
+// notification (the app sends none today) shows in the banner and list, without sound or badge.
+const SILENT = { shouldShowBanner: false, shouldShowList: false, shouldPlaySound: false, shouldSetBadge: false }
+const QUIET = { shouldShowBanner: true, shouldShowList: true, shouldPlaySound: false, shouldSetBadge: false }
+export const foregroundBehavior = data => (data?.kind === 'rest' ? SILENT : QUIET)
+
+// A tap on a rest alert opens the Workout tab and does nothing else.
+export const isRestAlertResponse = response => response?.notification?.request?.content?.data?.kind === 'rest'
+
+// iOS authorization statuses (expo-notifications IosAuthorizationStatus) that let an alert show:
+// authorized, provisional and ephemeral. Expo reports provisional as status 'undetermined' with
+// granted false, so the iOS status is read too.
+const IOS_ALLOWED = [2, 3, 4]
+export const alertsAllowed = permissions => permissions?.granted === true || IOS_ALLOWED.includes(permissions?.ios?.status)
