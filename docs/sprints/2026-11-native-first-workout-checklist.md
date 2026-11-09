@@ -35,16 +35,17 @@ Swipe up from the bottom edge and pause to open the app switcher. Then swipe the
 - [ ] Tap Storage check.
 - [ ] It says "Storage check passed".
 
-## 4. The five kill checks
+## 4. The six kill checks
 
-Start a workout for these. Kill the app as described above each time.
+Start Push A for these. Kill the app as described above each time, except where a check says otherwise.
 
 - [ ] 1. Draft. Type a weight and tap Save without completing the set. Kill the app and reopen it. The draft is still there.
-- [ ] 2. Rest. Complete a set. Kill the app during the rest. Reopen it. The set is still done and the rest time left is right.
-- [ ] 3. Left and right. On cable lateral raise, complete the left side. Kill the app and reopen it. Left is still done and the dock asks for the right side.
-- [ ] 4. Finish. Finish the workout. Kill the app and reopen it. The workout is saved and no session is open.
-- [ ] 5. Next workout. Start the next workout. Its exercises open at the weights you just lifted.
-- [ ] Finish or discard that second workout before the Export step. Export only shows on the Workout start screen and on the "Saved on this phone" screen, not while a workout is open.
+- [ ] 2. Typed, not saved. Tap the current set's weight to open the keypad and type a new weight. Do not tap Save. Swipe up to the Home Screen to send the app to the background, then open the app switcher and swipe the openGym card up. Reopen it. The set shows the typed weight as a draft.
+- [ ] 3. Rest. Complete a set. Kill the app during the rest. Reopen it. The set is still done and the rest time left is right.
+- [ ] 4. Left and right. On cable lateral raise, complete the left side. Kill the app and reopen it. Left is still done and the dock asks for the right side.
+- [ ] 5. Finish. Finish the workout. Kill the app and reopen it. The workout is saved and no session is open.
+- [ ] 6. Next workout. Start Push A again from the routine list on the Workout start screen, not from the Next button: Next has moved on to Pull A, whose exercises differ. The bench opens at the weight you just lifted.
+- [ ] Discard that second Push A before the Export step: tap Finish, then Discard workout, then Discard. Export only shows on the Workout start screen and on the "Saved on this phone" screen, not while a workout is open.
 
 ## 5. Export
 
