@@ -12,6 +12,7 @@ import {
   deleteWorkout,
   findOwnWorkouts,
   findWorkoutsBySyncId,
+  ownBundleId,
   readBodyMass,
   requestHealthAccess,
   saveStrengthWorkout
@@ -19,7 +20,6 @@ import {
 
 // A separate file from opengym.db, so the check can clear its rows and delete the file safely.
 const PROBE_DATABASE_NAME = 'opengym-probe.db'
-const OWN_BUNDLE = 'io.github.michaelportale.opengym'
 const MANUAL_ID = 'opengym-phase0-gate-manual'
 const adapter = { saveStrengthWorkout, findWorkoutsBySyncId, findOwnWorkouts, deleteWorkout }
 const message = e => (e && e.message) || String(e)
@@ -73,7 +73,7 @@ export default function Diagnostics() {
       const end = new Date()
       const start = new Date(end.getTime() - 30 * 24 * 3600000)
       const samples = await readBodyMass({ start, end })
-      return ['read: ' + readVerdict(samples, OWN_BUNDLE), 'samples: ' + samples.length]
+      return ['read: ' + readVerdict(samples, await ownBundleId()), 'samples: ' + samples.length]
     })
 
   const saveManual = () =>
@@ -86,7 +86,7 @@ export default function Diagnostics() {
 
   const removeTests = () =>
     run(async () => {
-      const r = await removeGateWorkouts(adapter, OWN_BUNDLE)
+      const r = await removeGateWorkouts(adapter, await ownBundleId())
       const out = ['removed: ' + r.removed, 'left: ' + r.left, 'other workouts from this app (kept): ' + r.other]
       if (r.error) out.push('error: ' + r.error)
       return out

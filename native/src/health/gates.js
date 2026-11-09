@@ -4,8 +4,36 @@ export function gateSyncId(nowMs) {
   return GATE_PREFIX + nowMs
 }
 
-export function syncMetadata(id, version, volumeLb) {
-  return { HKMetadataKeySyncIdentifier: id, HKMetadataKeySyncVersion: version, openGymTotalVolumeLb: volumeLb }
+export function syncMetadata(id, version, volumeLb, { partial } = {}) {
+  const metadata = { HKMetadataKeySyncIdentifier: id, HKMetadataKeySyncVersion: version, openGymTotalVolumeLb: volumeLb }
+  if (partial) metadata.openGymVolumePartial = true
+  return metadata
+}
+
+// An empty source list means no filter to the library, which would match every app's objects.
+export function syncIdFilter(syncId, ownSources, equalTo) {
+  if (ownSources.length === 0) return null
+  return {
+    AND: [
+      { metadata: { withMetadataKey: 'HKMetadataKeySyncIdentifier', operatorType: equalTo, value: syncId } },
+      { sources: ownSources }
+    ]
+  }
+}
+
+export function toOwnWorkout(w) {
+  const m = w.metadata
+  return {
+    uuid: w.uuid,
+    syncId: syncIdOf(m) ?? null,
+    syncVersion: m?.HKMetadataKeySyncVersion ?? null,
+    volumeLb: m?.openGymTotalVolumeLb ?? null
+  }
+}
+
+export function toBodyMassReading(s) {
+  if (!Number.isFinite(s.quantity)) return null
+  return { uuid: s.uuid, lb: s.quantity, at: s.startDate, bundleId: s.sourceRevision?.source?.bundleIdentifier ?? null }
 }
 
 // HKSyncIdentifier is what builds before the key fix saved under, so their workouts need it to be found.

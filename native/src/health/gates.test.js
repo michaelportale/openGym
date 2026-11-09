@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { gateSyncId, syncMetadata, syncIdOf, sortOwnWorkouts, externalBodyMass, readVerdict } from './gates.js'
+import { gateSyncId, syncMetadata, syncIdOf, sortOwnWorkouts, externalBodyMass, readVerdict, syncIdFilter, toOwnWorkout, toBodyMassReading } from './gates.js'
 
 const own = 'io.github.michaelportale.opengym'
 
@@ -45,4 +45,35 @@ test('an empty or own-only read is inconclusive, never a pass', () => {
   expect(readVerdict([], own)).toBe('inconclusive')
   expect(readVerdict([{ uuid: 'a', bundleId: own }], own)).toBe('inconclusive')
   expect(readVerdict([{ uuid: 'b', bundleId: 'com.apple.Health' }], own)).toBe('pass')
+})
+
+test('the partial flag adds a key only when set', () => {
+  expect('openGymVolumePartial' in syncMetadata('x', 5, 1200)).toBe(false)
+  expect('openGymVolumePartial' in syncMetadata('x', 5, 1200, { partial: false })).toBe(false)
+  expect(syncMetadata('x', 5, 1200, { partial: true }).openGymVolumePartial).toBe(true)
+  expect(Object.keys(syncMetadata('x', 5, 1200))).toEqual(['HKMetadataKeySyncIdentifier', 'HKMetadataKeySyncVersion', 'openGymTotalVolumeLb'])
+})
+
+test('the delete filter needs an own source, or it would match every app', () => {
+  expect(syncIdFilter('opengym-w-1', [], 4)).toBeNull()
+  const src = { bundleIdentifier: own }
+  expect(syncIdFilter('opengym-w-1', [src], 4)).toEqual({
+    AND: [
+      { metadata: { withMetadataKey: 'HKMetadataKeySyncIdentifier', operatorType: 4, value: 'opengym-w-1' } },
+      { sources: [src] }
+    ]
+  })
+})
+
+test('an own workout tolerates missing metadata', () => {
+  expect(toOwnWorkout({ uuid: 'u' })).toEqual({ uuid: 'u', syncId: null, syncVersion: null, volumeLb: null })
+  expect(toOwnWorkout({ uuid: 'u', metadata: { HKMetadataKeySyncIdentifier: 'a', HKMetadataKeySyncVersion: 3, openGymTotalVolumeLb: 10 } }))
+    .toEqual({ uuid: 'u', syncId: 'a', syncVersion: 3, volumeLb: 10 })
+})
+
+test('a body mass reading needs a finite quantity and tolerates a missing source', () => {
+  const d = new Date(0)
+  expect(toBodyMassReading({ uuid: 'u', quantity: NaN, startDate: d })).toBeNull()
+  expect(toBodyMassReading({ uuid: 'u', quantity: 180, startDate: d })).toEqual({ uuid: 'u', lb: 180, at: d, bundleId: null })
+  expect(toBodyMassReading({ uuid: 'u', quantity: 180, startDate: d, sourceRevision: { source: { bundleIdentifier: 'b' } } }).bundleId).toBe('b')
 })

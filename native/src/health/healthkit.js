@@ -1,6 +1,9 @@
 import {
+  AuthorizationStatus,
   ComparisonPredicateOperator,
   WorkoutActivityType,
+  authorizationStatusFor,
+  currentAppSource,
   deleteObjects,
   queryQuantitySamples,
   querySources,
@@ -8,23 +11,43 @@ import {
   requestAuthorization,
   saveWorkoutSample
 } from '@kingstinct/react-native-healthkit'
-import { syncIdOf, syncMetadata } from './gates.js'
+import { syncIdFilter, syncIdOf, syncMetadata, toBodyMassReading, toOwnWorkout } from './gates.js'
 
 const WORKOUT = 'HKWorkoutTypeIdentifier'
 const BODY_MASS = 'HKQuantityTypeIdentifierBodyMass'
 
 export async function requestHealthAccess() {
-  await requestAuthorization({ toShare: [WORKOUT, BODY_MASS], toRead: [WORKOUT, BODY_MASS] })
+  await requestAuthorization({ toShare: [WORKOUT, BODY_MASS], toRead: [BODY_MASS] })
 }
 
-export async function saveStrengthWorkout({ id, version, start, end, volumeLb }) {
+export async function ownBundleId() {
+  const source = currentAppSource()
+  try {
+    return source.bundleIdentifier
+  } finally {
+    source.dispose()
+  }
+}
+
+export function workoutWriteAccess() {
+  try {
+    const status = authorizationStatusFor(WORKOUT)
+    if (status === AuthorizationStatus.sharingAuthorized) return 'on'
+    if (status === AuthorizationStatus.sharingDenied) return 'off'
+    return 'unknown'
+  } catch {
+    return 'unknown'
+  }
+}
+
+export async function saveStrengthWorkout({ id, version, start, end, volumeLb, partial }) {
   const workout = await saveWorkoutSample(
     WorkoutActivityType.traditionalStrengthTraining,
     [],
     start,
     end,
     undefined,
-    syncMetadata(id, version, volumeLb)
+    syncMetadata(id, version, volumeLb, { partial })
   )
   try {
     return { uuid: workout.uuid }
@@ -40,17 +63,17 @@ export async function findWorkoutsBySyncId(id) {
   })
   return workouts.map(w => {
     try {
-      return { uuid: w.uuid, syncVersion: Number(w.metadata.HKMetadataKeySyncVersion), volumeLb: Number(w.metadata.openGymTotalVolumeLb) }
+      return toOwnWorkout(w)
     } finally {
       w.dispose()
     }
   })
 }
 
-export async function findOwnWorkouts(ownBundleId) {
+export async function findOwnWorkouts(bundleId) {
   const sources = await querySources(WORKOUT)
   try {
-    const own = sources.filter(s => s.bundleIdentifier === ownBundleId)
+    const own = sources.filter(s => s.bundleIdentifier === bundleId)
     // The library treats an empty source list as no filter, which would read every app's workouts.
     if (own.length === 0) return []
     const workouts = await queryWorkoutSamples({ limit: 0, filter: { sources: own } })
@@ -66,6 +89,18 @@ export async function findOwnWorkouts(ownBundleId) {
   }
 }
 
+export async function deleteWorkoutsBySyncId(syncId) {
+  const bundleId = await ownBundleId()
+  const sources = await querySources(WORKOUT)
+  try {
+    const filter = syncIdFilter(syncId, sources.filter(s => s.bundleIdentifier === bundleId), ComparisonPredicateOperator.equalTo)
+    if (!filter) return 0
+    return await deleteObjects(WORKOUT, filter)
+  } finally {
+    sources.forEach(s => s.dispose())
+  }
+}
+
 export function deleteWorkout(uuid) {
   return deleteObjects(WORKOUT, { uuid })
 }
@@ -76,10 +111,9 @@ export async function readBodyMass({ start, end }) {
     unit: 'lb',
     filter: { date: { startDate: start, endDate: end } }
   })
-  return samples.map(s => ({
-    uuid: s.uuid,
-    lb: s.quantity,
-    at: s.startDate,
-    bundleId: s.sourceRevision.source.bundleIdentifier
-  }))
+  try {
+    return samples.map(toBodyMassReading).filter(Boolean)
+  } finally {
+    samples.forEach(s => s.dispose?.())
+  }
 }
