@@ -72,6 +72,14 @@ describe('liftsView', () => {
   })
 })
 
+describe('liftRows on an assistance machine', () => {
+  it('shows the least help as the best', () => {
+    const M = Object.values(exercises.EXIDX).find(e => exercises.isAssisted(e) && !exercises.isCustomEx(e))
+    const state = { workouts: [80, 60, 40].map((w, i) => wk(9 - i, [{ id: M.id, sets: sets(w, 8) }])) }
+    expect(liftRows(state).map(l => [l.id, l.label])).toEqual([[M.id, 'Best: 40 lb']])
+  })
+})
+
 describe('liftsCard', () => {
   it('reads as loading until the rows are worked out, when there is history', () => {
     const state = { workouts: [wk(3, [{ id: A.id, sets: sets(100) }])] }
