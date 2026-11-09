@@ -17,7 +17,7 @@ export const TABS = [
   {
     name: 'exercises',
     label: 'Exercises',
-    availability: 'unbuilt',
+    availability: 'ready',
     sf: { default: 'square.stack.3d.up', selected: 'square.stack.3d.up.fill' }
   }
 ]
