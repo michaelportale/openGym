@@ -8,6 +8,7 @@ import PrimaryButton from '../../ui/PrimaryButton'
 import ScreenHeader from '../../ui/ScreenHeader'
 import StartScreen from '../../workout/StartScreen'
 import { useWorkoutHome } from '../../workout/use-workout-home'
+import WorkoutError from '../../workout/WorkoutError'
 import WorkoutSession from '../../workout/WorkoutSession'
 
 // The tab never passes for the owner's data while it runs on the example snapshot.
@@ -51,6 +52,11 @@ function Body({ home }) {
       ) : null}
     </View>
   )
+}
+
+// Expo Router wraps this route in it: a render throw shows the error, Retry and Export.
+export function ErrorBoundary({ error, retry }) {
+  return <WorkoutError error={error} retry={retry} />
 }
 
 export default function Workout() {

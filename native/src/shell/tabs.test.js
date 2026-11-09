@@ -96,6 +96,16 @@ test('a tab colour that is not hex is rejected', () => {
   expect(() => pinnedTabColor('accent', 'web', () => {})).toThrow('accent')
 })
 
+// A render throw on the phone holding the only record must not become a crash loop.
+test('the Workout route has an error boundary with the error, Retry and Export', () => {
+  const route = readFileSync(new URL('../app/(tabs)/index.js', import.meta.url), 'utf8')
+  expect(route).toMatch(/export function ErrorBoundary\(\{ error, retry \}\)/)
+  const screen = readFileSync(new URL('../workout/WorkoutError.js', import.meta.url), 'utf8')
+  expect(screen).toContain('error?.message')
+  expect(screen).toContain('onPress={retry}')
+  expect(screen).toContain('<ExportButton')
+})
+
 test('the tab host uses the shared colours and the five-tab list', () => {
   const src = readFileSync(new URL('../app/(tabs)/_layout.js', import.meta.url), 'utf8')
   expect(src).toContain('tabBarColors')
