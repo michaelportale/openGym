@@ -41,7 +41,7 @@ Start Push A for these. Kill the app as described above each time.
 
 - [ ] 1. Draft. Type a weight and tap Save without completing the set. Kill the app and reopen it. The draft is still there.
 - [ ] 2. Typed, not saved. Tap the current set's weight to open the keypad and type a new weight. Do not tap Save. With the keypad still open, kill the app straight from it as described above: swipe up and pause, then swipe the openGym card up, without going to the Home Screen first. Reopen it. The set shows the typed weight as a draft.
-- [ ] 3. Rest. Complete a set. Kill the app during the rest. Reopen it. The set is still done and the rest time left is right.
+- [ ] 3. Rest. Complete a set. On a fresh install this first rest shows the iOS notification prompt: tap Allow, since step 7 needs alerts on. Kill the app during the rest. Reopen it. The set is still done and the rest time left is right.
 - [ ] 4. Left and right. On cable lateral raise, complete the left side. Kill the app and reopen it. Left is still done and the dock asks for the right side.
 - [ ] 5. Finish. Finish the workout. Kill the app and reopen it. The workout is saved and no session is open.
 - [ ] 6. Next workout. Start Push A again from the routine list on the Workout start screen, not from the Next button: Next has moved on to Pull A, whose exercises differ. The bench opens at the weight you just lifted.
@@ -62,16 +62,22 @@ Start Push A again for these, and discard it when they are done (Finish, then Di
 
 ## 7. Rest alerts, haptics and motion
 
-Phase 3. Start Push A for these, and discard it when they are done. The first rest of a session asks for notification permission: allow it for the first checks, then turn it off in the notifications check below.
+Phase 3. Start Push A from the routine list on the Workout start screen for these. The Old alert check saves that workout; the checks after it need a new Push A, and you discard that one when the step is done.
 
+iOS shows the notification prompt once per install, at the first rest. On a fresh install that was kill check 3 in step 4, not this step. If the prompt never appeared (an earlier install on this phone already answered it), open Settings, Notifications, openGym and check Allow Notifications is on before you start.
+
+- [ ] Saved set. Complete the current set. As it saves, the phone gives one short haptic.
+- [ ] Done pop. Watch the Done column and complete the current set. Its mark pops in, growing from small, rather than just appearing. Tap Add warm-up, then open the warm-up and complete it: its mark pops too.
+- [ ] Rest ends in the app. Set Auto-Lock to Never. Complete a set and stay on the Workout tab until the rest runs out. The phone buzzes once, and no banner or sound appears. Set Auto-Lock back.
 - [ ] Locked alert. Complete a set, then lock the phone during the rest. The alert arrives when the rest ends.
-- [ ] Tap the alert. It opens the app on the Workout tab. (The simulator could not test this.)
+- [ ] Tap the alert. Complete a set, tap the Home tab, then lock the phone. When the alert arrives, tap it. The app opens on the Workout tab, not on Home. (The simulator could not test this.)
 - [ ] Pause, then lock. Complete a set, tap Pause on the rest, then lock the phone. No alert arrives while paused. Unlock, tap Resume, lock again: the alert arrives when the time left runs out.
-- [ ] Old alert. Complete a set, lock the phone, then finish and save the workout during the rest. Tap the alert that arrives (or one left in Notification Centre). No workout comes back.
-- [ ] Deny notifications. In Settings, turn notifications off for openGym. Complete a set. The workout still works and "Rest alerts are off" shows once, not on every set.
+- [ ] Old alert. Complete a set, lock the phone and let the alert arrive. Unlock without tapping the alert, so it stays in Notification Centre. Complete the next set, and during its rest tap Finish, then Save workout. Swipe down from the top of the screen: the openGym alert is gone from Notification Centre. Lock the phone and wait until after that second rest would have ended: no alert arrives.
+- [ ] Deny notifications. Start a new Push A from the routine list on the Workout start screen, not from the Next button: Next has moved on to Pull A. In Settings, turn notifications off for openGym, then return to the app. Complete a set. The workout still works and "Rest alerts are off" shows. Complete another set: it does not show again.
 - [ ] Reduce Motion. In Settings, Accessibility, Motion, turn Reduce Motion on. Complete a set and move to the next exercise: no pops or fades. Turn it back off.
 - [ ] System haptics off. In Settings, Sounds & Haptics, turn System Haptics off. Complete a set: no buzz, and everything still works. Turn it back on.
 - [ ] Long absence. Open the keypad and type a number without saving. Leave the app in the background for 5 minutes or more, then return. The keypad is closed and the typed numbers show in the row as a draft.
+- [ ] Discard this Push A: tap Finish, then Discard workout, then Discard.
 
 ## 8. Airplane Mode off
 
