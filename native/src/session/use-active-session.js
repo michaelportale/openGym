@@ -35,37 +35,44 @@ export function sessionOptionsFrom(options = {}) {
   }
 }
 
+// The controller the hook keeps, from the options of its first render.
+export function activeSessionController(options) {
+  return createSessionController(sessionOptionsFrom(options))
+}
+
+// What the hook hands the screen besides the state: each command on `controller`, then
+// `publish()` so the screen re-renders with the state the command settled in.
+export function sessionActions(controller, publish) {
+  const settled = run => async (...args) => {
+    const result = await run(...args)
+    publish()
+    return result
+  }
+  const actions = Object.fromEntries(ACTIONS.map(name => [name, settled((...args) => controller.call(name, ...args))]))
+  actions.finishSession = settled(input => controller.finishSession(input))
+  // The state as of the last settled action. After `await commitSet(...)` the hook value in a
+  // closure is still the old render, and the screen needs the new row's `at` to start its rest.
+  actions.getState = () => controller.getState()
+  // The view at the clock now; writes nothing (the controller's refresh).
+  actions.refresh = settled(() => controller.refresh())
+  return actions
+}
+
 // Restores the open session once, when the screen mounts. options.storage, base, now, and
 // timeZone are read from the first render. A storage error comes back as { ok: false, saved: false }
 // from the action and as error on the hook value. The set stays unsaved.
 export function useActiveSession(options) {
   const controllerRef = useRef(null)
-  if (controllerRef.current == null) controllerRef.current = createSessionController(sessionOptionsFrom(options))
+  if (controllerRef.current == null) controllerRef.current = activeSessionController(options)
   const controller = controllerRef.current
   const [state, setState] = useState(() => controller.getState())
   const liveRef = useRef(true)
   const actionsRef = useRef(null)
+  // Nothing is published once the screen has gone.
   if (actionsRef.current == null) {
-    const actions = Object.fromEntries(ACTIONS.map(name => [name, async (...args) => {
-      const result = await controller.call(name, ...args)
+    actionsRef.current = sessionActions(controller, () => {
       if (liveRef.current) setState(controller.getState())
-      return result
-    }]))
-    actions.finishSession = async (input) => {
-      const result = await controller.finishSession(input)
-      if (liveRef.current) setState(controller.getState())
-      return result
-    }
-    // The state as of the last settled action. After `await commitSet(...)` the hook value in a
-    // closure is still the old render, and the screen needs the new row's `at` to start its rest.
-    actions.getState = () => controller.getState()
-    // The view at the clock now; writes nothing (the controller's refresh).
-    actions.refresh = async () => {
-      const next = await controller.refresh()
-      if (liveRef.current) setState(controller.getState())
-      return next
-    }
-    actionsRef.current = actions
+    })
   }
 
   useEffect(() => {
