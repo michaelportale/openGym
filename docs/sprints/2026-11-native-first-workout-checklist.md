@@ -37,10 +37,10 @@ Swipe up from the bottom edge and pause to open the app switcher. Then swipe the
 
 ## 4. The six kill checks
 
-Start Push A for these. Kill the app as described above each time, except where a check says otherwise.
+Start Push A for these. Kill the app as described above each time.
 
 - [ ] 1. Draft. Type a weight and tap Save without completing the set. Kill the app and reopen it. The draft is still there.
-- [ ] 2. Typed, not saved. Tap the current set's weight to open the keypad and type a new weight. Do not tap Save. Swipe up to the Home Screen to send the app to the background, then open the app switcher and swipe the openGym card up. Reopen it. The set shows the typed weight as a draft.
+- [ ] 2. Typed, not saved. Tap the current set's weight to open the keypad and type a new weight. Do not tap Save. With the keypad still open, kill the app straight from it as described above: swipe up and pause, then swipe the openGym card up, without going to the Home Screen first. Reopen it. The set shows the typed weight as a draft.
 - [ ] 3. Rest. Complete a set. Kill the app during the rest. Reopen it. The set is still done and the rest time left is right.
 - [ ] 4. Left and right. On cable lateral raise, complete the left side. Kill the app and reopen it. Left is still done and the dock asks for the right side.
 - [ ] 5. Finish. Finish the workout. Kill the app and reopen it. The workout is saved and no session is open.
