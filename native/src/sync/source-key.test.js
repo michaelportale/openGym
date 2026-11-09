@@ -1,6 +1,7 @@
 import { expect, test, vi } from 'vitest'
 import { createNodeSqliteDb } from '../../scripts/node-sqlite.mjs'
 import { createSqliteWeighIns } from '../body/weigh-ins.js'
+import { createSqliteMeasurements } from '../body/measurement-store.js'
 import { createSqliteFinishedWorkouts } from '../session/finished-workouts.js'
 import { createSqlitePendingEdits } from './pending-edits.js'
 import { createSqliteServerCopy } from './server-copy.js'
@@ -143,4 +144,30 @@ test('readSourceKey follows nutrition days and settings too: put, and acked', as
   expect(both).not.toBe(day)
   await stores.routineEdits.markAcked([{ kind: 'nutritionDay', key: '2026-11-09', t: 3 }, { kind: 'setting', key: 'supplements', t: 4 }], 'now')
   expect(await read()).toBe(none)
+})
+
+test('a pending measurement change gives a new key, apart from the weigh-ins', () => {
+  const m = { d: '2026-11-09', op: 'set', entry: { d: '2026-11-09', t: 100, waist: 80 }, t: 100 }
+  const key = sourceKey({ ...base(), measurements: [m] })
+  expect(key).not.toBe(sourceKey(base()))
+  expect(sourceKey({ ...base(), measurements: [structuredClone(m)] })).toBe(key)
+  expect(sourceKey({ ...base(), measurements: [{ ...m, t: 101 }] })).not.toBe(key)
+  expect(sourceKey({ ...base(), measurements: [{ d: m.d, op: 'remove', t: 100 }] })).not.toBe(key)
+  // a weigh-in and a measurement of the same day, op and time are two different keys
+  const w = base().weighIns[0]
+  expect(sourceKey({ ...base(), weighIns: [], measurements: [{ d: w.d, op: w.op, t: w.t }] })).not.toBe(sourceKey(base()))
+})
+
+test('readSourceKey follows the measurement store, and leaves measurements out without one', async () => {
+  const db = createNodeSqliteDb()
+  const measurements = createSqliteMeasurements(db)
+  const stores = { finished: createSqliteFinishedWorkouts(db), serverCopy: createSqliteServerCopy(db), measurements }
+  const read = () => readSourceKey({ ...stores, now: NOW })
+  const first = await read()
+  await measurements.put({ d: '2026-11-09', op: 'set', entry: { d: '2026-11-09', t: 5, waist: 80 }, t: 5 })
+  const second = await read()
+  expect(second).not.toBe(first)
+  expect(await readSourceKey({ ...stores, measurements: null, now: NOW })).toBe(first)
+  await measurements.markAcked([{ d: '2026-11-09', t: 5 }], 'now')
+  expect(await read()).toBe(first)
 })

@@ -329,3 +329,82 @@ test('a routine, a day and a setting ride one push, each in its own place', () =
   expect(push.state.workouts.map(w => w.id)).toEqual(['w1', 'w2', 'p1'])
   expect(push.edits.map(e => [e.kind, e.key])).toEqual([['routine', 'r1'], ['nutritionDay', '2026-11-09'], ['setting', 'supplements']])
 })
+
+// Body measurements (measurement-store.js rows): by day, like weigh-ins, under the same typed
+// guard (measurement-ops.js). Entries as the web stores them, in cm, with keys this app does not know.
+const mEntry = (d, t, fields = {}) => ({ d, t, waist: 81.28, chest: 101.6, neck: null, other: [{ id: 'c1', name: 'Calf', value: 38.1 }], futureKey: { x: [1] }, ...fields })
+const mSet = e => ({ d: e.d, op: 'set', entry: e, t: e.t })
+const measuredCopy = () => ({
+  state: {
+    ...fixture(),
+    measurements: [
+      mEntry('2026-11-01', 100),
+      // two rows on one day, as an import can leave them: the web folds them, so both go back
+      mEntry('2026-11-03', 200, { waist: 80 }),
+      mEntry('2026-11-03', 300, { waist: null, hips: 99.06 }),
+      mEntry('2026-11-05', 400, { mystery: { nested: [1, { y: 'z' }] } }),
+    ],
+    deleted: { ...fixture().deleted, measurements: { '2026-11-07': 900 } },
+  },
+  rev: 11,
+  wid: 'wid-m',
+})
+
+test('a measurement set goes in by day; every other day, row and key is byte-identical', () => {
+  const copy = measuredCopy()
+  const mine = mEntry('2026-11-05', 500, { waist: 80.01, mystery: { nested: [1, { y: 'z' }] } })
+  const push = buildPush(copy, [], [], [], [mSet(mine)])
+  expect(push.state.measurements).toEqual([...copy.state.measurements.slice(0, 3), mine])
+  copy.state.measurements.slice(0, 3).forEach((e, i) => expect(push.state.measurements[i]).toBe(e))
+  const others = s => JSON.stringify(s.measurements.filter(e => e.d !== '2026-11-05'))
+  expect(others(push.state)).toBe(others(measuredCopy().state))
+  expect(JSON.stringify({ ...push.state, measurements: undefined })).toBe(JSON.stringify({ ...measuredCopy().state, measurements: undefined }))
+  expect(push.state.workouts).toBe(copy.state.workouts)
+  expect(push.state.deleted).toBe(copy.state.deleted)
+  expect(push.baseRev).toBe(11)
+  expect(push.baseWid).toBe('wid-m')
+  expect(push.edits).toEqual([])
+  expect(copy).toEqual(measuredCopy()) // input not mutated
+})
+
+test('a measurement day the copy lacks is added in day order, and a copy with no measurements starts the list', () => {
+  const mine = mEntry('2026-11-04', 500)
+  expect(buildPush(measuredCopy(), [], [], [], [mSet(mine)]).state.measurements.map(e => [e.d, e.t])).toEqual([
+    ['2026-11-01', 100], ['2026-11-03', 200], ['2026-11-03', 300], ['2026-11-04', 500], ['2026-11-05', 400],
+  ])
+  const bare = { state: fixture(), rev: 1, wid: 'w' }
+  const push = buildPush(bare, [], [], [], [mSet(mine)])
+  expect(push.state.measurements).toEqual([mine])
+  expect({ ...push.state, measurements: undefined }).toEqual({ ...fixture(), measurements: undefined })
+})
+
+test('a measurement remove takes out the day it saw, both rows of it; the removal goes as the day left out', () => {
+  const copy = measuredCopy()
+  const push = buildPush(copy, [], [], [], [{ d: '2026-11-03', op: 'remove', t: 600, baseT: 300 }])
+  expect(push.state.measurements).toEqual([copy.state.measurements[0], copy.state.measurements[3]])
+  // the server records the removal from the day the push leaves out (sync-stamps.js stampUnstamped)
+  expect(push.state.deleted).toBe(copy.state.deleted)
+})
+
+test('measurements that cannot apply, or are already there, make no push and leave the list as it was', () => {
+  const copy = measuredCopy()
+  expect(buildPush(copy, [], [], [], [mSet(mEntry('2026-11-05', 350))])).toBeNull() // a later entry holds the day
+  expect(buildPush(copy, [], [], [], [mSet(mEntry('2026-11-05', 400, { mystery: { nested: [1, { y: 'z' }] } }))])).toBeNull() // already there
+  expect(buildPush(copy, [], [], [], [{ d: '2026-11-03', op: 'remove', t: 600, baseT: 200 }])).toBeNull() // saw another entry
+  expect(buildPush(copy, [], [], [], [{ d: '2026-11-09', op: 'remove', t: 600, baseT: 1 }])).toBeNull() // already gone
+  expect(buildPush(copy, [], [], [], [mSet(mEntry('2026-11-07', 850))])).toBeNull() // removed on the web after it
+  expect(buildPush(copy, [], [], [], [mSet(mEntry('2026-11-07', 950))]).state.measurements.map(e => e.d)).toContain('2026-11-07')
+  const withWorkout = buildPush(copy, [pend('p1')], [], [], [mSet(mEntry('2026-11-05', 350))])
+  expect(withWorkout.state.measurements).toBe(copy.state.measurements)
+})
+
+test('a workout, a weigh-in, an edit and a measurement ride one push, each in its own place', () => {
+  const copy = { ...planCopy(), state: { ...planCopy().state, measurements: measuredCopy().state.measurements } }
+  const mine = mEntry('2026-11-08', 500)
+  const push = buildPush(copy, [pend('p1')], [typedSet('2026-11-08', 181.2, 5)], [routineEdit(movedR1())], [mSet(mine)])
+  expect(push.state.workouts.map(w => w.id)).toEqual(['w1', 'w2', 'p1'])
+  expect(push.state.bodyweight).toEqual([{ d: '2026-11-08', w: 181.2, t: 5 }])
+  expect(push.state.routines[0]).toEqual(movedR1())
+  expect(push.state.measurements).toEqual([...copy.state.measurements, mine])
+  expect(push.edits.map(e => [e.kind, e.key])).toEqual([['routine', 'r1']])
+})

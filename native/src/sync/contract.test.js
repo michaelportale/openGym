@@ -15,6 +15,7 @@ import { describe, expect, onTestFinished, test } from 'vitest'
 import { boundPort } from '../../../api/test/helpers.mjs'
 import { SQLITE_DRIVERS } from '../../scripts/node-sqlite.mjs'
 import { createSqliteWeighIns } from '../body/weigh-ins.js'
+import { createSqliteMeasurements } from '../body/measurement-store.js'
 import { createSqlitePendingEdits } from './pending-edits.js'
 import { createSqliteFinishedWorkouts } from '../session/finished-workouts.js'
 import { createApiClient } from './api-client.js'
@@ -161,8 +162,9 @@ function phoneApp(db, { keychain = fakeKeychain(), client = createApiClient({ fe
   const meta = createSqliteSyncMeta(db)
   const weighIns = createSqliteWeighIns(db)
   const routineEdits = createSqlitePendingEdits(db)
-  const sync = createSync({ client, credentials: createCredentials(keychain), copy, workouts, weighIns, routineEdits, meta, now: () => T0 })
-  return { sync, workouts, weighIns, routineEdits, copy, meta, keychain, client }
+  const measurements = createSqliteMeasurements(db)
+  const sync = createSync({ client, credentials: createCredentials(keychain), copy, workouts, weighIns, routineEdits, measurements, meta, now: () => T0 })
+  return { sync, workouts, weighIns, routineEdits, measurements, copy, meta, keychain, client }
 }
 
 async function paired(server, db = createRealDb(), options) {
@@ -223,7 +225,7 @@ describe.skipIf(!HAS_API_DEPS)(TITLE, { timeout: 30_000 }, () => {
     expect(stored.rev).toBe(12)
     expect(stored.wid).toBe(fixture()._wid)
     expect(await app.sync.status()).toEqual({
-      paired: true, state: 'idle', lastSyncedAt: new Date(T0).toISOString(), pending: 0, pendingWeighIns: 0, pendingEdits: 0, copyKey: `${stored.rev}|${stored.wid}`, server: server.api, profile: 'Owner',
+      paired: true, state: 'idle', lastSyncedAt: new Date(T0).toISOString(), pending: 0, pendingWeighIns: 0, pendingEdits: 0, pendingMeasurements: 0, copyKey: `${stored.rev}|${stored.wid}`, server: server.api, profile: 'Owner',
     })
     // the token is in the Keychain and nowhere in SQLite
     const token = app.keychain.m.get('opengym.token')
@@ -383,6 +385,64 @@ describe.skipIf(!HAS_API_DEPS)(TITLE, { timeout: 30_000 }, () => {
     expect(file.bodyweight ?? []).toEqual([])
     expect(Number(file.deleted.bodyweight['2026-11-08'])).toBeGreaterThan(0)
     expect(await app.weighIns.listPending()).toEqual([])
+  })
+
+  // A day's measurements as the web stores them: cm that are not round in inches, an empty field,
+  // a custom field and a key this app does not know.
+  const measured = (d, t, fields = {}) => ({ d, t, neck: 38.1, waist: 81.28, chest: null, other: [{ id: 'c1', name: 'Calf pump', value: 38.5 }], futureKey: { nested: [1, { x: 'y' }] }, ...fields })
+
+  test('a measurement set reaches the server file byte for byte, other days kept; a later remove takes it out and stamps the day', async () => {
+    const webDay = measured('2026-11-01', T0 - 9000, { waist: 82.55 })
+    const server = await startServer({ state: { ...fixture(), measurements: [webDay] } })
+    const app = await paired(server)
+    const mine = measured('2026-11-08', T0)
+    await app.measurements.put({ d: mine.d, op: 'set', entry: mine, t: T0 })
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pending: 0, pendingMeasurements: 0 })
+    let file = server.file()
+    expect(JSON.stringify(file.measurements)).toBe(JSON.stringify([webDay, mine]))
+    expectOriginalKept(file)
+    expect(file.workouts.map(stripStamps)).toEqual(fixture().workouts.map(stripStamps))
+    expect((await app.copy.get()).state.measurements).toEqual(file.measurements)
+    expect(await app.measurements.listPending()).toEqual([])
+    // acked by the pull: the next sync sends nothing
+    await app.sync.syncNow()
+    expect(server.file()._rev).toBe(file._rev)
+
+    await app.measurements.put({ d: mine.d, op: 'remove', t: T0 + 1000, baseT: T0 })
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingMeasurements: 0 })
+    file = server.file()
+    expect(JSON.stringify(file.measurements)).toBe(JSON.stringify([webDay]))
+    expect(Number(file.deleted.measurements['2026-11-08'])).toBeGreaterThan(T0)
+    expect(file.deleted.workouts).toEqual(fixture().deleted.workouts)
+    expect(await app.measurements.listPending()).toEqual([])
+  })
+
+  test('a measurement day the web deletes, and one the phone removes, stay deleted after the phone forgets and pairs again', async () => {
+    const server = await startServer()
+    const app = await paired(server)
+    const a = measured('2026-11-07', T0)
+    const b = measured('2026-11-08', T0)
+    await app.measurements.put({ d: a.d, op: 'set', entry: a, t: T0 })
+    await app.measurements.put({ d: b.d, op: 'set', entry: b, t: T0 })
+    await app.sync.syncNow()
+    expect(server.file().measurements).toEqual([a, b])
+    // the phone removes one day; the web deletes the other, as its Delete button does
+    await app.measurements.put({ d: b.d, op: 'remove', t: T0 + 1000, baseT: T0 })
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingMeasurements: 0 })
+    const del = Math.max(Date.now(), T0 + 60_000)
+    await server.webWrites(state => ({ ...state, measurements: [], deleted: { ...state.deleted, measurements: { ...state.deleted.measurements, [a.d]: del } } }))
+    const file = server.file()
+    expect(file.measurements).toEqual([])
+    await app.sync.forget()
+    expect(await app.sync.status()).toMatchObject({ pendingMeasurements: 2 })
+    expect(await app.sync.pair(server.api, await server.pairCode())).toEqual({ ok: true })
+    const after = server.file()
+    expect(after._rev).toBe(file._rev) // nothing was pushed
+    expect(after.measurements).toEqual([])
+    expect(Number(after.deleted.measurements[a.d])).toBe(del)
+    expect(Number(after.deleted.measurements[b.d])).toBeGreaterThan(T0)
+    expect(await app.measurements.listPending()).toEqual([])
+    expect((await app.copy.get()).state.measurements).toEqual([])
   })
 
   // A routine whose first slot carries keys this app does not know, as the web leaves them.

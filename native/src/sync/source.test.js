@@ -7,6 +7,7 @@ import { createNodeSqliteDb } from '../../scripts/node-sqlite.mjs'
 import { createSqliteServerCopy } from './server-copy.js'
 import { exercises } from '../shared/training.js'
 import { createMemoryPendingEdits } from './pending-edits.js'
+import { createMemoryMeasurements } from '../body/measurement-store.js'
 
 const builtIn = exercises.EXDB[0]
 const cap = s => s[0].toUpperCase() + s.slice(1)
@@ -317,4 +318,63 @@ test('readScreenSource over the real store shows every kind, paired or not, and 
   const after = await readScreenSource({ ...s, routineEdits: edits, bundled })
   expect(after.state).not.toHaveProperty('nutritionDays')
   expect(after.state).not.toHaveProperty('nutritionTargets')
+})
+
+// Body measurements waiting to sync show the same way, by day, through the push's own guard
+// (measurement-ops.js).
+const mEntry = (d, t, fields = {}) => ({ d, t, waist: 81.28, neck: null, other: [], ...fields })
+const mSet = e => ({ d: e.d, op: 'set', entry: e, t: e.t })
+
+test('measurements: unpaired, a pending day starts the list on the snapshot, which has none; the bundle is untouched', () => {
+  expect(bundled.state).not.toHaveProperty('measurements')
+  const before = JSON.stringify(bundled)
+  const mine = mEntry('2026-11-09', 6)
+  const out = screenSource({ copy: null, bundled, pending: [], measurements: [mSet(mine), { d: '2026-11-08', op: 'remove', t: 7, baseT: 1 }] })
+  expect(out.state.measurements).toEqual([mine])
+  expect(out.state.routines).toBe(bundled.state.routines)
+  expect(out.state.workouts.map(x => x.id)).toEqual(['b1'])
+  expect(JSON.stringify(bundled)).toBe(before)
+})
+
+test('measurements: paired, pending days show over the copy; a removed day goes; other days keep their identity; the copy stays as stored', () => {
+  const other = mEntry('2026-11-01', 3, { mystery: { x: 1 } })
+  const copy = { state: { routines: [], workouts: [], measurements: [other, mEntry('2026-11-05', 4), mEntry('2026-11-07', 5)] }, rev: 2, wid: 'x' }
+  const before = JSON.stringify(copy)
+  const mine = mEntry('2026-11-05', 9, { waist: 80 })
+  const out = screenSource({ copy, bundled, pending: [], measurements: [mSet(mine), { d: '2026-11-07', op: 'remove', t: 9, baseT: 5 }] })
+  expect(out.state.measurements).toEqual([other, mine])
+  expect(out.state.measurements[0]).toBe(other)
+  expect(JSON.stringify(copy)).toBe(before)
+})
+
+test('measurements: a set the web beat, or that a removal on record beats, does not show; with none pending the list is the copy\'s own', () => {
+  const webs = mEntry('2026-11-05', 20)
+  const copy = { state: { routines: [], workouts: [], measurements: [webs], deleted: { measurements: { '2026-11-06': 30 } } }, rev: 2, wid: 'x' }
+  const out = screenSource({ copy, bundled, pending: [], measurements: [mSet(mEntry('2026-11-05', 9)), mSet(mEntry('2026-11-06', 25))] })
+  expect(out.state.measurements).toEqual([webs])
+  expect(screenSource({ copy, bundled, pending: [] }).state.measurements).toBe(copy.state.measurements)
+  expect(screenSource({ copy, bundled, pending: [], measurements: [] }).state.measurements).toBe(copy.state.measurements)
+  expect(screenSource({ copy: null, bundled, pending: [], measurements: [] }).state).not.toHaveProperty('measurements')
+})
+
+test('readScreenSource reads the pending measurements before the copy and lays them over it, paired or not', async () => {
+  const mine = mEntry('2026-11-09', 6)
+  const s = stores({ copy: { state: { routines: [], workouts: [] }, rev: 1, wid: 'x' }, all: [], pending: [] })
+  const measurements = { listPending: async () => { s.log.push('measurements'); return [mSet(mine)] } }
+  expect((await readScreenSource({ ...s, measurements, bundled })).state.measurements).toEqual([mine])
+  expect(s.log.indexOf('measurements')).toBeGreaterThanOrEqual(0)
+  expect(s.log.indexOf('measurements')).toBeLessThan(s.log.indexOf('copy'))
+  const u = stores({ copy: null, all: [], pending: [] })
+  expect((await readScreenSource({ ...u, measurements, bundled })).state.measurements).toEqual([mine])
+})
+
+test('readScreenSource over the real store: a pending measurement shows, and goes once acked', async () => {
+  const measurements = createMemoryMeasurements()
+  const mine = mEntry('2026-11-09', 6)
+  await measurements.put(mSet(mine))
+  const s = stores({ copy: { state: { routines: [], workouts: [] }, rev: 1, wid: 'x' }, all: [], pending: [] })
+  expect((await readScreenSource({ ...s, measurements, bundled })).state.measurements).toEqual([mine])
+  expect((await readScreenSource({ ...s, bundled })).state).not.toHaveProperty('measurements') // a screen that reads none
+  await measurements.markAcked([{ d: mine.d, t: 6 }], 'now')
+  expect((await readScreenSource({ ...s, measurements, bundled })).state).not.toHaveProperty('measurements')
 })

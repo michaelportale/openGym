@@ -4,6 +4,7 @@ import { readCopy } from './server-copy.js'
 import { exercises } from '../shared/training.js'
 import { sessionState } from '../workout/history-state.js'
 import { applyEdits } from './edit-guard.js'
+import { applyMeasurementOps } from '../body/measurement-ops.js'
 
 export const cap = s => (s ? s[0].toUpperCase() + s.slice(1) : '')
 
@@ -59,16 +60,26 @@ function withEdits(state, edits) {
   return applyEdits(state, edits).state
 }
 
+// Body measurements waiting to sync (measurement-store.js ops), laid over the state's list by day
+// with its own removal records, through the push's guard (measurement-ops.js). Unpaired, a pending
+// day starts the list on the snapshot, which has none. With no op to show, the state comes back
+// as it was.
+function withMeasurements(state, ops) {
+  if (!ops?.length) return state
+  return { ...state, measurements: applyMeasurementOps(state.measurements, ops, state.deleted?.measurements).next }
+}
+
 // `example`: whether the screen shows the example snapshot, and so its banner. Never over the copy.
-export function screenSource({ copy, bundled, pending, routineEdits }) {
+// `measurements`: the pending measurement ops (may be left out: none).
+export function screenSource({ copy, bundled, pending, routineEdits, measurements }) {
   if (!copy) {
-    const state = withEdits(sessionState(bundled, pending), routineEdits)
+    const state = withMeasurements(withEdits(sessionState(bundled, pending), routineEdits), measurements)
     return { state, names: { ...namesFor(state), ...bundled.names }, example: bundled.example === true }
   }
   const doc = readable(copy.state)
   // Acked workouts are in the copy and it wins; only unsent ones are added.
   const held = new Set((doc.workouts ?? []).map(w => w.id))
-  const state = withEdits(sessionState({ state: doc }, (pending ?? []).filter(w => !held.has(w.id))), routineEdits)
+  const state = withMeasurements(withEdits(sessionState({ state: doc }, (pending ?? []).filter(w => !held.has(w.id))), routineEdits), measurements)
   return { state, names: namesFor(state), example: false }
 }
 
@@ -79,20 +90,22 @@ export function screenSource({ copy, bundled, pending, routineEdits }) {
 // A copy the screen still cannot build from reads as no copy, as a corrupt one does: `copy` is null
 // then too, since the screens show the snapshot and an edit made there is on the snapshot's base.
 // Edits not yet sent, of every kind, show over the state (routineEdits, the pending-edits.js
-// store, may be left out: none). The unsent workouts and edits are read before the copy: the sync
-// engine stores a copy before it acks the workouts that copy holds, so a sync landing between the
-// two reads leaves each workout in one.
-export async function readScreenSource({ finished, serverCopy, bundled, routineEdits = null }) {
+// store, may be left out: none), and so do body measurements not yet sent (`measurements`, the
+// measurement-store.js store, may be left out: none). The unsent workouts, edits and measurements
+// are read before the copy: the sync engine stores a copy before it acks the workouts that copy
+// holds, so a sync landing between the two reads leaves each workout in one.
+export async function readScreenSource({ finished, serverCopy, bundled, routineEdits = null, measurements = null }) {
   const edits = routineEdits ? await routineEdits.listPending() : []
+  const measured = measurements ? await measurements.listPending() : []
   const workouts = await finished.list()
   const pending = await finished.listPending()
   const copy = await readCopy(serverCopy)
   if (copy) {
     try {
-      return { ...screenSource({ copy, bundled, pending, routineEdits: edits }), workouts, copy }
+      return { ...screenSource({ copy, bundled, pending, routineEdits: edits, measurements: measured }), workouts, copy }
     } catch {
       // falls through to the bundled snapshot
     }
   }
-  return { ...screenSource({ copy: null, bundled, pending: workouts, routineEdits: edits }), workouts, copy: null }
+  return { ...screenSource({ copy: null, bundled, pending: workouts, routineEdits: edits, measurements: measured }), workouts, copy: null }
 }
