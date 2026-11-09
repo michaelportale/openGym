@@ -1,4 +1,4 @@
-import { dumbbells, exercises } from '../shared/training.js'
+import { dumbbells, exercises, history } from '../shared/training.js'
 import { warmupPrompts } from '../science/warmup-prompt.js'
 import { warmupRamp } from '../science/warmup-ramp.js'
 import { carriedWeight, isDone, isWarmup, shownValues } from './workout-view.js'
@@ -20,6 +20,9 @@ const started = slot => isDone(slot) || slot.row?.sides?.L?.done === true || slo
  */
 export function warmupPromptFor({ entry, entryIndex, entries, unit = 'lb', equipment, step, owned } = {}) {
   if (!entry || !Array.isArray(entries)) return null
+  // Offered to reps work on a load that adds weight: an assisted lift's lighter number is the
+  // harder one, and a hold or cardio entry has no warm-up reps to write.
+  if (exercises.isAssisted(entry) || history.modeOf({ id: entry.id, ...entry.target }) !== 'reps') return null
   if (!warmupPrompts(entries.map(e => e.id))[entryIndex]?.prompt) return null
   const slots = entry.sets ?? []
   if (slots.some(isWarmup)) return null
@@ -28,7 +31,7 @@ export function warmupPromptFor({ entry, entryIndex, entries, unit = 'lb', equip
   const first = work[0]
   const working = shownValues(first, null, carriedWeight(entry, first.setId)).w
   const ramp = warmupRamp({ working, step, floor: barFor(equipment, unit), owned, id: entry.id, unit })
-  if (ramp.length === 0) return null
+  if (ramp.length === 0 || !(ramp[0].w > 0)) return null
   return { sets: ramp.map(({ w, r }) => ({ w, r })), whyIds: [...WARMUP_WHY_IDS] }
 }
 

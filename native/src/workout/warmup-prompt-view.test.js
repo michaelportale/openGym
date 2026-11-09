@@ -42,6 +42,21 @@ describe('warmupPromptFor', () => {
     expect(ask([ent('0289', [todo(null, 8)])], 0, { step: 5 })).toBeNull()
     expect(ask([ent('nope', [todo(80, 8)])], 0, { step: 5 })).toBeNull()
   })
+  test('an assisted exercise gets no prompt: less weight is harder there', () => {
+    // 1432 assisted standing pull-up, 50 lb of assistance
+    expect(ask([ent('1432', [todo(50, 8)])], 0, { equipment: 'machine', step: 5 })).toBeNull()
+    expect(ask([ent('0289', [todo(50, 8)], { assisted: true })], 0, { step: 5 })).toBeNull()
+    expect(ask([ent('0289', [todo(50, 8)])], 0, { step: 5 })).not.toBeNull()
+  })
+  test('a timed hold gets no prompt, a reps-mode barbell lift still does', () => {
+    // 2135 weighted front plank at 25
+    expect(ask([ent('2135', [todo(25, 30)], { mode: 'time' })], 0, { equipment: 'weighted', step: 5 })).toBeNull()
+    expect(ask([ent('0025', [todo(135, 5)], { mode: 'reps' })], 0, { equipment: 'barbell', step: 5 })).not.toBeNull()
+  })
+  test('a first rung that rounds to 0 offers nothing', () => {
+    // 10 lb dumbbell on a 5 lb step: 40% rounds down to 0
+    expect(ask([ent('0289', [todo(10, 8)])], 0, { step: 5 })).toBeNull()
+  })
   test('owned dumbbells round down to a bell you have', () => {
     const entries = [ent('0289', [todo(80, 8)])]
     expect(ask(entries, 0, { owned: [10, 25, 35, 65, 80] }).sets.map(s => s.w)).toEqual([25, 35])
