@@ -115,9 +115,10 @@ test('a truthy done counts, as in the shared lib', () => {
   expect(lastTime({ workouts: [w] }, '0289', 'x').top).toBe(55)
 })
 
+// Each entry carries the target the shared builder stamps, so a reference comparison sees it too.
 const planned = () => [
-  { id: '0289', sets: [{ w: 0, r: 10, phase: 'warmup' }, { w: 0, r: 10 }, { w: 0, r: 8 }] },
-  { id: '0999', sets: [{ w: 5, r: 12, sides: { L: { w: 5, r: 12 }, R: { w: 5, r: 12 } } }] },
+  { id: '0289', target: { id: '0289', sets: 2, reps: 10, repsMin: 8, weight: 0 }, sets: [{ w: 0, r: 10, phase: 'warmup' }, { w: 0, r: 10 }, { w: 0, r: 8 }] },
+  { id: '0999', target: { id: '0999', sets: 1, reps: 24, repsMin: 16, side: true, weight: 0 }, sets: [{ w: 5, r: 12, sides: { L: { w: 5, r: 12 }, R: { w: 5, r: 12 } } }] },
 ]
 test('applyOpeningWeights sets work rows to top and leaves warm-ups and reps', () => {
   const input = planned()
@@ -190,6 +191,7 @@ test('progression off opens exactly as before, weights and reps: deep equal to t
   const before = openingWeightsBefore(planned(), topped, 'push-a')
   expect(double[0].sets[1].r).not.toBe(before[0].sets[1].r)
   expect(double[1].sets[0].sides.L.r).not.toBe(before[1].sets[0].sides.L.r)
+  expect(double[0].target).not.toEqual(before[0].target)
   for (const routine of [pushA('off'), withEach({ prog: 'off' }), pushA(null, { excludeFromProgression: true })]) {
     for (const s of [topped, state, {}]) {
       expect(applyOpeningWeights(planned(), s, 'push-a', routine)).toStrictEqual(openingWeightsBefore(planned(), s, 'push-a'))
@@ -211,6 +213,11 @@ test('a prescription opens every work set at its weight and reps, per-side rows 
   expect(out[0].sets.map(s => [s.w, s.r])).toEqual([[0, 10], [80, 8], [80, 8]])
   // '0999' is per side (16–24 for both sides together, 10 lb step): 20 → 30, back to 16, 8 a side.
   expect(out[1].sets[0]).toMatchObject({ w: 30, r: 16, sides: { L: { w: 30, r: 8 }, R: { w: 30, r: 8 } } })
+  // The session is graded against what it opened at: the target takes the same weight and reps,
+  // and keeps everything else the builder stamped.
+  expect(out[0].target).toStrictEqual({ ...input[0].target, weight: 80, reps: 8 })
+  expect(out[1].target).toStrictEqual({ ...input[1].target, weight: 30, reps: 16 })
+  expect(input[0].target.weight).toBe(0)
 })
 
 test('a timed exercise keeps last time\'s weight even when its prescription carries one', () => {

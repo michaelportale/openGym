@@ -48,7 +48,9 @@ export function lastTime(state, exerciseId, routineId) {
 // Every work row opens at the prescription's weight, and its reps when it sets them, when the
 // routine's progression names one; else at last time's top weight, or blank, reps as built.
 // Without a routine, last time decides. A per-side row's reps are both sides together, as the
-// shared model stores them: each side gets half. Warm-ups are untouched. Returns new objects.
+// shared model stores them: each side gets half. Warm-ups are untouched. With a prescription the
+// entry's target takes the same weight and reps, as buildPlannedEntry stamps its own plan, so the
+// session is graded against what it opened at. Returns new objects.
 export function applyOpeningWeights(entries, state, routineId, routine) {
   return entries.map(entry => {
     const opening = prescribedOpening(state, routine, entry.id)
@@ -64,6 +66,8 @@ export function applyOpeningWeights(entries, state, routineId, routine) {
       }
       return next
     })
-    return { ...entry, sets }
+    if (!opening || !entry.target) return { ...entry, sets }
+    const target = { ...entry.target, weight: opening.weight, ...(reps != null ? { reps } : {}) }
+    return { ...entry, target, sets }
   })
 }

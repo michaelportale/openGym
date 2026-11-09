@@ -48,6 +48,8 @@ test('a double-progression raise reads "next time" at the raised weight, and the
   // The next session opens at the line: the raised weight, the reps back at the bottom of the range.
   const next = buildSessionBase({ state: withSaved, routine, now, timeZone, id: 'n1' })
   expect(next.entries[0].sets.map(s => [s.w, s.r])).toEqual([[85, 8], [85, 8], [85, 8]])
+  // And it is graded against that: the target is 85 × 8, not the plan's 12.
+  expect(next.entries[0].target).toMatchObject({ weight: 85, reps: 8, repsMin: 8, sets: 3 })
 })
 
 test('the just-saved workout drives the line: without it the older session would', () => {
