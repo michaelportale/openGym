@@ -66,9 +66,9 @@ Phase 3. Start Push A from the routine list on the Workout start screen for thes
 
 iOS shows the notification prompt once per install, at the first rest. On a fresh install that was kill check 3 in step 4, not this step. If the prompt never appeared (an earlier install on this phone already answered it), open Settings, Notifications, openGym and check Allow Notifications is on before you start.
 
-- [ ] Saved set. Complete the current set. As it saves, the phone gives one short haptic.
+- [ ] Saved set. Complete the current set. As it saves, the phone gives a single haptic (the system's success pattern, which can feel like a quick double tap), not a repeated one.
 - [ ] Done pop. Watch the Done column and complete the current set. Its mark pops in, growing from small, rather than just appearing. Tap Add warm-up, then open the warm-up and complete it: its mark pops too.
-- [ ] Rest ends in the app. Set Auto-Lock to Never. Complete a set and stay on the Workout tab until the rest runs out. The phone buzzes once, and no banner or sound appears. Set Auto-Lock back.
+- [ ] Rest ends in the app. Set Auto-Lock to Never. Complete a set and stay on the Workout tab until the rest runs out. As it ends, the phone gives a single haptic, and no banner or sound appears. Set Auto-Lock back.
 - [ ] Locked alert. Complete a set, then lock the phone during the rest. The alert arrives when the rest ends.
 - [ ] Tap the alert. Complete a set, tap the Home tab, then lock the phone. When the alert arrives, tap it. The app opens on the Workout tab, not on Home. (The simulator could not test this.)
 - [ ] Pause, then lock. Complete a set, tap Pause on the rest, then lock the phone. No alert arrives while paused. Unlock, tap Resume, lock again: the alert arrives when the time left runs out.
