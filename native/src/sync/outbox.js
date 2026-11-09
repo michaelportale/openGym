@@ -39,8 +39,8 @@ export function buildPush(copy, pending, pendingWeighIns = [], pendingRoutineEdi
     baseWid: copy.wid,
     // as it goes: the edit's content on the copy's stamps (edit-guard.js), and the listed row's
     // baseTs, so markSent passes over a row a fresh put started over since
-    routineEdits: carried.map(({ rid, t }) => ({
-      rid, t, baseTs: pendingRoutineEdits.find(e => e.rid === rid && e.t === t).baseTs, routine: plan.next.find(r => r?.id === rid),
+    routineEdits: carried.map(({ kind, key, t }) => ({
+      kind, key, t, baseTs: pendingRoutineEdits.find(e => e.kind === kind && e.key === key && e.t === t).baseTs, value: plan.next.find(r => r?.id === key),
     })),
   }
 }

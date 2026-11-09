@@ -6,7 +6,7 @@ import { nextRoutineId } from '../workout/next-up.js'
 import { createNodeSqliteDb } from '../../scripts/node-sqlite.mjs'
 import { createSqliteServerCopy } from './server-copy.js'
 import { exercises } from '../shared/training.js'
-import { createMemoryRoutineEdits } from './pending-edits.js'
+import { createMemoryPendingEdits } from './pending-edits.js'
 
 const builtIn = exercises.EXDB[0]
 const cap = s => s[0].toUpperCase() + s.slice(1)
@@ -190,7 +190,7 @@ test('readScreenSource reads the unsent workouts before the copy: a sync landing
 })
 
 // Routine edits waiting to sync show over the routines the screen would otherwise have.
-const edit = (rid, routine, extra = {}) => ({ rid, baseTs: null, routine, sent: null, t: 5, ...extra })
+const edit = (rid, routine, extra = {}) => ({ kind: 'routine', key: rid, baseTs: null, value: routine, sent: null, t: 5, ...extra })
 
 test('routine edits: unpaired, a pending edit to a snapshot routine shows, and the bundle is untouched', () => {
   const before = JSON.stringify(bundled)
@@ -242,11 +242,11 @@ test('readScreenSource reads the routine edits before the copy and applies them,
 })
 
 test('readScreenSource over the real store: an edit shows, and goes once acked', async () => {
-  const routineEdits = createMemoryRoutineEdits()
+  const routineEdits = createMemoryPendingEdits()
   await routineEdits.put(edit('r', { id: 'r', name: 'Mine', ex: [] }))
   const s = stores({ copy: null, all: [], pending: [] })
   expect((await readScreenSource({ ...s, routineEdits, bundled })).state.routines[0].name).toBe('Mine')
-  await routineEdits.markAcked([{ rid: 'r', t: 5 }], 'now')
+  await routineEdits.markAcked([{ kind: 'routine', key: 'r', t: 5 }], 'now')
   expect((await readScreenSource({ ...s, routineEdits, bundled })).state.routines[0].name).toBe('R')
 })
 

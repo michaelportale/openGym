@@ -3,7 +3,7 @@ import * as SecureStore from 'expo-secure-store'
 import { openAppDatabase } from '../storage/database'
 import { createSqliteWeighIns } from '../body/weigh-ins'
 import { createSqliteFinishedWorkouts } from '../session/finished-workouts'
-import { createSqliteRoutineEdits } from './pending-edits'
+import { createSqlitePendingEdits } from './pending-edits'
 import { createApiClient } from './api-client'
 import { createCredentials } from './credentials'
 import { createSqliteServerCopy, createSqliteSyncMeta } from './server-copy'
@@ -30,7 +30,7 @@ export function getSync() {
           meta: createSqliteSyncMeta(db),
           workouts: createSqliteFinishedWorkouts(db),
           weighIns: createSqliteWeighIns(db),
-          routineEdits: createSqliteRoutineEdits(db),
+          routineEdits: createSqlitePendingEdits(db),
           now: Date.now,
         })
         sync.subscribe(refresh)

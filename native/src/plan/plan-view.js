@@ -53,12 +53,12 @@ const NOTICE = {
 
 const noticeName = name => (typeof name === 'string' && name.trim() ? name : 'this routine')
 
-// routineEdits.listNotices() rows as the lines the screens show, each with its Dismiss button's
-// VoiceOver label.
+// Routine rows of pending-edits.js listNotices() as the lines the screens show, each with its
+// Dismiss button's VoiceOver label.
 export function noticeLines(notices) {
   return (notices ?? []).map(n => {
     const name = noticeName(n.name)
-    return { rid: n.rid, text: (NOTICE[n.kind] ?? NOTICE.changed)(name), dismissLabel: `Dismiss notice about ${name}` }
+    return { rid: n.key, text: (NOTICE[n.reason] ?? NOTICE.changed)(name), dismissLabel: `Dismiss notice about ${name}` }
   })
 }
 

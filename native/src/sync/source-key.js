@@ -19,7 +19,7 @@ export function sourceKey({ copyKey, workouts, weighIns, routineEdits, now }) {
     copyKey ? [copyKey.rev ?? null, copyKey.wid ?? null] : null,
     (workouts ?? []).map(w => w?.id ?? null),
     (weighIns ?? []).map(r => [r.d, r.t, r.op]),
-    (routineEdits ?? []).map(e => [e.rid, e.t]),
+    (routineEdits ?? []).map(e => [e.key, e.t]),
     localDay(now),
   ])
 }
@@ -28,7 +28,7 @@ export function sourceKey({ copyKey, workouts, weighIns, routineEdits, now }) {
 // come before the copy's key, as every reader here reads them (a sync stores the copy, then acks).
 export async function readSourceKey({ finished, serverCopy, weighIns = null, routineEdits = null, now }) {
   const pendingWeighIns = weighIns ? await weighIns.listPending() : []
-  const pendingEdits = routineEdits ? await routineEdits.listPending() : []
+  const pendingEdits = routineEdits ? await routineEdits.listPending({ kind: 'routine' }) : []
   const workouts = finished ? await finished.listPending() : []
   const copyKey = await serverCopy.key()
   return sourceKey({ copyKey, workouts, weighIns: pendingWeighIns, routineEdits: pendingEdits, now })

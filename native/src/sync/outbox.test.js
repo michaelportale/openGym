@@ -146,7 +146,7 @@ const planCopy = () => ({
   rev: 7,
   wid: 'wid-a',
 })
-const routineEdit = (routine, extra = {}) => ({ rid: routine.id, baseTs: 1000, routine, sent: null, t: 50, ...extra })
+const routineEdit = (routine, extra = {}) => ({ kind: 'routine', key: routine.id, baseTs: 1000, value: routine, sent: null, t: 50, ...extra })
 // r1 with its two slots swapped and the moved one edited.
 const movedR1 = () => {
   const r = planCopy().state.routines[0]
@@ -171,7 +171,7 @@ test('a moved slot carries every key it had to its new place, and the other rout
   expect(push.state.workouts).toBe(copy.state.workouts)
   expect(push.baseRev).toBe(7)
   expect(push.baseWid).toBe('wid-a')
-  expect(push.routineEdits).toEqual([{ rid: 'r1', t: 50, baseTs: 1000, routine: mine }])
+  expect(push.routineEdits).toEqual([{ kind: 'routine', key: 'r1', t: 50, baseTs: 1000, value: mine }])
   expect(copy).toEqual(planCopy()) // input not mutated
 })
 
@@ -196,7 +196,7 @@ test('an edit plus a workout and a weigh-in gives one push carrying all three', 
   expect(push.state.workouts.map(w => w.id)).toEqual(['w1', 'w2', 'p1'])
   expect(push.state.bodyweight).toEqual([{ d: '2026-11-08', w: 181.2, t: 5 }])
   expect(push.state.routines[0]).toEqual(mine)
-  expect(push.routineEdits).toEqual([{ rid: 'r1', t: 50, baseTs: 1000, routine: mine }])
+  expect(push.routineEdits).toEqual([{ kind: 'routine', key: 'r1', t: 50, baseTs: 1000, value: mine }])
 })
 
 test('a push without routine edits says it carries none', () => {
@@ -213,7 +213,7 @@ test('a rebased edit goes in with its newer routine: the copy holds what this ph
   const push = buildPush(copy, [], [], [routineEdit(newer, { baseTs: 1, sent: sentBefore, t: 60 })])
   expect(push.state.routines[0]).toEqual(newer)
   // the row's own baseTs as listed, not the copy's _ts it goes on: markSent matches the row
-  expect(push.routineEdits).toEqual([{ rid: 'r1', t: 60, baseTs: 1, routine: newer }])
+  expect(push.routineEdits).toEqual([{ kind: 'routine', key: 'r1', t: 60, baseTs: 1, value: newer }])
 })
 
 test('only the edits that go are carried, each with its own t', () => {
@@ -221,7 +221,7 @@ test('only the edits that go are carried, each with its own t', () => {
   const mine = movedR1()
   const r2 = { ...copy.state.routines[1], ex: [{ id: '0027', sets: 5, reps: 8 }] }
   const push = buildPush(copy, [], [], [routineEdit(mine, { t: 70 }), routineEdit(r2, { baseTs: 2, t: 71 })])
-  expect(push.routineEdits).toEqual([{ rid: 'r1', t: 70, baseTs: 1000, routine: mine }])
+  expect(push.routineEdits).toEqual([{ kind: 'routine', key: 'r1', t: 70, baseTs: 1000, value: mine }])
   expect(push.state.routines[1]).toBe(copy.state.routines[1])
 })
 
@@ -230,5 +230,5 @@ test('an edit made on older stamps goes on the copy\'s, and is recorded for mark
   const { _f, ...stale } = { ...movedR1(), _ts: 1 }
   const push = buildPush(copy, [], [], [routineEdit(stale)])
   expect(push.state.routines[0]).toEqual({ ...stale, _ts: 1000, _f: { ex: 900 } })
-  expect(push.routineEdits).toEqual([{ rid: 'r1', t: 50, baseTs: 1000, routine: push.state.routines[0] }])
+  expect(push.routineEdits).toEqual([{ kind: 'routine', key: 'r1', t: 50, baseTs: 1000, value: push.state.routines[0] }])
 })

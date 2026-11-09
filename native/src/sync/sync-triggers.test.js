@@ -85,8 +85,8 @@ describe('focusReloads', () => {
     expect(focusReloads({ homeStatus: 'start', loadedKey: key(), key: key({ now: NOW + 24 * 3600000 }) })).toBe(true)
   })
   test('a routine edit saved on the Plan tab moves the key, paired or not, so the start screen reads it', () => {
-    expect(focusReloads({ homeStatus: 'start', loadedKey: key(), key: key({ routineEdits: [{ rid: 'r1', t: 5 }] }) })).toBe(true)
-    expect(focusReloads({ homeStatus: 'start', loadedKey: key({ copyKey: null }), key: key({ copyKey: null, routineEdits: [{ rid: 'r1', t: 5 }] }) })).toBe(true)
+    expect(focusReloads({ homeStatus: 'start', loadedKey: key(), key: key({ routineEdits: [{ kind: 'routine', key: 'r1', t: 5 }] }) })).toBe(true)
+    expect(focusReloads({ homeStatus: 'start', loadedKey: key({ copyKey: null }), key: key({ copyKey: null, routineEdits: [{ kind: 'routine', key: 'r1', t: 5 }] }) })).toBe(true)
   })
   test('a key that could not be read, or no key from the load shown, reads again', () => {
     expect(focusReloads({ homeStatus: 'start', loadedKey: key(), key: null })).toBe(true)
@@ -96,7 +96,7 @@ describe('focusReloads', () => {
     expect(focusReloads({ homeStatus: 'error', loadedKey: key(), key: key() })).toBe(true)
   })
   test('never while a session is open or a load is running, whatever the key', () => {
-    expect(focusReloads({ homeStatus: 'session', loadedKey: key(), key: key({ routineEdits: [{ rid: 'r1', t: 5 }] }) })).toBe(false)
+    expect(focusReloads({ homeStatus: 'session', loadedKey: key(), key: key({ routineEdits: [{ kind: 'routine', key: 'r1', t: 5 }] }) })).toBe(false)
     expect(focusReloads({ homeStatus: 'loading', loadedKey: null, key: null })).toBe(false)
   })
 })

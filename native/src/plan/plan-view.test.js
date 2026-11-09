@@ -64,9 +64,9 @@ describe('planView: your routines', () => {
 
 describe('notices', () => {
   const notices = [
-    { rid: 'a', name: 'Push A', kind: 'changed', at: '1' },
-    { rid: 'b', name: 'Pull B', kind: 'deleted', at: '2' },
-    { rid: 'c', name: 'Legs', kind: 'unsafe', at: '3' },
+    { kind: 'routine', key: 'a', name: 'Push A', reason: 'changed', at: '1' },
+    { kind: 'routine', key: 'b', name: 'Pull B', reason: 'deleted', at: '2' },
+    { kind: 'routine', key: 'c', name: 'Legs', reason: 'unsafe', at: '3' },
   ]
   test('the exact text for changed, deleted and unsafe, and a Dismiss label that names the routine', () => {
     expect(noticeLines(notices)).toEqual([
@@ -80,7 +80,7 @@ describe('notices', () => {
     expect(planView({ routines: [] }, {}).notices).toEqual([])
   })
   test('an empty or blank name reads as this routine', () => {
-    expect(noticeLines([{ rid: 'a', name: '', kind: 'changed' }, { rid: 'b', name: '  ', kind: 'deleted' }, { rid: 'c', name: null, kind: 'unsafe' }])).toEqual([
+    expect(noticeLines([{ kind: 'routine', key: 'a', name: '', reason: 'changed' }, { kind: 'routine', key: 'b', name: '  ', reason: 'deleted' }, { kind: 'routine', key: 'c', name: null, reason: 'unsafe' }])).toEqual([
       { rid: 'a', text: "Your change to this routine wasn't sent: it was changed on the web first. This shows the web's version.", dismissLabel: 'Dismiss notice about this routine' },
       { rid: 'b', text: "Your change to this routine wasn't sent: it was deleted on the web.", dismissLabel: 'Dismiss notice about this routine' },
       { rid: 'c', text: "Your change to this routine wasn't sent: this move or swap has to be made on the web.", dismissLabel: 'Dismiss notice about this routine' },

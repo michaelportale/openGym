@@ -4,7 +4,7 @@ import { resetIdsOf } from '../../../frontend/src/lib/sync-merge.js'
 import { createSqliteFinishedWorkouts } from '../session/finished-workouts.js'
 import { createSqliteWeighIns } from '../body/weigh-ins.js'
 import { createSqliteHealthStore } from '../health/health-store.js'
-import { createSqliteRoutineEdits } from './pending-edits.js'
+import { createSqlitePendingEdits } from './pending-edits.js'
 import { createCredentials } from './credentials.js'
 import { buildPush } from './outbox.js'
 import { createSqliteServerCopy, createSqliteSyncMeta } from './server-copy.js'
@@ -162,7 +162,7 @@ async function setup({ server = fakeServer(), paired = true, local = [] } = {}) 
   const meta = createSqliteSyncMeta(db)
   const workouts = createSqliteFinishedWorkouts(db)
   const weighIns = createSqliteWeighIns(db)
-  const routineEdits = createSqliteRoutineEdits(db)
+  const routineEdits = createSqlitePendingEdits(db)
   let clock = T0
   const now = () => clock
   for (const w of local) await workouts.put(w)
@@ -1127,7 +1127,7 @@ const planDoc = () => ({
   ],
 })
 // What the Plan screen saves: the copy's routine as edited, on that routine's _ts.
-const routineEdit = (base, change, t) => ({ rid: base.id, baseTs: base._ts ?? null, routine: change(clone(base)), t })
+const routineEdit = (base, change, t) => ({ kind: 'routine', key: base.id, baseTs: base._ts ?? null, value: change(clone(base)), t })
 const setsOn = n => r => ({ ...r, ex: r.ex.map((s, i) => (i === 0 ? { ...s, sets: n } : s)) })
 const swapped = r => ({ ...r, ex: [r.ex[1], r.ex[0]] })
 const content = r => { const { _ts, _f, _u, ...rest } = r; return rest }
@@ -1153,14 +1153,14 @@ describe('routine edits', () => {
     expect(t.server.calls).toEqual(['rev', 'push', 'pull'])
     const sent = t.server.pushes[0]
     expect(sent.baseRev).toBe(3)
-    expect(sent.state).toEqual({ ...planDoc(), routines: [mine.routine, planDoc().routines[1]] })
+    expect(sent.state).toEqual({ ...planDoc(), routines: [mine.value, planDoc().routines[1]] })
     // the server stamped it; the stored copy is the server's, with every key on its own slot
     expect(t.server.routine('r1')._ts).toBeGreaterThan(1000)
-    expect(content(t.server.routine('r1'))).toEqual(content(mine.routine))
+    expect(content(t.server.routine('r1'))).toEqual(content(mine.value))
     expect((await t.copy.get()).state).toEqual(t.server.doc)
     expect(await t.routineEdits.listPending()).toEqual([])
-    expect(await t.db.getAll('SELECT rid, acked_at, superseded_at FROM routine_edits')).toEqual([{ rid: 'r1', acked_at: iso(T0), superseded_at: null }])
-    expect((await t.routineEdits.get('r1')).sent).toEqual(mine.routine)
+    expect(await t.db.getAll('SELECT key, acked_at, superseded_at FROM pending_edits')).toEqual([{ key: 'r1', acked_at: iso(T0), superseded_at: null }])
+    expect((await t.routineEdits.get('routine', 'r1')).sent).toEqual(mine.value)
     expect(await t.routineEdits.listNotices()).toEqual([])
     expect(r).toMatchObject({ state: 'idle', pending: 0, pendingWeighIns: 0, pendingRoutineEdits: 0 })
 
@@ -1181,10 +1181,10 @@ describe('routine edits', () => {
     }]
     expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 1 })
     expect(t.server.calls).toEqual(['rev', 'push', 'pull'])
-    expect(content(t.server.routine('r1'))).toEqual(content(first.routine))
+    expect(content(t.server.routine('r1'))).toEqual(content(first.value))
     const landed = t.server.routine('r1')._ts
     expect(landed).toBeGreaterThan(1000)
-    expect(await t.routineEdits.listPending()).toEqual([{ rid: 'r1', baseTs: landed, routine: second.routine, sent: null, t: T0 + 2 }])
+    expect(await t.routineEdits.listPending()).toEqual([{ kind: 'routine', key: 'r1', baseTs: landed, value: second.value, sent: null, t: T0 + 2 }])
     expect(await t.routineEdits.listNotices()).toEqual([])
 
     t.fresh()
@@ -1192,9 +1192,9 @@ describe('routine edits', () => {
     expect(t.server.calls).toEqual(['rev', 'push', 'pull'])
     expect(t.server.pushes[1].baseRev).toBe(4)
     // the second routine, on the stamps of the landed push it goes on top of
-    expect(t.server.pushes[1].state.routines[0]).toEqual({ ...second.routine, _ts: landed })
-    expect(second.routine._ts).toBe(1000)
-    expect(content(t.server.routine('r1'))).toEqual(content(second.routine))
+    expect(t.server.pushes[1].state.routines[0]).toEqual({ ...second.value, _ts: landed })
+    expect(second.value._ts).toBe(1000)
+    expect(content(t.server.routine('r1'))).toEqual(content(second.value))
     expect(t.server.routine('r1')._ts).toBeGreaterThan(landed)
     expect(await t.routineEdits.listPending()).toEqual([])
     expect(await t.routineEdits.listNotices()).toEqual([])
@@ -1210,7 +1210,7 @@ describe('routine edits', () => {
     expect(t.server.routine('r1')).toMatchObject({ name: 'Push A', ex: planDoc().routines[0].ex })
     expect((await t.copy.get()).state).toEqual(t.server.doc)
     expect(await t.routineEdits.listPending()).toEqual([])
-    expect(await t.routineEdits.listNotices()).toEqual([{ rid: 'r1', name: 'Push', kind: 'changed', at: iso(T0) }])
+    expect(await t.routineEdits.listNotices()).toEqual([{ kind: 'routine', key: 'r1', name: 'Push', reason: 'changed', at: iso(T0) }])
     expect(r).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
     expect(r.problem).toBeUndefined()
 
@@ -1224,16 +1224,16 @@ describe('routine edits', () => {
     const mine = await t.edit('r1', setsOn(4))
     const markSent = t.routineEdits.markSent
     t.routineEdits.markSent = async items => {
-      t.server.calls.push(`markSent ${items.map(i => `${i.rid}@${i.t}`).join(',')}`)
+      t.server.calls.push(`markSent ${items.map(i => `${i.key}@${i.t}`).join(',')}`)
       return markSent(items)
     }
     t.server.once.push = [async () => { t.server.webEditsRoutine('r2', r => ({ ...r, name: 'Pull A' })) }]
     const r = await t.sync.syncNow()
     expect(t.server.calls).toEqual(['rev', `markSent r1@${T0 + 1}`, 'push', `markSent r1@${T0 + 1}`, 'push', 'pull'])
     expect(t.server.pushes[1].baseRev).toBe(4)
-    expect(t.server.pushes[1].state.routines[0]).toEqual(mine.routine)
+    expect(t.server.pushes[1].state.routines[0]).toEqual(mine.value)
     expect(t.server.pushes[1].state.routines[1]).toMatchObject({ name: 'Pull A' })
-    expect(content(t.server.routine('r1'))).toEqual(content(mine.routine))
+    expect(content(t.server.routine('r1'))).toEqual(content(mine.value))
     expect(t.server.routine('r2').name).toBe('Pull A')
     expect(await t.routineEdits.listPending()).toEqual([])
     expect(await t.routineEdits.listNotices()).toEqual([])
@@ -1249,7 +1249,7 @@ describe('routine edits', () => {
     expect(t.server.pushes).toEqual([])
     expect(t.server.doc.routines.map(x => x.id)).toEqual(['r2'])
     expect(await t.routineEdits.listPending()).toEqual([])
-    expect(await t.routineEdits.listNotices()).toEqual([{ rid: 'r1', name: 'Push', kind: 'deleted', at: iso(T0) }])
+    expect(await t.routineEdits.listNotices()).toEqual([{ kind: 'routine', key: 'r1', name: 'Push', reason: 'deleted', at: iso(T0) }])
     expect(r).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
   })
 
@@ -1258,7 +1258,7 @@ describe('routine edits', () => {
     const mine = await t.edit('r1', setsOn(4))
     t.server.once.pull = [OFFLINE]
     expect(await t.sync.syncNow()).toMatchObject({ state: 'waiting', pendingRoutineEdits: 1 })
-    expect((await t.routineEdits.get('r1')).sent).toEqual(mine.routine)
+    expect((await t.routineEdits.get('routine', 'r1')).sent).toEqual(mine.value)
     t.fresh()
     expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
     expect(t.server.calls).toEqual(['rev', 'pull'])
@@ -1275,7 +1275,7 @@ describe('routine edits', () => {
     expect(t.server.pushes).toHaveLength(1)
     expect(t.serverIds()).toEqual(['web-1', 'p1'])
     expect(t.server.doc.bodyweight).toHaveLength(1)
-    expect(content(t.server.routine('r1'))).toEqual(content(mine.routine))
+    expect(content(t.server.routine('r1'))).toEqual(content(mine.value))
     expect(await t.sync.status()).toMatchObject({ pending: 0, pendingWeighIns: 0, pendingRoutineEdits: 0 })
   })
 
@@ -1300,7 +1300,7 @@ describe('routine edits', () => {
     expect(t.server.routine('r1').name).toBe('Push (web, later)')
     expect(await t.routineEdits.listPending()).toEqual([])
     expect(await t.routineEdits.listNotices()).toEqual([])
-    expect(await t.db.getAll('SELECT rid, acked_at, superseded_at FROM routine_edits')).toEqual([{ rid: 'r1', acked_at: iso(T0), superseded_at: null }])
+    expect(await t.db.getAll('SELECT key, acked_at, superseded_at FROM pending_edits')).toEqual([{ key: 'r1', acked_at: iso(T0), superseded_at: null }])
     expect(await t.sync.status()).toMatchObject({ pendingRoutineEdits: 0 })
   })
 
@@ -1314,7 +1314,7 @@ describe('routine edits', () => {
     t.server.webAdds(web('web-9'))
     expect(await t.sync.syncNow()).toMatchObject({ state: 'problem', problem: 'server-older' })
     expect(await t.sync.resendAll()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
-    expect(content(t.server.routine('r1'))).toEqual(content(mine.routine))
+    expect(content(t.server.routine('r1'))).toEqual(content(mine.value))
     expect(await t.routineEdits.listPending()).toEqual([])
     expect(await t.routineEdits.listNotices()).toEqual([])
   })
@@ -1346,15 +1346,15 @@ describe('routine edits', () => {
       return markSent(items)
     }
     expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 1 })
-    expect(t.server.pushes[0].state.routines[0]).toEqual(first.routine)
+    expect(t.server.pushes[0].state.routines[0]).toEqual(first.value)
     const landed = t.server.routine('r1')._ts
-    expect(await t.routineEdits.listPending()).toEqual([{ rid: 'r1', baseTs: landed, routine: second.routine, sent: null, t: T0 + 2 }])
+    expect(await t.routineEdits.listPending()).toEqual([{ kind: 'routine', key: 'r1', baseTs: landed, value: second.value, sent: null, t: T0 + 2 }])
     expect(await t.routineEdits.listNotices()).toEqual([])
 
     t.fresh()
     expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
     expect(t.server.calls).toEqual(['rev', 'push', 'pull'])
-    expect(content(t.server.routine('r1'))).toEqual(content(second.routine))
+    expect(content(t.server.routine('r1'))).toEqual(content(second.value))
     expect(await t.routineEdits.listPending()).toEqual([])
     expect(await t.routineEdits.listNotices()).toEqual([])
   })
@@ -1374,14 +1374,14 @@ describe('routine edits', () => {
       return r
     }
     expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 1 })
-    expect(content(t.server.routine('r1'))).toEqual(content(first.routine))
-    expect(await t.routineEdits.get('r1')).toEqual({ rid: 'r1', baseTs: 1000, routine: second.routine, sent: first.routine, t: T0 + 2 })
+    expect(content(t.server.routine('r1'))).toEqual(content(first.value))
+    expect(await t.routineEdits.get('routine', 'r1')).toEqual({ kind: 'routine', key: 'r1', baseTs: 1000, value: second.value, sent: first.value, t: T0 + 2 })
     expect(await t.routineEdits.listNotices()).toEqual([])
 
     t.fresh()
     expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
     expect(t.server.calls).toEqual(['rev', 'push', 'pull'])
-    expect(content(t.server.routine('r1'))).toEqual(content(second.routine))
+    expect(content(t.server.routine('r1'))).toEqual(content(second.value))
     expect(await t.routineEdits.listPending()).toEqual([])
     expect(await t.routineEdits.listNotices()).toEqual([])
   })
@@ -1395,7 +1395,7 @@ describe('routine edits', () => {
     expect(t.server.pushes).toEqual([])
     expect(t.server.routine('r3')).toEqual(twins)
     expect(await t.routineEdits.listPending()).toEqual([])
-    expect(await t.routineEdits.listNotices()).toEqual([{ rid: 'r3', name: 'Bench day', kind: 'unsafe', at: iso(T0) }])
+    expect(await t.routineEdits.listNotices()).toEqual([{ kind: 'routine', key: 'r3', name: 'Bench day', reason: 'unsafe', at: iso(T0) }])
     expect(r).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
 
     // a sets-only edit of the same routine goes
@@ -1423,7 +1423,7 @@ async function screenEdit(t, change, at) {
   const src = await readScreenSource({ finished: t.workouts, serverCopy: t.copy, bundled, routineEdits: t.routineEdits })
   const shown = findRoutine(src.state, 'r1')
   const { base, fresh } = editBase({ copy: src.copy, bundled }, 'r1')
-  await t.routineEdits.put({ rid: 'r1', baseTs: base?._ts ?? null, routine: change(clone(shown)), t: at, fresh })
+  await t.routineEdits.put({ kind: 'routine', key: 'r1', baseTs: base?._ts ?? null, value: change(clone(shown)), t: at, fresh })
   return { shown }
 }
 
@@ -1441,7 +1441,7 @@ describe('routine edits made on the bundled snapshot', () => {
     expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
     expect(t.server.pushes).toEqual([])
     expect(t.server.routine('r1')).toEqual(before)
-    expect(await t.routineEdits.listNotices()).toEqual([{ rid: 'r1', name: 'Push', kind: 'changed', at: iso(T0) }])
+    expect(await t.routineEdits.listNotices()).toEqual([{ kind: 'routine', key: 'r1', name: 'Push', reason: 'changed', at: iso(T0) }])
   })
 
   // Forget, then an edit on the snapshot, then pairing the same server again (as changing the
@@ -1464,7 +1464,7 @@ describe('routine edits made on the bundled snapshot', () => {
     expect(t.server.pushes).toEqual([])
     expect(t.server.routine('r1')).toEqual(before)
     expect(await t.routineEdits.listPending()).toEqual([])
-    expect(await t.routineEdits.listNotices()).toEqual([{ rid: 'r1', name: 'Push', kind: 'changed', at: iso(T0) }])
+    expect(await t.routineEdits.listNotices()).toEqual([{ kind: 'routine', key: 'r1', name: 'Push', reason: 'changed', at: iso(T0) }])
   })
 
   test('an edit still pending at forget, an unpaired edit, re-pair: the web\'s change since the snapshot stands, with a notice', async () => {
@@ -1479,7 +1479,7 @@ describe('routine edits made on the bundled snapshot', () => {
     expect((await t.sync.pair(BASE, 'GOODCODE')).ok).toBe(true)
     expect(t.server.pushes).toEqual([])
     expect(t.server.routine('r1')).toEqual(before)
-    expect(await t.routineEdits.listNotices()).toEqual([{ rid: 'r1', name: 'Push', kind: 'changed', at: iso(T0) }])
+    expect(await t.routineEdits.listNotices()).toEqual([{ kind: 'routine', key: 'r1', name: 'Push', reason: 'changed', at: iso(T0) }])
   })
 
   // A save on the snapshot (the copy turned unbuildable for the screens) lands between the push
@@ -1495,7 +1495,7 @@ describe('routine edits made on the bundled snapshot', () => {
     t.routineEdits.markSent = async items => {
       if (!saved) {
         saved = true
-        await t.routineEdits.put({ rid: 'r1', baseTs: SNAP_R1._ts, routine: setsOn(5)(clone(SNAP_R1)), t: T0 + 2, fresh: true })
+        await t.routineEdits.put({ kind: 'routine', key: 'r1', baseTs: SNAP_R1._ts, value: setsOn(5)(clone(SNAP_R1)), t: T0 + 2, fresh: true })
       }
       return markSent(items)
     }
@@ -1505,7 +1505,7 @@ describe('routine edits made on the bundled snapshot', () => {
     await t.sync.syncNow()
     expect(t.server.routine('r1').ex[0]).toMatchObject({ sets: 4, reps: 6 })
     expect(await t.routineEdits.listPending()).toEqual([])
-    expect(await t.routineEdits.listNotices()).toEqual([{ rid: 'r1', name: 'Push', kind: 'changed', at: iso(T0) }])
+    expect(await t.routineEdits.listNotices()).toEqual([{ kind: 'routine', key: 'r1', name: 'Push', reason: 'changed', at: iso(T0) }])
   })
 
   test('an unpaired edit of a routine unchanged since the snapshot goes on pairing, over an older pending one', async () => {

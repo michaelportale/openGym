@@ -2,7 +2,7 @@ import { expect, test, vi } from 'vitest'
 import { createNodeSqliteDb } from '../../scripts/node-sqlite.mjs'
 import { createSqliteWeighIns } from '../body/weigh-ins.js'
 import { createSqliteFinishedWorkouts } from '../session/finished-workouts.js'
-import { createSqliteRoutineEdits } from './pending-edits.js'
+import { createSqlitePendingEdits } from './pending-edits.js'
 import { createSqliteServerCopy } from './server-copy.js'
 import { keyed, readSourceKey, sourceKey } from './source-key.js'
 
@@ -96,24 +96,24 @@ test('keyed retries a failed build on the next call', async () => {
   expect(await load()).toEqual({ ok: true })
 })
 
-test('a pending routine edit moves the key, by its rid and time', () => {
+test('a pending routine edit moves the key, by its key and time', () => {
   const key = sourceKey(base())
   expect(sourceKey({ ...base(), routineEdits: [] })).toBe(key)
-  const one = sourceKey({ ...base(), routineEdits: [{ rid: 'a', t: 1 }] })
+  const one = sourceKey({ ...base(), routineEdits: [{ kind: 'routine', key: 'a', t: 1 }] })
   expect(one).not.toBe(key)
-  expect(sourceKey({ ...base(), routineEdits: [{ rid: 'a', t: 2 }] })).not.toBe(one)
-  expect(sourceKey({ ...base(), routineEdits: [{ rid: 'b', t: 1 }] })).not.toBe(one)
+  expect(sourceKey({ ...base(), routineEdits: [{ kind: 'routine', key: 'a', t: 2 }] })).not.toBe(one)
+  expect(sourceKey({ ...base(), routineEdits: [{ kind: 'routine', key: 'b', t: 1 }] })).not.toBe(one)
 })
 
 test('readSourceKey follows routine edits: put, and acked', async () => {
   const db = createNodeSqliteDb()
-  const stores = { finished: createSqliteFinishedWorkouts(db), serverCopy: createSqliteServerCopy(db), routineEdits: createSqliteRoutineEdits(db) }
+  const stores = { finished: createSqliteFinishedWorkouts(db), serverCopy: createSqliteServerCopy(db), routineEdits: createSqlitePendingEdits(db) }
   const read = () => readSourceKey({ ...stores, now: NOW })
   const none = await read()
-  await stores.routineEdits.put({ rid: 'a', baseTs: null, routine: { id: 'a', name: 'A' }, t: 3 })
+  await stores.routineEdits.put({ kind: 'routine', key: 'a', baseTs: null, value: { id: 'a', name: 'A' }, t: 3 })
   const put = await read()
   expect(put).not.toBe(none)
-  await stores.routineEdits.markAcked([{ rid: 'a', t: 3 }], 'now')
+  await stores.routineEdits.markAcked([{ kind: 'routine', key: 'a', t: 3 }], 'now')
   expect(await read()).toBe(none)
   // Without a store the edits read as none.
   expect(await readSourceKey({ finished: stores.finished, serverCopy: stores.serverCopy, now: NOW })).toBe(none)

@@ -7,7 +7,7 @@ import { createSqliteSessionStorage } from '../session/sqlite-storage'
 import { focusReloads, homeKey, homeKeyStep, reloadsOnFocus } from '../sync/sync-triggers'
 import { useSync } from '../sync/use-sync'
 import { createSqliteServerCopy } from '../sync/server-copy'
-import { createSqliteRoutineEdits } from '../sync/pending-edits'
+import { createSqlitePendingEdits } from '../sync/pending-edits'
 import { readScreenSource } from '../sync/source'
 import { readSourceKey } from '../sync/source-key'
 import { nextRoutineId } from './next-up'
@@ -21,7 +21,7 @@ const LOADING = { status: 'loading', error: null, db: null, state: null, workout
 const sourceStores = db => ({
   finished: createSqliteFinishedWorkouts(db),
   serverCopy: createSqliteServerCopy(db),
-  routineEdits: createSqliteRoutineEdits(db),
+  routineEdits: createSqlitePendingEdits(db),
 })
 
 // What the Workout tab opens on. An open journal always wins ('session', openBase null: the

@@ -4,7 +4,7 @@ import { openAppDatabase } from '../storage/database'
 import { coalesced } from '../body/coalesce'
 import { createSqliteFinishedWorkouts } from '../session/finished-workouts'
 import { createSqliteServerCopy, createSqliteSyncMeta } from '../sync/server-copy'
-import { createSqliteRoutineEdits } from '../sync/pending-edits'
+import { createSqlitePendingEdits } from '../sync/pending-edits'
 import { readScreenSource } from '../sync/source'
 import { keyed, readSourceKey } from '../sync/source-key'
 import { useFocusReload } from '../sync/use-focus-reload'
@@ -32,7 +32,7 @@ export function useExerciseSource() {
         setSource(await load({
           finished: createSqliteFinishedWorkouts(db),
           serverCopy: createSqliteServerCopy(db),
-          routineEdits: createSqliteRoutineEdits(db),
+          routineEdits: createSqlitePendingEdits(db),
           meta: createSqliteSyncMeta(db),
           now: Date.now(),
         }))

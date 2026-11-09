@@ -82,7 +82,7 @@ export function screenSource({ copy, bundled, pending, routineEdits }) {
 // The unsent workouts and routine edits are read before the copy: the sync engine stores a copy before it acks the
 // workouts that copy holds, so a sync landing between the two reads leaves each workout in one.
 export async function readScreenSource({ finished, serverCopy, bundled, routineEdits = null }) {
-  const edits = routineEdits ? await routineEdits.listPending() : []
+  const edits = routineEdits ? await routineEdits.listPending({ kind: 'routine' }) : []
   const workouts = await finished.list()
   const pending = await finished.listPending()
   const copy = await readCopy(serverCopy)

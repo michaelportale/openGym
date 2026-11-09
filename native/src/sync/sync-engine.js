@@ -6,8 +6,8 @@
 //
 // Everything is injected: `client` (api-client.js), `credentials` (the Keychain token),
 // `copy` and `meta` (server-copy.js), `workouts` (the finished-workout store), `weighIns` (the
-// weigh-in day operations), `routineEdits` (pending-edits.js) and `now` (ms since epoch). It
-// never touches the session journal and logs nothing.
+// weigh-in day operations), `routineEdits` (the pending-edits.js store, whose routine rows it
+// syncs) and `now` (ms since epoch). It never touches the session journal and logs nothing.
 
 import { applyDayOps } from '../body/day-ops.js'
 import { applyRoutineEdits } from './edit-guard.js'
@@ -111,7 +111,7 @@ export function createSync({ client, credentials, copy, workouts, weighIns, rout
     // A routine edit is acked once the stored copy holds it (done), and superseded when the web
     // changed or deleted that routine first (the Plan tab says so). Rebased: the copy holds what
     // this phone sent while a newer edit waited, so the newer one now stands on the copy's _ts.
-    const routines = applyRoutineEdits(state.routines, await routineEdits.listPending())
+    const routines = applyRoutineEdits(state.routines, await routineEdits.listPending({ kind: 'routine' }))
     const at = iso()
     if (routines.done.length) await routineEdits.markAcked(routines.done, at)
     if (routines.rebased.length) await routineEdits.rebase(routines.rebased)
@@ -205,7 +205,7 @@ export function createSync({ client, credentials, copy, workouts, weighIns, rout
     }
 
     for (let tries = 0; ; tries++) {
-      const plan = buildPush(held, await workouts.listPending(), await weighIns.listPending(), await routineEdits.listPending())
+      const plan = buildPush(held, await workouts.listPending(), await weighIns.listPending(), await routineEdits.listPending({ kind: 'routine' }))
       if (!plan) return synced()
       if (tries === 2) return stuck('conflict')
       // What this attempt sends for each routine, so the pull that finds it there knows it as the
@@ -237,7 +237,7 @@ export function createSync({ client, credentials, copy, workouts, weighIns, rout
     const httpStatus = Number(await meta.get('httpStatus')) || null
     const pending = (await workouts.listPending()).length
     const pendingWeighIns = (await weighIns.listPending()).length
-    const pendingRoutineEdits = (await routineEdits.listPending()).length
+    const pendingRoutineEdits = (await routineEdits.listPending({ kind: 'routine' })).length
     // The rev and wid alone: this runs on every state change, and the body can be megabytes.
     const held = await copy.key().catch(() => null)
     const isPaired = !!auth && !!server
