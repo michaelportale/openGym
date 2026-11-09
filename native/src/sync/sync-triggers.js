@@ -35,6 +35,15 @@ export function reloadsOnFocus(homeStatus) {
   return homeStatus === 'start' || homeStatus === 'error'
 }
 
+// Once the source key (sync/source-key.js) is read on focus: the start screen reads again only when
+// it moved since the load the screen shows (loadedKey), or either key is missing (null: a key that
+// could not be read, or a load that failed). A pending routine edit is in the key, so an edit made
+// on the Plan tab still shows. The error screen shows no source, so it always reads again.
+export function focusReloads({ homeStatus, loadedKey, key }) {
+  if (!reloadsOnFocus(homeStatus)) return false
+  return homeStatus === 'error' || key == null || key !== loadedKey
+}
+
 export function canPair({ address, code, busy }) {
   return !busy && address.trim() !== '' && code.trim() !== ''
 }

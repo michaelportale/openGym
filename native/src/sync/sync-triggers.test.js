@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest'
-import { FOREGROUND_GAP_MS, canPair, homeKey, homeKeyStep, reloadsOnFocus, serverLines, shouldSyncOnForeground } from './sync-triggers.js'
+import { FOREGROUND_GAP_MS, canPair, focusReloads, homeKey, homeKeyStep, reloadsOnFocus, serverLines, shouldSyncOnForeground } from './sync-triggers.js'
+import { sourceKey } from './source-key.js'
 
 describe('shouldSyncOnForeground', () => {
   const T = 1_000_000
@@ -70,6 +71,33 @@ describe('reloadsOnFocus', () => {
   test('never while a session is open, and not over a load already running', () => {
     expect(reloadsOnFocus('session')).toBe(false)
     expect(reloadsOnFocus('loading')).toBe(false)
+  })
+})
+
+// Once the source key is read on focus: the start screen reads again only when it moved since the
+// load it shows, so returning to an unchanged tab keeps what it built.
+describe('focusReloads', () => {
+  const NOW = new Date(2026, 10, 9, 9).getTime()
+  const key = (over = {}) => sourceKey({ copyKey: { rev: 7, wid: 'w7' }, workouts: [], weighIns: [], routineEdits: [], now: NOW, ...over })
+  test('the start screen keeps what it built while the key holds, and reads again once it moved', () => {
+    expect(focusReloads({ homeStatus: 'start', loadedKey: key(), key: key() })).toBe(false)
+    expect(focusReloads({ homeStatus: 'start', loadedKey: key(), key: key({ copyKey: { rev: 8, wid: 'w8' } }) })).toBe(true)
+    expect(focusReloads({ homeStatus: 'start', loadedKey: key(), key: key({ now: NOW + 24 * 3600000 }) })).toBe(true)
+  })
+  test('a routine edit saved on the Plan tab moves the key, paired or not, so the start screen reads it', () => {
+    expect(focusReloads({ homeStatus: 'start', loadedKey: key(), key: key({ routineEdits: [{ rid: 'r1', t: 5 }] }) })).toBe(true)
+    expect(focusReloads({ homeStatus: 'start', loadedKey: key({ copyKey: null }), key: key({ copyKey: null, routineEdits: [{ rid: 'r1', t: 5 }] }) })).toBe(true)
+  })
+  test('a key that could not be read, or no key from the load shown, reads again', () => {
+    expect(focusReloads({ homeStatus: 'start', loadedKey: key(), key: null })).toBe(true)
+    expect(focusReloads({ homeStatus: 'start', loadedKey: null, key: key() })).toBe(true)
+  })
+  test('the error screen shows no source, so it reads again whatever the key', () => {
+    expect(focusReloads({ homeStatus: 'error', loadedKey: key(), key: key() })).toBe(true)
+  })
+  test('never while a session is open or a load is running, whatever the key', () => {
+    expect(focusReloads({ homeStatus: 'session', loadedKey: key(), key: key({ routineEdits: [{ rid: 'r1', t: 5 }] }) })).toBe(false)
+    expect(focusReloads({ homeStatus: 'loading', loadedKey: null, key: null })).toBe(false)
   })
 })
 
