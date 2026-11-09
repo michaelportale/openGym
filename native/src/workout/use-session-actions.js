@@ -2,12 +2,17 @@ import { useEffect, useRef, useState } from 'react'
 import { AccessibilityInfo, Alert } from 'react-native'
 import { workoutModel } from '../shared/training.js'
 import { createEventId } from '../session/ids'
+import { ALERTS_OFF_NOTICE, shouldExplainAlertsOff } from '../notify/permission'
 import { createActionGate } from './action-gate'
+import { afterGatedWrite } from './after-write'
 import { completeLabels } from './keypad'
 import { pendingRest, restMsFor } from './rest-after'
 import { shownAfterComplete, withTargets } from './session-screen'
 import { carriedWeight, lockedWeight, shownValues } from './workout-view'
-import { NO_NOTICES, addSetCall, addWarmupCall, completeAfterCommit, completeCall, dockKeypadField, draftCall, editCall, findSet, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightRefusal, pauseRestCall, primaryAction, removeWarmupCall, restAfterComplete, resultNotice, resumeRestCall, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, sheetSide, thrown, undoWrite } from './set-calls'
+import { NO_NOTICES, addSetCall, addWarmupCall, completeAfterCommit, completeCall, dockKeypadField, draftCall, editCall, findSet, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightRefusal, pauseRestCall, primaryAction, removeWarmupCall, restAfterComplete, resultNotice, resumeRestCall, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, sheetSide, thrown, undoWrite, writeOutcome } from './set-calls'
+
+// The sessions already told that rest alerts are off. In memory: a relaunch tells again.
+const explainedAlertsOff = new Set()
 
 // Every write the session screen makes, through one action gate: a tap while a write is in
 // flight is dropped, so a double tap on Complete logs one set. `view` is this render's view (with
@@ -57,25 +62,37 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
   // overnight reloads the view (writing nothing), so the overnight dock shows without another tap.
   // Once the gate is free, the rest alert is brought in line with the journal: after every write,
   // not only those that touch rest, so none is missed. It is not awaited and never rejects, so it
-  // changes neither the result nor its notice. A dropped tap wrote nothing and reconciles nothing.
-  const act = fn => gate.current(async () => {
-    setBusy(true)
-    try {
-      const result = await fn()
-      if (result?.error?.code === 'overnight') await session.refresh()
-      return result
-    } catch (error) {
-      return thrown(error)
-    } finally {
-      setBusy(false)
-    }
-  }).then(result => {
-    if (!result?.ignored) afterWrite?.()
-    return result
-  })
+  // changes neither the result nor its notice (afterGatedWrite). Only a write that started a rest
+  // waits for it, to learn whether alerts are off. A dropped tap wrote nothing and reconciles nothing.
+  // The journal's rest, read as the write begins (inside the gate) and again once it has settled:
+  // a rest that began in between is what may ask for notification permission (afterGatedWrite).
+  const restOf = () => session.getState().view?.rest ?? null
+  const act = fn => {
+    let before = null
+    return gate.current(async () => {
+      setBusy(true)
+      try {
+        before = restOf()
+        const result = await fn()
+        if (result?.error?.code === 'overnight') await session.refresh()
+        return result
+      } catch (error) {
+        return thrown(error)
+      } finally {
+        setBusy(false)
+      }
+    }).then(result => afterGatedWrite(result, { afterWrite, before, after: restOf, now: Date.now() }))
+  }
+  // A write that started a rest with alerts off says so, once for each session, unless it has
+  // something else to say: a failure or a warning is never replaced.
   const report = (result, action) => {
     const stamp = nextStamp()
     setNotices(current => noticesAfter(current, result, action, stamp))
+    if (result?.alertsOff && !writeOutcome(result, action) && shouldExplainAlertsOff(base?.id, explainedAlertsOff)) {
+      explainedAlertsOff.add(base.id)
+      const notice = nextStamp()(ALERTS_OFF_NOTICE)
+      setNotices(current => ({ ...current, notice }))
+    }
   }
 
   // Every write but the three overnight choices (Resume, Finish, Discard). Right before it writes,

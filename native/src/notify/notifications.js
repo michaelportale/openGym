@@ -16,6 +16,8 @@ const flat = request => ({
 export const restAlerts = {
   // The current status, never a prompt.
   permissions: () => Notifications.getPermissionsAsync(),
+  // The in-context request: the system prompt, shown by iOS at most once.
+  request: options => Notifications.requestPermissionsAsync(options),
   listScheduled: async () => (await Notifications.getAllScheduledNotificationsAsync()).map(flat),
   // `sound: true` is the system's notification sound, which Focus and silent mode govern.
   schedule: ({ identifier, date, title, body, data }) => Notifications.scheduleNotificationAsync({

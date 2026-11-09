@@ -8,13 +8,13 @@ import { pendingRest } from '../workout/rest-after.js'
 import { resumeRestCall } from '../workout/set-calls.js'
 import {
   alertStatus,
-  alertsAllowed,
   deliveredToDismiss,
   desiredRestAlert,
   foregroundBehavior,
   isRestAlertResponse,
   nextSetLabel,
   planRestAlerts,
+  restAlertPossible,
   reconcileRestAlerts,
   restAlertId,
 } from './rest-alert.js'
@@ -112,14 +112,14 @@ describe('planRestAlerts', () => {
     expect(planRestAlerts(desired, [pending(desired)])).toEqual({ cancel: [], schedule: null })
   })
 
-  test('a different deadline: cancel it and schedule the new one', () => {
+  test('a different deadline: schedule the new one over it, without cancelling the identifier it replaces', () => {
     const old = pending(alertFor('s1', T0 + 60_000))
-    expect(planRestAlerts(desired, [old])).toEqual({ cancel: ['rest-s1'], schedule: desired })
+    expect(planRestAlerts(desired, [old])).toEqual({ cancel: [], schedule: desired })
   })
 
   test('the next set changed (an Undo during rest): the alert is rewritten', () => {
     const old = pending(alertFor('s1', T0 + 90_000, 'Next: Bench press, set 1'))
-    expect(planRestAlerts(desired, [old])).toEqual({ cancel: ['rest-s1'], schedule: desired })
+    expect(planRestAlerts(desired, [old])).toEqual({ cancel: [], schedule: desired })
   })
 
   test("another session's rest alert is cancelled", () => {
@@ -150,6 +150,11 @@ describe('deliveredToDismiss', () => {
   test('a finished or discarded session takes its delivered rest alert away', () => {
     expect(deliveredToDismiss('s1', delivered, 'finished')).toEqual(['rest-s1'])
     expect(deliveredToDismiss('s1', delivered, 'discarded')).toEqual(['rest-s1'])
+  })
+
+  test('no session open: every delivered rest alert goes, and nothing else', () => {
+    expect(deliveredToDismiss(null, delivered, 'none')).toEqual(['rest-s1', 'rest-s0'])
+    expect(deliveredToDismiss(null, [], 'none')).toEqual([])
   })
 
   test('an active session keeps what was delivered', () => {
@@ -217,17 +222,18 @@ describe('foreground and tap', () => {
   })
 })
 
-describe('alertsAllowed', () => {
-  test('granted, provisional and ephemeral may schedule', () => {
-    expect(alertsAllowed({ status: 'granted', granted: true, ios: { status: 2 } })).toBe(true)
-    expect(alertsAllowed({ status: 'undetermined', granted: false, ios: { status: 3 } })).toBe(true)
-    expect(alertsAllowed({ status: 'undetermined', granted: false, ios: { status: 4 } })).toBe(true)
-  })
-
-  test('denied, not asked yet, or unknown may not', () => {
-    expect(alertsAllowed({ status: 'denied', granted: false, ios: { status: 1 } })).toBe(false)
-    expect(alertsAllowed({ status: 'undetermined', granted: false, ios: { status: 0 } })).toBe(false)
-    expect(alertsAllowed(null)).toBe(false)
+describe('restAlertPossible', () => {
+  const now = T0 + 10_000
+  test('only an active session with a running rest could schedule', () => {
+    const ok = { sessionId: 's1', status: 'active', view: { rest: running(T0 + 90_000) }, now }
+    expect(restAlertPossible(ok)).toBe(true)
+    expect(restAlertPossible({ ...ok, status: 'finished' })).toBe(false)
+    expect(restAlertPossible({ ...ok, status: 'discarded' })).toBe(false)
+    expect(restAlertPossible({ ...ok, status: 'none', sessionId: null })).toBe(false)
+    expect(restAlertPossible({ ...ok, status: null })).toBe(false)
+    expect(restAlertPossible({ ...ok, view: { rest: { ...running(T0 + 90_000), status: 'paused' } } })).toBe(false)
+    expect(restAlertPossible({ ...ok, view: { rest: null } })).toBe(false)
+    expect(restAlertPossible({ ...ok, now: T0 + 91_000 })).toBe(false)
   })
 })
 
@@ -245,10 +251,10 @@ describe('reconcileRestAlerts', () => {
     expect(adapter.state.calls).toEqual([['schedule', 'rest-s1']])
   })
 
-  test('cancels before it schedules, so a replaced alert is the new one', async () => {
-    const adapter = fakeAdapter({ scheduled: [alertFor('s1', T0 + 60_000)] })
+  test('a replaced alert is scheduled over, not cancelled first; other sessions are cancelled', async () => {
+    const adapter = fakeAdapter({ scheduled: [alertFor('s1', T0 + 60_000), alertFor('s0', T0 + 30_000)] })
     await reconcileRestAlerts({ ...active(running(T0 + 90_000)), adapter })
-    expect(adapter.state.calls).toEqual([['cancel', 'rest-s1'], ['schedule', 'rest-s1']])
+    expect(adapter.state.calls).toEqual([['cancel', 'rest-s0'], ['schedule', 'rest-s1']])
     expect(adapter.state.scheduled.map(r => r.data.deadline)).toEqual([T0 + 90_000])
   })
 
@@ -279,6 +285,13 @@ describe('reconcileRestAlerts', () => {
     const adapter = fakeAdapter({ scheduled: [alertFor('s1', T0 + 90_000)] })
     await reconcileRestAlerts({ sessionId: null, status: 'none', view: null, nextLabel: null, now, adapter })
     expect(adapter.state.scheduled).toEqual([])
+  })
+
+  test('no session open: every delivered rest alert is dismissed too', async () => {
+    const delivered = [{ identifier: 'rest-s1', data: { kind: 'rest' } }, { identifier: 'reminder-1', data: null }]
+    const adapter = fakeAdapter({ delivered })
+    await reconcileRestAlerts({ sessionId: null, status: 'none', view: null, nextLabel: null, now, adapter })
+    expect(adapter.state.delivered.map(n => n.identifier)).toEqual(['reminder-1'])
   })
 
   test('an adapter error reaches the caller', async () => {

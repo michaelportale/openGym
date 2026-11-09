@@ -58,19 +58,28 @@ const sameAlert = (request, desired) => desired != null
   && request.body === desired.body
 
 // `scheduled` is the pending requests ({ identifier, body, data }). Every rest alert that is not
-// exactly `desired` is cancelled (an old deadline, another session's, a stale one); `desired` is
-// scheduled unless it is already there. A request that is not a rest alert is never touched.
-// Cancels run before the schedule: the new request may reuse a cancelled identifier.
+// exactly `desired` is cancelled (another session's, a stale one); `desired` is scheduled unless it
+// is already there. The desired identifier is never cancelled: scheduling it replaces the pending
+// request on iOS, and a cancel then add on one identifier only adds an ordering risk. A request
+// that is not a rest alert is never touched.
 export function planRestAlerts(desired, scheduled) {
   const requests = scheduled ?? []
-  const cancel = requests.filter(r => isRestAlert(r.identifier) && !sameAlert(r, desired)).map(r => r.identifier)
+  const cancel = requests
+    .filter(r => isRestAlert(r.identifier) && !sameAlert(r, desired) && r.identifier !== desired?.identifier)
+    .map(r => r.identifier)
   const kept = requests.some(r => sameAlert(r, desired))
   return { cancel, schedule: desired && !kept ? desired : null }
 }
 
+// Could a schedule follow? Only an active session with a rest still running. Permission is read
+// only then; every other run just cancels and needs no permission.
+export const restAlertPossible = ({ sessionId, status, view, now }) => desiredRestAlert({ sessionId, status, rest: view?.rest, now }) != null
+
 // A finished or discarded session's rest alert, already delivered, is taken out of the
-// notification list: it would call the owner back to a workout that is over.
+// notification list: it would call the owner back to a workout that is over. With no session open
+// ('none', the Start screen) none can be current, so every delivered rest alert goes.
 export function deliveredToDismiss(sessionId, delivered, status) {
+  if (status === 'none') return (delivered ?? []).filter(n => isRestAlert(n.identifier)).map(n => n.identifier)
   if (!sessionId || !ended(status)) return []
   const id = restAlertId(sessionId)
   return (delivered ?? []).filter(n => n.identifier === id).map(n => n.identifier)
@@ -87,7 +96,9 @@ export async function reconcileRestAlerts({ sessionId, status, view, nextLabel, 
   const plan = planRestAlerts(desired, await adapter.listScheduled())
   for (const id of plan.cancel) await adapter.cancel(id)
   if (plan.schedule) await adapter.schedule(plan.schedule)
-  const dismiss = sessionId && ended(status) ? deliveredToDismiss(sessionId, await adapter.listDelivered(), status) : []
+  const dismiss = status === 'none' || (sessionId && ended(status))
+    ? deliveredToDismiss(sessionId, await adapter.listDelivered(), status)
+    : []
   for (const id of dismiss) await adapter.dismiss(id)
   return { ...plan, dismiss }
 }
@@ -101,9 +112,3 @@ export const foregroundBehavior = data => (data?.kind === 'rest' ? SILENT : QUIE
 
 // A tap on a rest alert opens the Workout tab and does nothing else.
 export const isRestAlertResponse = response => response?.notification?.request?.content?.data?.kind === 'rest'
-
-// iOS authorization statuses (expo-notifications IosAuthorizationStatus) that let an alert show:
-// authorized, provisional and ephemeral. Expo reports provisional as status 'undetermined' with
-// granted false, so the iOS status is read too.
-const IOS_ALLOWED = [2, 3, 4]
-export const alertsAllowed = permissions => permissions?.granted === true || IOS_ALLOWED.includes(permissions?.ios?.status)
