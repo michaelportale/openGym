@@ -38,7 +38,7 @@ const HIDDEN = ['_unstamped', '_prior']
 // know, records of removals and edits, two web workouts and two routines, and the server's own
 // notes that no client is ever sent (`_prior`, `_unstamped`; sync-stamps.js notePrior/ownRecord).
 const fixture = () => ({
-  unit: 'kg',
+  unit: 'lb',
   lang: 'en',
   futureFeature: { nested: [1, { x: 'y' }], flag: true },
   routines: [
@@ -265,6 +265,17 @@ describe.skipIf(!HAS_API_DEPS)(TITLE, { timeout: 30_000 }, () => {
     expect(file.workouts.map(stripStamps)).toEqual([p1])
     expect(file._rev).toBe(1)
     expect((await app.copy.get()).state).toEqual(without(file, HIDDEN))
+  })
+
+  test('a profile kept in kilograms is refused: no token, copy or address is kept, the file untouched', async () => {
+    const server = await startServer({ state: { ...fixture(), unit: 'kg' } })
+    const app = phoneApp(createRealDb())
+    expect(await app.sync.pair(server.api, await server.pairCode()))
+      .toEqual({ ok: false, error: 'This profile uses kilograms. The app works in pounds for now, so it was not paired.' })
+    expect(app.keychain.m.size).toBe(0)
+    expect(await app.copy.get()).toBeNull()
+    expect(await app.meta.get('server')).toBeNull()
+    expect(server.file()).toEqual({ ...fixture(), unit: 'kg' })
   })
 
   test('a web write lands between the pull and the push: a real 409, one retry, nothing lost', async () => {

@@ -18,7 +18,7 @@ const OFFLINE = { ok: false, kind: 'offline' }
 const UNAUTHORIZED = { ok: false, kind: 'unauthorized' }
 
 const initialDoc = () => ({
-  unit: 'kg',
+  unit: 'lb',
   futureFeature: { nested: [1, { x: 'y' }], flag: true },
   routines: [{ id: 'r1', name: 'Push', ex: [{ id: 'bench' }] }],
   deleted: { workouts: { 'gone-1': 1730000000000 } },
@@ -193,11 +193,11 @@ describe('syncNow', () => {
   test('a different wid at the same revision is pulled too', async () => {
     const t = await setup()
     await t.sync.syncNow()
-    t.server.doc = { ...t.server.doc, unit: 'lb', _wid: 'wid-other', _wids: ['wid-1', 'wid-2', 'wid-3'] }
+    t.server.doc = { ...t.server.doc, unit: 'kg', _wid: 'wid-other', _wids: ['wid-1', 'wid-2', 'wid-3'] }
     t.fresh()
     await t.sync.syncNow()
     expect(t.server.calls).toEqual(['rev', 'pull'])
-    expect((await t.copy.get()).state.unit).toBe('lb')
+    expect((await t.copy.get()).state.unit).toBe('kg')
   })
 
   test('pending workouts go on top of the pulled document; then they are acked and the server copy is stored', async () => {
@@ -480,7 +480,7 @@ describe('syncNow', () => {
     // the web wipes the profile: an empty copy stamped with what it wiped (sync-merge.js resetIdsOf)
     const wiped = resetIdsOf(t.server.doc)
     expect(wiped.workouts).toEqual(['web-1', 'p1'])
-    t.server.write({ unit: 'kg', routines: [], workouts: [], resetAt: T0 + 1000, resetIds: wiped })
+    t.server.write({ unit: 'lb', routines: [], workouts: [], resetAt: T0 + 1000, resetIds: wiped })
     // later the owner signs out everywhere and pairs this phone again: every ack is reset
     expect(await t.sync.pair('gym.example.com', 'GOODCODE')).toEqual({ ok: true })
     expect(t.serverIds()).toEqual([])
@@ -651,7 +651,8 @@ describe('pair', () => {
 
     const r = await t.sync.pair(' gym.example.com/ ', ' GOODCODE ')
     expect(r).toEqual({ ok: true })
-    expect(t.server.calls).toEqual(['redeem', 'me', 'rev', 'pull', 'push', 'pull'])
+    // the pull after redeem checks the profile's unit before anything is stored
+    expect(t.server.calls).toEqual(['redeem', 'pull', 'me', 'rev', 'pull', 'push', 'pull'])
     expect(t.keychain.m.get('opengym.token')).toBe('T1')
     expect(await t.meta.get('server')).toBe(BASE)
     expect(await t.meta.get('profile')).toBe('Mo')
@@ -698,10 +699,65 @@ describe('pair', () => {
     expect(await pairing).toEqual({ ok: true })
     await first
     const afterRedeem = t.server.calls.slice(t.server.calls.indexOf('redeem') + 1)
-    // the earlier sync finishes (pull, push, pull), then the pairing's own sync starts afresh
-    expect(afterRedeem).toEqual(['pull', 'push', 'pull', 'me', 'rev', 'pull'])
+    // the pairing checks the unit (pull), the earlier sync finishes (pull, push, pull), then the
+    // pairing's own sync starts afresh
+    expect(afterRedeem).toEqual(['pull', 'pull', 'push', 'pull', 'me', 'rev', 'pull'])
     expect((await t.copy.get()).state).toEqual(t.server.doc)
     expect(await t.pendingIds()).toEqual([])
+  })
+
+  test.each([
+    ['kilograms', 'kg', 'This profile uses kilograms. The app works in pounds for now, so it was not paired.'],
+    ['any other unit', 'stone', 'This profile does not use pounds. The app works in pounds for now, so it was not paired.'],
+  ])('a profile kept in %s is refused in words, and nothing of it is kept', async (_n, unit, words) => {
+    const t = await setup({ server: fakeServer({ ...initialDoc(), unit }), paired: false, local: [phone('p1'), phone('p2')] })
+    await t.workouts.markAcked(['p1'], 'OLD')
+    const r = await t.sync.pair('gym.example.com', 'GOODCODE')
+    expect(r).toEqual({ ok: false, error: words })
+    expect(t.server.calls).toEqual(['redeem', 'pull'])
+    expect(t.server.pushes).toEqual([])
+    expect(t.keychain.m.size).toBe(0)
+    expect(await t.meta.get('server')).toBeNull()
+    expect(await t.meta.get('profile')).toBeNull()
+    expect(await t.copy.get()).toBeNull()
+    expect((await t.workouts.list()).map(w => w.id)).toEqual(['p1', 'p2'])
+    expect(await t.pendingIds()).toEqual(['p2'])
+    expect(await t.sync.status()).toEqual({ paired: false, state: 'unpaired', pending: 1 })
+  })
+
+  test('refusing a kilogram profile leaves the current pairing as it was', async () => {
+    const t = await setup({ local: [phone('p1')] })
+    await t.sync.syncNow()
+    const before = await t.copy.get()
+    t.server.once.pull = [{ ok: true, state: { ...initialDoc(), unit: 'kg' }, rev: 9 }]
+    const r = await t.sync.pair('gym.example.com', 'GOODCODE')
+    expect(r.ok).toBe(false)
+    expect(r.error).toMatch(/kilograms/)
+    expect(t.keychain.m.get('opengym.token')).toBe('T1')
+    expect(await t.meta.get('server')).toBe(BASE)
+    expect(await t.copy.get()).toEqual(before)
+    expect(await t.pendingIds()).toEqual([])
+  })
+
+  test('a profile with no unit yet (a new one, no document) is paired', async () => {
+    const t = await setup({ server: fakeServer({}), paired: false, local: [phone('p1')] })
+    expect(await t.sync.pair('gym.example.com', 'GOODCODE')).toEqual({ ok: true })
+    expect(t.serverIds()).toEqual(['p1'])
+  })
+
+  test('a pull that fails while checking the unit refuses in words, and nothing is kept', async () => {
+    const t = await setup({ paired: false, local: [phone('p1')] })
+    t.server.once.pull = [OFFLINE]
+    const r = await t.sync.pair('gym.example.com', 'GOODCODE')
+    expect(r.ok).toBe(false)
+    expect(r.error).toMatch(/gym\.example\.com/)
+    expect(r.error).toMatch(/new code/)
+    expect(r.error).not.toMatch(/https?:\/\//)
+    expect(t.server.pushes).toEqual([])
+    expect(t.keychain.m.size).toBe(0)
+    expect(await t.meta.get('server')).toBeNull()
+    expect(await t.copy.get()).toBeNull()
+    expect(await t.pendingIds()).toEqual(['p1'])
   })
 
   test('a 401 problem is cleared by pairing again', async () => {

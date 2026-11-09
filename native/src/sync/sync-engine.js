@@ -40,6 +40,14 @@ function goneFrom(state) {
   return id => Number(removed[id]) > 0 || wiped.has(String(id))
 }
 
+// The app logs pounds only (its Lb column and keypad): a profile kept in another unit would show its
+// numbers as pounds and get pounds stored as its own unit. No unit yet (a new profile) is fine.
+function unitError(state) {
+  if (state.unit === undefined || state.unit === 'lb') return null
+  const uses = state.unit === 'kg' ? 'This profile uses kilograms.' : 'This profile does not use pounds.'
+  return `${uses} The app works in pounds for now, so it was not paired.`
+}
+
 function pairError(result, base) {
   const host = hostOf(base)
   if (result.kind === 'invalid-code') return "That code didn't work. A code works once and lasts 5 minutes; run the pair command on the Mac for a new one."
@@ -274,6 +282,12 @@ export function createSync({ client, credentials, copy, workouts, meta, now }) {
     if (!typed) return { ok: false, error: 'Enter the pairing code from the Mac.' }
     const r = await client.redeem(address.base, typed)
     if (!r.ok) return { ok: false, error: pairError(r, address.base) }
+    // The unit is checked before anything is stored: a refusal keeps no token, copy or address of
+    // this server, and leaves the current pairing and every workout as they were.
+    const doc = await client.pull(address.base, r.token)
+    if (!doc.ok) return { ok: false, error: `Couldn't read your data from ${hostOf(address.base)}, so this phone was not paired. Run the pair command on the Mac for a new code and try again.` }
+    const wrongUnit = unitError(doc.state)
+    if (wrongUnit) return { ok: false, error: wrongUnit }
     try {
       await exclusive(async () => {
         // The old token goes first and the new one is written last, so a kill part-way leaves
