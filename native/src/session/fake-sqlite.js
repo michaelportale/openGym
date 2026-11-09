@@ -91,6 +91,10 @@ export function createFakeSqliteDb() {
       row.acked_at = params[0]
       return { changes: 1 }
     }
+    if (/^UPDATE finished_workouts SET acked_at = NULL$/i.test(text)) {
+      for (const row of tables.finished_workouts) row.acked_at = null
+      return { changes: tables.finished_workouts.length }
+    }
     if (/^INSERT INTO server_copy /i.test(text)) {
       const [rev, wid, body, pulled_at] = params
       tables.server_copy = [{ id: 1, rev, wid, body, pulled_at }]

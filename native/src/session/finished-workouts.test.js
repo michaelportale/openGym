@@ -257,3 +257,28 @@ test('a second ack keeps the first time', async () => {
   await store.markAcked(['a'], 'SECOND')
   expect(await db.getAll('SELECT acked_at FROM finished_workouts WHERE id = ?', ['a'])).toEqual([{ acked_at: 'FIRST' }])
 })
+
+test.each(['memory', 'fake sqlite', 'node sqlite'])('%s store: resetAcked makes every workout pending again and keeps them all', async (kind) => {
+  const store = STORES[kind]()
+  await store.put(workout('a', '2026-11-05'))
+  await store.put(workout('b', '2026-11-06'))
+  await store.markAcked(['a', 'b'], '2026-11-08T10:00:00.000Z')
+  expect(await store.listPending()).toEqual([])
+
+  await store.resetAcked()
+  expect((await store.listPending()).map(w => w.id)).toEqual(['a', 'b'])
+  expect((await store.list()).map(w => w.id)).toEqual(['a', 'b'])
+  // acking again after a reset takes the new time
+  await store.markAcked(['a'], 'LATER')
+  expect((await store.listPending()).map(w => w.id)).toEqual(['b'])
+})
+
+test.each(SQLITE_DRIVERS)('%s: a reset survives a kill', async (_driver, createDb) => {
+  let db = createDb()
+  const store = createSqliteFinishedWorkouts(db)
+  await store.put(workout('a', '2026-11-05'))
+  await store.markAcked(['a'], '2026-11-08T10:00:00.000Z')
+  await store.resetAcked()
+  db = db.reopen()
+  expect((await createSqliteFinishedWorkouts(db).listPending()).map(w => w.id)).toEqual(['a'])
+})

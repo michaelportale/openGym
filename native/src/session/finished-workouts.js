@@ -54,6 +54,10 @@ export function createMemoryFinishedWorkouts() {
       for (const id of ids) if (rows.has(id) && !acked.has(id)) acked.set(id, at)
       return { ok: true }
     },
+    async resetAcked() {
+      acked.clear()
+      return { ok: true }
+    },
   }
 }
 
@@ -125,6 +129,13 @@ export function createSqliteFinishedWorkouts(db) {
     async markAcked(ids, at) {
       await ready()
       for (const id of ids) await db.run('UPDATE finished_workouts SET acked_at = ? WHERE id = ? AND acked_at IS NULL', [at, id])
+      return { ok: true }
+    },
+    // Every workout is to be sent again (a new pairing, or a server restored from an older
+    // backup). The server keeps one copy per id, so re-sending one it holds adds nothing.
+    async resetAcked() {
+      await ready()
+      await db.run('UPDATE finished_workouts SET acked_at = NULL')
       return { ok: true }
     },
   }
