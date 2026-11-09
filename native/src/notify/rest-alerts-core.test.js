@@ -121,6 +121,18 @@ describe('asking when a rest starts', () => {
     expect(later).toBe(true)
   })
 
+  test('a second rest start while the first prompt is still up never asks again', async () => {
+    vi.useFakeTimers()
+    const adapter = fakeAdapter({ permissions: async () => ask, request: () => new Promise(() => {}) })
+    const alerts = make(adapter)
+    alerts.reconcile(journal('active'), { restStarted: true })
+    alerts.reconcile(journal('active'), { restStarted: true })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(adapter.state.requests).toHaveLength(1)
+    await vi.advanceTimersByTimeAsync(ASK_WAIT_MS)
+    expect(adapter.state.requests).toHaveLength(1)
+  })
+
   test('an answer after the wait still reconciles, and is not asked for again', async () => {
     vi.useFakeTimers()
     let answer
