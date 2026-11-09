@@ -120,8 +120,24 @@ describe('card', () => {
     const { card } = screen(view([{ id: '0300', target: {}, sets: [set('s1', sided(7.5, { r: 20, done: false }, { r: 18, done: false }))] }]), {
       lastTimes: { '0300': { workoutId: 'x', d: 'd', top: 7.5, sets: [{ sides: { L: { w: 7.5, r: 20 }, R: { w: 7.5, r: 18 } } }] } },
     })
-    expect(card.rows[0].lastText).toBe('7.5 × 20 / 7.5 × 18')
+    expect(card.rows[0].lastText).toBe('7.5 × 20/18')
     expect(card.rows[0].weightText).toBe('7.5')
+  })
+  // The Last cell is one line: one shared weight is written once.
+  test('per-side last time is compact; different side weights keep both', () => {
+    const lastOf = sides => screen(view([{ id: '0300', target: {}, sets: [set('s1', sided(7.5, { r: 20, done: false }, { r: 18, done: false }))] }]), {
+      lastTimes: { '0300': { workoutId: 'x', d: 'd', top: 10, sets: [{ sides }] } },
+    }).card.rows[0].lastText
+    expect(lastOf({ L: { w: 7.5, r: 12 }, R: { w: 7.5, r: 12 } })).toBe('7.5 × 12/12')
+    expect(lastOf({ L: { w: 7.5, r: 20 }, R: { w: 10, r: 18 } })).toBe('7.5 × 20 / 10 × 18')
+  })
+  test('a per-side row with one side done names that side', () => {
+    const rowsOf = (L, R) => screen(view([{ id: '0300', target: {}, sets: [set('s1', sided(7.5, { r: 20, done: L }, { r: 18, done: R }), { completed: L || R })] }])).card.rows[0]
+    expect(rowsOf(true, false).sideDone).toBe('L')
+    expect(rowsOf(false, true).sideDone).toBe('R')
+    expect(rowsOf(false, false).sideDone).toBeNull()
+    expect(rowsOf(true, true).sideDone).toBeNull()
+    expect(screen(mid()).card.rows.map(r => r.sideDone)).toEqual([null, null, null])
   })
   test('no history and unknown exercise', () => {
     const v = view([{ id: '9999', target: {}, sets: [set('a', todo(null, null))] }])

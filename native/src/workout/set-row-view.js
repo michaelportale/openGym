@@ -18,17 +18,27 @@ const spokenLast = lastText => {
   return `, last time ${lastText.replaceAll(' × ', ' by ')}`
 }
 
-export function setRowView({ number, weight, reps, status, lastText }) {
+// A per-side set with one side logged is not done yet; its done column marks that side.
+const SIDE_MARKS = {
+  L: { text: 'L ✓', label: 'Left side done' },
+  R: { text: 'R ✓', label: 'Right side done' }
+}
+
+// `sideDone` is 'L' or 'R' when exactly one side of a per-side set is logged.
+export function setRowView({ number, weight, reps, status, lastText, sideDone }) {
   if (!Object.hasOwn(STATUSES, status)) throw new Error(`Unknown set status: ${status}`)
   const { marker, fields, spoken } = STATUSES[status]
   const load = spokenAmount(weight, 'pound', 'pounds', 'no weight')
   const count = spokenAmount(reps, 'rep', 'reps', 'no reps')
+  const sideMark = status !== 'done' && Object.hasOwn(SIDE_MARKS, sideDone ?? '') ? SIDE_MARKS[sideDone] : null
+  const side = sideMark ? `, ${sideMark.label.toLowerCase()}` : ''
   return {
     marker,
     fields,
+    sideMark,
     weightText: isBlank(weight) ? '–' : String(weight),
     repsText: isBlank(reps) ? '–' : String(reps),
     lastText: lastText || '–',
-    accessibilityLabel: `Set ${number}, ${load}, ${count}, ${spoken}${status === 'done' ? '' : spokenLast(lastText)}`
+    accessibilityLabel: `Set ${number}, ${load}, ${count}, ${spoken}${side}${status === 'done' ? '' : spokenLast(lastText)}`
   }
 }

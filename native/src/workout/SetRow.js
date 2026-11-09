@@ -62,9 +62,10 @@ function Box({ text, label, hint, onPress }) {
 const plain = (text, tone) => <AppText variant="value" color={tone}>{text}</AppText>
 
 // Takes a row of `workoutScreen(...).card.rows`. `onPress(setId, field)` opens the keypad
-// ('w' or 'r'); on a done or pending row the whole row is the target.
-export default function SetRow({ setId, number, weightText, repsText, lastText, status, onPress }) {
-  const view = setRowView({ number, weight: weightText, reps: repsText, status, lastText })
+// ('w' or 'r'); on a done or pending row the whole row is the target. `sideDone` marks a
+// per-side set with one side logged.
+export default function SetRow({ setId, number, weightText, repsText, lastText, status, sideDone, onPress }) {
+  const view = setRowView({ number, weight: weightText, reps: repsText, status, lastText, sideDone })
   const marker = MARKERS[view.marker]
   const tone = status === 'done' ? color.textSecondary : color.text
   const current = view.fields === 'boxed'
@@ -87,9 +88,20 @@ export default function SetRow({ setId, number, weightText, repsText, lastText, 
           <View style={styles.amount}>{plain(view.repsText, tone)}</View>
         </>
       )}
-      <View style={styles.last}>{plain(view.lastText, color.textMuted)}</View>
+      {/* One line: a long or per-side value shrinks to fit rather than wrapping. */}
+      <View style={styles.last}>
+        <AppText variant="value" color={color.textMuted} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6} style={styles.lastText}>
+          {view.lastText}
+        </AppText>
+      </View>
       <View style={[styles.done, styles.marker]}>
-        <NativeSymbol name={marker.name} tintColor={marker.tint} weight={marker.weight} size={size.marker} />
+        {view.sideMark ? (
+          <AppText variant="value" color={color.accent} numberOfLines={1} adjustsFontSizeToFit accessibilityLabel={view.sideMark.label}>
+            {view.sideMark.text}
+          </AppText>
+        ) : (
+          <NativeSymbol name={marker.name} tintColor={marker.tint} weight={marker.weight} size={size.marker} />
+        )}
       </View>
     </>
   )
@@ -128,6 +140,7 @@ const styles = StyleSheet.create({
   number: { flex: 1, alignItems: 'center' },
   amount: { flex: 2, alignItems: 'center', justifyContent: 'center' },
   last: { flex: 2, alignItems: 'center' },
+  lastText: { alignSelf: 'stretch', textAlign: 'center' },
   boxed: {
     minWidth: '100%',
     minHeight: touch.row,

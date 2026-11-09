@@ -103,10 +103,14 @@ function repsText(slot) {
 
 const lastLine = s => `${num(s.w)} × ${num(s.r)}`
 
+// One line in a narrow column: per side, a shared weight is written once ("7.5 × 20/18").
 function lastText(last, index) {
   const s = last && last.sets ? last.sets[index] : null
   if (!s) return DASH
-  if (s.sides) return `${lastLine(s.sides.L)} / ${lastLine(s.sides.R)}`
+  if (s.sides) {
+    const { L, R } = s.sides
+    return L.w === R.w ? `${num(L.w)} × ${num(L.r)}/${num(R.r)}` : `${lastLine(L)} / ${lastLine(R)}`
+  }
   return lastLine(s)
 }
 
@@ -198,6 +202,7 @@ export function workoutScreen(view, { names = {}, lastTimes = {}, exerciseIndex,
       lastText: lastText(last, counter - 1),
       status: finished ? 'done' : isCurrent ? 'current' : 'pending',
       perSide,
+      sideDone: sideDoneOf(slot.row),
     })
   }
 

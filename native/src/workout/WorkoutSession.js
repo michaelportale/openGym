@@ -140,7 +140,7 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
         {pinned ? null : head}
         <View style={styles.body}>
           <ExerciseCard {...card} weightTitle={weightTitle} onPressRow={actions.openSheet} onAddSet={actions.addSet} />
-          {upNext ? <UpNextRow name={nameOf(names, upNext.id)} /> : null}
+          {upNext ? <UpNextRow name={nameOf(names, upNext.id)} onPress={() => move(1)} /> : null}
         </View>
         {pinned ? null : dock}
       </ScrollView>

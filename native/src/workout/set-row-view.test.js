@@ -42,3 +42,18 @@ test('accepts the screen rows display text', () => {
   expect(view('pending', { weight: '–', reps: '20 / 18' }).accessibilityLabel).toBe('Set 2, no weight, 20 / 18 reps, not started')
   expect(view('pending', { weight: '–' }).weightText).toBe('–')
 })
+
+// A per-side set with one side logged is still not done; its done column says which side is.
+test('one side done shows a partial mark and says which side', () => {
+  const left = view('current', { weight: '7.5', reps: '20 / 18', sideDone: 'L' })
+  expect(left.sideMark).toEqual({ text: 'L ✓', label: 'Left side done' })
+  expect(left.accessibilityLabel).toBe('Set 2, 7.5 pounds, 20 / 18 reps, current set, left side done')
+  const right = view('pending', { sideDone: 'R' })
+  expect(right.sideMark).toEqual({ text: 'R ✓', label: 'Right side done' })
+  expect(right.accessibilityLabel).toBe('Set 2, 135 pounds, 8 reps, not started, right side done')
+})
+test('no partial mark otherwise', () => {
+  expect(view('current').sideMark).toBeNull()
+  expect(view('done', { sideDone: null }).sideMark).toBeNull()
+  expect(view('pending', { sideDone: 'X' }).sideMark).toBeNull()
+})
