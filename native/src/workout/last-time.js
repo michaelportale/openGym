@@ -1,4 +1,5 @@
 import { workoutModel } from '../shared/training.js'
+import { prescribedWeight } from './next-time.js'
 
 const num = v => typeof v === 'number' && Number.isFinite(v)
 
@@ -44,10 +45,11 @@ export function lastTime(state, exerciseId, routineId) {
   }
 }
 
-// Every work row opens at last time's top weight, or blank. Returns new objects.
-export function applyOpeningWeights(entries, state, routineId) {
+// Every work row opens at the prescription's weight when the routine's progression names one,
+// else at last time's top weight, or blank. Without a routine, last time decides. Returns new objects.
+export function applyOpeningWeights(entries, state, routineId, routine) {
   return entries.map(entry => {
-    const top = lastTime(state, entry.id, routineId)?.top ?? null
+    const top = prescribedWeight(state, routine, entry.id) ?? lastTime(state, entry.id, routineId)?.top ?? null
     const sets = (entry.sets ?? []).map(set => {
       if (workoutModel.isWarmupRow(set)) return set
       const next = { ...set, w: top }

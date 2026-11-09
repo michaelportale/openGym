@@ -99,7 +99,7 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
     return () => sub.remove()
   }, [])
 
-  if (session.status === 'saved') return <SavedScreen db={db} onDone={onExit} />
+  if (session.status === 'saved') return <SavedScreen db={db} state={state} base={base} names={names} onDone={onExit} />
   if (session.status === 'discarded') return null
   if (session.status !== 'ready' || !screen) {
     const failed = session.status === 'error'

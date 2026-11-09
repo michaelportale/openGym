@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest'
+import { workoutModel } from '../shared/training.js'
 import { applyOpeningWeights, lastTime } from './last-time.js'
 import { sessionState } from './history-state.js'
 
@@ -146,4 +147,79 @@ test('applyOpeningWeights does not mutate its input', () => {
   expect(out).not.toBe(input)
   expect(out[0]).not.toBe(input[0])
   expect(out[0].sets[1]).not.toBe(input[0].sets[1])
+})
+
+// applyOpeningWeights as it was before prescriptions (8c1014124), kept as the oracle for "off".
+function openingWeightsBefore(entries, state, routineId) {
+  return entries.map(entry => {
+    const top = lastTime(state, entry.id, routineId)?.top ?? null
+    const sets = (entry.sets ?? []).map(set => {
+      if (workoutModel.isWarmupRow(set)) return set
+      const next = { ...set, w: top }
+      if (workoutModel.isSideSet(set)) {
+        next.sides = { L: { ...set.sides.L, w: top }, R: { ...set.sides.R, w: top } }
+      }
+      return next
+    })
+    return { ...entry, sets }
+  })
+}
+
+// Both exercises reached the top of a double-progression range last time: a raise is due.
+const topped = {
+  unit: 'lb',
+  workouts: [{
+    id: 't1', d: '2026-11-09', routineIds: ['push-a'],
+    entries: [
+      { id: '0289', rid: 'push-a', target: { id: '0289', sets: 2, reps: 10, repsMin: 8 }, sets: [warm(40, 10), row(75, 10), row(75, 10)] },
+      { id: '0999', rid: 'push-a', target: { id: '0999', sets: 1, reps: 12, repsMin: 8 }, sets: [row(20, 12)] },
+    ],
+  }],
+}
+const pushA = (prog, extra = {}) => ({
+  id: 'push-a', ...(prog ? { prog } : {}),
+  ex: [{ id: '0289', sets: 2, reps: 10, repsMin: 8 }, { id: '0999', sets: 1, reps: 12, repsMin: 8 }],
+  ...extra,
+})
+
+test('progression off opens exactly as before: deep equal to the old output', () => {
+  for (const routine of [pushA('off'), pushA(null, { ex: pushA().ex.map(c => ({ ...c, prog: 'off' })) }), pushA(null, { excludeFromProgression: true })]) {
+    for (const s of [topped, state, {}]) {
+      expect(applyOpeningWeights(planned(), s, 'push-a', routine)).toStrictEqual(openingWeightsBefore(planned(), s, 'push-a'))
+    }
+  }
+})
+
+test('without a routine, or for an exercise it does not hold, last time decides as before', () => {
+  expect(applyOpeningWeights(planned(), topped, 'push-a')).toStrictEqual(openingWeightsBefore(planned(), topped, 'push-a'))
+  const other = { id: 'push-a', ex: [{ id: 'nope', sets: 1, reps: 5 }] }
+  expect(applyOpeningWeights(planned(), topped, 'push-a', other)).toStrictEqual(openingWeightsBefore(planned(), topped, 'push-a'))
+})
+
+test('a prescription weight opens every work set, both sides of a per-side row, and leaves warm-ups', () => {
+  const out = applyOpeningWeights(planned(), topped, 'push-a', pushA())
+  // '0289' raises 75 → 80 on a 5 lb step; the warm-up row keeps its own weight.
+  expect(out[0].sets.map(s => s.w)).toEqual([0, 80, 80])
+  expect(out[0].sets.map(s => s.r)).toEqual([10, 10, 8])
+  // '0999' (band work, logged at 20) raises on its 10 lb step.
+  expect(out[1].sets[0].w).toBe(30)
+  expect(out[1].sets[0].sides.L.w).toBe(30)
+  expect(out[1].sets[0].sides.R.w).toBe(30)
+  expect(out[1].sets[0].sides.L.r).toBe(12)
+})
+
+test('a timed exercise keeps last time\'s weight even when its prescription carries one', () => {
+  // The plan's hold changed (25 → 30 s) and its weight with it, so the prescription holds at 15.
+  const plank = { id: '0289', mode: 'time', sets: 2, sec: 30, weight: 15, prog: 'time' }
+  const held = { sec: 25, w: 10, done: true }
+  const timedState = {
+    unit: 'lb',
+    workouts: [{
+      id: 'h1', d: '2026-11-09', routineIds: ['push-a'],
+      entries: [{ id: '0289', rid: 'push-a', target: { mode: 'time', sets: 2, sec: 25 }, planned: { sets: 2, sec: 25, weight: 10 }, sets: [held, held] }],
+    }],
+  }
+  const timed = { id: 'push-a', ex: [plank, pushA().ex[1]] }
+  const out = applyOpeningWeights(planned(), timedState, 'push-a', timed)
+  expect(out[0]).toStrictEqual(openingWeightsBefore(planned(), timedState, 'push-a')[0])
 })
