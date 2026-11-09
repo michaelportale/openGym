@@ -44,6 +44,12 @@ describe('hapticForWrite', () => {
   it('is silent for a dropped tap', () => {
     expect(hapticForWrite('complete', { ignored: true })).toBeNull()
   })
+  it('is silent for a write the owner did not tap, even a failed one', () => {
+    const failed = { ok: false, saved: false, error: { code: 'storage' } }
+    expect(hapticForWrite('draft', failed, { tapped: false })).toBeNull()
+    expect(hapticForWrite('complete', saved, { tapped: false })).toBeNull()
+    expect(hapticForWrite('draft', failed, { tapped: true })).toBe('error')
+  })
 })
 
 describe('restEndedNow', () => {

@@ -10,8 +10,10 @@ const SET_ACTIONS = new Set(['complete', 'complete-warmup'])
 // The haptic a settled write earns. A Complete that committed is a saved set (even if its rest did
 // not start or a warning shows); any write whose failure notice shows is a failure (the same
 // classification as the screen's notice); nothing else makes one. A dropped tap makes none.
-export function hapticForWrite(action, result) {
-  if (!result || result.ignored) return null
+// `tapped: false` is a write the owner did not tap (a swipe-away's draft, the rest restored on open):
+// it never buzzes, a failure included; its notice still shows.
+export function hapticForWrite(action, result, { tapped = true } = {}) {
+  if (!tapped || !result || result.ignored) return null
   if (writeOutcome(result, action)?.kind === 'failed') return hapticFor('write-failed')
   if (SET_ACTIONS.has(action) && result.saved === true && result.ok !== false) return hapticFor('set-saved')
   return null

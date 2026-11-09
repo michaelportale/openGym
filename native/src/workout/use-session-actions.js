@@ -4,6 +4,7 @@ import { workoutModel } from '../shared/training.js'
 import { hapticForWrite } from '../feedback/haptics'
 import { playHaptic } from '../feedback/haptics-adapter'
 import { createEventId } from '../session/ids'
+import { closeSheetOnReturn, typedNumbersKept } from './absence'
 import { createActionGate } from './action-gate'
 import { afterGatedWrite, alertsOffNotice } from './after-write'
 import { completeLabels } from './keypad'
@@ -55,6 +56,8 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
   // Which sheet is on screen (its key), read when a write settles: state in a closure is stale.
   const sheetKeys = useRef(0)
   const openKey = useRef(null)
+  // When the app left the front with the sheet open (the first of 'inactive' / 'background').
+  const backgroundedAt = useRef(null)
 
   const restMsOf = entry => restMsFor(entry, restSec)
   const latest = () => withTargets(session.getState().view, base)
@@ -86,9 +89,15 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
         setBusy(false)
       }
     }).then(async result => {
-      const settled = await afterGatedWrite(result, { afterWrite, before, after: restOf, now: Date.now() })
-      if (!quiet) playHaptic(hapticForWrite(action, settled))
-      return settled
+      // Played from the raw gate result, before the alert follow-up: on a session's first rest that
+      // waits behind the notification-permission prompt. The follow-up never changes success or
+      // failure. A throw here must never reject the write's promise.
+      try {
+        playHaptic(hapticForWrite(action, result, { tapped: !quiet }))
+      } catch (error) {
+        console.warn('haptic failed', error)
+      }
+      return afterGatedWrite(result, { afterWrite, before, after: restOf, now: Date.now() })
     })
   }
   // A write that started a rest with alerts off says so, once for each session, unless it has
@@ -109,11 +118,11 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
   // says to choose first.
   // `build(view, now)` makes the write from the engine's latest view through a decision helper
   // given that same clock.
-  const write = (build, action) => act(async () => {
+  const write = (build, action, quiet = false) => act(async () => {
     const view = latest()
     const now = Date.now()
     return overnightRefusal(view, now) ?? build(view, now)
-  }, action)
+  }, action, quiet)
 
   // setId and side come from the tap. The commit is awaited first; its rest is named and timed
   // by the row's `at` in the view the commit produced (one side of a per-side set, or a warm-up,
@@ -156,7 +165,7 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
     const call = draftCall(view, { setId, values, now })
     return call ? session.putDraft(call.setId, call.values) : null
   }
-  const draft = (setId, values) => write(putDraft(setId, values))
+  const draft = (setId, values, quiet = false) => write(putDraft(setId, values), undefined, quiet)
   // The typed numbers kept as the app leaves the front. Through the gate like every write, and the
   // same checks, but it holds the gate for that one draft write and nothing more: no busy flag and
   // no view reload after an overnight refusal (nothing on screen changes while the app leaves; the
@@ -251,13 +260,25 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
     // done set it cancels. The sheet is gone, so a refusal shows on the screen.
     onClose: async (values, changed) => {
       closeSheet()
-      if (sheetCloseCall(sheet.mode, changed) === 'draft') report(await draft(sheet.setId, values), 'draft')
+      // Not a tapped write: a failure shows its notice but never buzzes.
+      if (sheetCloseCall(sheet.mode, changed) === 'draft') report(await draft(sheet.setId, values, true), 'draft')
     },
     // The app leaving the front with typed numbers keeps them as a draft through the same gate,
     // so a kill from the app switcher loses nothing. Numbers already kept are not written again
     // (the 'background' after an 'inactive'), so leaving holds the gate for one write. The sheet
     // stays open; a refusal shows in it while it is, else on the screen.
     onAppState: async (appState, values, changed) => {
+      const nowMs = Date.now()
+      if (appState === 'active') {
+        // Back after a long absence: close the sheet, but only once what was typed is safe in the
+        // set's draft (written on 'inactive'); a failed write keeps the sheet open with the numbers.
+        const left = backgroundedAt.current
+        backgroundedAt.current = null
+        const kept = typedNumbersKept(changed, findSet(latest(), sheet.setId)?.slot.draft, values)
+        if (closeSheetOnReturn(left, nowMs) && kept && openKey.current === sheet.key) closeSheet()
+        return
+      }
+      if (backgroundedAt.current == null && (appState === 'inactive' || appState === 'background')) backgroundedAt.current = nowMs
       const stored = findSet(latest(), sheet.setId)?.slot.draft
       if (sheetBackgroundCall(appState, sheet.mode, changed, { values, stored }) !== 'draft') return
       const { key, setId } = sheet
