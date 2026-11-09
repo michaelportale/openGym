@@ -2,7 +2,7 @@
 
 Run this on the iPhone before the first real gym session. Tick each line. Record pass or fail per line in the PR, not here.
 
-Read this first: the dev build and the Release build share one bundle id, so they share one database. Everything you log while testing is written to the same place as real sessions. That is why step 14 wipes the app once. After the wipe, any later test on that phone writes into the real record.
+Read this first: the dev build and the Release build share one bundle id, so they share one database. Everything you log while testing is written to the same place as real sessions. That is why step 15 wipes the app once. After the wipe, any later test on that phone writes into the real record.
 
 ## Before you build
 
@@ -27,7 +27,7 @@ Swipe up from the bottom edge and pause to open the app switcher. Then swipe the
 - [ ] `--no-bundler` is required. Without it Expo starts Metro on 8081, which is taken on this Mac, and its TypeScript check fails on a test fixture.
 - [ ] The app opens on the Workout tab, not Home.
 - [ ] The example-data banner is absent. If you see "Example data. Your routines are not loaded on this build.", the snapshot is missing. Stop and rebuild.
-- [ ] Only if this phone already holds real gym sessions (logged since an earlier wipe), do this now, before any test below: the reinstall in step 10 and the wipe in step 14 delete everything on the phone. On the Mac, from the repository root, note the count: `node -e "console.log(JSON.parse(require('fs').readFileSync('data/state-<user id>.json','utf8')).workouts.length)"` (the user id is the part of the file name between `state-` and `.json`). In ··· More, Diagnostics, pair with the **real** server: print a code with `docker compose exec api node scripts/pair-code.mjs` (or the bare-metal form in SELF_HOSTING) and enter the https address you open the web app at and the code. Run the count again: it went up by the sessions on the phone. Then tap "Forget this server" and confirm, so no test below reaches the real server. With no real sessions on the phone, skip this line.
+- [ ] Only if this phone already holds real gym sessions (logged since an earlier wipe), do this now, before any test below: the reinstall in step 10 and the wipe in step 15 delete everything on the phone. On the Mac, from the repository root, note the count: `node -e "console.log(JSON.parse(require('fs').readFileSync('data/state-<user id>.json','utf8')).workouts.length)"` (the user id is the part of the file name between `state-` and `.json`). In ··· More, Diagnostics, pair with the **real** server: print a code with `docker compose exec api node scripts/pair-code.mjs` (or the bare-metal form in SELF_HOSTING) and enter the https address you open the web app at and the code. Run the count again: it went up by the sessions on the phone. Then tap "Forget this server" and confirm, so no test below reaches the real server. With no real sessions on the phone, skip this line.
 
 ## 2. Airplane Mode
 
@@ -104,13 +104,13 @@ Phase 4. Start Push A from the routine list on the Workout start screen. Discard
 
 ## 10. Pairing and restore, on a copy
 
-This rehearses sync and restore against a **copy** of `data/`, never the real one. Do it before the wipe. It needs the Mac and the phone on the same network, and the Release build from step 1 on the phone. Anything you log here goes into the phone's database, like every other test in this file; the wipe in step 14 clears it.
+This rehearses sync and restore against a **copy** of `data/`, never the real one. Do it before the wipe. It needs the Mac and the phone on the same network, and the Release build from step 1 on the phone. Anything you log here goes into the phone's database, like every other test in this file; the wipe in step 15 clears it.
 
 - [ ] Back up the real data, with the tar from [SELF_HOSTING section 6](../SELF_HOSTING.md#6-backups): `tar czf opengym-backup-$(date +%F).tar.gz data/`. Only the real folder is read; nothing here changes it.
 - [ ] Make the copy, from the repository root: `cp -a data ../opengym-data-copy`. The copy sits outside the repository so it cannot be committed. Then remove the copy's secret: `rm ../opengym-data-copy/secret`. The copy makes its own secret on first start, so nothing it signs (including the phone's sign-in token) works on the real server.
 - [ ] Start a second API on the copy, on another port, with Docker, leaving the real container and the real `./data` alone: `docker build -t opengym-api-copy ./api`, then `docker run -d --name opengym-api-copy -p 3100:3000 -e DATA_DIR=/data -v "$PWD/../opengym-data-copy:/data" opengym-api-copy`. Use any free host port in place of `3100`; write it as `<port>` below. Without Docker, from `api/` (needs `npm install` there): `DATA_DIR=<the copy> PORT=<port> node server.js`. The copy has the real push subscriptions, so day reminders may arrive twice while it runs.
 - [ ] Print a pairing code for the copy: `docker exec opengym-api-copy node scripts/pair-code.mjs` (bare metal: `cd api && DATA_DIR=<the copy> PORT=<port> node scripts/pair-code.mjs`). With more than one profile, add `--user <name>`. The code lasts 5 minutes.
-- [ ] On the phone, open ··· More, then Diagnostics. In "Your server" tap "Pair with your server". Enter `http://<the Mac's LAN IP>:<port>` and the code, then tap Pair. The first connection shows the iOS Local Network prompt: tap Allow. If Pair says it couldn't reach the server, tap Allow on that prompt and tap Pair again with the same code: a request that never reached the server does not use the code up. If 5 minutes have passed, or Pair then says the code didn't work, print a new code. Plain http is for this rehearsal only: it sends the sign-in token unencrypted, which is acceptable here because the copy has its own secret, so the token opens nothing on the real server, but not for the real pairing (step 14 uses https). This uses the Release build from step 1. The section now shows the host, "Signed in as" your profile, the status line "Synced to <host> at <time>" and, if anything is queued, "N workouts waiting". A separate "Last synced" line shows only while the status line does not say when it last synced. Routines, rotation and history now come from the copy. Note the count on the Mac now: `node -e "console.log(JSON.parse(require('fs').readFileSync('<the copy>/state-<user id>.json','utf8')).workouts.length)"` (the user id is the part of the file name between `state-` and `.json`).
+- [ ] On the phone, open ··· More, then Diagnostics. In "Your server" tap "Pair with your server". Enter `http://<the Mac's LAN IP>:<port>` and the code, then tap Pair. The first connection shows the iOS Local Network prompt: tap Allow. If Pair says it couldn't reach the server, tap Allow on that prompt and tap Pair again with the same code: a request that never reached the server does not use the code up. If 5 minutes have passed, or Pair then says the code didn't work, print a new code. Plain http is for this rehearsal only: it sends the sign-in token unencrypted, which is acceptable here because the copy has its own secret, so the token opens nothing on the real server, but not for the real pairing (step 15 uses https). This uses the Release build from step 1. The section now shows the host, "Signed in as" your profile, the status line "Synced to <host> at <time>" and, if anything is queued, "N workouts waiting". A separate "Last synced" line shows only while the status line does not say when it last synced. Routines, rotation and history now come from the copy. Note the count on the Mac now: `node -e "console.log(JSON.parse(require('fs').readFileSync('<the copy>/state-<user id>.json','utf8')).workouts.length)"` (the user id is the part of the file name between `state-` and `.json`).
 - [ ] Finish a short workout. The saved screen says "Synced to <host> at <time>".
 - [ ] Turn Airplane Mode on, and Wi-Fi off in Control Centre. Finish another workout. The saved screen says "Saved on this phone. It will sync when <host> is reachable." Diagnostics shows "1 workout waiting".
 - [ ] Turn Airplane Mode off and Wi-Fi back on, then return to the app. Tap "Sync now" in Diagnostics. Returning to the app syncs by itself only when the last try was more than a minute ago, and the Control Centre toggle may not background the app at all. The line then says "Synced to <host> at <time>" and no workouts are waiting.
@@ -143,27 +143,46 @@ Phase 6, Stages A (workouts) and B (weigh-ins). Do it before the wipe, on test w
 
 ## 12. Exercises and Progress
 
-Phases 7A (text side) and 7B. Do it before the wipe, with the Release build. This adds native dependencies (expo-video, react-native-svg), so the phone needs a fresh Release build first: `npx expo run:ios --configuration Release …`, the command from step 1. The phone is unpaired here, so exercise screens show text only and Progress shows only what is logged on this phone (the bundled snapshot has no weigh-ins); the animation checks and the real-data Progress check come after the cutover, in step 14. Open the Exercises tab.
+Phases 7A (text side) and 7B. Do it before the wipe, with the Release build. This adds native dependencies (expo-video, react-native-svg), so the phone needs a fresh Release build first: `npx expo run:ios --configuration Release …`, the command from step 1. The phone is unpaired here, so exercise screens show text only and Progress shows only what is logged on this phone (the bundled snapshot has no weigh-ins); the animation checks and the real-data Progress check come after the cutover, in step 15. Open the Exercises tab.
 
 - [ ] Search. Tap the "Search exercises" field and type `db press`. Dumbbell presses are listed, each row showing the name and "target · equipment". A search with no match (try `zzzz`) says `No exercise matches “zzzz”.`, then "Close matches".
 - [ ] Tap with the keyboard up. With the keyboard still showing, tap a row. The exercise screen opens at once, without a first tap that only closes the keyboard.
 - [ ] Text. Clear the search and open Barbell Bench Press. The screen shows Back, the name, tags, the description, and "How to" with numbered steps, plus "Best: …" and "Last time: …" lines if you have logged it.
 - [ ] Diagnostics ends with the media credit line.
 - [ ] Body weight. Open the Progress tab. The Body weight card shows the "Today: …" line and "Log weight". Tap "Log weight", type a weight and Save. Below 3 weigh-ins it says "Log <n> more weigh-ins to see a trend." ("Log 1 more weigh-in" when one is missing), and the chart shows dots only, with no line. It counts weigh-ins in the selected range, including any from sections 10 and 11.
-- [ ] Trend. After you have logged weigh-ins on 3 different days (or the Health import brought them in), "7-day average <x> lb" and "<±n> lb over 30 days" appear. The "this week" line needs a weigh-in 7 to 14 days before the latest one, so it will most likely show only in step 14's real-data check. Tap "Why this?": the sheet is titled "Why a 7-day average" and says Definition. If you cannot log on 3 days before the wipe, skip this row; the real-data check in step 14 covers it.
+- [ ] Trend. After you have logged weigh-ins on 3 different days (or the Health import brought them in), "7-day average <x> lb" and "<±n> lb over 30 days" appear. The "this week" line needs a weigh-in 7 to 14 days before the latest one, so it will most likely show only in step 15's real-data check. Tap "Why this?": the sheet is titled "Why a 7-day average" and says Definition. If you cannot log on 3 days before the wipe, skip this row; the real-data check in step 15 covers it.
 - [ ] Range chips. Tap 1M, 3M, 1Y and All. The selected chip changes and the chart stays drawn; 3M is selected by default. The ranges differ only once you have older weigh-ins.
 - [ ] Your lifts. Finish a workout first if you have none on this phone. "Your lifts" lists the exercises you have logged, heaviest best first. Tap one: its exercise screen opens.
 - [ ] Speed. On Progress, open a lift from Your lifts, go Back, and repeat with a few lifts: no Back shows a visible pause. Tap All: the chart draws without a pause. The first time the tab opens, Your lifts may say "Loading…" for a moment.
 - [ ] Your history. Use a weighted lift, such as Barbell Bench Press. On that screen "Your history" lists the last sessions: each shows its date and its sets, like 185 × 5, with "PR" on the record session. From 2 sessions on it also shows a chart. Tap Est. 1RM to see the e1RM chart, then tap "Why this?" (the toggle and "Why this?" show only when the lift has e1RM points from at least 2 sessions: a timed or bodyweight exercise has none, and a lift logged once has no chart to switch): the sheet says Convention until audited.
 - [ ] The last card reads "Measurements and nutrition arrive in Phase 7D. WHOOP follows in Phase 8."
 
-## 13. Before the wipe
+## 13. Plan
+
+Phase 7C. Do it before the wipe, with the Release build. The phone is unpaired here, so the Plan tab edits the routines bundled in this build and nothing reaches a server; the checks that sync an edit to the web come after the cutover, in step 15. Open the Plan tab.
+
+- [ ] The tab. "How you train" shows "Rotation" with a "Next" tag on one routine, or "Fixed week", or nothing if no schedule is set. "Your routines" lists each routine with its exercise count.
+- [ ] Open a routine. Tap one in "Your routines". Each exercise row shows its name and a target line like the web's, with an up and a down button. The first row's up button and the last row's down button are disabled.
+- [ ] Move. Tap the down button on the first exercise. It moves down one place and saves at once, with no Save button. Go Back and open the routine again: the order held.
+- [ ] Workout starts the edited routine. Open the Workout tab. Start that routine: the exercises come in the new order. Discard it: tap Finish, then Discard workout, then Discard. Move the exercise back up on the Plan tab.
+- [ ] The Workout tab reloads. Leave the Workout tab on its start screen, switch to Plan, move an exercise, and switch back. The start screen shows the edited routine without a restart.
+- [ ] Open the sheet. Tap an exercise row. A sheet opens with "Swap exercise", Sets, Reps and Seconds or Minutes (for a timed exercise), the Progression choices, Save and Cancel.
+- [ ] Cancel writes nothing. Step Sets up, tap Cancel, and open the routine again: Sets is what it was. Step Sets up and Reps down, tap Save, and reopen: the row's target line shows the new numbers.
+- [ ] Swap is held back. Step Sets up without saving. "Swap exercise" is disabled and the sheet says "Save or cancel your changes to swap." Tap Cancel.
+- [ ] Swap. Tap an exercise, then "Swap exercise" and pick a different one. The routine screen shows the new exercise in the same place, with the same sets.
+- [ ] Rep range. Open an exercise whose progression is double or triple (set one in the Progression choices if none is). The Reps stepper reads "Reps from" and a second reads "Reps up to". Raise "Reps from" above "Reps up to": after Save the two come back in order.
+- [ ] Progression. In the sheet choose a different Progression and tap Save. Reopen the sheet: that choice is selected. Choose the routine's own rule again and Save, to put it back. Your routines have progression off, so the choices should start at the routine's setting.
+- [ ] A pyramid exercise. If a routine has one, its sheet shows no steppers and says "Pyramid sets: edit them on the web", with Close in place of Save and Cancel. Skip this row if you have none.
+- [ ] An unsafe move or swap. If a move or swap is one the web's server would undo, the sheet or screen says "This move or swap has to be made on the web." and nothing is saved. You may not hit one; if you do not, skip this row.
+- [ ] VoiceOver. On a routine, each move button reads "Move <exercise> up" or "Move <exercise> down", and each row reads its name and target line.
+
+## 14. Before the wipe
 
 - [ ] Every line above has a recorded pass or fail in the PR. Fix any failure before wiping.
 - [ ] From the repository root, `git status` does not list `native/local/`.
 - [ ] The privacy search covers every tracked file in the repository, not only `native/` and `docs/sprints/`: `git grep -n -I -e '<your user id>' -e '<one of your routine ids>' -e '<one of your custom exercise ids>'` prints nothing. Your user id is the part of your data file's name between `state-` and `.json`. Type the real values only in the terminal, never into a tracked file, this one included.
 
-## 14. The wipe
+## 15. The wipe
 
 This removes the test workouts so your first real session starts clean.
 
@@ -189,6 +208,13 @@ Exercise animations, now that the phone is paired with your real server (read-on
 - [ ] Progress, real data. Open the Progress tab. Your lifts lists your real lifts, and Body weight shows your real trend; "this week" shows when your log has weigh-ins a week apart. The Strength trend card shows only if a lift's e1RM moved over the last 8 weeks across at least 2 sessions.
 - [ ] Progress speed, real data. Open a lift from Your lifts, go Back, and repeat a few times: no Back shows a visible pause. Tap All: the chart draws without a pause.
 - [ ] A custom exercise. Do not create one on the web: the phone is the only writer now. If you already have a custom exercise, find it in the list: its row says "Yours" and its screen shows its own description and no animation. Skip this row if you have none.
+
+Plan edits, now that the phone is paired with your real server. These write to your real routines, so make each edit and put it back. Open the Plan tab.
+
+- [ ] An edit reaches the web. Move an exercise in a routine, then in Diagnostics tap "Sync now" and wait for "Synced to <host> at <time>". Open the web app: the routine shows the new order. Move it back on the phone and sync again.
+- [ ] An unknown web setting survives a phone move. On the web, give an exercise in a routine a note (or set a dumbbell exercise to "each" or "total"). On the phone, sync, then move that exercise up or down and sync again. On the web the note (or the "each" or "total" choice) is still there.
+- [ ] Changed on the web first. Phone offline in Airplane Mode: edit a routine's sets on the phone. On the web, edit the same routine (change a different exercise's sets). Turn Airplane Mode off and tap "Sync now". The Plan tab, and that routine, show "Your change to <routine> wasn't sent: it was changed on the web first. This shows the web's version." with Dismiss. The routine shows the web's version. Tap Dismiss: the notice goes. Put the web edit back.
+- [ ] Deleted on the web. In Airplane Mode, edit a routine on the phone. On the web, delete that routine (do this with a routine you can recreate; the phone is not the only writer for this one check, so note the routine first). Turn Airplane Mode off and tap "Sync now". The Plan tab shows "Your change to <routine> wasn't sent: it was deleted on the web." with Dismiss. Tap Dismiss. Recreate the routine on the web if you want it back.
 
 From here on, do not install a dev build over the Release app. Any test on this phone now writes into the real record.
 
