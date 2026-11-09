@@ -132,7 +132,7 @@ This removes the test workouts so your first real session starts clean.
 - [ ] Open it. Push A is next.
 - [ ] Before you pair, no workouts are listed. Export says "Nothing to export yet".
 - [ ] The example-data banner is absent.
-- [ ] This is the cutover. In ··· More, Diagnostics, pair with the **real** server: run the pair command against it (`docker compose exec api node scripts/pair-code.mjs`, or the bare-metal form in SELF_HOSTING) and enter its address and the code. Routines, rotation and history load from the server. Check the start screen's "Next: <routine>" follows your rotation, and that starting a routine shows the "Last" column with your real previous weights. Then back out without logging.
+- [ ] This is the cutover. In ··· More, Diagnostics, pair with the **real** server: run the pair command against it (`docker compose exec api node scripts/pair-code.mjs`, or the bare-metal form in SELF_HOSTING) and enter its address and the code. Routines, rotation and history load from the server. Check the start screen's "Next: <routine>" follows your rotation, and that starting a routine shows the "Last" column with your real previous weights. Then discard it without logging: tap Finish, then Discard workout, then Discard.
 - [ ] Stop logging on the web. From now on the phone is the only writer.
 - [ ] Close every web tab and installed web app that is signed in to openGym. An open tab holds its own copy of your data; when it next syncs it merges and pushes that copy to the server, which can put stale data next to what the phone wrote.
 - [ ] Do not use "Sign out everywhere" on the web unless you mean to: it also unpairs the phone. The phone then says the server signed it out, keeps every workout, and syncs again after you pair it again.
