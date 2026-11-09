@@ -3,16 +3,11 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { assertSameSessions, toSnapshot } from './snapshot.mjs'
-
-const args = process.argv.slice(2)
-const outAt = args.indexOf('--out')
-const out = outAt >= 0 ? args.splice(outAt, 2)[1] : null
-const input = args[0]
-const target = resolve(out || fileURLToPath(new URL('../local/snapshot.json', import.meta.url)))
+import { assertSameSessions, parseArgs, toSnapshot } from './snapshot.mjs'
 
 try {
-  if (!input) throw new Error('usage: make-snapshot.mjs <state.json> [--out <path>]')
+  const { input, out } = parseArgs(process.argv.slice(2))
+  const target = resolve(out ?? fileURLToPath(new URL('../local/snapshot.json', import.meta.url)))
   const state = JSON.parse(readFileSync(input, 'utf8'))
   const snap = toSnapshot(state)
   assertSameSessions(state, snap)

@@ -1,7 +1,7 @@
-import { expect, test } from 'vitest'
+import { describe, expect, test } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { assertSameSessions, toSnapshot } from './snapshot.mjs'
+import { USAGE, assertSameSessions, parseArgs, toSnapshot } from './snapshot.mjs'
 
 const catalogue = [{ id: '0025', n: 'barbell bench press', bp: 'chest', eq: 'barbell' }]
 
@@ -72,4 +72,28 @@ test('the example snapshot is marked and names every routine exercise', () => {
   const ex = JSON.parse(readFileSync(fileURLToPath(new URL('../src/data/snapshot.example.json', import.meta.url)), 'utf8'))
   expect(ex.example).toBe(true)
   for (const r of ex.state.routines) for (const e of r.ex) expect(ex.names[e.id]?.name).toBeTruthy()
+})
+
+// make-snapshot.mjs reads its arguments through this; a throw prints the message and exits 1
+// before anything is written.
+describe('parseArgs', () => {
+  const usage = 'usage: make-snapshot.mjs <state.json> [--out <path>]'
+  test('the state file, and --out where to write it', () => {
+    expect(parseArgs(['state.json'])).toEqual({ input: 'state.json', out: null })
+    expect(parseArgs(['state.json', '--out', '/tmp/snap.json'])).toEqual({ input: 'state.json', out: '/tmp/snap.json' })
+    expect(parseArgs(['--out', '/tmp/snap.json', 'state.json'])).toEqual({ input: 'state.json', out: '/tmp/snap.json' })
+  })
+  // Without a value, --out used to fall back to the bundled snapshot's path and overwrite it.
+  test('--out with no value is a usage error, never the default path', () => {
+    expect(() => parseArgs(['state.json', '--out'])).toThrow(usage)
+    expect(() => parseArgs(['--out', 'state.json'])).toThrow(usage)
+    expect(() => parseArgs(['--out', '--out', 'x.json', 'state.json'])).toThrow(usage)
+  })
+  test('no state file, or more than one, is a usage error', () => {
+    expect(() => parseArgs([])).toThrow(usage)
+    expect(() => parseArgs(['a.json', 'b.json'])).toThrow(usage)
+  })
+  test('the usage line names the arguments', () => {
+    expect(USAGE).toBe(usage)
+  })
 })

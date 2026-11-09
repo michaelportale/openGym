@@ -50,3 +50,21 @@ export function assertSameSessions(fullState, snapshot) {
     if (a !== b) throw new Error(`snapshot builds ${r.name} differently`)
   }
 }
+
+export const USAGE = 'usage: make-snapshot.mjs <state.json> [--out <path>]'
+
+// make-snapshot.mjs's arguments: one state file, and --out with the path to write. --out without
+// a path (or followed by another flag) is a usage error, not the default path: that default is the
+// snapshot the app bundles.
+export function parseArgs(argv) {
+  const args = [...argv]
+  const at = args.indexOf('--out')
+  let out = null
+  if (at >= 0) {
+    out = args[at + 1]
+    if (out == null || out.startsWith('-')) throw new Error(USAGE)
+    args.splice(at, 2)
+  }
+  if (args.length !== 1) throw new Error(USAGE)
+  return { input: args[0], out }
+}
