@@ -53,7 +53,7 @@ function NextTimeLine({ line, onWhy }) {
 export default function SavedScreen({ db, state, base, names, onDone }) {
   const [lines, setLines] = useState([])
   const [why, setWhy] = useState(null)
-  const { text: syncText } = useSync()
+  const { text: syncText } = useSync({ fresh: true })
 
   // Read once: the session's state, base and names are fixed for its life (it is keyed by id).
   useEffect(() => {

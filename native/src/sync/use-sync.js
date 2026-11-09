@@ -75,9 +75,11 @@ export async function syncOnForeground() {
 
 const call = name => (...args) => getSync().then(sync => sync[name](...args))
 
-// { status, text, pair, forget, syncNow, resendAll }. status is null until first read.
-export function useSync() {
-  const [status, setStatus] = useState(current)
+// { status, text, pair, forget, syncNow, resendAll }. status is null until first read. `fresh`
+// starts from null rather than the last status read, so the screen shows nothing older than its
+// own first read (the saved screen, whose workout the earlier status does not know about).
+export function useSync({ fresh = false } = {}) {
+  const [status, setStatus] = useState(fresh ? null : current)
   useEffect(() => {
     watchers.add(setStatus)
     refresh()
