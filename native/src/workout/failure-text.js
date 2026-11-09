@@ -7,6 +7,7 @@ export const OVERNIGHT_NOTICE = 'Choose Resume, Finish or Discard first.'
 const NOT_DONE = {
   complete: 'Set not saved.',
   rest: "Rest didn't start.",
+  'start-rest': "Rest didn't start.",
   draft: 'Numbers not saved.',
   edit: 'Change not saved.',
   undo: 'Set not undone.',

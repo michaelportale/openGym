@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { carriedWeight, currentExerciseIndex, workoutScreen } from './workout-view.js'
+import { carriedWeight, currentExerciseIndex, shownValues, workoutScreen } from './workout-view.js'
 
 const set = (setId, row, extra = {}) => ({
   setId, completed: row.done === true, warmup: false, draft: null, row, ...extra,
@@ -322,5 +322,34 @@ describe('warm-ups', () => {
     const legacy = set('x', { ...done(60, 5), phase: 'work', warmup: true }, { warmup: true })
     const { card } = screen(view([bench([legacy, set('a', todo(75, 8))])]))
     expect(card.rows.map(r => [r.setId, r.label])).toEqual([['x', '1'], ['a', '2']])
+  })
+})
+
+// A done set never takes a draft (draftCall refuses one, and Complete clears it), so a draft on
+// one is what a failed clear left behind. The set shows, and the keypad opens on, what was logged.
+describe('a draft left on a done set', () => {
+  test('a done set shows what was logged, not the leftover draft', () => {
+    const v = view([bench([set('a', done(80, 6), { draft: { w: 82.5, r: 5 } }), set('b', todo(75, 8))])])
+    expect(screen(v).card.rows[0]).toMatchObject({ weightText: '80', repsText: '6', status: 'done' })
+    expect(shownValues(v.entries[0].sets[0], null)).toEqual({ w: 80, r: 6 })
+  })
+  test('the set after it carries the logged weight, not the draft\'s', () => {
+    const v = view([bench([set('a', done(80, 6), { draft: { w: 82.5, r: 5 } }), set('b', todo(75, 8))])])
+    expect(screen(v).dock.lead).toBe('Set 2 · 80 lb × 8')
+  })
+  test('per side, both sides done: the row\'s numbers', () => {
+    const slot = set('s', sided(10, { r: 12, done: true }, { r: 11, done: true }), { draft: { w: 7.5, sides: { L: { r: 9 }, R: { r: 8 } } } })
+    expect(shownValues(slot, null)).toEqual({ w: 10, sides: { L: { r: 12 }, R: { r: 11 } } })
+    expect(shownValues(slot, 'R')).toEqual({ w: 10, sides: { L: { r: 12 }, R: { r: 11 } } })
+    expect(screen(view([{ id: '0300', target: {}, sets: [slot] }])).card.rows[0]).toMatchObject({ weightText: '10', repsText: '12 / 11' })
+  })
+  test('per side, one side done: that side\'s reps from the row; the side being worked keeps its draft', () => {
+    const slot = set('s', sided(10, { r: 12, done: true }, { r: 11, done: false }), { completed: true, draft: { w: 10, sides: { L: { r: 9 }, R: { r: 14 } } } })
+    expect(shownValues(slot, 'R')).toEqual({ w: 10, sides: { L: { r: 12 }, R: { r: 14 } } })
+    const right = set('s', sided(10, { r: 12, done: false }, { r: 11, done: true }), { completed: true, draft: { r: 9 } })
+    expect(shownValues(right, 'L')).toEqual({ w: 10, sides: { L: { r: 9 }, R: { r: 11 } } })
+  })
+  test('a set not done keeps its draft', () => {
+    expect(shownValues(set('a', todo(75, 8), { draft: { w: 80, r: 5 } }), null)).toEqual({ w: 80, r: 5 })
   })
 })

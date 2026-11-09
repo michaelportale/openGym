@@ -11,7 +11,8 @@ const CODES = [
   'not-saved', 'failed',
 ]
 // What the screen was doing when the write was refused; undefined is a caller that did not say.
-const ACTIONS = ['complete', 'rest', 'draft', 'edit', 'undo', 'add-set', 'add-warmup', 'add-time', 'skip-rest', 'resume', 'discard', 'finish', undefined]
+// 'rest' is the rest restored on open, 'start-rest' the Start rest tap.
+const ACTIONS = ['complete', 'rest', 'start-rest', 'draft', 'edit', 'undo', 'add-set', 'add-warmup', 'add-time', 'skip-rest', 'resume', 'discard', 'finish', undefined]
 const GENERIC = 'Something went wrong. Try again.'
 
 describe('failureText', () => {
@@ -45,6 +46,7 @@ describe('failureText', () => {
     expect(failureText('storage', { action: 'complete' })).toBe("Set not saved. The phone couldn't write it. Try again.")
     expect(failureText('storage', { action: 'draft' })).toBe("Numbers not saved. The phone couldn't write it. Try again.")
     expect(failureText('storage', { action: 'rest' })).toBe("Rest didn't start. The phone couldn't write it. Try again.")
+    expect(failureText('storage', { action: 'start-rest' })).toBe("Rest didn't start. The phone couldn't write it. Try again.")
     expect(failureText('unknown-set', { action: 'edit' })).toBe('Change not saved. That set is no longer in this workout.')
     expect(failureText('unknown-set', { action: 'undo' })).toBe('Set not undone. That set is no longer in this workout.')
     expect(failureText('unknown-exercise', { action: 'add-set' })).toBe('Set not added. That exercise is no longer in this workout.')

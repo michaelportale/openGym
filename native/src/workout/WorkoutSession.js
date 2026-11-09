@@ -112,13 +112,13 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
       <ProgressBar value={header.progress} />
       {actions.notice ? (
         <Card accessibilityLiveRegion="polite" style={styles.notice}>
-          <AppText variant="body">{actions.notice}</AppText>
+          <AppText variant="body" accessibilityRole="alert">{actions.notice}</AppText>
         </Card>
       ) : null}
       {/* A set saved but its rest did not start: Start rest starts that same rest, through the gate. */}
       {actions.restNotice ? (
         <Card accessibilityLiveRegion="polite" style={[styles.notice, styles.restNotice]}>
-          <AppText variant="body">{actions.restNotice}</AppText>
+          <AppText variant="body" accessibilityRole="alert">{actions.restNotice}</AppText>
           <View style={styles.restAction}>
             <IconButton label="Start rest" accessibilityLabel="Start rest" accessibilityHint="Starts the rest after your last set." onPress={actions.startRest} />
           </View>

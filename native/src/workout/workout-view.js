@@ -83,12 +83,14 @@ function nextSide(row) {
 // The numbers a set shows, and what one-tap Complete logs: the draft's fields, then `carry` from
 // carriedWeight, then the row's. In the keypad's shape: { w, r }, or per side
 // { w, sides: { L: { r }, R: { r } } } with the weight of the side being worked.
+// A done set never takes a draft (draftCall refuses one), so a draft on it is one a failed clear
+// left behind after the commit: it shows what was logged. So does a half-done set's done side.
 export function shownValues(slot, side, carry) {
   const { row } = slot
-  const d = slot.draft || {}
+  const d = isDone(slot) ? {} : slot.draft || {}
   if (!isSideSet(row)) return { w: d.w ?? carry ?? row.w ?? null, r: d.r ?? row.r ?? null }
   const own = row.sides[side === 'R' ? 'R' : 'L']
-  const reps = s => d.sides?.[s]?.r ?? d.r ?? row.sides[s].r ?? null
+  const reps = s => (row.sides[s].done === true ? row.sides[s].r : d.sides?.[s]?.r ?? d.r ?? row.sides[s].r) ?? null
   return { w: d.w ?? carry ?? own.w ?? row.w ?? null, sides: { L: { r: reps('L') }, R: { r: reps('R') } } }
 }
 

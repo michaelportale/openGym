@@ -1,12 +1,12 @@
-import { useRef, useState } from 'react'
-import { Alert } from 'react-native'
+import { useEffect, useRef, useState } from 'react'
+import { AccessibilityInfo, Alert } from 'react-native'
 import { workoutModel } from '../shared/training.js'
 import { createEventId } from '../session/ids'
 import { createActionGate } from './action-gate'
 import { pendingRest, restMsFor } from './rest-after'
 import { shownAfterComplete, withTargets } from './session-screen'
 import { carriedWeight, shownValues } from './workout-view'
-import { NO_NOTICES, addSetCall, addWarmupCall, completeCall, completeResult, dockKeypadField, draftCall, editCall, findSet, keypadField, noticesAfter, overnightNotice, primaryAction, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, undoCall } from './set-calls'
+import { NO_NOTICES, addSetCall, addWarmupCall, completeCall, completeResult, dockKeypadField, draftCall, editCall, findSet, keypadField, noticeAnnouncement, noticesAfter, overnightNotice, primaryAction, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, undoCall } from './set-calls'
 
 const sideLabel = { L: 'Complete left', R: 'Complete right' }
 const failed = error => ({ ok: false, saved: false, error: { code: 'storage', message: error?.message || String(error) } })
@@ -23,6 +23,13 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
   const [busy, setBusy] = useState(false)
   // The screen's notice and its "Rest didn't start" line (noticesAfter).
   const [notices, setNotices] = useState(NO_NOTICES)
+  // VoiceOver ignores live regions: speak a notice or rest line once, when it appears or changes.
+  const spoken = useRef(NO_NOTICES)
+  useEffect(() => {
+    const text = noticeAnnouncement(spoken.current, notices)
+    spoken.current = notices
+    if (text) AccessibilityInfo.announceForAccessibility(text)
+  }, [notices])
   const [sheet, setSheet] = useState(null)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [sheetNotice, setSheetNotice] = useState(null)
@@ -64,15 +71,17 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
     return completeResult(result, await session.startRest(rest).catch(failed))
   })
 
-  // The rest the latest completed work set earned and has not had: on open, the one a kill
-  // between Complete and rest left unstarted; on Start rest, the one a refused rest left. It is
-  // named restEventId(setId, at), the id its Complete used, so a rest that did land, or one the
-  // owner skipped, is not started again. Its time runs from the set's own `at`.
-  const restoreRest = () => act(async () => {
+  // The rest the latest completed work set earned and has not had: on open ('rest'), the one a
+  // kill between Complete and rest left unstarted; on the Start rest tap ('start-rest'), the one a
+  // refused rest left. It is named restEventId(setId, at), the id its Complete used, so a rest that
+  // did land, or one the owner skipped, is not started again. Its time runs from the set's own
+  // `at`; null when it has run out.
+  const startPendingRest = action => act(async () => {
     const opened = latest()
     const pending = pendingRest(opened, Date.now(), id => restMsOf(opened.entries.find(entry => entry.id === id)))
     return pending ? session.startRest(pending) : null
-  }).then(result => report(result, 'rest'))
+  }).then(result => report(result, action))
+  const restoreRest = () => startPendingRest('rest')
 
   const draft = (setId, values) => act(async () => {
     const call = draftCall(latest(), { setId, values })
@@ -201,7 +210,7 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
     restNotice: notices.rest,
     restoreRest,
     startRest: () => {
-      if (!blockedOvernight()) restoreRest()
+      if (!blockedOvernight()) startPendingRest('start-rest')
     },
     openSheet,
     addSet: addRow(addSetCall, 'add-set'),

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { NO_NOTICES, OVERNIGHT_NOTICE, addSetCall, addWarmupCall, completeCall, completeResult, dockKeypadField, draftCall, editCall, keypadField, noticesAfter, overnightNotice, primaryAction, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, undoCall, writeOutcome } from './set-calls.js'
+import { NO_NOTICES, OVERNIGHT_NOTICE, addSetCall, addWarmupCall, completeCall, completeResult, dockKeypadField, draftCall, editCall, keypadField, noticeAnnouncement, noticesAfter, overnightNotice, primaryAction, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, undoCall, writeOutcome } from './set-calls.js'
 import { shownValues, workoutScreen } from './workout-view.js'
 import { pendingRest, restEventId, restMsFor } from './rest-after.js'
 import { withTargets } from './session-screen.js'
@@ -411,6 +411,13 @@ describe('writeOutcome', () => {
     expect(writeOutcome({ ok: false, saved: true, error: { code: 'storage', message: 'clear failed' } }, 'finish'))
       .toEqual({ kind: 'failed', text: "The workout isn't closed yet. Tap Save workout again." })
   })
+  test('saved but not ok from anything but Finish is never "tap Save workout": its own words', () => {
+    expect(writeOutcome({ ok: false, saved: true, error: STORAGE }, 'complete'))
+      .toEqual({ kind: 'failed', text: "Set not saved. The phone couldn't write it. Try again." })
+    expect(writeOutcome({ ok: false, saved: true, error: { code: 'no-rest' } }, 'skip-rest'))
+      .toEqual({ kind: 'failed', text: 'Rest not skipped. No rest is running.' })
+    expect(writeOutcome({ ok: false, saved: true }, undefined)).toEqual({ kind: 'failed', text: 'Not saved. Something went wrong. Try again.' })
+  })
 
   test('a save, a repeat, no change, or a tap the gate dropped say nothing', () => {
     expect(writeOutcome({ ok: true, saved: true }, 'complete')).toBeNull()
@@ -434,6 +441,17 @@ describe('completeResult', () => {
   })
   test('a timer checkpoint that failed on the rest is carried, not dropped', () => {
     expect(completeResult(saved, { ok: true, saved: true, checkpointError: STORAGE })).toEqual({ ok: true, saved: true, checkpointError: STORAGE })
+  })
+  test('a refused rest whose timer checkpoint failed too carries both', () => {
+    const result = completeResult(saved, { ...refused, checkpointError: STORAGE })
+    expect(result).toEqual({ ok: true, saved: true, restFailed: true, checkpointError: STORAGE })
+    expect(writeOutcome(result, 'complete')).toEqual({
+      kind: 'saved-rest-failed',
+      text: "Saved. Rest didn't start. The workout time couldn't be updated, so it may be off after a restart.",
+    })
+    // The set's own checkpoint error stands; the rest's does not replace it.
+    const own = { code: 'storage', message: 'own' }
+    expect(completeResult({ ...saved, checkpointError: own }, { ...refused, checkpointError: STORAGE }).checkpointError).toBe(own)
   })
   test('a set that did not save stays not saved whatever the rest did', () => {
     expect(completeResult(refused, { ok: true, saved: true })).toBe(refused)
@@ -469,12 +487,20 @@ describe('noticesAfter', () => {
     expect(noticesAfter(restLine, { ok: true, saved: true }, 'undo')).toEqual(NO_NOTICES)
     expect(noticesAfter(restLine, refused, 'undo').rest).toBe(SAVED_REST)
   })
-  test('Start rest: a rest that runs, or was already running, or has nothing left to start ends the line', () => {
-    expect(noticesAfter(restLine, { ok: true, saved: true }, 'rest')).toEqual(NO_NOTICES)
-    expect(noticesAfter(restLine, { ok: true, saved: false, duplicate: true }, 'rest')).toEqual(NO_NOTICES)
+  test('Start rest: a rest that runs, or was already running, ends the line', () => {
+    for (const action of ['rest', 'start-rest']) {
+      expect(noticesAfter(restLine, { ok: true, saved: true }, action), action).toEqual(NO_NOTICES)
+      expect(noticesAfter(restLine, { ok: true, saved: false, duplicate: true }, action), action).toEqual(NO_NOTICES)
+    }
+  })
+  test('the Start rest tap that finds the rest already run out says so; the restore on open says nothing', () => {
+    expect(noticesAfter(restLine, null, 'start-rest')).toEqual({ notice: 'That rest has already run out.', rest: null })
+    expect(noticesAfter({ notice: 'old', rest: SAVED_REST }, null, 'start-rest')).toEqual({ notice: 'That rest has already run out.', rest: null })
     expect(noticesAfter(restLine, null, 'rest')).toEqual(NO_NOTICES)
+    expect(noticesAfter({ notice: 'kept', rest: null }, null, 'rest')).toEqual({ notice: 'kept', rest: null })
   })
   test('Start rest refused: the line says why and keeps its button; the notice is left alone', () => {
+    expect(noticesAfter({ notice: 'kept', rest: SAVED_REST }, refused, 'start-rest')).toEqual({ notice: 'kept', rest: "Rest didn't start. The phone couldn't write it. Try again." })
     expect(noticesAfter({ notice: 'kept', rest: SAVED_REST }, refused, 'rest')).toEqual({ notice: 'kept', rest: "Rest didn't start. The phone couldn't write it. Try again." })
     // The rest restored on open is the same write: refused, it offers Start rest too.
     expect(noticesAfter(NO_NOTICES, refused, 'rest')).toEqual({ notice: null, rest: "Rest didn't start. The phone couldn't write it. Try again." })
@@ -486,6 +512,31 @@ describe('noticesAfter', () => {
   test('a tap the gate dropped changes nothing', () => {
     expect(noticesAfter(restLine, { ignored: true }, 'complete')).toBe(restLine)
     expect(noticesAfter(restLine, { ignored: true }, 'rest')).toBe(restLine)
+    expect(noticesAfter(restLine, { ignored: true }, 'start-rest')).toBe(restLine)
+  })
+})
+
+// VoiceOver on iOS ignores live regions, so the screen announces a notice itself: once, when it
+// appears or its words change, never on a re-render.
+describe('noticeAnnouncement', () => {
+  const FAILED = "Set not saved. The phone couldn't write it. Try again."
+  test('a notice or rest line that appears is spoken', () => {
+    expect(noticeAnnouncement(NO_NOTICES, { notice: FAILED, rest: null })).toBe(FAILED)
+    expect(noticeAnnouncement(NO_NOTICES, { notice: null, rest: SAVED_REST })).toBe(SAVED_REST)
+  })
+  test('one whose words changed is spoken; one that stayed the same is not spoken again', () => {
+    expect(noticeAnnouncement({ notice: 'Set not added. No rest is running.', rest: SAVED_REST }, { notice: FAILED, rest: SAVED_REST })).toBe(FAILED)
+    const why = "Rest didn't start. The phone couldn't write it. Try again."
+    expect(noticeAnnouncement({ notice: FAILED, rest: SAVED_REST }, { notice: FAILED, rest: why })).toBe(why)
+    expect(noticeAnnouncement({ notice: FAILED, rest: SAVED_REST }, { notice: FAILED, rest: SAVED_REST })).toBeNull()
+  })
+  test('both new: the notice, then the rest line', () => {
+    expect(noticeAnnouncement(NO_NOTICES, { notice: FAILED, rest: SAVED_REST })).toBe(`${FAILED} ${SAVED_REST}`)
+  })
+  test('one that went away is not spoken', () => {
+    expect(noticeAnnouncement({ notice: FAILED, rest: SAVED_REST }, NO_NOTICES)).toBeNull()
+    expect(noticeAnnouncement({ notice: FAILED, rest: SAVED_REST }, { notice: null, rest: SAVED_REST })).toBeNull()
+    expect(noticeAnnouncement(NO_NOTICES, NO_NOTICES)).toBeNull()
   })
 })
 
@@ -705,15 +756,42 @@ describe.each(SQLITE_DRIVERS)('%s: the calls drive the engine', (_name, createDb
     expect(current(session).rest).toBeNull()
   })
 
-  test('a set saved whose draft did not clear says so instead of dropping it', async () => {
-    const db = createDb()
-    const session = await open(db)
-    await session.call('putDraft', benchSet, { w: 77.5, r: 6 })
+  // Save a draft of 80 x 5, then change the reps to 6 in the sheet and Complete: 80 x 6 is logged
+  // and the clear of the 80 x 5 draft fails. The set shows, and Update starts from, 80 x 6.
+  test('a set saved whose draft did not clear says so, and shows what was logged, after a kill too', async () => {
+    let db = createDb()
+    const first = await open(db)
+    await first.call('putDraft', benchSet, { w: 80, r: 5 })
     db.failNext(/DELETE FROM session_drafts/, new Error('disk full'))
-    const commit = await session.call('commitSet', completeCall(current(session), { setId: benchSet, side: null, eventId: 'c1' }))
+    const commit = await first.call('commitSet', completeCall(current(first), { setId: benchSet, side: null, values: { w: 80, r: 6 }, eventId: 'c1' }))
     expect(commit).toMatchObject({ ok: true, saved: true, draftError: { code: 'storage' } })
     expect(noticesAfter(NO_NOTICES, completeResult(commit, null), 'complete'))
       .toEqual({ notice: "Saved. The typed numbers for this set couldn't be cleared.", rest: null })
+    const logged = view => {
+      const done0 = view.entries[0].sets[0]
+      expect(done0.draft).toEqual({ w: 80, r: 5 })
+      expect(done0.row).toMatchObject({ w: 80, r: 6, done: true })
+      expect(shownValues(done0, null)).toEqual({ w: 80, r: 6 })
+      expect(workoutScreen(view, { names: {}, lastTimes: {} }).card.rows[0]).toMatchObject({ weightText: '80', repsText: '6', status: 'done' })
+      // Update opens on the logged numbers, so an unchanged Update writes them back, not 80 x 5.
+      expect(editCall(view, { setId: benchSet, values: shownValues(done0, null), eventId: 'e1' }).fields).toEqual({ w: 80, r: 6 })
+    }
+    logged(current(first))
+    db = db.reopen()
+    logged(current(await open(db, false)))
+  })
+
+  test('Start rest after that rest has run out starts nothing and says so', async () => {
+    clock = T0 + 1000
+    const db = createDb()
+    const session = await open(db)
+    const commit = await session.call('commitSet', completeCall(current(session), { setId: benchSet, side: null, eventId: 'c1' }))
+    db.failNext(/INSERT OR IGNORE INTO session_events/, new Error('disk full'))
+    const notices = noticesAfter(NO_NOTICES, completeResult(commit, await session.call('startRest', restAfterComplete(current(session), benchSet, restMsOf))), 'complete')
+    clock = T0 + 1000 + 120_000
+    expect(pendingRest(current(session), clock, () => 120_000)).toBeNull()
+    expect(noticesAfter(notices, null, 'start-rest')).toEqual({ notice: 'That rest has already run out.', rest: null })
+    expect(current(session).rest).toBeNull()
   })
 
   test('a set saved whose timer checkpoint failed says so instead of dropping it', async () => {
