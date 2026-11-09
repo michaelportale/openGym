@@ -149,11 +149,27 @@ test('per-side reps read per side with no both-sides reason, per-hand weights re
   expect(line.reason).toBeNull()
 })
 
-test('a named policy other than double has a line but no progression Why', () => {
-  const linear = { ...routine, prog: 'linear', ex: [{ id: '0025', sets: 3, reps: 5 }] }
-  const done = session('s1', '2026-11-09', [work(100, 5), work(100, 5), work(100, 5)], linear.ex[0])
-  const [line] = nextTimeLines({ unit: 'lb', routines: [linear], workouts: [done] }, linear, done.entries, names)
-  expect(line).toMatchObject({ kind: 'up', weight: 105, reps: '5', whyId: null, reason: 'Every rep last time. 5 lb more.' })
+test('only double progression has lines: linear, greyskull and triple have no register entry', () => {
+  for (const prog of ['linear', 'greyskull', 'triple']) {
+    for (const r of [{ ...routine, prog }, { ...routine, ex: [{ ...bench, prog }] }]) {
+      expect(nextTimeLines({ ...withSaved, routines: [r] }, r, saved.entries, names)).toEqual([])
+    }
+  }
+  // Named double is the same as the unnamed native default.
+  const named = { ...routine, prog: 'double' }
+  expect(nextTimeLines({ ...withSaved, routines: [named] }, named, saved.entries, names)).toEqual(nextTimeLines(withSaved, routine, saved.entries, names))
+})
+
+test('a double-progression deload line opens the deload register entry', () => {
+  // Three sessions at 80 with no rep gained: the third stall deloads.
+  const stalled = ['2026-11-02', '2026-11-05', '2026-11-09'].map((d, i) => session(`d${i}`, d, [work(80, 9), work(80, 9), work(80, 9)]))
+  const [line] = nextTimeLines({ ...withSaved, workouts: stalled }, routine, stalled[2].entries, names)
+  expect(line.kind).toBe('deload')
+  expect(line.weight).toBeLessThan(80)
+  expect(line.whyId).toBe('deload-after-misses')
+  expect(whyEntry('deload').id).toBe(line.whyId)
+  // A raise or a hold keeps the progression entry.
+  expect(nextTimeLines(withSaved, routine, saved.entries, names)[0].whyId).toBe('double-progression')
 })
 
 test('bodyweight work reads as bodyweight, not 0 lb', () => {

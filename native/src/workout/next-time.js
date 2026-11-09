@@ -1,6 +1,6 @@
 import { history, workoutModel } from '../shared/training.js'
 import { withEffortNote } from '../science/effort.js'
-import { nativePrescription } from '../science/native-progression.js'
+import { nativePrescription, nativeRepPolicy } from '../science/native-progression.js'
 import { programRepRange } from '../science/rep-range.js'
 import { setsFor } from '../science/warmup.js'
 import { sessionState } from './history-state.js'
@@ -14,14 +14,16 @@ const num = v => typeof v === 'number' && Number.isFinite(v)
 const unitOf = state => state?.unit ?? 'lb'
 
 /**
- * The native prescription of a reps exercise in `routine` when it names a weight, else null.
- * The engine steps and words its load in the profile unit the screen shows. A routine kept out
- * of progression (deload, rehab) gets none, as the shared session builder gives it none. Off, a
- * first session and timed work have no weight here. Warm-ups are left out by the engine.
+ * The native prescription of an exercise in `routine` when it names a weight, else null. Only
+ * double progression (named, or the native default when none is) has a register entry to
+ * explain it, so any other policy, off, and timed work (never double) get none and open at last
+ * time as before. A routine kept out of progression (deload, rehab) gets none, as the shared
+ * session builder gives it none. The engine steps and words its load in the profile unit the
+ * screen shows, and leaves warm-ups out. A first session has no weight.
  */
 function weightedPrescription(state, routine, exerciseId) {
   const cfg = (routine?.ex ?? []).find(c => c?.id === exerciseId)
-  if (!cfg || routine.excludeFromProgression === true || history.modeOf(cfg) !== 'reps') return null
+  if (!cfg || routine.excludeFromProgression === true || nativeRepPolicy(cfg, routine) !== 'double') return null
   const p = nativePrescription({ ...(state ?? {}), unit: unitOf(state) }, cfg, routine)
   return p && p.kind !== 'off' && num(p.weight) ? { p, cfg } : null
 }
@@ -38,13 +40,12 @@ function reasonText(why) {
   return template.replace(/\{(\d+)\}/g, (slot, i) => (args[i] == null ? slot : String(args[i])))
 }
 
-// The reps after "×": the program's stored range under double progression, else the engine's
-// aim, else the plan's reps. Per-side reps are stored for both sides together; shown per side.
+// The reps after "×": the program's stored range, else the engine's aim, else the plan's reps. Per-side reps are stored for both sides together; shown per side.
 function repsText(p, cfg) {
   const per = history.isPerSide(cfg) ? 2 : 1
   const side = per === 2 ? ' per side' : ''
   const { reps, repsMin } = programRepRange(cfg)
-  if (p.policy === 'double' && num(repsMin) && num(reps) && repsMin > 0 && repsMin < reps) return `${repsMin / per}–${reps / per}${side}`
+  if (num(repsMin) && num(reps) && repsMin > 0 && repsMin < reps) return `${repsMin / per}–${reps / per}${side}`
   const one = num(p.reps) && p.reps > 0 ? p.reps : num(reps) && reps > 0 ? reps : null
   return one == null ? null : `${one / per}${side}`
 }
@@ -54,7 +55,7 @@ function repsText(p, cfg) {
  * prescription has a weight: "Bench press — next time 85 lb × 8–12". `state` is the session's
  * history with that workout in it. Off, a first session, and timed work have no line. The effort
  * note reads that exercise's done work sets and never changes the weight. `whyId` is the
- * progression register entry when the policy is double progression, the only one it explains.
+ * register entry that explains the line: the deload one for a deload, else double progression.
  */
 export function nextTimeLines(state, routine, entries, names = {}) {
   const unit = unitOf(state)
@@ -84,7 +85,7 @@ export function nextTimeLines(state, routine, entries, names = {}) {
       // which would contradict the per-side line, so a per-side exercise shows the line alone.
       reason: history.isPerSide(cfg) ? null : reasonText(p.why),
       effortNote: p.effortNote,
-      whyId: p.policy === 'double' ? 'double-progression' : null,
+      whyId: p.kind === 'deload' ? 'deload-after-misses' : 'double-progression',
     })
   }
   return lines

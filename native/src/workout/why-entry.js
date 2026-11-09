@@ -10,7 +10,8 @@ const ENTRIES = Object.freeze({
   'warmup-prompt': { id: 'warmup-prompt', payload: () => whyThis('warmup-prompt'), title: 'Why a warm-up is offered' },
   progression: { id: 'double-progression', payload: () => whyThis('double-progression'), title: 'Why this progression' },
   'rep-range': { id: 'rep-ranges', payload: () => whyThis('rep-ranges'), title: 'Why this rep range' },
-  effort: { id: 'effort-proximity', payload: () => whyThis('effort-proximity'), title: 'Why this effort' }
+  effort: { id: 'effort-proximity', payload: () => whyThis('effort-proximity'), title: 'Why this effort' },
+  deload: { id: 'deload-after-misses', payload: () => whyThis('deload-after-misses'), title: 'Why a deload' }
 })
 
 /** @returns {{ id: string, title: string, payload: () => object } | null} */

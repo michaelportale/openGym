@@ -12,8 +12,9 @@ import { savedNextTime } from './next-time'
 import WhySheet from './WhySheet'
 import { whyEntry } from './why-entry'
 
-const PROGRESSION_WHY = whyEntry('progression')
-const EFFORT_WHY = whyEntry('effort')
+// The register entries a line can open: its own (whyId: progression or deload) and the effort note's.
+const WHY_ENTRIES = [whyEntry('progression'), whyEntry('deload'), whyEntry('effort')]
+const EFFORT_ID = whyEntry('effort').id
 
 function WhyButton({ label, hint, onPress }) {
   return (
@@ -33,12 +34,12 @@ function NextTimeLine({ line, onWhy }) {
           <AppText variant="body">{line.text}</AppText>
           {line.reason ? <AppText variant="label" color={color.textSecondary}>{line.reason}</AppText> : null}
         </View>
-        {line.whyId ? <WhyButton label={`Why this suggestion for ${line.name}?`} hint="Shows how the next weight is decided." onPress={() => onWhy('progression')} /> : null}
+        <WhyButton label={`Why this suggestion for ${line.name}?`} hint="Shows how the next weight is decided." onPress={() => onWhy(line.whyId)} />
       </View>
       {line.effortNote ? (
         <View style={styles.row}>
           <AppText variant="body" color={color.textSecondary} style={styles.grow}>{line.effortNote}</AppText>
-          <WhyButton label={`Why far from failure on ${line.name}?`} hint="Shows what reps left says about a set." onPress={() => onWhy('effort')} />
+          <WhyButton label={`Why far from failure on ${line.name}?`} hint="Shows what reps left says about a set." onPress={() => onWhy(EFFORT_ID)} />
         </View>
       ) : null}
     </View>
@@ -79,8 +80,7 @@ export default function SavedScreen({ db, state, base, names, onDone }) {
         <ExportButton db={db} />
         <PrimaryButton label="Done" accessibilityHint="Goes back to the start of the Workout tab." onPress={onDone} />
       </View>
-      <WhySheet visible={why === 'progression'} entry={PROGRESSION_WHY} onClose={() => setWhy(null)} />
-      <WhySheet visible={why === 'effort'} entry={EFFORT_WHY} onClose={() => setWhy(null)} />
+      {WHY_ENTRIES.map(entry => <WhySheet key={entry.id} visible={why === entry.id} entry={entry} onClose={() => setWhy(null)} />)}
     </ScrollView>
   )
 }

@@ -223,3 +223,19 @@ test('a timed exercise keeps last time\'s weight even when its prescription carr
   const out = applyOpeningWeights(planned(), timedState, 'push-a', timed)
   expect(out[0]).toStrictEqual(openingWeightsBefore(planned(), timedState, 'push-a')[0])
 })
+
+test('linear and greyskull open exactly as before: no register entry, so last time decides', () => {
+  for (const prog of ['linear', 'greyskull']) {
+    const onRoutine = pushA(prog)
+    const onExercise = pushA(null, { ex: pushA().ex.map(c => ({ ...c, prog })) })
+    for (const routine of [onRoutine, onExercise]) {
+      for (const s of [topped, state, {}]) {
+        expect(applyOpeningWeights(planned(), s, 'push-a', routine)).toStrictEqual(openingWeightsBefore(planned(), s, 'push-a'))
+      }
+    }
+  }
+})
+
+test('a named double policy opens at its prescription like the unnamed default', () => {
+  expect(applyOpeningWeights(planned(), topped, 'push-a', pushA('double'))).toStrictEqual(applyOpeningWeights(planned(), topped, 'push-a', pushA()))
+})
