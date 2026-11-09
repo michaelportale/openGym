@@ -1,9 +1,10 @@
-import { useEffect } from 'react'
+import { useLayoutEffect, useRef } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated'
 import { color, radius, size, space, touch } from '../theme/tokens'
 import NativeSymbol from '../ui/NativeSymbol'
 import AppText from '../ui/AppText'
+import { donePop } from '../ui/done-transition'
 import ScaleButton from '../ui/ScaleButton'
 import { useMotion } from '../ui/use-motion'
 import { setRowView } from './set-row-view'
@@ -53,14 +54,19 @@ const HIDDEN = { accessibilityElementsHidden: true, importantForAccessibility: '
 
 // The marker, popping in (scale and fade) when `pop` is set: the card saw this set open and the
 // view now shows it done, which only happens after the durable write. The card decides, because
-// this row swaps its root element when it stops being open and so remounts. Nothing waits on it;
-// a new pop retargets the running one. The zero-length first step starts it from 0.
+// this row swaps its root element when it stops being open and so remounts; the remounted marker's
+// Reduce Motion flag starts from the value already read. donePop decides once, where `pop` turns
+// on. Nothing waits on it; a new pop retargets the running one. The zero-length first step starts a
+// marker already on screen from 0, before the frame is drawn (a layout effect), so it never shows
+// full size first.
 function Marker({ pop, children }) {
   const { duration } = useMotion()
-  const ms = duration('press')
-  const progress = useSharedValue(pop && ms > 0 ? 0 : 1)
-  useEffect(() => {
-    if (pop && ms > 0) progress.value = withSequence(withTiming(0, { duration: 0 }), withTiming(1, { duration: ms }))
+  const wasPop = useRef(false)
+  const start = donePop(wasPop.current, pop, duration('press'))
+  const progress = useSharedValue(start.from)
+  useLayoutEffect(() => {
+    wasPop.current = pop
+    if (start.ms > 0) progress.value = withSequence(withTiming(0, { duration: 0 }), withTiming(1, { duration: start.ms }))
   }, [pop])
   const style = useAnimatedStyle(() => ({ opacity: 0.4 + 0.6 * progress.value, transform: [{ scale: 0.7 + 0.3 * progress.value }] }))
   return <Animated.View style={style}>{children}</Animated.View>

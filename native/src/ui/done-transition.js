@@ -14,3 +14,12 @@ export function poppedSetIds(previous, rows) {
   }
   return popped
 }
+
+// How the Done mark draws: { from, ms }. It pops (starts at 0 and grows over `ms`) only where `pop`
+// turns on, which includes a mount with `pop` set (the row swapped its root), and only with a
+// duration. With none (Reduce Motion, or the flag before any read resolved) it is drawn full size.
+// `wasPop` is the previous render's `pop` (false on mount): a duration that arrives later, while
+// `pop` is still set, never pops a mark already drawn full size.
+export function donePop(wasPop, pop, ms) {
+  return pop && !wasPop && ms > 0 ? { from: 0, ms } : { from: 1, ms: 0 }
+}
