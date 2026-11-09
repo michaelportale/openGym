@@ -12,6 +12,11 @@ const round1 = n => Math.round(n * 10) / 10
 const positive = v => v != null && Number.isFinite(+v) && +v > 0
 const isObj = v => !!v && typeof v === 'object'
 
+// Time comes only from the caller: a missing or non-finite now is a programming error.
+const needNow = (fn, now) => {
+  if (typeof now !== 'number' || !Number.isFinite(now)) throw new Error(`${fn}: now (a finite ms timestamp) is required`)
+}
+
 const unitOf = key => (key === 'bodyFat' ? '%' : M.measurementUnit(UNIT))
 
 // A display-only copy of the state's measurement fields, the web's normalised and folded view.
@@ -72,6 +77,7 @@ export function fieldChoices(state) {
 // One field's card: the latest value and day, the change since the previous reading, the series
 // for LineChart (points [{ t, d, y }] in inches or percent) over `range` days (0 = all).
 export function fieldView(state, key, { range = 0, now } = {}) {
+  needNow('fieldView', now)
   const s = displayState(state)
   const label = M.measurementLabel(key, s.customMeasurements)
   const unit = unitOf(key)
@@ -132,6 +138,7 @@ const typed = v => (v == null || v === '' || !(Number(v) > 0) || !Number.isFinit
 // entry is refused. t is the weigh-in saveOp floor (weigh-in-view.js): above now, the shown entry
 // and the day's deletion stamp. Returns { entry, error }.
 export function applyLogForm(state, d, form, { now } = {}) {
+  needNow('applyLogForm', now)
   const fail = error => ({ entry: null, error })
   if (!DAY.test(d || '') || d > localToday(now)) return fail('Choose a valid date')
   const s = displayState(state)
@@ -172,6 +179,7 @@ export function applyLogForm(state, d, form, { now } = {}) {
 // The op that removes a day. baseT is the t of the stored copy's own entry for the day (the copy
 // without this phone's pending overlay): the larger t of its rows, which is the row the guard reads.
 export function removeOp(copyState, d, { now } = {}) {
+  needNow('removeOp', now)
   const ts = (Array.isArray(copyState?.measurements) ? copyState.measurements : [])
     .filter(e => isObj(e) && e.d === d && Number.isFinite(Number(e.t))).map(e => Number(e.t))
   return { d, op: 'remove', t: now, baseT: ts.length ? Math.max(...ts) : null }
@@ -179,7 +187,8 @@ export function removeOp(copyState, d, { now } = {}) {
 
 // The history list, newest day first: { d, label, count, preview: [{ key, label, value, unit }] }
 // with the first three enabled fields that hold a value, as the web screen shows them.
-export function historyRows(state, { now = Date.now() } = {}) {
+export function historyRows(state, { now } = {}) {
+  needNow('historyRows', now)
   const s = displayState(state)
   const fields = M.enabledMeasurementFields(s)
   return [...s.measurements].reverse().map(entry => {

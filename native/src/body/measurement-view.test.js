@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 import { applyLogForm, fieldChoices, fieldView, historyRows, logForm, removeOp } from './measurement-view.js'
 
 const NOW = new Date('2026-11-09T15:00:00').getTime()
@@ -212,5 +212,34 @@ describe('historyRows (Measurements.jsx recent list)', () => {
   test('no list gives no rows', () => {
     expect(historyRows({}, { now: NOW })).toEqual([])
     expect(historyRows(undefined, { now: NOW })).toEqual([])
+  })
+})
+
+describe('now is required wherever time is read (no Date.now inside)', () => {
+  afterEach(() => vi.useRealTimers())
+  const calls = {
+    historyRows: now => historyRows({}, { now }),
+    fieldView: now => fieldView({ measurements: [{ d: D, t: 1, waist: 81.28 }] }, 'waist', { now }),
+    applyLogForm: now => applyLogForm({}, D, { values: { waist: 32 } }, { now }),
+    removeOp: now => removeOp({}, D, { now }),
+  }
+  for (const [name, call] of Object.entries(calls)) {
+    test(`${name} throws a plain Error naming it when now is missing or not finite`, () => {
+      for (const now of [undefined, NaN, Infinity, '5', null]) expect(() => call(now)).toThrow(new RegExp(`^${name}: `))
+    })
+  }
+  test('the options object itself may be missing', () => {
+    expect(() => historyRows({})).toThrow(/^historyRows: /)
+    expect(() => removeOp({}, D)).toThrow(/^removeOp: /)
+  })
+  test('fieldView with a fixed now gives the same series whatever the real clock says', () => {
+    const s = { measurements: [{ d: '2026-10-20', t: 1, waist: 81.28 }, { d: '2026-11-08', t: 2, waist: 83.82 }] }
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-11-09T12:00:00'))
+    const a = fieldView(s, 'waist', { range: 30, now: NOW })
+    vi.setSystemTime(new Date('2030-01-01T12:00:00'))
+    const b = fieldView(s, 'waist', { range: 30, now: NOW })
+    expect(a.series).toHaveLength(2)
+    expect(b).toEqual(a)
   })
 })
