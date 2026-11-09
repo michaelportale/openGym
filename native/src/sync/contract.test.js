@@ -28,11 +28,15 @@ const run = promisify(execFile)
 const UID = 'u_owner'
 const SECRET = crypto.randomBytes(32).toString('hex')
 const T0 = Date.parse('2026-11-09T10:00:00.000Z')
+// A browser session that outlives the test, without reading the clock (server.js sessionUser
+// only checks that the expiry is still ahead).
+const COOKIE_EXP = Date.parse('2100-01-01T00:00:00.000Z')
 // What the API never sends a client (server.js forClient).
 const HIDDEN = ['_unstamped', '_prior']
 
 // The owner's document as the web left it: keys this app does not know, a set type it does not
-// know, records of removals and edits, two web workouts and two routines.
+// know, records of removals and edits, two web workouts and two routines, and the server's own
+// notes that no client is ever sent (`_prior`, `_unstamped`; sync-stamps.js notePrior/ownRecord).
 const fixture = () => ({
   unit: 'kg',
   lang: 'en',
@@ -52,6 +56,8 @@ const fixture = () => ({
     },
     { id: 'web-2', d: '2026-11-03', name: 'Pull', start: 1762160400000, end: 1762162800000, vol: 0, prs: [], entries: [] },
   ],
+  _prior: { queue: ['13.1x2y3z'], 'routines|r1|name': ['6.abc123'] },
+  _unstamped: { fp: '27.abc.def', ed: { unit: 1730000000000 } },
   _rev: 12,
   _wid: 'a1b2c3d4e5f60718',
   _wids: ['0000000000000001'],
@@ -65,7 +71,7 @@ const phone = (id, d) => ({
 
 // Same construction as server.js makeSession() for a browser cookie: `uid:exp:sv`, HMAC-SHA256.
 function webCookie(sv = 0) {
-  const payload = `${UID}:${Date.now() + 86400000}:${sv}`
+  const payload = `${UID}:${COOKIE_EXP}:${sv}`
   return { Cookie: `gymsid=${payload}.${crypto.createHmac('sha256', SECRET).update(payload).digest('base64url')}` }
 }
 
@@ -80,11 +86,12 @@ function fakeKeychain() {
   }
 }
 
-async function startServer() {
+// `state: null` starts a profile with no document at all, as a new one is.
+async function startServer({ state = fixture() } = {}) {
   const dataDir = mkdtempSync(join(tmpdir(), 'opengym-contract-'))
   writeFileSync(join(dataDir, 'secret'), SECRET, { mode: 0o600 })
   writeFileSync(join(dataDir, 'db.json'), JSON.stringify({ users: [{ id: UID, name: 'Owner', created: new Date(T0).toISOString() }], creds: [], subs: [], invites: [] }))
-  writeFileSync(join(dataDir, `state-${UID}.json`), JSON.stringify(fixture()))
+  if (state) writeFileSync(join(dataDir, `state-${UID}.json`), JSON.stringify(state))
   const child = spawn(process.execPath, ['server.js'], {
     cwd: API,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -145,11 +152,25 @@ const stripStamps = w => without(w, ['_ts', '_f'])
 function expectOriginalKept(file) {
   const original = fixture()
   for (const [k, v] of Object.entries(original)) {
-    if (['_rev', '_wid', '_wids', 'workouts'].includes(k)) continue
+    if (['_rev', '_wid', '_wids', 'workouts', ...HIDDEN].includes(k)) continue
     expect(file[k], k).toEqual(v)
   }
   for (const w of original.workouts) expect(file.workouts.find(x => x.id === w.id)).toEqual(w)
   expect(file._wids).toContain(original._wid)
+}
+
+// The server's own notes never reach the phone: not in the copy, not anywhere in SQLite. The
+// server keeps `_prior` across the phone's pushes. It rebuilds `_unstamped` on every push from a
+// writer that does not stamp, and drops one that is not that writer's (sync-stamps.js ownRecord):
+// it is gone after the phone's first push by the server's rule, not the phone's doing.
+async function expectHiddenStayOnServer(app, file, { pushed }) {
+  const stored = await app.copy.get()
+  for (const k of HIDDEN) expect(stored.state, k).not.toHaveProperty(k)
+  const raw = JSON.stringify(await app.db.getAll('SELECT body FROM server_copy'))
+  for (const k of HIDDEN) expect(raw).not.toContain(k)
+  expect(file._prior).toEqual(fixture()._prior)
+  if (pushed) expect(file).not.toHaveProperty('_unstamped')
+  else expect(file._unstamped).toEqual(fixture()._unstamped)
 }
 
 function expectOnce(file, workout) {
@@ -168,8 +189,10 @@ describe.skipIf(!HAS_API_DEPS)(TITLE, { timeout: 30_000 }, () => {
     const app = await paired(server)
     const stored = await app.copy.get()
     const file = server.file()
+    expect(file).toEqual(fixture())
     expect(stored.state).toEqual(without(file, HIDDEN))
-    expect(stored.state).toEqual(fixture())
+    expect(stored.state).toEqual(without(fixture(), HIDDEN))
+    await expectHiddenStayOnServer(app, file, { pushed: false })
     expect(stored.rev).toBe(12)
     expect(stored.wid).toBe(fixture()._wid)
     expect(await app.sync.status()).toEqual({
@@ -205,6 +228,7 @@ describe.skipIf(!HAS_API_DEPS)(TITLE, { timeout: 30_000 }, () => {
     expect(stored.state).toEqual(without(file, HIDDEN))
     expect(stored.rev).toBe(file._rev)
     expect(stored.wid).toBe(file._wid)
+    await expectHiddenStayOnServer(app, file, { pushed: true })
   })
 
   test('a web tab writes in between: the phone pulls, rebases and nothing is lost on either side', async () => {
@@ -226,6 +250,20 @@ describe.skipIf(!HAS_API_DEPS)(TITLE, { timeout: 30_000 }, () => {
     expectOnce(file, p2)
     expect(file.workouts.filter(w => w.id === 'web-3')).toEqual([web3])
     expect(file.workouts).toHaveLength(5)
+    expect((await app.copy.get()).state).toEqual(without(file, HIDDEN))
+    await expectHiddenStayOnServer(app, file, { pushed: true })
+  })
+
+  test('a new profile with no document yet: pairing pulls an empty one and the first push starts it', async () => {
+    const server = await startServer({ state: null })
+    const app = await paired(server)
+    expect(await app.copy.get()).toMatchObject({ state: {}, rev: 0, wid: null })
+    const p1 = phone('11111111-1111-4111-8111-111111111111', '2026-11-08')
+    await app.workouts.put(p1)
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pending: 0 })
+    const file = server.file()
+    expect(file.workouts.map(stripStamps)).toEqual([p1])
+    expect(file._rev).toBe(1)
     expect((await app.copy.get()).state).toEqual(without(file, HIDDEN))
   })
 
