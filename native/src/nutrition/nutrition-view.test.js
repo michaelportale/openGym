@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import {
   addSupplement, applyDayForm, applyTargets, clearDayValue, dayForm, recentDays, removeSupplement,
-  renameSupplement, targetsForm, todayCard, toggleSupplement, weekView,
+  targetsForm, todayCard, toggleSupplement, weekView,
 } from './nutrition-view.js'
 
 const TODAY = '2026-11-09' // a Monday
@@ -293,15 +293,6 @@ describe('supplements', () => {
 
   test('add needs an id (nutrition.js:160)', () => {
     expect(addSupplement(state, 'Zinc', '')).toEqual({ error: '' })
-  })
-
-  test('rename keeps the id, so past ticks follow; same rules on the name, other than itself (no web rename: restates nutrition.js:157-164)', () => {
-    expect(renameSupplement(state, 'a', ' Creatine HCl ')).toEqual([{ id: 'a', name: 'Creatine HCl' }, SUPPS[1]])
-    expect(renameSupplement(state, 'a', 'CREATINE')).toEqual([{ id: 'a', name: 'CREATINE' }, SUPPS[1]])
-    expect(renameSupplement(state, 'a', 'vitamin d')).toEqual({ error: 'That supplement is already on the list.' })
-    expect(renameSupplement(state, 'a', '  ')).toEqual({ error: '' })
-    expect(renameSupplement(state, 'zzz', 'Zinc')).toEqual({ error: 'That supplement is not on the list.' })
-    expect(renameSupplement(state, 'a', 'x'.repeat(80))[0].name).toHaveLength(60)
   })
 
   test('remove returns the list without it and does not touch any day: past ticks stay (nutrition.js:167, Nutrition.jsx:128)', () => {

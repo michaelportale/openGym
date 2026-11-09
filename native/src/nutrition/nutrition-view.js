@@ -12,12 +12,11 @@ import { nutrition } from '../shared/training.js'
 const {
   NUTRIENTS, DAY_TYPES, TARGET_KEYS, canLogNutrition, isLoggedDay, nutritionDayOf, nutritionHistory,
   nutritionInputError, readSupplements, readTargets, weekSummary, withNutritionDay, withSupplement,
-  withSupplementTick, withTarget, withoutSupplement, clearNutritionDay, SUPPLEMENT_NAME_MAX,
+  withSupplementTick, withTarget, withoutSupplement, clearNutritionDay,
 } = nutrition
 
 export const ERR_BAD_DATE = 'Choose a valid date' // Nutrition.jsx:51
 export const ERR_DUPLICATE = 'That supplement is already on the list.' // Nutrition.jsx:105
-export const ERR_UNKNOWN_SUPPLEMENT = 'That supplement is not on the list.'
 
 const NAME = { kcal: 'Calories', protein: 'Protein', carbs: 'Carbs', fat: 'Fat', fiber: 'Fiber' }
 const DAY_TYPE_NAME = { training: 'Training day', rest: 'Rest day' } // Nutrition.jsx:23
@@ -132,16 +131,6 @@ export function applyTargets(state, type, key, value) {
 export function addSupplement(state, name, id) {
   if (!String(name || '').trim() || !id) return { error: '' } // Nutrition.jsx:105: only a non-empty name toasts
   return withSupplement(state?.supplements, name, id) || { error: ERR_DUPLICATE } // also the full list, as the web
-}
-
-/** The whole new list with `id` renamed, same id so past ticks follow. The web has no rename; the name rules are withSupplement's. */
-export function renameSupplement(state, id, name) {
-  const list = readSupplements(state?.supplements)
-  if (!list.some(x => x.id === id)) return { error: ERR_UNKNOWN_SUPPLEMENT }
-  const clean = String(name || '').trim().slice(0, SUPPLEMENT_NAME_MAX)
-  if (!clean) return { error: '' }
-  if (list.some(x => x.id !== id && x.name.toLowerCase() === clean.toLowerCase())) return { error: ERR_DUPLICATE }
-  return list.map(x => (x.id === id ? { ...x, name: clean } : x))
 }
 
 /** The whole new list without `id`. No day is touched: past ticks stay. */
