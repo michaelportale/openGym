@@ -14,6 +14,5 @@ export function nextRoutineId(state, today, now) {
     copy.workouts.push(w)
     rotation.refillAfter(copy, w, w.d, w.end ?? w.start ?? now)
   }
-  rotation.refillIfComplete(copy, today, now)
   return queue.queueRemaining(copy)[0] ?? copy.routines?.[0]?.id ?? null
 }
