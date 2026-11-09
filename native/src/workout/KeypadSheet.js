@@ -54,8 +54,9 @@ const keyHint = key => (key === 'back' ? 'Deletes the last character.' : 'Types 
 // no onComplete. `completeLabel` and `completeSpoken` are completeLabels(...) (keypad.js): what the
 // Complete button shows and what VoiceOver says. A warm-up not done yet passes onRemove, its Remove
 // warm-up. `notice` shows a write that was refused.
-// Under the title and Close, the sheet scrolls, so at the largest text sizes every control can be
-// reached; from the accessibility sizes on, Save and Complete stack full width (actionsStacked).
+// Under the title, Close and any notice, the sheet scrolls, so at the largest text sizes every
+// control can be reached; from the accessibility sizes on, Save and Complete stack full width
+// (actionsStacked).
 // `side` is the side Complete logs on a per-side set; Complete waits for its reps and the weight.
 // `weightSetWith` ('L' or 'R') is the side a half-done per-side set's weight was logged with: the
 // weight field and the weight chips take no input, and the sheet opens on the other side's reps.
@@ -92,10 +93,11 @@ export default function KeypadSheet({ visible, title, initial, perSide, side = n
           <AppText variant="screenTitle" accessibilityRole="header" style={styles.title}>{title}</AppText>
           <IconButton label="Close" accessibilityLabel="Close" accessibilityHint="Closes the keypad." onPress={close} />
         </View>
+        {/* Outside the scroll, so a refusal stays on screen while the buttons are scrolled to. */}
+        {notice ? (
+          <AppText variant="body" color={color.text} accessibilityLiveRegion="polite" accessibilityRole="alert" style={styles.notice}>{notice}</AppText>
+        ) : null}
         <ScrollView style={styles.body} contentContainerStyle={styles.content} alwaysBounceVertical={false}>
-          {notice ? (
-            <AppText variant="body" color={color.text} accessibilityLiveRegion="polite" accessibilityRole="alert">{notice}</AppText>
-          ) : null}
           <View style={styles.fields}>
             <Field id="w" title={weightTitle} text={fieldText(state, 'w')} active={state.field === 'w'} perHand={perHand} setWith={state.lock} onPress={press('field:w')} />
             {fields.map(([id, name]) => (
@@ -154,6 +156,7 @@ export default function KeypadSheet({ visible, title, initial, perSide, side = n
 const styles = StyleSheet.create({
   sheet: { flex: 1, gap: space.lg, paddingTop: space.lg, backgroundColor: color.bg },
   top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md, paddingHorizontal: space.lg },
+  notice: { paddingHorizontal: space.lg },
   body: { flex: 1 },
   content: { gap: space.lg, paddingHorizontal: space.lg, paddingBottom: space.lg },
   title: { flexShrink: 1 },
