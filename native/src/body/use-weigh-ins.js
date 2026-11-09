@@ -1,13 +1,13 @@
-import { useCallback, useState } from 'react'
-import { useFocusEffect } from 'expo-router'
+import { useState } from 'react'
 import { openAppDatabase } from '../storage/database'
 import { createSqliteWeighIns } from './weigh-ins'
 import { applyDayOps } from './day-ops'
 import { coalesced } from './coalesce'
 import { readCopy, createSqliteServerCopy } from '../sync/server-copy'
 import { localDate } from '../session/timing'
-import { getHealth, healthAfterFinish } from '../health/use-health'
-import { getSync, syncAfterFinish } from '../sync/use-sync'
+import { healthAfterFinish } from '../health/use-health'
+import { syncAfterFinish } from '../sync/use-sync'
+import { useFocusReload } from '../sync/use-focus-reload'
 import { afterWeighIn, canRemove, saveOp, todayLine } from './weigh-in-view'
 
 const CHANGED = "That weight changed. Check today's weight and try again."
@@ -50,24 +50,7 @@ export function useWeighIns() {
     }
   }))
 
-  useFocusEffect(useCallback(() => {
-    let focused = true
-    const offs = []
-    const listen = engine => engine
-      .then(e => {
-        const off = e.subscribe(() => { reload() })
-        if (focused) offs.push(off)
-        else off() // blurred while the engine was being built
-      })
-      .catch(() => {})
-    reload()
-    listen(getHealth())
-    listen(getSync())
-    return () => {
-      focused = false
-      for (const off of offs.splice(0)) off()
-    }
-  }, [reload]))
+  useFocusReload(reload)
 
   const write = async build => {
     try {
