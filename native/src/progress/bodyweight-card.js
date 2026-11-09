@@ -23,7 +23,9 @@ export function bodyweightCard({ bodyweight, range, now, targetW = null }) {
     monthLine: v.enough && v.delta30 !== null ? `${signed(v.delta30)} lb over 30 days` : null,
     towardLine: v.enough && v.toward ? 'toward your goal' : null,
     nudge: need > 0 ? `Log ${need} more weigh-in${need === 1 ? '' : 's'} to see a trend.` : null,
-    chart: v.points.length ? { points: v.points, trend: v.enough ? v.trend : null, goal: targetW ?? null } : null,
+    // Under 3 weigh-ins the chart is dots only: a line through two of them would look like the
+    // trend the card says it cannot draw yet.
+    chart: v.points.length ? { points: v.points, trend: v.enough ? v.trend : null, goal: targetW ?? null, dotsOnly: !v.enough } : null,
     recent,
   }
 }

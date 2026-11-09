@@ -13,7 +13,9 @@ import statsSrc from './Stats.jsx?raw'
 let host, root
 const NOW = new Date('2026-10-23T12:00:00').getTime()
 const day = 86400000
-const wi = (ago, w) => ({ d: new Date(NOW - ago * day).toISOString().slice(0, 10), t: NOW - ago * day, w })
+// d is the local day of t, as the weigh-in sheet writes it: a weigh-in sits on its day.
+const localDay = ms => { const x = new Date(ms); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}` }
+const wi = (ago, w) => ({ d: localDay(NOW - ago * day), t: NOW - ago * day, w })
 function mount(bodyweight, extra = {}) {
   const st = JSON.parse(JSON.stringify(DEF))
   Object.assign(st, { workouts: [], bodyweight, unit: 'kg' }, extra)

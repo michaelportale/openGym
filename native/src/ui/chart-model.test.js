@@ -88,3 +88,22 @@ test('a zero or tiny width stays finite', () => {
   expect(finite(chartModel({ points: pts([1, 2]), width: 0, height: 0 }))).toBe(true)
   expect(finite(chartModel({ points: [{ t: 5, y: 3 }, { t: 5, y: 4 }], width: 100, height: 100 }))).toBe(true)
 })
+
+test('unsorted points stay inside the plot', () => {
+  // A weigh-in imported late can arrive after a later one: the span is the earliest to the latest.
+  const points = [{ t: 0, y: 1, d: '2026-01-01' }, { t: 2 * DAY, y: 3, d: '2026-01-03' }, { t: DAY, y: 2, d: '2026-01-02' }]
+  const m = chartModel({ points, width: 300, height: 100, pad: 8 })
+  expect(m.dots.map((d) => d.x)).toEqual([8, 292, 150])
+  for (const d of m.dots) {
+    expect(d.x).toBeGreaterThanOrEqual(8)
+    expect(d.x).toBeLessThanOrEqual(292)
+  }
+})
+
+test('dotsOnly draws the dots and no line, even with a trend', () => {
+  const points = pts([10, 20])
+  const m = chartModel({ points, dotsOnly: true, width: 300, height: 100 })
+  expect(m.line).toBeNull()
+  expect(m.dots).toHaveLength(2)
+  expect(chartModel({ points, trend: [{ t: 0, y: 12 }, { t: DAY, y: 18 }], dotsOnly: true, width: 300, height: 100 }).line).toBeNull()
+})

@@ -73,7 +73,7 @@ export default function ProgressBody({ children }) {
               ))}
             </View>
             {card.chart ? (
-              <LineChart points={card.chart.points} trend={card.chart.trend} goal={card.chart.goal} label={chartLabel(range, card.averageLine)} />
+              <LineChart points={card.chart.points} trend={card.chart.trend} goal={card.chart.goal} dotsOnly={card.chart.dotsOnly} label={chartLabel(range, card.averageLine)} />
             ) : null}
             {card.recent.length ? (
               <View style={styles.recent}>

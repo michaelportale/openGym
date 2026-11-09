@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { bodyweightCard } from './bodyweight-card.js'
+import { chartModel } from '../ui/chart-model.js'
 
 const NOW = Date.UTC(2026, 10, 9, 12)
 const day = n => new Date(NOW - n * 86400000).toISOString().slice(0, 10)
@@ -17,6 +18,27 @@ describe('bodyweightCard', () => {
     expect(c.nudge).toBe('Log 1 more weigh-in to see a trend.')
     expect(c.chart.trend).toBeNull()
     expect(c.chart.points).toHaveLength(2)
+  })
+  it('draws dots only under 3 weigh-ins in range', () => {
+    expect(bodyweightCard({ bodyweight: series(2), range: 90, now: NOW }).chart.dotsOnly).toBe(true)
+    expect(bodyweightCard({ bodyweight: series(3), range: 90, now: NOW }).chart.dotsOnly).toBe(false)
+    const two = bodyweightCard({ bodyweight: series(2), range: 90, now: NOW }).chart
+    expect(chartModel({ ...two, width: 300, height: 160 }).line).toBeNull()
+  })
+  it('keeps a late Health import inside the plot', () => {
+    // A typed weigh-in this morning, then a pass this evening imports yesterday's reading.
+    const copy = series(26).slice(0, 25)
+    const today = day(0)
+    const yesterday = day(1)
+    const morning = NOW - 4 * 3600000
+    const bw = [...copy, { d: yesterday, w: 175.5, t: NOW + 8 * 3600000, src: 'health' }, { d: today, w: 175.2, t: morning }]
+    const c = bodyweightCard({ bodyweight: bw, range: 30, now: NOW + 8 * 3600000 + 1 })
+    const m = chartModel({ ...c.chart, width: 300, height: 160, pad: 8 })
+    for (const d of m.dots) {
+      expect(d.x).toBeGreaterThanOrEqual(8)
+      expect(d.x).toBeLessThanOrEqual(292)
+    }
+    expect(m.dots.at(-1).x).toBe(292)
   })
   it('gives the average, week and month lines for ten weigh-ins', () => {
     const c = bodyweightCard({ bodyweight: series(10), range: 90, now: NOW })

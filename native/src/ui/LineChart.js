@@ -7,11 +7,11 @@ import { chartModel } from './chart-model'
 
 const num = (n) => String(Math.round(n * 10) / 10)
 
-// points / trend: [{ t: ms, y: lb, d?: 'YYYY-MM-DD' }] sorted by t. The chart is one image
-// to a screen reader, named by `label`.
-export default function LineChart({ points, trend = null, goal = null, height = 160, label }) {
+// points / trend: [{ t: ms, y: lb, d?: 'YYYY-MM-DD' }]. dotsOnly: no line, only the dots. The
+// chart is one image to a screen reader, named by `label`.
+export default function LineChart({ points, trend = null, goal = null, dotsOnly = false, height = 160, label }) {
   const [width, setWidth] = useState(0)
-  const model = width > 0 ? chartModel({ points, trend, goal, width, height }) : null
+  const model = width > 0 ? chartModel({ points, trend, goal, dotsOnly, width, height }) : null
 
   return (
     <View
