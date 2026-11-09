@@ -11,6 +11,7 @@ import CoverageGlance from '../components/CoverageGlance.jsx'
 import QueueRow from '../components/QueueRow.jsx'
 import { queueOf, queueView, weekTally, pinState } from '../lib/queue.js'
 import { weekWorkouts } from '../lib/week-recap.js'
+import { bodyweightView } from '../lib/bw-view.js'
 import { scheduleModeOf } from '../lib/rotation.js'
 import { useConnectionTrouble } from '../components/SyncBanner.jsx'
 import { Button } from '../components/ui.jsx'
@@ -111,7 +112,7 @@ export default function Home() {
   const weekSummary = `${doneThisWeek}${plannedPerWeek ? ' / ' + plannedPerWeek : ''} ${t('this week')} · ${tn('{0} workout total', '{0} workouts total', S.workouts.length)}`
   const rotStreak = rotationStreak(S, todayISO())
   const weekCount = useMemo(() => weekWorkouts(S.workouts, todayISO(), weekStartOf(S)).length, [S.workouts, S.weekStart])
-  const bwPoints = S.bodyweight.slice(-30).map(b => ({ t: b.t || new Date(b.d).getTime(), y: b.w, d: b.d }))
+  const bwPoints = bodyweightView(S.bodyweight.slice(-30), { range: 0 }).points
 
   // today's session shown right under the week strip
   const onToday = () => { if (S.active) nav('/workout'); else if (todayRoutines.length) startFlow(effectiveRoutineIds(S, todayISO())); else dayOverrideSheet(todayISO()) }
