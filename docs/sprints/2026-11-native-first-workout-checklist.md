@@ -12,7 +12,7 @@ Read this first: the dev build and the Release build share one bundle id, so the
    This writes `native/local/snapshot.json`. It is gitignored. Do not commit it.
    Then check that no exercise of yours will run native double progression. This prints only a number and should print 0:
    `cd native && node --input-type=module -e "import s from './local/snapshot.json' with { type: 'json' }; import { nativeRepPolicy } from './src/science/native-progression.js'; let n = 0; for (const r of s.state.routines) for (const c of r.ex ?? []) if (r.excludeFromProgression !== true && nativeRepPolicy(c, r) === 'double') n++; console.log(n)" 2>/dev/null`
-   A number above 0 means that many exercises will get Next time lines after Finish and will open at the suggested weight. A routine with no progression named counts, because it defaults to double. A pyramid also counts, and it gets no line, so that is a safe false positive.
+   A number above 0 means that many exercises will get Next time lines after Finish and will open at the suggested weight. A routine with no progression named counts, because it defaults to double. A pyramid also counts, and it gets no line, so that is a safe false positive. If it prints nothing at all, the check failed (for example, the snapshot is missing): run it again without the final `2>/dev/null` to see the error.
 3. Find the phone's hardware UDID: `xcrun xctrace list devices`. The CoreDevice identifier from `xcrun devicectl list devices` is rejected by the build.
 4. Unlock the phone. The install works while it is locked, but the app only launches when it is unlocked.
 

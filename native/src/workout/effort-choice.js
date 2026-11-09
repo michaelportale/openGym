@@ -53,8 +53,8 @@ export function rirChipHint(current, choice) {
 
 // The `rir` field a call carries. `rir`: undefined = untouched (nothing written), null = cleared,
 // else the chosen number. A clear removes a logged value (a null field deletes it from the row),
-// and only on an Update (`clear`): a Complete never writes over an earlier value. A warm-up row
-// never gets one.
+// and only when the caller passes `clear` (the keypad's Complete and Update do; null reaches them
+// only from tapping a selected chip). A warm-up row never gets one.
 export function rirFields(row, rir, { clear = false } = {}) {
   if (workoutModel.isWarmupRow(row) || rir === undefined) return { ok: true, fields: {} }
   const v = validateRir(rir)
