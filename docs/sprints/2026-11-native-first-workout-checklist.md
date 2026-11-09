@@ -15,14 +15,14 @@ Read this first: the dev build and the Release build share one bundle id, so the
 
 ## How to kill the app
 
-Swipe up from the bottom edge and pause to open the app switcher. Then swipe the openGym card up. Reopen it from the Home Screen.
+Swipe up from the bottom edge and pause to open the app switcher. Then swipe the openGym card up. Reopen it from the Home Screen. It opens on the Workout tab every time.
 
 ## 1. Install the Release build
 
 - [ ] Run:
   `cd native && LANG=en_US.UTF-8 npx expo run:ios --configuration Release --device <hardware UDID> --no-bundler`
 - [ ] `--no-bundler` is required. Without it Expo starts Metro on 8081, which is taken on this Mac, and its TypeScript check fails on a test fixture.
-- [ ] The app opens on the Workout tab.
+- [ ] The app opens on the Workout tab, not Home.
 - [ ] The example-data banner is absent. If you see "Example data. Your routines are not loaded on this build.", the snapshot is missing. Stop and rebuild.
 
 ## 2. Airplane Mode
@@ -31,7 +31,8 @@ Swipe up from the bottom edge and pause to open the app switcher. Then swipe the
 
 ## 3. Storage check
 
-- [ ] Open Diagnostics and tap Storage check.
+- [ ] Open Diagnostics: on the Workout start screen (no workout open), tap the ··· (More) button at the top right.
+- [ ] Tap Storage check.
 - [ ] It says "Storage check passed".
 
 ## 4. The five kill checks
@@ -43,10 +44,11 @@ Start a workout for these. Kill the app as described above each time.
 - [ ] 3. Left and right. On cable lateral raise, complete the left side. Kill the app and reopen it. Left is still done and the dock asks for the right side.
 - [ ] 4. Finish. Finish the workout. Kill the app and reopen it. The workout is saved and no session is open.
 - [ ] 5. Next workout. Start the next workout. Its exercises open at the weights you just lifted.
+- [ ] Finish or discard that second workout before the Export step. Export only shows on the Workout start screen and on the "Saved on this phone" screen, not while a workout is open.
 
 ## 5. Export
 
-- [ ] Tap Export workouts. The share sheet opens.
+- [ ] On the Workout start screen, tap Export workouts. The share sheet opens.
 - [ ] AirDrop the JSON to the Mac. It arrives and opens as JSON.
 
 ## 6. Airplane Mode off
@@ -56,6 +58,8 @@ Start a workout for these. Kill the app as described above each time.
 ## 7. Before the wipe
 
 - [ ] Every line above has a recorded pass or fail in the PR. Fix any failure before wiping.
+- [ ] From the repository root, `git status` does not list `native/local/`.
+- [ ] The privacy search covers every tracked file in the repository, not only `native/` and `docs/sprints/`: `git grep -n -I -e '<your user id>' -e '<one of your routine ids>' -e '<one of your custom exercise ids>'` prints nothing. Your user id is the part of your data file's name between `state-` and `.json`. Type the real values only in the terminal, never into a tracked file, this one included.
 
 ## 8. The wipe
 
