@@ -5,10 +5,12 @@ import { history, progression, queue, repRange, rotation } from '../shared/train
 import { findExercise } from '../exercises/detail-view.js'
 import { cap } from '../sync/source.js'
 import { sameRoutine } from './routine-guard.js'
-import { applySlotForm, formRanged, moveSlot, policyChoices } from './slot-edit.js'
+import { applySlotForm, failureOnPick, formRanged, moveSlot, policyChoices, stepInvalid } from './slot-edit.js'
 
 export const UNSAFE_EDIT = 'This move or swap has to be made on the web.'
 export const MISSING_ROUTINE = "This routine isn't in your plan any more."
+// The web's own words (sheets.jsx:1808) for a rule whose Step is not positive (slot-edit.js stepInvalid).
+export const STEP_INVALID = 'Enter a positive step to use this progression rule.'
 
 const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v)
 const routinesOf = state => (Array.isArray(state?.routines) ? state.routines.filter(isObj) : [])
@@ -150,12 +152,13 @@ function fieldsOf(form) {
 }
 
 // The sheet's controls for a draft (slotForm). A pyramid is read-only; cardio has no rule to pick
-// (applySlotForm writes none for it).
+// (applySlotForm writes none for it). `invalid`: the message while Save is refused (STEP_INVALID).
 export function sheetView(form, slot, routine) {
   const choices = form.pyramid || form.mode === 'cardio'
     ? null
     : policyChoices(slot, routine).map(c => ({ ...c, selected: c.value === (form.prog || '') }))
-  return { editable: !form.pyramid, pyramid: !!form.pyramid, fields: fieldsOf(form), choices }
+  const invalid = !form.pyramid && stepInvalid(form, slot, routine) ? STEP_INVALID : null
+  return { editable: !form.pyramid, pyramid: !!form.pyramid, fields: fieldsOf(form), choices, invalid }
 }
 
 // One press of a stepper's + (dir 1) or − (dir -1), never below the field's floor.
@@ -167,8 +170,9 @@ export function stepForm(form, key, dir) {
 
 // The draft with another rule picked. Moving onto a range rule fills the range from the reps, as
 // the web's sheet does; between range rules the typed range stays; off one, Save drops repsMin.
+// Picking Greyskull turns Last set to failure on (failureOnPick).
 export function withProg(form, prog, slot, routine) {
-  const next = { ...form, prog }
+  const next = { ...form, prog, lastToFailure: failureOnPick(prog, slot) }
   next.ranged = formRanged(next, slot, routine)
   if (next.ranged && !form.ranged) Object.assign(next, repRange.normalizeRepRange(form.reps, form.repsMin, form.perSide ? 2 : 1))
   return next

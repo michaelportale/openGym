@@ -14,7 +14,7 @@ import SlotSheet from '../../plan/SlotSheet'
 import { waitForPick } from '../../plan/pick-relay'
 import { createWriteChain } from '../../plan/write-chain'
 import { MISSING_ROUTINE, UNSAFE_EDIT, findRoutine, noticeLines, routineView, savedRoutine } from '../../plan/plan-view'
-import { moveSlot, swapSlot } from '../../plan/slot-edit'
+import { moveSlot, stepInvalid, swapSlot } from '../../plan/slot-edit'
 import { usePlan } from '../../plan/use-plan'
 
 const FAILED = "Couldn't save. Try again."
@@ -119,7 +119,8 @@ export default function RoutineScreen() {
   }
 
   const onSave = async form => {
-    if (!live) return
+    // The sheet refuses Save while the Step is invalid; nothing is written then either way.
+    if (!live || stepInvalid(form, slotAt(sheet.routine, sheet.index), sheet.routine)) return
     const next = savedRoutine(sheet.routine, sheet.index, form)
     if (!next) {
       close()

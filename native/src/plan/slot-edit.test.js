@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest'
-import { applySlotForm, formRanged, moveSlot, policyChoices, slotForm, swapSlot } from './slot-edit.js'
+import { applySlotForm, formRanged, moveSlot, policyChoices, slotForm, stepInvalid, swapSlot } from './slot-edit.js'
+import { STEP_INVALID, sheetView, withProg } from './plan-view.js'
 
 const routine = (ex, extra = {}) => ({ id: 'r1', name: 'Push', ex, ...extra })
 const bench = { id: 'bench', sets: 3, reps: 10, weight: 60, mode: 'reps' }
@@ -132,6 +133,109 @@ describe('applySlotForm (sheets.jsx:1875 save)', () => {
     const before = JSON.stringify(slot)
     apply(slot, { sets: 5, prog: '' })
     expect(JSON.stringify(slot)).toBe(before)
+  })
+})
+
+// What the web's rule picker (ProgressionFields) and ExConfig's save do beyond sets, reps and the
+// rule. The phone shows none of these fields: it sets or raises setsMax, lastToFailure and repsMax
+// as the web would, and never removes one.
+describe('triple progression\'s set ceiling (sheets.jsx:1774 picker default, :1943 save)', () => {
+  test('triple gives a slot with no ceiling above its sets min(10, sets + 2)', () => {
+    expect(apply(bench, { prog: 'triple' })).toMatchObject({ prog: 'triple', sets: 3, setsMax: 5 })
+    expect(apply(bench, { prog: 'triple', sets: 9 }).setsMax).toBe(10)
+  })
+  test('a ceiling not above the sets is raised to that default; one above them is kept as it is', () => {
+    expect(apply({ ...bench, setsMax: 3 }, { prog: 'triple' }).setsMax).toBe(5)
+    expect(apply({ ...bench, setsMax: 6 }, { prog: 'triple' }).setsMax).toBe(6)
+    expect(apply({ ...bench, setsMax: 12 }, { prog: 'triple' }).setsMax).toBe(12)
+    expect(apply({ ...bench, prog: 'triple', setsMax: 5 }, { sets: 6 }).setsMax).toBe(8)
+  })
+  test('at 10 sets there is no room above: nothing is written, and a ceiling there is kept, never removed', () => {
+    expect('setsMax' in apply(bench, { prog: 'triple', sets: 10 })).toBe(false)
+    expect(apply({ ...bench, setsMax: 4 }, { prog: 'triple', sets: 10 }).setsMax).toBe(4)
+  })
+  test('the rule in force counts: a routine on triple gives one; other rules leave it alone', () => {
+    expect(apply(bench, { prog: '' }, routine([bench], { prog: 'triple' })).setsMax).toBe(5)
+    expect('setsMax' in apply(bench, { prog: 'double' })).toBe(false)
+    expect(apply({ ...bench, setsMax: 2 }, { prog: 'linear' }).setsMax).toBe(2)
+    expect('setsMax' in apply({ id: 'plank', mode: 'time', sets: 3, sec: 30 }, { prog: 'time' })).toBe(false)
+  })
+})
+
+describe('picking Greyskull (sheets.jsx:1771)', () => {
+  const r = routine([bench])
+  const picked = (slot, prog) => withProg(slotForm(slot, r), prog, slot, r)
+  test('turns Last set to failure on, unless the slot already decided it', () => {
+    expect(picked(bench, 'greyskull').lastToFailure).toBe(true)
+    expect(applySlotForm(bench, picked(bench, 'greyskull'), r)).toMatchObject({ prog: 'greyskull', lastToFailure: true })
+    const off = { ...bench, lastToFailure: false }
+    expect(applySlotForm(off, picked(off, 'greyskull'), r).lastToFailure).toBe(false)
+  })
+  test('only the pick does it: a slot on Greyskull edited otherwise, or a rule picked away again, keeps what the slot had', () => {
+    const gs = { ...bench, prog: 'greyskull' }
+    expect('lastToFailure' in apply(gs, { sets: 4 })).toBe(false)
+    expect('lastToFailure' in applySlotForm(bench, withProg(picked(bench, 'greyskull'), 'linear', bench, r), r)).toBe(false)
+    expect('lastToFailure' in applySlotForm(bench, picked(bench, ''), routine([bench], { prog: 'greyskull' }))).toBe(false)
+  })
+})
+
+describe('a bodyweight rep ceiling (sheets.jsx:1945)', () => {
+  const dip = { id: 'dip', bodyweight: true, sets: 3, reps: 8, weight: 0, repsMax: 12, mode: 'reps' }
+  test('reps above the ceiling raise it to the reps; below it, it is kept', () => {
+    expect(apply(dip, { reps: 15 }).repsMax).toBe(15)
+    expect(apply(dip, { reps: 10 }).repsMax).toBe(12)
+    expect(apply(dip, { prog: 'double', reps: 14, repsMin: 10 }).repsMax).toBe(14)
+  })
+  test('only bodyweight work with no load and a ceiling', () => {
+    expect(apply({ ...dip, weight: 10 }, { reps: 15 }).repsMax).toBe(12)
+    expect(apply({ ...dip, bodyweight: false }, { reps: 15 }).repsMax).toBe(12)
+    const { repsMax: _none, ...noCeiling } = dip
+    expect('repsMax' in apply(noCeiling, { reps: 15 })).toBe(false)
+  })
+})
+
+describe('policyChoices: triple is not offered for bodyweight work with no load (sheets.jsx:1748)', () => {
+  const dip = { id: 'dip', bodyweight: true, sets: 3, reps: 8, weight: 0, mode: 'reps' }
+  const values = slot => policyChoices(slot, routine([slot])).map(c => c.value)
+  test('left out with no load, offered with some, and kept on a slot already on triple', () => {
+    expect(values(dip)).toEqual(['', 'off', 'linear', 'greyskull', 'double'])
+    expect(values({ ...dip, weight: 10 })).toContain('triple')
+    expect(values({ ...dip, prog: 'triple' })).toContain('triple')
+    expect(values({ ...dip, bodyweight: false })).toContain('triple')
+  })
+})
+
+describe('an invalid Step refuses Save (sheets.jsx:1727 progressionStepOf, :1730 progressionStepIsValid, :1735 backoffOffered, :1863, :1876, :2213)', () => {
+  const r = routine([bench])
+  const invalid = (slot, prog) => stepInvalid({ ...slotForm(slot, r), prog }, slot, r)
+  test('a Step of 0 is fine with no rule, and refused for any rule in force', () => {
+    const zero = { ...bench, inc: 0 }
+    expect(invalid(zero, 'off')).toBe(false)
+    expect(invalid(zero, 'linear')).toBe(true)
+    expect(invalid(zero, '')).toBe(true) // follows the routine: linear
+    expect(stepInvalid({ ...slotForm(zero, r), prog: '' }, zero, routine([zero], { prog: 'off' }))).toBe(false)
+  })
+  test('no Step, or a negative one, is the default increment, which is valid', () => {
+    expect(invalid(bench, 'linear')).toBe(false)
+    expect(invalid({ ...bench, inc: -1 }, 'linear')).toBe(false)
+    expect(invalid({ id: 'plank', mode: 'time', sets: 3, sec: 30 }, 'time')).toBe(false)
+    expect(invalid({ id: 'plank', mode: 'time', sets: 3, sec: 30, inc: 0 }, 'time')).toBe(true)
+  })
+  test('back-off sets need a Step even with no rule, where they are offered', () => {
+    const backoff = { ...bench, inc: 0, backoff: true }
+    expect(invalid(backoff, 'off')).toBe(true)
+    expect(invalid({ ...backoff, bodyweight: true }, 'off')).toBe(false)
+    expect(invalid({ ...backoff, intensifier: { type: 'restpause' } }, 'off')).toBe(false)
+  })
+  test('cardio has no rule and no Step to refuse', () => {
+    const run = { id: 'run', mode: 'cardio', sets: 1, min: 30, inc: 0 }
+    expect(invalid(run, '')).toBe(false)
+  })
+  test('the sheet shows the web\'s message while the draft is invalid (sheets.jsx:1808)', () => {
+    const zero = { ...bench, inc: 0 }
+    expect(STEP_INVALID).toBe('Enter a positive step to use this progression rule.')
+    expect(sheetView({ ...slotForm(zero, r), prog: 'linear' }, zero, r).invalid).toBe(STEP_INVALID)
+    expect(sheetView({ ...slotForm(zero, r), prog: 'off' }, zero, r).invalid).toBeNull()
   })
 })
 

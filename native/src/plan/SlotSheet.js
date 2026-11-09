@@ -59,7 +59,9 @@ function Stepper({ field, disabled, onStep }) {
 // slot each time. Save hands the draft (slotForm) to onSave; Cancel writes nothing. Swap acts at
 // once through the caller; while the draft has changes it waits for Save or Cancel, so typed
 // numbers are never dropped. (Move up and Move down are on the routine screen's rows.) `message`
-// is a failed save. `onDismiss` runs once the sheet has gone (the caller pushes the picker then).
+// is a failed save. While the draft's Step is invalid (the web's rule), Save is refused and the
+// web's message shows under the rules. `onDismiss` runs once the sheet has gone (the caller
+// pushes the picker then).
 export default function SlotSheet({ visible, title, slot, routine, message, busy, onSave, onSwap, onClose, onDismiss }) {
   const [initial] = useState(() => slotForm(slot, routine))
   const [form, setForm] = useState(initial)
@@ -112,10 +114,13 @@ export default function SlotSheet({ visible, title, slot, routine, message, busy
               ))}
             </View>
           ) : null}
+          {view.invalid ? (
+            <AppText variant="body" accessibilityRole="alert" accessibilityLiveRegion="polite">{view.invalid}</AppText>
+          ) : null}
 
           {view.editable ? (
             <>
-              <PrimaryButton label="Save" accessibilityHint="Saves this exercise's settings." disabled={busy} onPress={() => onSave(form)} />
+              <PrimaryButton label="Save" accessibilityHint="Saves this exercise's settings." disabled={busy || !!view.invalid} onPress={() => { if (!view.invalid) onSave(form) }} />
               <SecondaryButton label="Cancel" accessibilityHint="Closes without saving." disabled={busy} onPress={close} />
             </>
           ) : (
