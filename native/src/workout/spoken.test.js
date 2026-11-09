@@ -96,7 +96,9 @@ describe('spokenPrimaryHint', () => {
     expect(spokenPrimaryHint('all-done')).toBe('Shows the summary before saving.')
   })
   test("the screen's overnight and unsaved docks say theirs", () => {
-    expect(spokenPrimaryHint('overnight')).toBe('Shows the summary, ending the workout at its last set.')
+    // The suggested end is the last set, or the time it was offered when that set was under 20
+    // minutes before (sessionEnd): the hint says both, never only "at its last set".
+    expect(spokenPrimaryHint('overnight')).toBe('Shows the summary. Ends at your last set, or now if that was under 20 minutes ago.')
     expect(spokenPrimaryHint('finished')).toBe('Shows the summary before saving.')
   })
   // Rest starts only when both sides of a per-side set are done (rest-after.js).

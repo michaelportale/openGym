@@ -85,7 +85,7 @@ const PRIMARY_HINTS = {
 }
 // The screen's own docks, whose buttons set-calls does not route.
 const SCREEN_HINTS = {
-  overnight: 'Shows the summary, ending the workout at its last set.',
+  overnight: 'Shows the summary. Ends at your last set, or now if that was under 20 minutes ago.',
   finished: 'Shows the summary before saving.'
 }
 

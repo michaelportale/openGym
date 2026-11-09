@@ -88,7 +88,8 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
   const dockHeight = pinned ? measured.dock : 0
   const { header, card } = screen
   const overnight = view.disposition?.kind === 'overnight'
-  // An overnight session ends at its last logged work; the engine refuses a finish without an end.
+  // An overnight session ends at the engine's suggested end (its last logged work, or the time it
+  // was offered when that work was under 20 minutes before); the engine refuses a finish without one.
   const finishEnd = overnight ? view.disposition.suggestedEnd ?? view.startedAt : null
   const perHand = shownEntry?.target?.dbLoad === 'each'
   const weightTitle = perHand ? 'Lb each' : 'Lb'
@@ -128,10 +129,10 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
     </View>
   )
 
-  // Overnight, the likely choice is to end last night's workout at its last set, so Finish is
-  // the filled button; Resume and Discard sit under it.
+  // Overnight, the likely choice is to end last night's workout, so Finish is the filled button;
+  // Resume and Discard sit under it. Its label claims no end time: the hint and the sheet say it.
   const dock = overnight ? (
-    <WorkoutDock dock={{ mode: 'overnight', lead: 'Left open overnight', primaryLabel: 'Finish at last set' }} onLayout={measure('dock')} inline={!pinned} onPrimary={() => finish.show(finishEnd)} busy={actions.busy}>
+    <WorkoutDock dock={{ mode: 'overnight', lead: 'Left open overnight', primaryLabel: 'Finish workout' }} onLayout={measure('dock')} inline={!pinned} onPrimary={() => finish.show(finishEnd)} busy={actions.busy}>
       <View style={styles.choices}>
         <IconButton label="Resume" accessibilityLabel="Resume workout" accessibilityHint="Keeps logging sets in this workout." onPress={actions.resume} />
         <IconButton label="Discard" accessibilityLabel="Discard workout" accessibilityHint="Asks before deleting this workout." onPress={actions.askDiscard} />
