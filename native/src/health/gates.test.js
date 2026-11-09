@@ -77,3 +77,12 @@ test('a body mass reading needs a finite quantity and tolerates a missing source
   expect(toBodyMassReading({ uuid: 'u', quantity: 180, startDate: d })).toEqual({ uuid: 'u', lb: 180, at: d, bundleId: null })
   expect(toBodyMassReading({ uuid: 'u', quantity: 180, startDate: d, sourceRevision: { source: { bundleIdentifier: 'b' } } }).bundleId).toBe('b')
 })
+
+test('a volume that is not a finite number leaves the volume key out', () => {
+  for (const volume of [undefined, null, NaN, Infinity]) {
+    const metadata = syncMetadata('x', 5, volume)
+    expect('openGymTotalVolumeLb' in metadata).toBe(false)
+    expect(Object.values(metadata).includes(undefined)).toBe(false)
+  }
+  expect(syncMetadata('x', 5, 0).openGymTotalVolumeLb).toBe(0)
+})

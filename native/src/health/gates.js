@@ -5,7 +5,8 @@ export function gateSyncId(nowMs) {
 }
 
 export function syncMetadata(id, version, volumeLb, { partial } = {}) {
-  const metadata = { HKMetadataKeySyncIdentifier: id, HKMetadataKeySyncVersion: version, openGymTotalVolumeLb: volumeLb }
+  const metadata = { HKMetadataKeySyncIdentifier: id, HKMetadataKeySyncVersion: version }
+  if (Number.isFinite(volumeLb)) metadata.openGymTotalVolumeLb = volumeLb
   if (partial) metadata.openGymVolumePartial = true
   return metadata
 }
