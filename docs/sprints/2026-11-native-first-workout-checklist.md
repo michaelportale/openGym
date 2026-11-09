@@ -143,17 +143,11 @@ Phase 6, Stages A (workouts) and B (weigh-ins). Do it before the wipe, on test w
 
 ## 12. Exercises
 
-Phase 7A. Do it before the wipe, with the Release build. This adds a native dependency (expo-video), so the phone needs a fresh Release build first: `npx expo run:ios --configuration Release …`, the command from step 1. Rows 4 to 7 and 9 need the phone paired with the server (step 10 leaves it unpaired; pair again if needed). Open the Exercises tab.
+Phase 7A, text side. Do it before the wipe, with the Release build. This adds a native dependency (expo-video), so the phone needs a fresh Release build first: `npx expo run:ios --configuration Release …`, the command from step 1. The phone is unpaired here, so exercise screens show text only; the animation checks come after the cutover, in step 14. Open the Exercises tab.
 
 - [ ] Search. Tap the "Search exercises" field and type `db press`. Dumbbell presses are listed, each row showing the name and "target · equipment". A search with no match (try `zzzz`) says `No exercise matches “zzzz”.`, then "Close matches".
 - [ ] Tap with the keyboard up. With the keyboard still showing, tap a row. The exercise screen opens at once, without a first tap that only closes the keyboard.
 - [ ] Text. Clear the search and open Barbell Bench Press. The screen shows Back, the name, tags, the description, and "How to" with numbered steps, plus "Best: …" and "Last time: …" lines if you have logged it.
-- [ ] Animation. Paired, with the server reachable, the animation plays within a few seconds, muted, and the credit line sits under it.
-- [ ] Music. Start music in another app, then open an exercise with an animation. The music keeps playing.
-- [ ] Offline, new exercise. Turn Airplane Mode on. Open an exercise whose animation you have not watched. It shows text only, with no spinner and no error.
-- [ ] Offline, watched exercise. Still in Airplane Mode, open an exercise whose animation you watched earlier. It plays again, from the cache.
-- [ ] A custom exercise. Make one on the web, sync, and find it in the list. Its row says "Yours". Its screen shows its own description and no animation.
-- [ ] Reduce Motion. Turn on Settings, Accessibility, Motion, Reduce Motion. Open an exercise with an animation: the still shows, and a tap plays the clip. Turn it back off.
 - [ ] Diagnostics ends with the media credit line.
 
 ## 13. Before the wipe
@@ -177,6 +171,15 @@ This removes the test workouts so your first real session starts clean.
 - [ ] Do not use "Sign out everywhere" on the web unless you mean to: it also unpairs the phone. The phone then says the server signed it out, keeps every workout, and syncs again after you pair it again.
 
 - [ ] After pairing with the real server, turn Apple Health on in ··· More, Diagnostics and allow access, so real sessions go to Health from then on.
+
+Exercise animations, now that the phone is paired with your real server (read-only checks). Open the Exercises tab.
+
+- [ ] Animation. Open Barbell Bench Press. Within a few seconds the animation plays, muted, with the credit line under it.
+- [ ] Music. Start music in another app, then open an exercise with an animation. The music keeps playing.
+- [ ] Offline, new exercise. Turn Airplane Mode on. Open an exercise whose animation you have not watched. It shows text only, with no spinner and no error.
+- [ ] Offline, watched exercise. Still in Airplane Mode, open an exercise whose animation you watched earlier. It plays again, from the cache. Turn Airplane Mode off.
+- [ ] Reduce Motion. Turn on Settings, Accessibility, Motion, Reduce Motion. Open an exercise with an animation: the still shows, and a tap plays the clip. Turn it back off.
+- [ ] A custom exercise. Do not create one on the web: the phone is the only writer now. If you already have a custom exercise, find it in the list: its row says "Yours" and its screen shows its own description and no animation. Skip this row if you have none.
 
 From here on, do not install a dev build over the Release app. Any test on this phone now writes into the real record.
 
