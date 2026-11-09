@@ -50,14 +50,15 @@ const keyHint = key => (key === 'back' ? 'Deletes the last character.' : 'Types 
 // whether to store a draft. `initialField` is 'w', 'r', or per side 'L.r'/'R.r' (a tapped reps box
 // opens on reps). `weightTitle` is 'Lb each' for a per-hand exercise, which also passes `perHand`
 // so the weight field is spoken "pounds each". A done set passes saveLabel 'Update', onUndo, and
-// no onComplete. A warm-up not done yet passes onRemove, its Remove warm-up. `notice` shows a
+// no onComplete. `completeLabel` and `completeSpoken` are completeLabels(...) (keypad.js): what the
+// Complete button shows and what VoiceOver says. A warm-up not done yet passes onRemove, its Remove warm-up. `notice` shows a
 // write that was refused.
 // `side` is the side Complete logs on a per-side set; Complete waits for its reps and the weight.
 // `weightSetWith` ('L' or 'R') is the side a half-done per-side set's weight was logged with: the
 // weight field and the weight chips take no input, and the sheet opens on the other side's reps.
 // While open, every app state change calls onAppState(next, values, changed), so the caller can
 // keep typed numbers when the app leaves the front (a kill from the app switcher follows).
-export default function KeypadSheet({ visible, title, initial, perSide, side = null, initialField = 'w', weightSetWith = null, weightTitle = 'Lb', perHand = false, saveLabel = 'Save', completeLabel = 'Complete', notice, onSave, onComplete, onUndo, onRemove, onClose, onAppState }) {
+export default function KeypadSheet({ visible, title, initial, perSide, side = null, initialField = 'w', weightSetWith = null, weightTitle = 'Lb', perHand = false, saveLabel = 'Save', completeLabel = 'Complete', completeSpoken, notice, onSave, onComplete, onUndo, onRemove, onClose, onAppState }) {
   const [state, setState] = useState(() => keypadState(initial, initialField, { weightSetWith }))
   useEffect(() => {
     if (visible) setState(keypadState(initial, initialField, { weightSetWith }))
@@ -118,7 +119,7 @@ export default function KeypadSheet({ visible, title, initial, perSide, side = n
           </View>
           {onComplete ? (
             <View style={styles.action}>
-              <PrimaryButton label={completeLabel} disabled={blocked !== null} accessibilityHint={blocked === 'weight' ? 'Enter a weight first.' : blocked === 'reps' ? 'Enter the reps first.' : 'Logs this set.'} onPress={() => onComplete(values)} />
+              <PrimaryButton label={completeLabel} accessibilityLabel={completeSpoken} disabled={blocked !== null} accessibilityHint={blocked === 'weight' ? 'Enter a weight first.' : blocked === 'reps' ? 'Enter the reps first.' : 'Logs this set.'} onPress={() => onComplete(values)} />
             </View>
           ) : null}
         </View>

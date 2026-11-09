@@ -167,7 +167,8 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
         weightTitle={card.weightTitle}
         perHand={card.perHand}
         saveLabel={sheet.mode === 'done' ? 'Update' : 'Save'}
-        completeLabel={sheet.completeLabel}
+        completeLabel={sheet.completeButton?.label}
+        completeSpoken={sheet.completeButton?.spoken}
         notice={sheet.notice}
         onSave={sheet.onSave}
         onComplete={sheet.mode === 'current' ? sheet.onComplete : undefined}

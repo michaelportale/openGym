@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { applyKey, completeBlocker, fieldText, keypadState, keypadValues, sheetCloseAction, weightLockNote } from './keypad.js'
+import { applyKey, completeBlocker, completeLabels, fieldText, keypadState, keypadValues, sheetCloseAction, weightLockNote } from './keypad.js'
 
 const press = (state, ...keys) => keys.reduce(applyKey, state)
 const values = (state, ...keys) => keypadValues(press(state, ...keys))
@@ -131,4 +131,12 @@ test('weightLockNote says which side set the weight', () => {
   expect(weightLockNote('R')).toBe('Set with the right side.')
   expect(weightLockNote(null)).toBeNull()
   expect(weightLockNote(undefined)).toBeNull()
+})
+
+test('completeLabels: a warm-up shows plain Complete and is spoken as the warm-up', () => {
+  expect(completeLabels({ warmup: true })).toEqual({ label: 'Complete', spoken: 'Complete warm-up' })
+  expect(completeLabels({ number: 3 })).toEqual({ label: 'Complete set 3', spoken: 'Complete set 3' })
+  expect(completeLabels({ side: 'L', number: 1 })).toEqual({ label: 'Complete left', spoken: 'Complete left' })
+  expect(completeLabels({ side: 'R', number: 1 })).toEqual({ label: 'Complete right', spoken: 'Complete right' })
+  expect(completeLabels({ side: 'constructor', number: 2 })).toEqual({ label: 'Complete set 2', spoken: 'Complete set 2' })
 })

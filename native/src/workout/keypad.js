@@ -106,6 +106,20 @@ export function completeBlocker(values, side) {
   return reps == null ? 'reps' : null
 }
 
+const SIDE_COMPLETE = { L: 'Complete left', R: 'Complete right' }
+
+// The sheet's Complete button: `label` is what it shows, `spoken` what VoiceOver says. A warm-up
+// shows plain "Complete", which fits on one line in half the row at the default text size (the
+// sheet's title already says Warm-up), and is spoken "Complete warm-up". `side` is the side a
+// per-side set's Complete logs; `number` the work set's number.
+export function completeLabels({ side = null, warmup = false, number = null } = {}) {
+  const sided = Object.hasOwn(SIDE_COMPLETE, side ?? '') ? SIDE_COMPLETE[side] : null
+  if (sided) return { label: sided, spoken: sided }
+  if (warmup) return { label: 'Complete', spoken: 'Complete warm-up' }
+  const text = `Complete set ${number}`
+  return { label: text, spoken: text }
+}
+
 // 'save' when the sheet closes with different numbers than it opened with.
 export function sheetCloseAction(initial, state) {
   return JSON.stringify(keypadValues(initial)) === JSON.stringify(keypadValues(state)) ? 'none' : 'save'

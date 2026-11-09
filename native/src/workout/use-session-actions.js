@@ -5,10 +5,10 @@ import { createEventId } from '../session/ids'
 import { createActionGate } from './action-gate'
 import { pendingRest, restMsFor } from './rest-after'
 import { shownAfterComplete, withTargets } from './session-screen'
+import { completeLabels } from './keypad'
 import { carriedWeight, lockedWeight, shownValues } from './workout-view'
 import { NO_NOTICES, addSetCall, addWarmupCall, completeAfterCommit, completeCall, dockKeypadField, draftCall, editCall, findSet, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightRefusal, primaryAction, removeWarmupCall, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, thrown, undoWrite } from './set-calls'
 
-const sideLabel = { L: 'Complete left', R: 'Complete right' }
 
 // Every write the session screen makes, through one action gate: a tap while a write is in
 // flight is dropped, so a double tap on Complete logs one set. `view` is this render's view (with
@@ -179,7 +179,7 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
       // A half-done per-side set's weight stays the one its first side was logged at.
       weightSetWith: lockedWeight(found.slot.row)?.side ?? null,
       title: `${screen.card.name} · ${row.warmup ? 'Warm-up' : `Set ${row.number}`}`,
-      completeLabel: sideLabel[side] ?? (row.warmup ? 'Complete warm-up' : `Complete set ${row.number}`),
+      completeButton: completeLabels({ side, warmup: row.warmup, number: row.number }),
     })
     setSheetNotice(null)
     setSheetOpen(true)
