@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useFocusEffect } from 'expo-router'
 import snapshot from '../data/snapshot'
 import { openAppDatabase } from '../storage/database'
 import { createSqliteFinishedWorkouts } from '../session/finished-workouts'
 import { createSqliteSessionStorage } from '../session/sqlite-storage'
-import { homeKey, homeKeyStep } from '../sync/sync-triggers'
+import { homeKey, homeKeyStep, reloadsOnFocus } from '../sync/sync-triggers'
 import { useSync } from '../sync/use-sync'
 import { createSqliteServerCopy } from '../sync/server-copy'
 import { createSqliteRoutineEdits } from '../plan/routine-edits'
@@ -53,6 +54,14 @@ export function useWorkoutHome() {
   useEffect(() => {
     reload()
   }, [reload])
+
+  // Back on the tab: the start screen (or the error) reads again, so a routine edit made on the
+  // Plan tab shows. Unpaired nothing else moves the sync key below. Never while a session is open.
+  const status = useRef(home.status)
+  status.current = home.status
+  useFocusEffect(useCallback(() => {
+    if (reloadsOnFocus(status.current)) reload()
+  }, [reload]))
 
   // A sync that pulled (or a pairing, or forgetting) while the start screen is showing reloads it,
   // so routines and next-up reflect the server; one that lands while it loads, once the load is

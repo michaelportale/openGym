@@ -28,6 +28,13 @@ export function homeKeyStep({ seen, next, homeStatus }) {
   return { seen: next, reload: homeStatus === 'start' && seen != null && seen !== next }
 }
 
+// Whether the Workout tab reads its source again when it comes into view: on the start screen or
+// the error screen only, never while a session is open (leaving it reloads) or over a load already
+// running. Unpaired, a routine edit moves no sync key (homeKey), so focus is when it is read.
+export function reloadsOnFocus(homeStatus) {
+  return homeStatus === 'start' || homeStatus === 'error'
+}
+
 export function canPair({ address, code, busy }) {
   return !busy && address.trim() !== '' && code.trim() !== ''
 }

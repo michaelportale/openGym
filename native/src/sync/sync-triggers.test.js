@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { FOREGROUND_GAP_MS, canPair, homeKey, homeKeyStep, serverLines, shouldSyncOnForeground } from './sync-triggers.js'
+import { FOREGROUND_GAP_MS, canPair, homeKey, homeKeyStep, reloadsOnFocus, serverLines, shouldSyncOnForeground } from './sync-triggers.js'
 
 describe('shouldSyncOnForeground', () => {
   const T = 1_000_000
@@ -58,6 +58,18 @@ describe('homeKeyStep', () => {
   })
   test('no status yet changes nothing', () => {
     expect(homeKeyStep({ seen: k(), next: null, homeStatus: 'start' })).toEqual({ seen: k(), reload: false })
+  })
+})
+
+// Unpaired, a routine edit moves no sync key, so a Workout tab already mounted read it only on focus.
+describe('reloadsOnFocus', () => {
+  test('the start screen and the error screen read again when the tab comes into view', () => {
+    expect(reloadsOnFocus('start')).toBe(true)
+    expect(reloadsOnFocus('error')).toBe(true)
+  })
+  test('never while a session is open, and not over a load already running', () => {
+    expect(reloadsOnFocus('session')).toBe(false)
+    expect(reloadsOnFocus('loading')).toBe(false)
   })
 })
 
