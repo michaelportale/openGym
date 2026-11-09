@@ -77,11 +77,12 @@ export function createMemoryRoutineEdits() {
       return [...rows.values()].filter(isPending).sort(byT).map(publicEdit)
     },
     // By rid on any pending row, whatever its t: what went out is what went out, even when a
-    // newer edit was saved after the push read the row.
+    // newer edit was saved after the push read the row. Only while the row's baseTs is the one the
+    // push listed: a fresh put since (an edit on the snapshot) was not built on what went out.
     async markSent(items) {
-      for (const { rid, routine } of items) {
+      for (const { rid, baseTs, routine } of items) {
         const row = rows.get(rid)
-        if (row && isPending(row)) row.sent = JSON.parse(JSON.stringify(routine))
+        if (row && isPending(row) && row.baseTs === (baseTs ?? null)) row.sent = JSON.parse(JSON.stringify(routine))
       }
       return { ok: true }
     },
@@ -206,8 +207,11 @@ export function createSqliteRoutineEdits(db) {
     },
     async markSent(items) {
       await ready()
-      for (const { rid, routine } of items) {
-        await db.run('UPDATE routine_edits SET sent = ? WHERE rid = ? AND acked_at IS NULL AND superseded_at IS NULL', [JSON.stringify(routine), rid])
+      for (const { rid, baseTs, routine } of items) {
+        await db.run(
+          'UPDATE routine_edits SET sent = ? WHERE rid = ? AND base_ts IS ? AND acked_at IS NULL AND superseded_at IS NULL',
+          [JSON.stringify(routine), rid, baseTs ?? null],
+        )
       }
       return { ok: true }
     },

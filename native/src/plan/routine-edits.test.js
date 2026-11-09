@@ -32,7 +32,7 @@ describe.each(Object.entries(makers))('%s routine edits', (_, make) => {
   test('a second put on a pending row keeps baseTs and sent', async () => {
     const s = make()
     await s.put({ rid: 'r1', baseTs: 100, routine: r1, t: 5 })
-    await s.markSent([{ rid: 'r1', t: 5, routine: r1 }])
+    await s.markSent([{ rid: 'r1', t: 5, baseTs: 100, routine: r1 }])
     const edited = { ...r1, name: 'Pull' }
     await s.put({ rid: 'r1', baseTs: 200, routine: edited, t: 6 })
     expect(await s.get('r1')).toEqual({ rid: 'r1', baseTs: 100, routine: edited, sent: r1, t: 6 })
@@ -41,7 +41,7 @@ describe.each(Object.entries(makers))('%s routine edits', (_, make) => {
   test('a put on an acked row is pending again on the caller\'s base, with sent = the acked routine, known to be on the server', async () => {
     const s = make()
     await s.put({ rid: 'r1', baseTs: 100, routine: r1, t: 5 })
-    await s.markSent([{ rid: 'r1', t: 5, routine: { ...r1, name: 'as sent' } }])
+    await s.markSent([{ rid: 'r1', t: 5, baseTs: 100, routine: { ...r1, name: 'as sent' } }])
     await s.markAcked([{ rid: 'r1', t: 5 }], 'a')
     expect(await s.listPending()).toEqual([])
     await s.put({ rid: 'r1', baseTs: 300, routine: { ...r1, name: 'X' }, t: 7 })
@@ -57,7 +57,7 @@ describe.each(Object.entries(makers))('%s routine edits', (_, make) => {
     const s = make()
     // pending, with what a push sent
     await s.put({ rid: 'p', baseTs: 100, routine: { name: 'P' }, t: 1 })
-    await s.markSent([{ rid: 'p', routine: { name: 'P' } }])
+    await s.markSent([{ rid: 'p', baseTs: 100, routine: { name: 'P' } }])
     await s.put({ rid: 'p', baseTs: 7, routine: { name: 'P2' }, t: 2, fresh: true })
     expect(await s.get('p')).toEqual({ rid: 'p', baseTs: 7, routine: { name: 'P2' }, sent: null, t: 2 })
     // acked: no sent from the ack either
@@ -94,9 +94,9 @@ describe.each(Object.entries(makers))('%s routine edits', (_, make) => {
     const s = make()
     await s.put({ rid: 'r1', baseTs: 1, routine: r1, t: 5 })
     // a newer edit was saved after the push read the row: what went out is still recorded
-    await s.markSent([{ rid: 'r1', t: 4, routine: { name: 'in flight' } }])
+    await s.markSent([{ rid: 'r1', t: 4, baseTs: 1, routine: { name: 'in flight' } }])
     expect(await s.get('r1')).toEqual({ rid: 'r1', baseTs: 1, routine: r1, sent: { name: 'in flight' }, t: 5 })
-    await s.markSent([{ rid: 'r1', t: 5, routine: r1 }])
+    await s.markSent([{ rid: 'r1', t: 5, baseTs: 1, routine: r1 }])
     expect((await s.get('r1')).sent).toEqual(r1)
     await s.rebase([{ rid: 'r1', t: 4, baseTs: 9 }])
     expect(await s.get('r1')).toMatchObject({ baseTs: 1, sent: r1 })
@@ -110,10 +110,24 @@ describe.each(Object.entries(makers))('%s routine edits', (_, make) => {
     await s.put({ rid: 'b', baseTs: 1, routine: { name: 'B' }, t: 2 })
     await s.markAcked([{ rid: 'a', t: 1 }], 'x')
     await s.markSuperseded([{ rid: 'b', t: 2, kind: 'changed' }], 'y')
-    await s.markSent([{ rid: 'a', t: 1, routine: { name: 'A' } }, { rid: 'b', t: 2, routine: { name: 'B' } }, { rid: 'zzz', t: 1, routine: {} }])
+    await s.markSent([{ rid: 'a', t: 1, baseTs: 1, routine: { name: 'A' } }, { rid: 'b', t: 2, baseTs: 1, routine: { name: 'B' } }, { rid: 'zzz', t: 1, baseTs: 1, routine: {} }])
     expect((await s.get('a')).sent).toBeNull()
     expect((await s.get('b')).sent).toBeNull()
     expect((await s.list()).map(e => e.rid)).toEqual(['a', 'b'])
+  })
+
+  test('markSent passes over a row whose baseTs is no longer the one the push listed: a fresh put started it over', async () => {
+    const s = make()
+    await s.put({ rid: 'r1', baseTs: 1500, routine: r1, t: 5 })
+    await s.put({ rid: 'r1', baseTs: 1000, routine: { ...r1, name: 'On the snapshot' }, t: 6, fresh: true })
+    await s.markSent([{ rid: 'r1', t: 5, baseTs: 1500, routine: r1 }])
+    expect(await s.get('r1')).toEqual({ rid: 'r1', baseTs: 1000, routine: { ...r1, name: 'On the snapshot' }, sent: null, t: 6 })
+    // a null base matches a null base only
+    await s.put({ rid: 'n', baseTs: null, routine: { name: 'N' }, t: 1 })
+    await s.markSent([{ rid: 'n', t: 1, baseTs: 0, routine: { name: 'N' } }])
+    expect((await s.get('n')).sent).toBeNull()
+    await s.markSent([{ rid: 'n', t: 1, baseTs: null, routine: { name: 'N' } }])
+    expect((await s.get('n')).sent).toEqual({ name: 'N' })
   })
 
   test('markSuperseded leaves listPending and shows in listNotices until dismissed', async () => {
@@ -146,7 +160,7 @@ describe.each(Object.entries(makers))('%s routine edits', (_, make) => {
   test('a put after superseded starts a fresh pending row', async () => {
     const s = make()
     await s.put({ rid: 'r1', baseTs: 1, routine: r1, t: 5 })
-    await s.markSent([{ rid: 'r1', t: 5, routine: r1 }])
+    await s.markSent([{ rid: 'r1', t: 5, baseTs: 1, routine: r1 }])
     await s.markSuperseded([{ rid: 'r1', t: 5, kind: 'changed' }], 'x')
     await s.dismiss('r1')
     await s.put({ rid: 'r1', baseTs: 77, routine: { ...r1, name: 'New' }, t: 8 })
@@ -231,7 +245,7 @@ test('real sqlite: a markSent landing while a put is on its way in is kept, sinc
   db.holdNext(/^INSERT INTO routine_edits/)
   const put = s.put({ rid: 'r1', baseTs: 1, routine: { ...r1, name: 'Pull' }, t: 6 })
   await db.held()
-  await s.markSent([{ rid: 'r1', routine: r1 }])
+  await s.markSent([{ rid: 'r1', baseTs: 1, routine: r1 }])
   db.release()
   expect(await put).toEqual({ ok: true, rid: 'r1', t: 6 })
   expect(await s.get('r1')).toEqual({ rid: 'r1', baseTs: 1, routine: { ...r1, name: 'Pull' }, sent: r1, t: 6 })

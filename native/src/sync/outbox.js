@@ -7,7 +7,8 @@ import { applyRoutineEdits } from '../plan/routine-guard.js'
 // Nothing else is changed, so keys this app does not know survive. The one addition: a document
 // with no unit is sent as pounds, which this app logs in (the web, the carry-over and the MCP
 // read a missing unit as kilograms).
-// `routineEdits` lists the edits this push carries, as sent, for the store's markSent.
+// `routineEdits` lists the edits this push carries, as sent and with the base each was listed on,
+// for the store's markSent.
 export function buildPush(copy, pending, pendingWeighIns = [], pendingRoutineEdits = []) {
   const held = Array.isArray(copy.state.workouts) ? copy.state.workouts : []
   const have = new Set(held.map(w => w?.id))
@@ -36,7 +37,10 @@ export function buildPush(copy, pending, pendingWeighIns = [], pendingRoutineEdi
     },
     baseRev: copy.rev,
     baseWid: copy.wid,
-    // as it goes: the edit's content on the copy's stamps (routine-guard.js)
-    routineEdits: carried.map(({ rid, t }) => ({ rid, t, routine: plan.next.find(r => r?.id === rid) })),
+    // as it goes: the edit's content on the copy's stamps (routine-guard.js), and the listed row's
+    // baseTs, so markSent passes over a row a fresh put started over since
+    routineEdits: carried.map(({ rid, t }) => ({
+      rid, t, baseTs: pendingRoutineEdits.find(e => e.rid === rid && e.t === t).baseTs, routine: plan.next.find(r => r?.id === rid),
+    })),
   }
 }

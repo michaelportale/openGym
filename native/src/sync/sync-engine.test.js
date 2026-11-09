@@ -1482,6 +1482,32 @@ describe('routine edits made on the bundled snapshot', () => {
     expect(await t.routineEdits.listNotices()).toEqual([{ rid: 'r1', name: 'Push', kind: 'changed', at: iso(T0) }])
   })
 
+  // A save on the snapshot (the copy turned unbuildable for the screens) lands between the push
+  // reading the edits and markSent. It was built on the snapshot, not on the edit that went out,
+  // so what went out is not its `sent`: the pull must not take it for the phone's own push.
+  test('a fresh save on the snapshot landing between the push reading the edits and markSent: the pushed edit stands, the web\'s change is kept, with a notice', async () => {
+    const t = await setup({ server: fakeServer(webChangedR1()) })
+    await t.sync.syncNow()
+    const base = (await t.copy.get()).state.routines[0]
+    await t.routineEdits.put(routineEdit(base, setsOn(4), T0 + 1))
+    const markSent = t.routineEdits.markSent
+    let saved = false
+    t.routineEdits.markSent = async items => {
+      if (!saved) {
+        saved = true
+        await t.routineEdits.put({ rid: 'r1', baseTs: SNAP_R1._ts, routine: setsOn(5)(clone(SNAP_R1)), t: T0 + 2, fresh: true })
+      }
+      return markSent(items)
+    }
+    await t.sync.syncNow()
+    t.routineEdits.markSent = markSent
+    t.fresh()
+    await t.sync.syncNow()
+    expect(t.server.routine('r1').ex[0]).toMatchObject({ sets: 4, reps: 6 })
+    expect(await t.routineEdits.listPending()).toEqual([])
+    expect(await t.routineEdits.listNotices()).toEqual([{ rid: 'r1', name: 'Push', kind: 'changed', at: iso(T0) }])
+  })
+
   test('an unpaired edit of a routine unchanged since the snapshot goes on pairing, over an older pending one', async () => {
     const t = await setup({ server: fakeServer({ ...initialDoc(), routines: [clone(SNAP_R1)] }) })
     await t.sync.syncNow()
