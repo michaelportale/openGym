@@ -1,5 +1,5 @@
 import { workoutModel } from '../shared/training.js'
-import { isOvernight } from '../session/timing.js'
+import { isOvernight, projectRest } from '../session/timing.js'
 import { OVERNIGHT_NOTICE, failureText } from './failure-text.js'
 import { completeFields, restEventId } from './rest-after.js'
 import { carriedWeight, isDone, isWarmup, lockedWeight, shownValues } from './workout-view.js'
@@ -97,6 +97,21 @@ export function restAfterComplete(view, setId, restMsOf) {
   const at = found.slot.row.at
   if (!Number.isFinite(at)) return null
   return { eventId: restEventId(setId, at), deadline: at + restMsOf(found.entry) }
+}
+
+// Pause is for a rest still running at `now` (the view may be older than the clock), and Resume
+// for a paused one. Resume is a new rest.start: it counts the frozen time from now, with the
+// rest's total kept so its progress and +30s room stay what they were.
+export function pauseRestCall(view, now, eventId) {
+  if (overnightNow(view, now)) return null
+  return projectRest(view?.rest, now)?.status === 'running' ? { eventId } : null
+}
+
+export function resumeRestCall(view, now, eventId) {
+  if (overnightNow(view, now)) return null
+  const rest = projectRest(view?.rest, now)
+  if (rest?.status !== 'paused') return null
+  return { eventId, deadline: now + rest.remainingMs, totalMs: rest.totalMs }
 }
 
 // A blank field keeps the logged number: a null field would delete it from the row.

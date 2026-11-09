@@ -1,13 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
 import { AccessibilityInfo, Alert } from 'react-native'
 import { workoutModel } from '../shared/training.js'
+import { hapticForWrite } from '../feedback/haptics'
+import { playHaptic } from '../feedback/haptics-adapter'
 import { createEventId } from '../session/ids'
+import { closeOnReturn, typedNumbersKept } from './absence'
 import { createActionGate } from './action-gate'
+import { afterGatedWrite, alertsOffNotice } from './after-write'
 import { completeLabels } from './keypad'
 import { pendingRest, restMsFor } from './rest-after'
 import { shownAfterComplete, withTargets } from './session-screen'
 import { carriedWeight, lockedWeight, shownValues } from './workout-view'
-import { NO_NOTICES, addSetCall, addWarmupCall, completeAfterCommit, completeCall, dockKeypadField, draftCall, editCall, findSet, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightRefusal, primaryAction, removeWarmupCall, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, sheetSide, thrown, undoWrite } from './set-calls'
+import { NO_NOTICES, addSetCall, addWarmupCall, completeAfterCommit, completeCall, dockKeypadField, draftCall, editCall, findSet, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightRefusal, pauseRestCall, primaryAction, removeWarmupCall, restAfterComplete, resultNotice, resumeRestCall, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, sheetSide, thrown, undoWrite } from './set-calls'
+
+// The sessions already told that rest alerts are off. In memory: a relaunch tells again.
+const explainedAlertsOff = new Set()
 
 // Every write the session screen makes, through one action gate: a tap while a write is in
 // flight is dropped, so a double tap on Complete logs one set. `view` is this render's view (with
@@ -17,7 +24,8 @@ import { NO_NOTICES, addSetCall, addWarmupCall, completeAfterCommit, completeCal
 // why in plain words (failureText), and the screen keeps showing the set as it is stored.
 // Overnight is checked inside the gate as each write runs, against the clock then, not when the
 // view was last drawn (write).
-export function useSessionActions({ session, base, restSec, view, screen, shownEntry, setShownIndex }) {
+// `afterWrite` runs once each gated write settles (useRestAlerts' reconcile), outside the gate.
+export function useSessionActions({ session, base, restSec, view, screen, shownEntry, setShownIndex, afterWrite }) {
   const gate = useRef(null)
   if (gate.current == null) gate.current = createActionGate()
   const [busy, setBusy] = useState(false)
@@ -48,27 +56,59 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
   // Which sheet is on screen (its key), read when a write settles: state in a closure is stale.
   const sheetKeys = useRef(0)
   const openKey = useRef(null)
+  // When the app left the front with the sheet open (the first of 'inactive' / 'background').
+  const backgroundedAt = useRef(null)
 
   const restMsOf = entry => restMsFor(entry, restSec)
   const latest = () => withTargets(session.getState().view, base)
 
   // A throw from storage is a refused write too, never an uncaught promise. A write refused
   // overnight reloads the view (writing nothing), so the overnight dock shows without another tap.
-  const act = fn => gate.current(async () => {
-    setBusy(true)
-    try {
-      const result = await fn()
-      if (result?.error?.code === 'overnight') await session.refresh()
-      return result
-    } catch (error) {
-      return thrown(error)
-    } finally {
-      setBusy(false)
-    }
-  })
+  // Once the gate is free, the rest alert is brought in line with the journal: after every write,
+  // not only those that touch rest, so none is missed. It is not awaited and never rejects, so it
+  // changes neither the result nor its notice (afterGatedWrite). A write that started a rest learns
+  // whether alerts are off from the step last read; only one that may ask for permission waits for
+  // the answer (restStartWaits). A dropped tap wrote nothing and reconciles nothing.
+  // The journal's rest, read as the write begins (inside the gate) and again once it has settled:
+  // a rest that began in between is what may ask for notification permission (afterGatedWrite).
+  const restOf = () => session.getState().view?.rest ?? null
+  // After the gate frees, a saved set or a failed write plays its haptic (hapticForWrite); never part
+  // of the write. `action` is what was tapped; `quiet` is a write the owner did not tap (the rest
+  // restored on open): it never buzzes and never counts as a rest start, so it cannot ask for
+  // notification permission (afterGatedWrite).
+  const act = (fn, action, quiet = false) => {
+    let before = null
+    return gate.current(async () => {
+      setBusy(true)
+      try {
+        before = restOf()
+        const result = await fn()
+        if (result?.error?.code === 'overnight') await session.refresh()
+        return result
+      } catch (error) {
+        return thrown(error)
+      } finally {
+        setBusy(false)
+      }
+    }).then(async result => {
+      // Played from the raw gate result, before the alert follow-up: on a session's first rest that
+      // waits behind the notification-permission prompt. The follow-up never changes success or
+      // failure. hapticForWrite is pure and playHaptic catches its own failures, so this never
+      // rejects the write's promise.
+      playHaptic(hapticForWrite(action, result, { tapped: !quiet }))
+      return afterGatedWrite(result, { afterWrite, before, after: restOf, now: Date.now(), quiet })
+    })
+  }
+  // A write that started a rest with alerts off says so, once for each session, unless it has
+  // something else to say: a failure or a warning is never replaced.
   const report = (result, action) => {
     const stamp = nextStamp()
     setNotices(current => noticesAfter(current, result, action, stamp))
+    const off = alertsOffNotice(result, action, base?.id, explainedAlertsOff)
+    if (off) {
+      const notice = nextStamp()(off)
+      setNotices(current => ({ ...current, notice }))
+    }
   }
 
   // Every write but the three overnight choices (Resume, Finish, Discard). Right before it writes,
@@ -77,11 +117,11 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
   // says to choose first.
   // `build(view, now)` makes the write from the engine's latest view through a decision helper
   // given that same clock.
-  const write = build => act(async () => {
+  const write = (build, action, quiet = false) => act(async () => {
     const view = latest()
     const now = Date.now()
     return overnightRefusal(view, now) ?? build(view, now)
-  })
+  }, action, quiet)
 
   // setId and side come from the tap. The commit is awaited first; its rest is named and timed
   // by the row's `at` in the view the commit produced (one side of a per-side set, or a warm-up,
@@ -103,7 +143,7 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
       await session.refresh()
       return refused
     })
-  })
+  }, 'complete')
 
   // The rest the latest completed work set earned and has not had: on open ('rest'), the one a
   // kill between Complete and rest left unstarted; on the Start rest tap ('start-rest'), the one a
@@ -117,14 +157,14 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
     const pending = pendingRest(opened, now, id => restMsOf(opened.entries.find(entry => entry.id === id)))
     if (!pending) return null
     return overnightRefusal(opened, now) ?? session.startRest(pending)
-  }).then(result => report(result, action))
+  }, action, action === 'rest').then(result => report(result, action))
   const restoreRest = () => startPendingRest('rest')
 
   const putDraft = (setId, values) => async (view, now) => {
     const call = draftCall(view, { setId, values, now })
     return call ? session.putDraft(call.setId, call.values) : null
   }
-  const draft = (setId, values) => write(putDraft(setId, values))
+  const draft = (setId, values, quiet = false) => write(putDraft(setId, values), undefined, quiet)
   // The typed numbers kept as the app leaves the front. Through the gate like every write, and the
   // same checks, but it holds the gate for that one draft write and nothing more: no busy flag and
   // no view reload after an overnight refusal (nothing on screen changes while the app leaves; the
@@ -165,6 +205,7 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
     const side = sheetSide(mode, found.slot.row)
     const key = ++sheetKeys.current
     openKey.current = key
+    backgroundedAt.current = null
     setSheet({
       key,
       setId,
@@ -187,6 +228,7 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
   // The sheet stays mounted with its last props while it slides away.
   const closeSheet = () => {
     openKey.current = null
+    backgroundedAt.current = null
     setSheetOpen(false)
   }
   // A refusal stays in the sheet only if that sheet is still open when the write settles;
@@ -219,13 +261,25 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
     // done set it cancels. The sheet is gone, so a refusal shows on the screen.
     onClose: async (values, changed) => {
       closeSheet()
-      if (sheetCloseCall(sheet.mode, changed) === 'draft') report(await draft(sheet.setId, values), 'draft')
+      // Not a tapped write: a failure shows its notice but never buzzes.
+      if (sheetCloseCall(sheet.mode, changed) === 'draft') report(await draft(sheet.setId, values, true), 'draft')
     },
     // The app leaving the front with typed numbers keeps them as a draft through the same gate,
     // so a kill from the app switcher loses nothing. Numbers already kept are not written again
     // (the 'background' after an 'inactive'), so leaving holds the gate for one write. The sheet
     // stays open; a refusal shows in it while it is, else on the screen.
     onAppState: async (appState, values, changed) => {
+      const nowMs = Date.now()
+      if (appState === 'active') {
+        // Back after a long absence: close the sheet, but only once what was typed is safe in the
+        // set's draft (written on 'inactive'); a failed write keeps the sheet open with the numbers.
+        const left = backgroundedAt.current
+        backgroundedAt.current = null
+        const kept = typedNumbersKept(changed, findSet(latest(), sheet.setId)?.slot.draft, values)
+        if (closeOnReturn({ left, now: nowMs, kept }) && openKey.current === sheet.key) closeSheet()
+        return
+      }
+      if (backgroundedAt.current == null && (appState === 'inactive' || appState === 'background')) backgroundedAt.current = nowMs
       const stored = findSet(latest(), sheet.setId)?.slot.draft
       if (sheetBackgroundCall(appState, sheet.mode, changed, { values, stored }) !== 'draft') return
       const { key, setId } = sheet
@@ -254,7 +308,7 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
 
   const discardNow = async () => {
     setFinishing(null)
-    report(await act(() => session.discard()), 'discard')
+    report(await act(() => session.discard(), 'discard'), 'discard')
   }
 
   const dockActions = {
@@ -268,6 +322,17 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
     },
     onPressLead: () => openSheet(screen.dock.setId, dockKeypadField(screen.dock.mode)),
     onAddTime: async () => report(await write(() => session.extendRest({ eventId: createEventId(), byMs: 30_000 })), 'add-time'),
+    // Pause freezes the time left; Resume starts it counting again from now. Both are decided on the
+    // engine's latest view at the clock as the write runs, so a tap on a rest that ended, or one
+    // already paused, writes nothing.
+    onPause: async () => report(await write(async (view, now) => {
+      const call = pauseRestCall(view, now, createEventId())
+      return call ? session.pauseRest(call) : null
+    }), 'pause-rest'),
+    onResume: async () => report(await write(async (view, now) => {
+      const call = resumeRestCall(view, now, createEventId())
+      return call ? session.startRest(call) : null
+    }), 'resume-rest'),
     onSkip: async () => report(await write(() => session.cancelRest({ eventId: createEventId() })), 'skip-rest'),
   }
 
@@ -294,7 +359,7 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
       close: () => setFinishing(null),
       confirm: async () => {
         const end = finishing?.end
-        const result = await act(() => session.finishSession({ sender: async () => ({ saved: true }), ...(end != null ? { end } : {}) }))
+        const result = await act(() => session.finishSession({ sender: async () => ({ saved: true }), ...(end != null ? { end } : {}) }), 'finish')
         if (result?.ignored) return
         // Opened before midnight, saved after it: refused, and the view is reloaded. The sheet
         // takes the overnight end and says why; the next Save is the overnight Finish.

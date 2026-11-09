@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { NO_NOTICES, OVERNIGHT_NOTICE, PAST_MIDNIGHT, addSetCall, addWarmupCall, completeAfterCommit, completeCall, completeResult, dockKeypadField, draftCall, editCall, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightNow, overnightRefusal, primaryAction, removeWarmupCall, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, sheetSide, thrown, undoCall, undoWrite, writeOutcome, findSet } from './set-calls.js'
+import { NO_NOTICES, OVERNIGHT_NOTICE, PAST_MIDNIGHT, addSetCall, addWarmupCall, completeAfterCommit, completeCall, completeResult, dockKeypadField, draftCall, editCall, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightNow, overnightRefusal, pauseRestCall, resumeRestCall, primaryAction, removeWarmupCall, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, sheetSide, thrown, undoCall, undoWrite, writeOutcome, findSet } from './set-calls.js'
 import { shownValues, workoutScreen } from './workout-view.js'
 import { pendingRest, restEventId, restMsFor } from './rest-after.js'
 import { withTargets } from './session-screen.js'
@@ -1390,5 +1390,69 @@ describe.each(SQLITE_DRIVERS)('%s: a view drawn before midnight takes no write a
     const saved = await session.finishSession({ sender, end: retarget.end })
     expect(saved).toMatchObject({ ok: true, saved: true })
     expect(saved.payload.workout).toMatchObject({ start, end: lastSet })
+  })
+})
+
+describe('pauseRestCall and resumeRestCall', () => {
+  const rest = (status, extra = {}) => ({ ...view([]), rest: { status, deadline: 200_000, remainingMs: 64_000, totalMs: 120_000, ...extra } })
+  test('pause is only for a running rest', () => {
+    expect(pauseRestCall(rest('running'), 140_000, 'p1')).toEqual({ eventId: 'p1' })
+    expect(pauseRestCall(rest('paused'), 140_000, 'p1')).toBeNull()
+    expect(pauseRestCall(rest('complete', { deadline: 100_000, remainingMs: 0 }), 140_000, 'p1')).toBeNull()
+    expect(pauseRestCall(view([]), 140_000, 'p1')).toBeNull()
+    expect(pauseRestCall(null, 140_000, 'p1')).toBeNull()
+  })
+  test('a running rest whose deadline has passed cannot be paused', () => {
+    expect(pauseRestCall(rest('running'), 200_000, 'p1')).toBeNull()
+    expect(pauseRestCall(rest('running'), 900_000, 'p1')).toBeNull()
+  })
+  test('resume is only for a paused rest, and restarts it from now with its total kept', () => {
+    expect(resumeRestCall(rest('paused'), 500_000, 'r1')).toEqual({ eventId: 'r1', deadline: 564_000, totalMs: 120_000 })
+    expect(resumeRestCall(rest('running'), 500_000, 'r1')).toBeNull()
+    expect(resumeRestCall(rest('complete'), 500_000, 'r1')).toBeNull()
+    expect(resumeRestCall(view([]), 500_000, 'r1')).toBeNull()
+  })
+  test('a write at midnight is refused first, so the gate never reaches these calls', () => {
+    const night = { ...rest('running'), activityAt: Date.parse('2026-11-09T23:50:00-05:00'), timeZone: 'America/New_York' }
+    expect(pauseRestCall(night, Date.parse('2026-11-10T00:10:00-05:00'), 'p1')).toBeNull()
+    expect(resumeRestCall({ ...night, rest: { ...night.rest, status: 'paused' } }, Date.parse('2026-11-10T00:10:00-05:00'), 'r1')).toBeNull()
+  })
+})
+
+describe.each(SQLITE_DRIVERS)('%s: pausing a rest survives a kill', (_name, createDb) => {
+  const T0 = Date.parse('2026-11-09T17:00:00.000Z')
+  const engineBase = () => ({
+    id: 'sess-p', d: '2026-11-09', start: T0, name: 'Push A', routineIds: ['push-a'],
+    entries: [{ id: 'bench', target: { restSec: 120 }, sets: [todo(75, 8), todo(75, 8)] }],
+  })
+  let clock = T0
+  const open = async (db, withBase = true) => {
+    const controller = createSessionController(sessionOptionsFrom({ db, base: withBase ? engineBase() : null, now: () => clock, timeZone: 'UTC' }))
+    await controller.open()
+    return controller
+  }
+  const current = controller => withTargets(controller.getState().view, engineBase())
+
+  test('pause, kill: still paused with the same time; resume after the kill counts from the resume', async () => {
+    clock = T0
+    let db = createDb()
+    const first = await open(db)
+    await first.call('startRest', { eventId: 'rs', deadline: T0 + 120_000, totalMs: 120_000 })
+    clock = T0 + 56_000
+    const pause = pauseRestCall(current(first), clock, 'p1')
+    expect((await first.call('pauseRest', pause)).saved).toBe(true)
+    db = db.reopen()
+    clock = T0 + 600_000
+    const second = await open(db, false)
+    expect(second.getState().view.rest).toMatchObject({ status: 'paused', remainingMs: 64_000, totalMs: 120_000 })
+    // Pausing again writes nothing.
+    expect(pauseRestCall(current(second), clock, 'p2')).toBeNull()
+    const resume = resumeRestCall(current(second), clock, 'r1')
+    expect(resume).toEqual({ eventId: 'r1', deadline: clock + 64_000, totalMs: 120_000 })
+    expect((await second.call('startRest', resume)).saved).toBe(true)
+    expect(second.getState().view.rest).toMatchObject({ status: 'running', remainingMs: 64_000, deadline: clock + 64_000 })
+    clock += 70_000
+    const third = await open(db.reopen(), false)
+    expect(third.getState().view.rest).toMatchObject({ status: 'complete', remainingMs: 0 })
   })
 })

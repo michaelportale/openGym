@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { AppState, ScrollView, StyleSheet, View } from 'react-native'
-import { localDate } from '../session/timing'
+import Animated from 'react-native-reanimated'
+import { hapticFor, restEndedNow } from '../feedback/haptics'
+import { playHaptic } from '../feedback/haptics-adapter'
+import { useRestAlerts } from '../notify/use-rest-alerts'
+import { localDate, projectRest } from '../session/timing'
 import { useActiveSession } from '../session/use-active-session'
 import { color, space } from '../theme/tokens'
 import AppText from '../ui/AppText'
@@ -20,6 +24,7 @@ import { useSessionActions } from './use-session-actions'
 import { deviceTimeZone } from './use-workout-home'
 import { currentExerciseIndex, workoutScreen } from './workout-view'
 import WorkoutDock from './WorkoutDock'
+import { useFadeIn } from '../ui/use-fade-in'
 
 const nameOf = (names, id) => names[id]?.name ?? `Unknown exercise (${id})`
 
@@ -45,10 +50,27 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
   const index = shownIndex == null ? currentExerciseIndex(view) : Math.min(shownIndex, Math.max(0, count - 1))
   const screen = view ? workoutScreen(view, { names, lastTimes, exerciseIndex: index, title: base?.name }) : null
   const shownEntry = view?.entries?.[index] ?? null
-  const actions = useSessionActions({ session, base, restSec: state.restSec ?? 90, view, screen, shownEntry, setShownIndex })
+  const cardEntering = useFadeIn(screen ? index : undefined)
+  // The rest alert follows the journal: reconciled when the session opens or ends (saved,
+  // discarded), on each return to the app, and after every write. Opening and each return read the
+  // notification permission again (Settings may have changed it while the app was away).
+  const alerts = useRestAlerts({ session, sessionId: base?.id, names })
+  const actions = useSessionActions({ session, base, restSec: state.restSec ?? 90, view, screen, shownEntry, setShownIndex, afterWrite: alerts })
+
+  // A rest that ends while the app is active buzzes once (the alert is suppressed while active, so
+  // this is the only signal; in front but inactive, the alert shows instead). `prev` is the last
+  // tick's projection; returning from the background clears it, so a rest that expired meanwhile
+  // does not buzz.
+  const lastRest = useRef(null)
+  const restNow = projectRest(view?.rest, now)
+  useEffect(() => {
+    if (restEndedNow(lastRest.current, restNow, AppState.currentState === 'active')) playHaptic(hapticFor('rest-ended'))
+    lastRest.current = restNow
+  }, [now])
 
   const restored = useRef(false)
   useEffect(() => {
+    if (session.status !== 'loading') alerts({ fresh: session.status === 'ready' })
     if (session.status !== 'ready' || restored.current) return
     restored.current = true
     if (view?.status === 'active') actions.restoreRest()
@@ -61,6 +83,13 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
   // after a kill) so an overnight session asks before any set is logged.
   useEffect(() => {
     const sub = AppState.addEventListener('change', next => {
+      // The 1-second tick is suspended in the background: the first frame back reads the clock
+      // now, so the rest and elapsed time are current rather than a tick behind.
+      lastRest.current = null
+      if (next === 'active') {
+        setNow(Date.now())
+        alerts({ fresh: true })
+      }
       const zone = read.current.view?.timeZone ?? deviceTimeZone()
       if (next === 'active' && read.current.view && localDate(Date.now(), zone) !== localDate(read.current.at, zone)) onExit()
     })
@@ -150,7 +179,9 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
       <ScrollView style={styles.screen} contentContainerStyle={{ paddingBottom: dockHeight }} scrollIndicatorInsets={{ bottom: dockHeight }}>
         {pinned ? null : head}
         <View style={styles.body}>
-          <ExerciseCard {...card} onPressRow={actions.openSheet} onAddSet={actions.addSet} onAddWarmup={actions.addWarmup} />
+          <Animated.View key={index} entering={cardEntering}>
+            <ExerciseCard {...card} onPressRow={actions.openSheet} onAddSet={actions.addSet} onAddWarmup={actions.addWarmup} />
+          </Animated.View>
           {upNext ? <UpNextRow name={nameOf(names, upNext.id)} onPress={() => move(1)} /> : null}
         </View>
         {pinned ? null : dock}

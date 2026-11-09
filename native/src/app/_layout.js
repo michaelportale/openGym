@@ -1,8 +1,13 @@
-import { Stack, ThemeProvider, DarkTheme } from 'expo-router'
+import { useEffect } from 'react'
+import { Stack, ThemeProvider, DarkTheme, router } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
+import { onRestAlertTap, setRestAlertHandler } from '../notify/notifications'
 import { color } from '../theme/tokens'
 
 export const unstable_settings = { anchor: '(tabs)' }
+
+// A rest alert arriving while the app is open is not presented: the dock shows the rest ending.
+setRestAlertHandler()
 
 const theme = {
   ...DarkTheme,
@@ -10,6 +15,9 @@ const theme = {
 }
 
 export default function RootLayout() {
+  // A tap on a rest alert opens the Workout tab and writes nothing: the screen there reads the
+  // journal as it always does.
+  useEffect(() => onRestAlertTap(() => router.navigate('/')), [])
   return (
     <ThemeProvider value={theme}>
       <Stack screenOptions={{ headerShown: false }}>

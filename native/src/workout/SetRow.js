@@ -1,8 +1,12 @@
+import { useLayoutEffect, useRef } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
+import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated'
 import { color, radius, size, space, touch } from '../theme/tokens'
 import NativeSymbol from '../ui/NativeSymbol'
 import AppText from '../ui/AppText'
+import { donePop } from '../ui/done-transition'
 import ScaleButton from '../ui/ScaleButton'
+import { useMotion } from '../ui/use-motion'
 import { setRowView } from './set-row-view'
 
 const MARKERS = {
@@ -48,13 +52,33 @@ function Box({ text, label, hint, look, onPress }) {
 // Last value and the done mark, so those cells are not stops of their own.
 const HIDDEN = { accessibilityElementsHidden: true, importantForAccessibility: 'no-hide-descendants' }
 
+// The marker, popping in (scale and fade) when `pop` is set: the card saw this set open and the
+// view now shows it done, which only happens after the durable write. The card decides, because
+// this row swaps its root element when it stops being open and so remounts; the remounted marker's
+// Reduce Motion flag starts from the value already read. donePop decides once, where `pop` turns
+// on. Nothing waits on it; a new pop retargets the running one. The zero-length first step starts a
+// marker already on screen from 0, before the frame is drawn (a layout effect), so it never shows
+// full size first.
+function Marker({ pop, children }) {
+  const { duration } = useMotion()
+  const wasPop = useRef(false)
+  const start = donePop(wasPop.current, pop, duration('press'))
+  const progress = useSharedValue(start.from)
+  useLayoutEffect(() => {
+    wasPop.current = pop
+    if (start.ms > 0) progress.value = withSequence(withTiming(0, { duration: 0 }), withTiming(1, { duration: start.ms }))
+  }, [pop])
+  const style = useAnimatedStyle(() => ({ opacity: 0.4 + 0.6 * progress.value, transform: [{ scale: 0.7 + 0.3 * progress.value }] }))
+  return <Animated.View style={style}>{children}</Animated.View>
+}
+
 const plain = (text, tone) => <AppText variant="value" color={tone}>{text}</AppText>
 
 // Takes a row of `workoutScreen(...).card.rows`. `onPress(setId, field)` opens the keypad
 // ('w' or 'r'); on a done or pending row the whole row is the target. `sideDone` marks a
 // per-side set with one side logged. `label` is the set number, or 'W' on a warm-up. `perHand`
-// says the weight is per hand.
-export default function SetRow({ setId, number, label, warmup, perSide, perHand, weightText, repsText, lastText, status, sideDone, onPress }) {
+// says the weight is per hand. `pop` animates the Done mark (see Marker).
+export default function SetRow({ setId, number, label, warmup, perSide, perHand, weightText, repsText, lastText, status, sideDone, pop, onPress }) {
   const view = setRowView({ number, weight: weightText, reps: repsText, status, lastText, sideDone, warmup, perSide, perHand })
   const marker = MARKERS[view.marker]
   const tone = status === 'done' ? color.textSecondary : color.text
@@ -90,7 +114,9 @@ export default function SetRow({ setId, number, label, warmup, perSide, perHand,
             {view.sideMark.text}
           </AppText>
         ) : (
-          <NativeSymbol name={marker.name} tintColor={marker.tint} weight={marker.weight} size={size.marker} />
+          <Marker pop={pop}>
+            <NativeSymbol name={marker.name} tintColor={marker.tint} weight={marker.weight} size={size.marker} />
+          </Marker>
         )}
       </View>
     </>
