@@ -210,6 +210,15 @@ export function sheetMode(status) {
   return status === 'done' || status === 'current' ? status : 'pending'
 }
 
+// The side a sheet's Complete logs: on the current set of a per-side row, its next side (left until
+// left is done, then right), read from the row itself. On a work set that is the dock's side; a
+// per-side warm-up (the web plans them on a per-side exercise) has its own, whatever the work sets
+// are doing. Null for a plain row, or a sheet that does not complete.
+export function sheetSide(mode, row) {
+  if (mode !== 'current' || !isSideSet(row)) return null
+  return row.sides.L?.done === true ? 'R' : 'L'
+}
+
 // Swiping the sheet away (or Close) after typing keeps a draft for any set not done yet, as its
 // Save would. On a done set it cancels: only Update edits a logged set.
 export function sheetCloseCall(mode, changed) {

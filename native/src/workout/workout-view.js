@@ -228,8 +228,9 @@ export function workoutScreen(view, { names = {}, lastTimes = {}, exerciseIndex,
       repsText: repsText(slot),
       lastText: DASH,
       status: finished ? 'done' : isCurrent ? 'current' : 'pending',
-      perSide: false,
-      sideDone: null,
+      // A planned warm-up on a per-side exercise is per side, each side logged on its own.
+      perSide: isSideSet(slot.row),
+      sideDone: sideDoneOf(slot.row),
       warmup: true,
     }
   })

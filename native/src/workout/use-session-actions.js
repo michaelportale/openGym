@@ -7,7 +7,7 @@ import { completeLabels } from './keypad'
 import { pendingRest, restMsFor } from './rest-after'
 import { shownAfterComplete, withTargets } from './session-screen'
 import { carriedWeight, lockedWeight, shownValues } from './workout-view'
-import { NO_NOTICES, addSetCall, addWarmupCall, completeAfterCommit, completeCall, dockKeypadField, draftCall, editCall, findSet, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightRefusal, primaryAction, removeWarmupCall, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, thrown, undoWrite } from './set-calls'
+import { NO_NOTICES, addSetCall, addWarmupCall, completeAfterCommit, completeCall, dockKeypadField, draftCall, editCall, findSet, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightRefusal, primaryAction, removeWarmupCall, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, sheetSide, thrown, undoWrite } from './set-calls'
 
 // Every write the session screen makes, through one action gate: a tap while a write is in
 // flight is dropped, so a double tap on Complete logs one set. `view` is this render's view (with
@@ -161,7 +161,8 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
     if (!found || !row) return
     const mode = sheetMode(row.status)
     const perSide = workoutModel.isSideSet(found.slot.row)
-    const side = mode === 'current' && perSide ? screen.dock.side : null
+    // The row's own next side: a per-side warm-up has its own, apart from the work set's.
+    const side = sheetSide(mode, found.slot.row)
     const key = ++sheetKeys.current
     openKey.current = key
     setSheet({

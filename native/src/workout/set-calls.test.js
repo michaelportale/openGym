@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { NO_NOTICES, OVERNIGHT_NOTICE, PAST_MIDNIGHT, addSetCall, addWarmupCall, completeAfterCommit, completeCall, completeResult, dockKeypadField, draftCall, editCall, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightNow, overnightRefusal, primaryAction, removeWarmupCall, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, thrown, undoCall, undoWrite, writeOutcome, findSet } from './set-calls.js'
+import { NO_NOTICES, OVERNIGHT_NOTICE, PAST_MIDNIGHT, addSetCall, addWarmupCall, completeAfterCommit, completeCall, completeResult, dockKeypadField, draftCall, editCall, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightNow, overnightRefusal, primaryAction, removeWarmupCall, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, sheetSide, thrown, undoCall, undoWrite, writeOutcome, findSet } from './set-calls.js'
 import { shownValues, workoutScreen } from './workout-view.js'
 import { pendingRest, restEventId, restMsFor } from './rest-after.js'
 import { withTargets } from './session-screen.js'
@@ -814,6 +814,47 @@ describe('dockKeypadField', () => {
     expect(dockKeypadField('enter-reps')).toBe('r')
     expect(dockKeypadField('enter-weight')).toBe('w')
     expect(dockKeypadField('ready')).toBe('w')
+  })
+})
+
+// The side a sheet's Complete logs comes from the row itself, so a per-side warm-up (planned by
+// the web's insertWarmupRow) logs left, then right, whatever the work sets are doing.
+describe('sheetSide', () => {
+  const T = Date.parse('2026-11-09T18:00:00.000Z')
+  const sidedWarm = (setId, L, R) => warm(setId, sided(20, L, R))
+  const rowOf = (v, setId) => workoutScreen(v, { names: {}, lastTimes: {} }).card.rows.find(r => r.setId === setId)
+  test('a per-side warm-up completes left, then right', () => {
+    const fresh = view([lateral([sidedWarm('w', { r: 5, done: false }, { r: 5, done: false }), slot('s', sided(7.5, { r: 10, done: false }, { r: 10, done: false }))])])
+    const mode = sheetMode(rowOf(fresh, 'w').status)
+    expect(mode).toBe('current')
+    expect(sheetSide(mode, findSet(fresh, 'w').slot.row)).toBe('L')
+    expect(completeCall(fresh, { setId: 'w', side: 'L', eventId: 'e1', now: T }).fields.sides).toMatchObject({ L: { done: true, r: 5 }, R: { done: false } })
+    const half = view([lateral([sidedWarm('w', { r: 5, done: true }, { r: 5, done: false }), slot('s', sided(7.5, { r: 10, done: false }, { r: 10, done: false }))])])
+    expect(sheetSide(sheetMode(rowOf(half, 'w').status), findSet(half, 'w').slot.row)).toBe('R')
+    expect(completeCall(half, { setId: 'w', side: 'L', eventId: 'e2', now: T })).toBeNull()
+    expect(completeCall(half, { setId: 'w', side: 'R', eventId: 'e2', now: T }).fields.sides).toMatchObject({ L: { done: true }, R: { done: true, r: 5 } })
+  })
+  test('after every work set is done, a per-side warm-up still offers its own side', () => {
+    const v = view([lateral([sidedWarm('w', { r: 5, done: false }, { r: 5, done: false }), slot('s', sided(7.5, { r: 10, done: true }, { r: 10, done: true }))])])
+    expect(workoutScreen(v, { names: {}, lastTimes: {} }).dock.side).toBeNull()
+    expect(sheetSide(sheetMode(rowOf(v, 'w').status), findSet(v, 'w').slot.row)).toBe('L')
+  })
+  test("on a work set it is the dock's side, at every step", () => {
+    const steps = [
+      [{ r: 10, done: false }, { r: 10, done: false }],
+      [{ r: 10, done: true }, { r: 10, done: false }],
+      [{ r: 10, done: false }, { r: 10, done: true }],
+    ]
+    for (const [L, R] of steps) {
+      const v = view([lateral([slot('s', sided(7.5, L, R))])])
+      const screen = workoutScreen(v, { names: {}, lastTimes: {} })
+      expect(sheetSide(sheetMode(rowOf(v, 's').status), findSet(v, 's').slot.row)).toBe(screen.dock.side)
+    }
+  })
+  test('none for a plain set, a done set, or one that is not current', () => {
+    expect(sheetSide('current', todo(75, 8))).toBeNull()
+    expect(sheetSide('done', sided(7.5, { r: 10, done: true }, { r: 10, done: true }))).toBeNull()
+    expect(sheetSide('pending', sided(7.5, { r: 10, done: false }, { r: 10, done: false }))).toBeNull()
   })
 })
 

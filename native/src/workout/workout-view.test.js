@@ -296,6 +296,14 @@ describe('warm-ups', () => {
     expect(card.rows[0]).toMatchObject({ setId: 'w', weightText: '45', repsText: '10', lastText: '–', perSide: false, sideDone: null })
     expect(card.rows[1]).toMatchObject({ setId: 'a', lastText: '75 × 10' })
   })
+  // A planned warm-up on a per-side exercise is per side too (the web's insertWarmupRow).
+  test('a per-side warm-up is a per-side row that marks its logged side', () => {
+    const sidedWarm = (L, R) => set('w', { ...sided(20, L, R), phase: 'warmup', warmup: true }, { warmup: true })
+    const open = screen(view([bench([sidedWarm({ r: 5, done: false }, { r: 5, done: false }), set('a', todo(75, 8))])])).card.rows[0]
+    expect(open).toMatchObject({ setId: 'w', warmup: true, perSide: true, sideDone: null, status: 'current' })
+    const half = screen(view([bench([sidedWarm({ r: 5, done: true }, { r: 5, done: false }), set('a', todo(75, 8))])])).card.rows[0]
+    expect(half).toMatchObject({ setId: 'w', warmup: true, perSide: true, sideDone: 'L', status: 'current' })
+  })
   test("the dock's Set 1 ignores a done warm-up, and an open one is never the dock's set", () => {
     expect(screen(view([bench([warm('w', done(45, 10)), set('a', todo(75, 8))])])).dock)
       .toMatchObject({ mode: 'ready', lead: 'Set 1 · 75 lb × 8', primaryLabel: 'Complete set 1', setId: 'a' })
