@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { useRouter } from 'expo-router'
-import { color, radius, space, touch } from '../theme/tokens'
+import { color, radius, size, space, touch } from '../theme/tokens'
 import AppText from '../ui/AppText'
 import Card from '../ui/Card'
 import LineChart from '../ui/LineChart'
@@ -10,8 +10,11 @@ import { afterPaint } from '../ui/after-paint'
 import { usePushLock } from '../ui/use-push-lock'
 import WhySheet from '../workout/WhySheet'
 import { whyEntry } from '../workout/why-entry'
+import { localDate } from '../session/timing'
+import NativeSymbol from '../ui/NativeSymbol'
 import { bodyweightCard } from './bodyweight-card'
 import { chartLabel, RANGES } from './chart-label'
+import { measurementsRow, nutritionRow } from './link-rows'
 import { liftRows, liftsCard, strengthRows } from './lifts-view'
 import { useProgress } from './use-progress'
 
@@ -26,8 +29,14 @@ function WhyLink({ label, hint, onPress }) {
   )
 }
 
-// The Progress tab's cards, between the header and the placeholder card. `children` is the Today
-// line and Log weight button, which sit at the top of the Body weight card.
+// The two screens Progress opens, below Your lifts: their routes and what VoiceOver's hint says.
+const LINKS = [
+  { key: 'nutrition', title: 'Nutrition', href: '/nutrition', hint: 'Opens Nutrition.' },
+  { key: 'measurements', title: 'Measurements', href: '/measurements', hint: 'Opens Body measurements.' },
+]
+
+// The Progress tab's cards, under the header, then the Nutrition and Measurements rows. `children`
+// is the Today line and Log weight button, which sit at the top of the Body weight card.
 export default function ProgressBody({ children }) {
   const router = useRouter()
   const guard = usePushLock()
@@ -43,6 +52,13 @@ export default function ProgressBody({ children }) {
   const [rows, setRows] = useState(null)
   useEffect(() => (state ? afterPaint(() => setRows(liftRows(state))) : undefined), [state])
   const lifts = liftsCard(state, rows)
+  // Each row's line, once per state (the source key moves at midnight, so today is read again then).
+  const links = useMemo(() => {
+    if (!state) return null
+    const now = Date.now()
+    const today = localDate(now, Intl.DateTimeFormat().resolvedOptions().timeZone)
+    return { nutrition: nutritionRow(state, { today }), measurements: measurementsRow(state, { now }) }
+  }, [state])
 
   return (
     <>
@@ -132,6 +148,28 @@ export default function ProgressBody({ children }) {
         </Card>
       ) : null}
 
+      <Card style={[styles.card, styles.lifts]}>
+        {LINKS.map((l, i) => {
+          const r = links?.[l.key]
+          return (
+            <Pressable
+              key={l.key}
+              accessibilityRole="button"
+              accessibilityLabel={r ? r.a11y : l.title}
+              accessibilityHint={l.hint}
+              onPress={() => guard(() => router.push(l.href))}
+              style={({ pressed }) => [styles.row, styles.link, i > 0 && styles.divided, pressed && styles.pressed]}
+            >
+              <View style={styles.grow}>
+                <AppText variant="heading">{l.title}</AppText>
+                {r ? <AppText variant="body" color={color.textSecondary}>{r.line}</AppText> : null}
+              </View>
+              <NativeSymbol name="chevron.right" tintColor={color.textSecondary} size={size.icon} />
+            </Pressable>
+          )
+        })}
+      </Card>
+
       <WhySheet visible={why === 'bw'} entry={BW_WHY} onClose={() => setWhy(null)} />
       <WhySheet visible={why === 'e1rm'} entry={E1RM_WHY} onClose={() => setWhy(null)} />
     </>
@@ -152,5 +190,8 @@ const styles = StyleSheet.create({
   // band under the last row (and about 1,800 pt of extra scrolling at 150 lifts).
   lifts: { gap: 0, paddingBottom: space.xs },
   lift: { minHeight: touch.row },
-  wait: { paddingVertical: space.md }
+  wait: { paddingVertical: space.md },
+  link: { minHeight: touch.row, paddingVertical: space.sm },
+  divided: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color.stroke },
+  pressed: { backgroundColor: color.surfaceActive }
 })

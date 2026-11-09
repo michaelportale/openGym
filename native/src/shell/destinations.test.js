@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { expect, test } from 'vitest'
 import { destinationCopy } from './destinations.js'
 
-const ids = ['home', 'progress']
+const ids = ['home']
 
 test('every unbuilt destination says it is not built and records nothing', () => {
   for (const id of ids) {
@@ -26,12 +26,10 @@ test('home does not promise a single phase', () => {
   expect(home.summary).toMatch(/Nothing on this screen is logged, saved, or synced/)
 })
 
-test('progress names phase 7 and WHOOP later; plan and exercises are built, so not destinations', () => {
+test('plan, exercises and progress are built, so not destinations', () => {
   expect(() => destinationCopy('plan')).toThrow(/Unknown destination/)
   expect(() => destinationCopy('exercises')).toThrow(/Unknown destination/)
-  const progress = destinationCopy('progress')
-  expect(progress.phaseLabel).toBe('Arrives in Phase 7')
-  expect(progress.summary).toBe('Measurements and nutrition arrive in Phase 7D. WHOOP follows in Phase 8.')
+  expect(() => destinationCopy('progress')).toThrow(/Unknown destination/)
 })
 
 test('an unknown destination throws', () => {

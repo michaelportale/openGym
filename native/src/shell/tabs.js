@@ -13,7 +13,7 @@ export const TABS = [
     // The dock is pinned, so this screen applies its own safe-area insets.
     disableAutomaticContentInsets: true
   },
-  { name: 'progress', label: 'Progress', availability: 'unbuilt', sf: { default: 'chart.bar', selected: 'chart.bar.fill' } },
+  { name: 'progress', label: 'Progress', availability: 'ready', sf: { default: 'chart.bar', selected: 'chart.bar.fill' } },
   {
     name: 'exercises',
     label: 'Exercises',

@@ -72,10 +72,20 @@ test('the app opens on Workout: the launch route is the Workout tab, and Home is
   expect(read('home.js')).toContain("destinationCopy('home')")
 })
 
-test('plan, workout and exercises are ready and home and progress are unbuilt', () => {
-  expect(TABS.filter(tab => tab.availability === 'ready').map(tab => tab.label)).toEqual(['Plan', 'Workout', 'Exercises'])
-  expect(TABS.filter(tab => tab.availability === 'unbuilt').map(tab => tab.label)).toEqual(['Home', 'Progress'])
+test('plan, workout, progress and exercises are ready and home is unbuilt', () => {
+  expect(TABS.filter(tab => tab.availability === 'ready').map(tab => tab.label)).toEqual(['Plan', 'Workout', 'Progress', 'Exercises'])
+  expect(TABS.filter(tab => tab.availability === 'unbuilt').map(tab => tab.label)).toEqual(['Home'])
   expect(TABS.some(tab => tab.availability === 'preview')).toBe(false)
+})
+
+test('the Progress tab renders its cards and the Nutrition and Measurements links, not the placeholder', () => {
+  const src = readFileSync(new URL('../app/(tabs)/progress.js', import.meta.url), 'utf8')
+  expect(src).toContain('<ProgressBody')
+  expect(src).not.toContain('UnbuiltScreen')
+  expect(src).not.toContain('destinationCopy')
+  const body = readFileSync(new URL('../progress/ProgressBody.js', import.meta.url), 'utf8')
+  expect(body).toContain("'/nutrition'")
+  expect(body).toContain("'/measurements'")
 })
 
 test('the Plan tab renders the Plan screen, not the placeholder', () => {

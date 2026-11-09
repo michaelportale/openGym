@@ -3,6 +3,7 @@ import snapshot from '../data/snapshot'
 import { openAppDatabase } from '../storage/database'
 import { coalesced } from '../body/coalesce'
 import { createSqliteWeighIns } from '../body/weigh-ins'
+import { createSqliteMeasurements } from '../body/measurement-store'
 import { createSqliteFinishedWorkouts } from '../session/finished-workouts'
 import { createSqliteServerCopy } from '../sync/server-copy'
 import { createSqlitePendingEdits } from '../sync/pending-edits'
@@ -13,8 +14,9 @@ import { progressLoader } from './progress-source'
 const LOADING = { status: 'loading', state: null, bodyweight: [], error: null }
 
 // { status: 'loading'|'ready'|'error', state, bodyweight, error }. `state` is the Workout tab's
-// screen source; `bodyweight` the effective weigh-in list (the server copy or snapshot with this
-// phone's pending weigh-ins laid over it). Reloads when the tab is focused or a Health pass or
+// screen source, with this phone's unsent edits and measurements laid over it (the Nutrition and
+// Measurements rows read it); `bodyweight` the effective weigh-in list (the server copy or
+// snapshot with this phone's pending weigh-ins laid over it). Reloads when the tab is focused or a Health pass or
 // sync changes something, coalesced. A reload whose source key (sync/source-key.js) is unchanged
 // keeps the same object, so nothing is parsed or worked out again.
 export function useProgress() {
@@ -31,6 +33,7 @@ export function useProgress() {
           serverCopy: createSqliteServerCopy(db),
           weighIns: createSqliteWeighIns(db),
           routineEdits: createSqlitePendingEdits(db),
+          measurements: createSqliteMeasurements(db),
           bundled: snapshot,
           now: Date.now(),
         }))

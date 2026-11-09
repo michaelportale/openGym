@@ -3,11 +3,6 @@ const destinations = {
     title: 'Home',
     phase: null,
     summary: 'Workouts are logged in the Workout tab. A summary of your next session and the nutrition summary are not built here yet. Nothing on this screen is logged, saved, or synced.'
-  },
-  progress: {
-    title: 'Progress',
-    phase: 7,
-    summary: 'Measurements and nutrition arrive in Phase 7D. WHOOP follows in Phase 8.'
   }
 }
 
