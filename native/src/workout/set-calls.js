@@ -75,8 +75,8 @@ export function completeCall(view, { setId, side, values, eventId, now }) {
   const w = lockedWeight(slot.row)?.w ?? shown.w
   if (w == null) return null
   // Reps left rides on the commit that finishes the set (a plain set's, a per-side set's second
-  // side), never a warm-up's; untouched (undefined) writes nothing and an explicit null clears a logged value. A bad value writes nothing at all.
-  const effort = rirFields(slot.row, values?.rir, { clear: true })
+  // side), never a warm-up's; untouched keypad values (rir undefined) keep a logged value, an explicit null clears it, and a Complete with no values (the dock's) clears one an Undo left, since the dock never shows it. A bad value writes nothing at all.
+  const effort = rirFields(slot.row, values ? values.rir : null, { clear: true })
   if (!effort.ok) return null
   const call = (fields, withEffort = true) => {
     const out = withEffort ? { ...fields, ...effort.fields } : fields

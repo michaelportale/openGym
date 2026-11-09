@@ -1060,6 +1060,18 @@ describe.each(SQLITE_DRIVERS)('%s: the calls drive the engine', (_name, createDb
     expect(row).toMatchObject({ w: 75, r: 8, rir: 3, done: true })
   })
 
+  test('Complete with reps left 0, Undo, then the dock\'s Complete: the row has no reps left', async () => {
+    clock = T0 + 1000
+    const session = await open(createDb())
+    await session.call('commitSet', completeCall(current(session), { setId: benchSet, side: null, values: { w: 75, r: 8, rir: 0 }, eventId: 'c1', now: clock }))
+    await session.call('undoSet', undoCall(current(session), { setId: benchSet, eventId: 'u1', now: clock }))
+    expect(current(session).entries[0].sets[0].row.rir).toBe(0)
+    await session.call('commitSet', completeCall(current(session), { setId: benchSet, side: null, eventId: 'c2', now: clock }))
+    const row = current(session).entries[0].sets[0].row
+    expect(row).toMatchObject({ done: true })
+    expect(Object.hasOwn(row, 'rir')).toBe(false)
+  })
+
   test('Update sets, changes and clears reps left; a kill keeps what was saved', async () => {
     clock = T0 + 1000
     let db = createDb()
@@ -1636,8 +1648,8 @@ describe('reps left in the calls', () => {
     const v = bench1({ ...todo(75, 8), rir: 3 })
     expect(completeCall(v, { setId: 's1', values: { w: 75, r: 8 }, eventId: 'e', now: 0 }).fields).toEqual({ w: 75, r: 8 })
     expect(completeCall(v, { setId: 's1', values: { w: 75, r: 8, rir: undefined }, eventId: 'e', now: 0 }).fields).toEqual({ w: 75, r: 8 })
-    // The dock's Complete passes no values at all, so it never clears.
-    expect(completeCall(v, { setId: 's1', eventId: 'e', now: 0 }).fields).toEqual({ w: 75, r: 8 })
+    // The dock's Complete passes no values at all: a reps left left over from an Undo is cleared.
+    expect(completeCall(v, { setId: 's1', eventId: 'e', now: 0 }).fields).toEqual({ w: 75, r: 8, rir: null })
     expect(completeCall(v, { setId: 's1', values: { w: 75, r: 8, rir: null }, eventId: 'e', now: 0 }).fields).toEqual({ w: 75, r: 8, rir: null })
     // Nothing logged: a clear writes nothing.
     expect(completeCall(bench1(todo(75, 8)), { setId: 's1', values: { w: 75, r: 8, rir: null }, eventId: 'e', now: 0 }).fields).toEqual({ w: 75, r: 8 })
