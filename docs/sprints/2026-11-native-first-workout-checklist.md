@@ -84,13 +84,14 @@ iOS shows the notification prompt once per install, at the first rest. On a fres
 
 Phase 4. Start Push A from the routine list on the Workout start screen. Discard it when the step is done (Finish, then Discard workout, then Discard), except where a line says to finish it.
 
-- [ ] Warm-up prompt. On the first lift for a body part, before any warm-up row or finished set, the prompt shows two loads. Tap Add warm-ups: two warm-up rows appear, prefilled and not done. Complete one: no rest starts.
+- [ ] Warm-up prompt. On the first lift for a body part, before any warm-up row or finished set, the prompt shows two loads. (It needs the first work set to show a weight above zero, and above the bar for a barbell lift. A bodyweight or empty first set gets no prompt.) Tap Add warm-ups: two warm-up rows appear, prefilled and not done. Complete one: no rest starts.
 - [ ] About rest times. Complete a set so the resting dock shows. Tap About rest times. A sheet opens that reads in plain words and ends with "General training information, not medical advice." Close it.
 - [ ] Why these steps? Open the keypad and type a number. Tap Why these steps? under the ±5 and ±10 chips. The sheet reads in plain words with the same closing line. Close it: the number you typed is still there.
 - [ ] Warm-up Why. On the warm-up prompt, tap Why? The sheet reads in plain words with the same closing line. Close it, then tap Why offered? and check the same.
 - [ ] Why reps left? In the keypad on a work set, tap Why reps left?. The sheet reads in plain words with the same closing line.
 - [ ] Reps left saved. On a work set, pick 3 and tap Complete. Reopen that set: 3 is selected. Kill the app and reopen it: it is still 3.
-- [ ] Progression off. Set your routines to progression off, then finish a workout. Finish shows no Next time lines. Start the same routine again: it opens at last time's weights exactly as before.
+- [ ] Progression off. Your routines have progression off. Finish a workout: it shows no Next time lines. Start the same routine again: it opens at last time's weights exactly as before.
+- [ ] Next time lines. With progression off on every exercise, Finish shows no Next time lines, so their Why? and the far-from-failure note cannot be checked on this phone. The unit tests and the pre-merge simulator walkthrough cover them. Once an exercise's progression is on (double progression, or none named) and you finished a work set of it, Finish shows a Next time line with a weight and reps and a Why?, and the next session opens that exercise at that weight. Do not edit your real data to test this.
 - [ ] Largest text. Set the text size to the largest. On the resting dock every button, About rest times included, stays usable. The reps-left row wraps or scrolls. Set the text size back.
 
 ## 9. Airplane Mode off
