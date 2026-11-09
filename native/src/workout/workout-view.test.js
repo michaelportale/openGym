@@ -149,6 +149,13 @@ describe('card', () => {
     expect(rowsOf(true, true).sideDone).toBeNull()
     expect(screen(mid()).card.rows.map(r => r.sideDone)).toEqual([null, null, null])
   })
+  // The screen passes these to the table, the keypad and the dock's spoken lead as they are.
+  test('a per-hand exercise titles the weight "Lb each" and says so; any other just "Lb"', () => {
+    expect(screen(view([bench(mid().entries[0].sets, { dbLoad: 'each' })])).card).toMatchObject({ weightTitle: 'Lb each', perHand: true })
+    expect(screen(mid()).card).toMatchObject({ weightTitle: 'Lb', perHand: false })
+    expect(screen(view([bench(mid().entries[0].sets, { dbLoad: 'total' })])).card).toMatchObject({ weightTitle: 'Lb', perHand: false })
+    expect(screen(view([])).card).toMatchObject({ weightTitle: 'Lb', perHand: false })
+  })
   test('no history and unknown exercise', () => {
     const v = view([{ id: '9999', target: {}, sets: [set('a', todo(null, null))] }])
     const { card } = screen(v)

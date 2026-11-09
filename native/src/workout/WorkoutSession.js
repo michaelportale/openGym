@@ -91,8 +91,6 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
   // An overnight session ends at the engine's suggested end (its last logged work, or the time it
   // was offered when that work was under 20 minutes before); the engine refuses a finish without one.
   const finishEnd = overnight ? view.disposition.suggestedEnd ?? view.startedAt : null
-  const perHand = shownEntry?.target?.dbLoad === 'each'
-  const weightTitle = perHand ? 'Lb each' : 'Lb'
   const upNext = view.entries[index + 1]
   const move = step => setShownIndex(Math.max(0, Math.min(count - 1, index + step)))
   const { sheet, finish } = actions
@@ -142,7 +140,7 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
     // Finished in the journal but not yet stored (a kill between the two): Save completes it.
     <WorkoutDock dock={{ mode: 'finished', lead: 'Not saved yet', primaryLabel: 'Save workout' }} onLayout={measure('dock')} inline={!pinned} onPrimary={() => finish.show(null)} busy={actions.busy} />
   ) : (
-    <WorkoutDock dock={screen.dock} perHand={perHand} onLayout={measure('dock')} inline={!pinned} busy={actions.busy} {...actions.dock} />
+    <WorkoutDock dock={screen.dock} perHand={card.perHand} onLayout={measure('dock')} inline={!pinned} busy={actions.busy} {...actions.dock} />
   )
 
   return (
@@ -151,7 +149,7 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
       <ScrollView style={styles.screen} contentContainerStyle={{ paddingBottom: dockHeight }} scrollIndicatorInsets={{ bottom: dockHeight }}>
         {pinned ? null : head}
         <View style={styles.body}>
-          <ExerciseCard {...card} weightTitle={weightTitle} perHand={perHand} onPressRow={actions.openSheet} onAddSet={actions.addSet} onAddWarmup={actions.addWarmup} />
+          <ExerciseCard {...card} onPressRow={actions.openSheet} onAddSet={actions.addSet} onAddWarmup={actions.addWarmup} />
           {upNext ? <UpNextRow name={nameOf(names, upNext.id)} onPress={() => move(1)} /> : null}
         </View>
         {pinned ? null : dock}
@@ -165,8 +163,8 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
         perSide={sheet.perSide}
         side={sheet.side}
         initialField={sheet.initialField}
-        weightTitle={weightTitle}
-        perHand={perHand}
+        weightTitle={card.weightTitle}
+        perHand={card.perHand}
         saveLabel={sheet.mode === 'done' ? 'Update' : 'Save'}
         completeLabel={sheet.completeLabel}
         notice={sheet.notice}

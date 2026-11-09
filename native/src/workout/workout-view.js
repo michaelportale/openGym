@@ -120,8 +120,12 @@ function lastText(last, index) {
   return lastLine(s)
 }
 
-function loadText(w, target) {
-  return `${num(w)} lb${target?.dbLoad === 'each' ? ' each' : ''}`
+// A dumbbell exercise loaded per hand: its weight is "each". Decided here once; the screen reads
+// it from the card.
+const perHandOf = entry => entry?.target?.dbLoad === 'each'
+
+function loadText(w, perHand) {
+  return `${num(w)} lb${perHand ? ' each' : ''}`
 }
 
 function progressOf(entries) {
@@ -141,10 +145,9 @@ function progressOf(entries) {
 function dockFor(view, entry, entries, index, current, number) {
   const rest = view.rest
   const resting = rest && (rest.status === 'running' || rest.status === 'paused')
-  const target = entry?.target
   const side = current && isSideSet(current.row) ? nextSide(current.row) : null
   const figures = current ? shown(current, side, carriedWeight(entry, current.setId)) : null
-  const figureText = figures ? `${loadText(figures.w, target)} × ${num(figures.r)}` : ''
+  const figureText = figures ? `${loadText(figures.w, perHandOf(entry))} × ${num(figures.r)}` : ''
 
   if (resting) {
     return {
@@ -186,12 +189,15 @@ function dockFor(view, entry, entries, index, current, number) {
 }
 
 // `title` is the routine name; the engine view does not carry it, so the caller passes it.
+// `card.weightTitle` ('Lb each' per hand, else 'Lb') heads the weight column and the keypad's
+// weight field; `card.perHand` makes the rows, the keypad and the dock's spoken lead say "each".
 export function workoutScreen(view, { names = {}, lastTimes = {}, exerciseIndex, title } = {}) {
   const entries = view?.entries || []
   const index = exerciseIndex === undefined ? currentExerciseIndex(view) : exerciseIndex
   const entry = entries[index] || { id: null, sets: [] }
   const info = names[entry.id]
   const last = lastTimes[entry.id] || null
+  const perHand = perHandOf(entry)
 
   // Warm-ups show first, wherever the engine appended them, labelled W with no number and no
   // last time. Among themselves they go in order like work sets: the first open one is current.
@@ -253,6 +259,8 @@ export function workoutScreen(view, { names = {}, lastTimes = {}, exerciseIndex,
       name: info ? info.name : `Unknown exercise (${entry.id})`,
       category: info ? info.category || '' : '',
       noHistory: last === null,
+      weightTitle: perHand ? 'Lb each' : 'Lb',
+      perHand,
       rows: [...warmRows, ...rows],
     },
     dock: dockFor(view || {}, entry, entries, index, current, currentNumber),
