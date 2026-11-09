@@ -10,6 +10,9 @@ Read this first: the dev build and the Release build share one bundle id, so the
 2. Generate your snapshot from your own data:
    `cd native && node scripts/make-snapshot.mjs <path to your state-*.json>`
    This writes `native/local/snapshot.json`. It is gitignored. Do not commit it.
+   Then check that no exercise of yours will run native double progression. This prints only a number and should print 0:
+   `cd native && node --input-type=module -e "import s from './local/snapshot.json' with { type: 'json' }; import { nativeRepPolicy } from './src/science/native-progression.js'; let n = 0; for (const r of s.state.routines) for (const c of r.ex ?? []) if (r.excludeFromProgression !== true && nativeRepPolicy(c, r) === 'double') n++; console.log(n)" 2>/dev/null`
+   A number above 0 means that many exercises will get Next time lines after Finish and will open at the suggested weight. A routine with no progression named counts, because it defaults to double. A pyramid also counts, and it gets no line, so that is a safe false positive.
 3. Find the phone's hardware UDID: `xcrun xctrace list devices`. The CoreDevice identifier from `xcrun devicectl list devices` is rejected by the build.
 4. Unlock the phone. The install works while it is locked, but the app only launches when it is unlocked.
 
@@ -86,12 +89,12 @@ Phase 4. Start Push A from the routine list on the Workout start screen. Discard
 
 - [ ] Warm-up prompt. On the first lift for a body part, before any warm-up row or finished set, the prompt shows two loads. (It needs the first work set to show a weight above zero, and above the bar for a barbell lift. A bodyweight or empty first set gets no prompt.) Tap Add warm-ups: two warm-up rows appear, prefilled and not done. Complete one: no rest starts.
 - [ ] About rest times. Complete a set so the resting dock shows. Tap About rest times. A sheet opens that reads in plain words and ends with "General training information, not medical advice." Close it.
-- [ ] About load steps Open the keypad and type a number. Tap About load steps under the ±5 and ±10 chips. The sheet reads in plain words with the same closing line. Close it: the number you typed is still there.
+- [ ] About load steps. Open the keypad and type a number. Tap About load steps under the ±5 and ±10 chips. The sheet reads in plain words with the same closing line. Close it: the number you typed is still there.
 - [ ] Warm-up Why. On the warm-up prompt, tap Why? The sheet reads in plain words with the same closing line. Close it, then tap Why offered? and check the same.
-- [ ] Why reps left? In the keypad on a work set, tap Why reps left?. The sheet reads in plain words with the same closing line.
+- [ ] Reps left Why. Open the keypad on a work set that is current or done. The Reps left row shows 0 to 5+ chips and a Why? beside the "Reps left" heading. On a per-side set the row shows only for the second side (R) of a set still in progress. Pick 2, tap Why?, close the sheet: 2 is still selected. The sheet reads in plain words with the same closing line.
 - [ ] Reps left saved. On a work set, pick 3 and tap Complete. Reopen that set: 3 is selected. Kill the app and reopen it: it is still 3.
 - [ ] Progression off. Your routines have progression off. Finish a workout: it shows no Next time lines. Start the same routine again: it opens at last time's weights exactly as before.
-- [ ] Next time lines. With progression off on every exercise, Finish shows no Next time lines, so their Why? and the far-from-failure note cannot be checked on this phone. The unit tests and the pre-merge simulator walkthrough cover them. Once an exercise's progression is on (double progression, or none named) and you finished a work set of it, Finish shows a Next time line with a weight and reps and a Why?, and the next session opens that exercise at that weight. Do not edit your real data to test this.
+- [ ] Next time lines. With progression off on every exercise, Finish shows no Next time lines, so their Why? and the far-from-failure note cannot be checked on this phone. The unit tests and the pre-merge simulator walkthrough cover them. Once an exercise's progression is on (double progression, or none named) and you finished a work set of it, Finish shows a Next time line with a weight and reps and a Why?, and the next session opens that exercise at that weight. Timed, pyramid, drop-set and rest-pause exercises, and an exercise on its first session, get no line. Do not edit your real data to test this.
 - [ ] Largest text. Set the text size to the largest. On the resting dock every button, About rest times included, stays usable. The reps-left row wraps or scrolls. Set the text size back.
 
 ## 9. Airplane Mode off
