@@ -72,11 +72,13 @@ export async function readCopy(serverCopy) {
 // and `serverCopy`. Paired: the server copy, plus the workouts it has not acked. Not paired: the
 // bundled snapshot plus every workout on the phone. `workouts` is every workout on the phone.
 // A copy the screen still cannot build from reads as no copy, as a corrupt one does.
+// The unsent workouts are read before the copy: the sync engine stores a copy before it acks the
+// workouts that copy holds, so a sync landing between the two reads leaves each workout in one.
 export async function readScreenSource({ finished, serverCopy, bundled }) {
   const workouts = await finished.list()
+  const pending = await finished.listPending()
   const copy = await readCopy(serverCopy)
   if (copy) {
-    const pending = await finished.listPending()
     try {
       return { ...screenSource({ copy, bundled, pending }), workouts }
     } catch {

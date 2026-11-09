@@ -154,3 +154,24 @@ test('the example banner is the bundle\'s own: shown over example data, never ov
   expect((await readScreenSource({ ...stores({ copy, all: [], pending: [] }), bundled: example })).example).toBe(false)
   expect((await readScreenSource({ ...stores({ copy: null, all: [], pending: [] }), bundled: example })).example).toBe(true)
 })
+
+test('readScreenSource reads the unsent workouts before the copy: a sync landing between the two reads never hides one', async () => {
+  const p1 = w('p1', '2026-11-08')
+  const before = { state: { routines: [], workouts: [w('c1', '2026-10-05')] }, rev: 1, wid: 'a', pulledAt: 't' }
+  const after = { state: { routines: [], workouts: [w('c1', '2026-10-05'), { ...p1, _ts: 9 }] }, rev: 2, wid: 'b', pulledAt: 't' }
+  // The engine stores the copy that holds p1, then acks p1. Here that lands right after whichever
+  // of the two reads comes first.
+  let copy = before
+  let pending = [p1]
+  let landed = false
+  const land = () => {
+    if (landed) return
+    landed = true
+    copy = after
+    pending = []
+  }
+  const finished = { list: async () => [p1], listPending: async () => { const r = pending; land(); return r } }
+  const serverCopy = { get: async () => { const r = copy; land(); return r } }
+  const out = await readScreenSource({ finished, serverCopy, bundled })
+  expect(out.state.workouts.map(x => x.id)).toEqual(['c1', 'p1'])
+})

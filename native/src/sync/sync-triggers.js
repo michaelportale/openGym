@@ -26,6 +26,15 @@ export function shouldReloadHome({ prev, next, homeStatus }) {
   return prev !== next
 }
 
+// One status seen by the Workout tab: the key it now counts as shown, and whether to reload. The
+// key is held while the screen loads, since the load may have read the copy before it changed: a
+// copy that lands during a load reloads the screen once the load is done. During a session it
+// moves on, as leaving the session reloads anyway.
+export function homeKeyStep({ seen, next, homeStatus }) {
+  if (next === null || homeStatus === 'loading') return { seen, reload: false }
+  return { seen: next, reload: shouldReloadHome({ prev: seen, next, homeStatus }) }
+}
+
 export function canPair({ address, code, busy }) {
   return !busy && address.trim() !== '' && code.trim() !== ''
 }

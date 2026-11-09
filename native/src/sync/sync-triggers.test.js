@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { FOREGROUND_GAP_MS, canPair, homeKey, serverLines, shouldReloadHome, shouldSyncOnForeground } from './sync-triggers.js'
+import { FOREGROUND_GAP_MS, canPair, homeKey, homeKeyStep, serverLines, shouldReloadHome, shouldSyncOnForeground } from './sync-triggers.js'
 
 describe('shouldSyncOnForeground', () => {
   const T = 1_000_000
@@ -35,6 +35,29 @@ describe('homeKey / shouldReloadHome', () => {
   })
   test('no status yet: no reload', () => {
     expect(shouldReloadHome({ prev: k(), next: null, homeStatus: 'start' })).toBe(false)
+  })
+})
+
+describe('homeKeyStep', () => {
+  const st = (over = {}) => ({ paired: true, server: 'https://g.example.com', copyKey: '4|w4', ...over })
+  const k = over => homeKey(st(over))
+  test('a copy that lands while the start screen loads reloads it once the load is done', () => {
+    let seen = k()
+    let step = homeKeyStep({ seen, next: k({ copyKey: '5|w5' }), homeStatus: 'loading' })
+    expect(step).toEqual({ seen: k(), reload: false })
+    seen = step.seen
+    step = homeKeyStep({ seen, next: k({ copyKey: '5|w5' }), homeStatus: 'start' })
+    expect(step).toEqual({ seen: k({ copyKey: '5|w5' }), reload: true })
+  })
+  test('the first key is recorded once the screen has loaded, with no reload', () => {
+    expect(homeKeyStep({ seen: undefined, next: k(), homeStatus: 'loading' })).toEqual({ seen: undefined, reload: false })
+    expect(homeKeyStep({ seen: undefined, next: k(), homeStatus: 'start' })).toEqual({ seen: k(), reload: false })
+  })
+  test('during a session the key moves on without a reload: leaving it reloads anyway', () => {
+    expect(homeKeyStep({ seen: k(), next: k({ copyKey: '5|w5' }), homeStatus: 'session' })).toEqual({ seen: k({ copyKey: '5|w5' }), reload: false })
+  })
+  test('no status yet changes nothing', () => {
+    expect(homeKeyStep({ seen: k(), next: null, homeStatus: 'start' })).toEqual({ seen: k(), reload: false })
   })
 })
 
