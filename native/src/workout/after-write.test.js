@@ -101,6 +101,14 @@ describe('afterGatedWrite', () => {
     expect(out.alertsOff).toBeUndefined()
   })
 
+  test('a quiet write (the rest restored on open) is never a rest start: it cannot ask or be marked', async () => {
+    const afterWrite = vi.fn(async () => ({ step: 'off', asked: false }))
+    const result = { ok: true }
+    const out = await afterGatedWrite(result, { afterWrite, before: null, after: () => running(NOW + 90_000), now: NOW, quiet: true })
+    expect(afterWrite).toHaveBeenCalledWith({ restStarted: false })
+    expect(out).toBe(result)
+  })
+
   test('a write that failed is never marked, whatever the permission says', async () => {
     const failed = { ok: false, saved: false, error: { code: 'storage' } }
     const out = await afterGatedWrite(failed, { afterWrite: async () => ({ step: 'off', asked: false }), before: null, after: () => running(NOW + 90_000), now: NOW })

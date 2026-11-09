@@ -73,7 +73,8 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
   const restOf = () => session.getState().view?.rest ?? null
   // After the gate frees, a saved set or a failed write plays its haptic (hapticForWrite); never part
   // of the write. `action` is what was tapped; `quiet` is a write the owner did not tap (the rest
-  // restored on open).
+  // restored on open): it never buzzes and never counts as a rest start, so it cannot ask for
+  // notification permission (afterGatedWrite).
   const act = (fn, action, quiet = false) => {
     let before = null
     return gate.current(async () => {
@@ -97,7 +98,7 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
       } catch (error) {
         console.warn('haptic failed', error)
       }
-      return afterGatedWrite(result, { afterWrite, before, after: restOf, now: Date.now() })
+      return afterGatedWrite(result, { afterWrite, before, after: restOf, now: Date.now(), quiet })
     })
   }
   // A write that started a rest with alerts off says so, once for each session, unless it has
