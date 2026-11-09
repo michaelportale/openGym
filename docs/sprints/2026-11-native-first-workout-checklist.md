@@ -2,7 +2,7 @@
 
 Run this on the iPhone before the first real gym session. Tick each line. Record pass or fail per line in the PR, not here.
 
-Read this first: the dev build and the Release build share one bundle id, so they share one database. Everything you log while testing is written to the same place as real sessions. That is why step 10 wipes the app once. After the wipe, any later test on that phone writes into the real record.
+Read this first: the dev build and the Release build share one bundle id, so they share one database. Everything you log while testing is written to the same place as real sessions. That is why step 11 wipes the app once. After the wipe, any later test on that phone writes into the real record.
 
 ## Before you build
 
@@ -27,7 +27,7 @@ Swipe up from the bottom edge and pause to open the app switcher. Then swipe the
 
 ## 2. Airplane Mode
 
-- [ ] Turn Airplane Mode on. Keep it on for steps 3 to 7.
+- [ ] Turn Airplane Mode on. Keep it on for steps 3 to 8.
 
 ## 3. Storage check
 
@@ -80,17 +80,30 @@ iOS shows the notification prompt once per install, at the first rest. On a fres
 - [ ] Long absence. Open the keypad and type a number without saving. Leave the app in the background for 5 minutes or more, then return. The keypad is closed and the typed numbers show in the row as a draft.
 - [ ] Discard this Push A: tap Finish, then Discard workout, then Discard.
 
-## 8. Airplane Mode off
+## 8. Warm-ups, reasons and reps left
+
+Phase 4. Start Push A from the routine list on the Workout start screen. Discard it when the step is done (Finish, then Discard workout, then Discard), except where a line says to finish it.
+
+- [ ] Warm-up prompt. On the first lift for a body part, before any warm-up row or finished set, the prompt shows two loads. Tap Add warm-ups: two warm-up rows appear, prefilled and not done. Complete one: no rest starts.
+- [ ] About rest times. Complete a set so the resting dock shows. Tap About rest times. A sheet opens that reads in plain words and ends with "General training information, not medical advice." Close it.
+- [ ] Why these steps? Open the keypad and type a number. Tap Why these steps? under the ±5 and ±10 chips. The sheet reads in plain words with the same closing line. Close it: the number you typed is still there.
+- [ ] Warm-up Why. On the warm-up prompt, tap Why? The sheet reads in plain words with the same closing line. Close it, then tap Why offered? and check the same.
+- [ ] Why reps left? In the keypad on a work set, tap Why reps left?. The sheet reads in plain words with the same closing line.
+- [ ] Reps left saved. On a work set, pick 3 and tap Complete. Reopen that set: 3 is selected. Kill the app and reopen it: it is still 3.
+- [ ] Progression off. Set your routines to progression off, then finish a workout. Finish shows no Next time lines. Start the same routine again: it opens at last time's weights exactly as before.
+- [ ] Largest text. Set the text size to the largest. On the resting dock every button, About rest times included, stays usable. The reps-left row wraps or scrolls. Set the text size back.
+
+## 9. Airplane Mode off
 
 - [ ] Turn Airplane Mode off when the checks above are done.
 
-## 9. Before the wipe
+## 10. Before the wipe
 
 - [ ] Every line above has a recorded pass or fail in the PR. Fix any failure before wiping.
 - [ ] From the repository root, `git status` does not list `native/local/`.
 - [ ] The privacy search covers every tracked file in the repository, not only `native/` and `docs/sprints/`: `git grep -n -I -e '<your user id>' -e '<one of your routine ids>' -e '<one of your custom exercise ids>'` prints nothing. Your user id is the part of your data file's name between `state-` and `.json`. Type the real values only in the terminal, never into a tracked file, this one included.
 
-## 10. The wipe
+## 11. The wipe
 
 This removes the test workouts so your first real session starts clean.
 
