@@ -7,10 +7,12 @@ import PrimaryButton from '../ui/PrimaryButton'
 import ScaleButton from '../ui/ScaleButton'
 import WhySheet from './WhySheet'
 import { whyEntry } from './why-entry'
+import { RIR_CHOICES, isRirSelected, rirChipLabel, rirChipText, toggleRir } from './effort-choice'
 import { actionsStacked, applyKey, completeBlocker, fieldLocked, fieldText, keypadState, keypadValues, sheetCloseAction, sideLockHint, sideLockNote } from './keypad'
 import { spokenField } from './spoken'
 
 const STEP_WHY = whyEntry('increments')
+const EFFORT_WHY = whyEntry('effort')
 const CHIPS = ['-10', '-5', '+5', '+10']
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'back']
 
@@ -66,14 +68,22 @@ const keyHint = key => (key === 'back' ? 'Deletes the last character.' : 'Types 
 // side's reps.
 // While open, every app state change calls onAppState(next, values, changed), so the caller can
 // keep typed numbers when the app leaves the front (a kill from the app switcher follows).
-export default function KeypadSheet({ visible, title, initial, perSide, side = null, initialField = 'w', weightSetWith = null, weightTitle = 'Lb', perHand = false, saveLabel = 'Save', completeLabel = 'Complete', completeSpoken, notice, onSave, onComplete, onUndo, onRemove, onClose, onAppState }) {
+export default function KeypadSheet({ visible, title, initial, perSide, side = null, initialField = 'w', weightSetWith = null, weightTitle = 'Lb', perHand = false, saveLabel = 'Save', completeLabel = 'Complete', completeSpoken, effort = null, notice, onSave, onComplete, onUndo, onRemove, onClose, onAppState }) {
   const [state, setState] = useState(() => keypadState(initial, initialField, { weightSetWith }))
   const [why, setWhy] = useState(false)
+  const [whyEffort, setWhyEffort] = useState(false)
+  // Reps left lives here until Complete or Update: not part of the typed-numbers draft. `touched`
+  // tells a tap from the value the row already holds, so an untouched row writes nothing.
+  const [reps, setReps] = useState({ rir: effort?.rir ?? null, touched: false })
   useEffect(() => {
     // The keypad can close under an open Why sheet (the app returns after a long absence);
     // never present it again on the next open.
     setWhy(false)
-    if (visible) setState(keypadState(initial, initialField, { weightSetWith }))
+    setWhyEffort(false)
+    if (visible) {
+      setState(keypadState(initial, initialField, { weightSetWith }))
+      setReps({ rir: effort?.rir ?? null, touched: false })
+    }
   }, [visible])
   const stacked = actionsStacked(useWindowDimensions().fontScale)
   const lockNote = sideLockNote(state.lock)
@@ -81,6 +91,7 @@ export default function KeypadSheet({ visible, title, initial, perSide, side = n
   const blocked = completeBlocker(values, side)
   const press = key => () => setState(current => applyKey(current, key))
   const fields = perSide ? [['L.r', 'Left reps'], ['R.r', 'Right reps']] : [['r', 'Reps']]
+  const rirOut = reps.touched ? reps.rir : undefined
   const changed = () => sheetCloseAction(keypadState(initial), state) === 'save'
   const close = () => onClose(values, changed())
   // The listener outlives this render; it reads the numbers on screen when the app state changes.
@@ -130,12 +141,40 @@ export default function KeypadSheet({ visible, title, initial, perSide, side = n
               <Key key={key} text={key === 'back' ? '⌫' : key} label={keyLabel(key)} hint={keyHint(key)} onPress={press(key)} />
             ))}
           </View>
+          {effort ? (
+            <View style={styles.effort}>
+              <View style={styles.effortHead}>
+                <AppText variant="label" accessibilityRole="header" color={color.textSecondary}>Reps left</AppText>
+                <ScaleButton accessibilityLabel="Why reps left?" accessibilityHint="Shows why reps left is asked." onPress={() => setWhyEffort(true)} style={styles.why} faceStyle={styles.whyFace}>
+                  <AppText variant="label" color={color.textSecondary}>Why?</AppText>
+                </ScaleButton>
+              </View>
+              <View style={styles.effortChips}>
+                {RIR_CHOICES.map(n => {
+                  const selected = isRirSelected(reps.rir, n)
+                  return (
+                    <ScaleButton
+                      key={n}
+                      accessibilityLabel={rirChipLabel(n)}
+                      accessibilityHint={selected ? 'Tap again to clear.' : 'Optional. Saved with this set.'}
+                      accessibilityState={{ selected }}
+                      onPress={() => setReps(current => ({ rir: toggleRir(current.rir, n), touched: true }))}
+                      style={styles.effortChip}
+                      faceStyle={[styles.keyFace, selected && styles.fieldActive]}
+                    >
+                      <AppText variant="value">{rirChipText(n)}</AppText>
+                    </ScaleButton>
+                  )
+                })}
+              </View>
+            </View>
+          ) : null}
           <View style={stacked ? styles.stacked : styles.actions}>
             <View style={stacked ? null : styles.action}>
               <ScaleButton
                 accessibilityLabel={saveLabel}
                 accessibilityHint={onComplete ? 'Keeps these numbers without completing the set.' : 'Changes this set to these numbers.'}
-                onPress={() => onSave(values)}
+                onPress={() => onSave(values, rirOut)}
                 faceStyle={styles.save}
               >
                 <AppText variant="button">{saveLabel}</AppText>
@@ -143,7 +182,7 @@ export default function KeypadSheet({ visible, title, initial, perSide, side = n
             </View>
             {onComplete ? (
               <View style={stacked ? null : styles.action}>
-                <PrimaryButton label={completeLabel} accessibilityLabel={completeSpoken} disabled={blocked !== null} accessibilityHint={blocked === 'weight' ? 'Enter a weight first.' : blocked === 'reps' ? 'Enter the reps first.' : 'Logs this set.'} onPress={() => onComplete(values)} />
+                <PrimaryButton label={completeLabel} accessibilityLabel={completeSpoken} disabled={blocked !== null} accessibilityHint={blocked === 'weight' ? 'Enter a weight first.' : blocked === 'reps' ? 'Enter the reps first.' : 'Logs this set.'} onPress={() => onComplete(values, rirOut)} />
               </View>
             ) : null}
           </View>
@@ -163,6 +202,7 @@ export default function KeypadSheet({ visible, title, initial, perSide, side = n
       {/* A second Modal inside this one's view: iOS presents it over the keypad, which keeps its
           typed numbers; closing returns here. Reading it never writes. */}
       <WhySheet visible={why} entry={STEP_WHY} onClose={() => setWhy(false)} />
+      <WhySheet visible={whyEffort} entry={EFFORT_WHY} onClose={() => setWhyEffort(false)} />
     </Modal>
   )
 }
@@ -182,6 +222,10 @@ const styles = StyleSheet.create({
   chip: { flex: 1 },
   why: { alignSelf: 'flex-start', minHeight: touch.min, justifyContent: 'center' },
   whyFace: { minHeight: touch.min, justifyContent: 'center' },
+  effort: { gap: space.sm },
+  effortHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md },
+  effortChips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  effortChip: { flexGrow: 1, flexBasis: '14%', minWidth: touch.min },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   key: { flexBasis: '31%', flexGrow: 1 },
   keyFace: { minHeight: touch.primary, alignItems: 'center', justifyContent: 'center', backgroundColor: color.control, borderColor: color.stroke, borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.md },

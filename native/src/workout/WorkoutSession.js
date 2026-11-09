@@ -206,6 +206,7 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
         saveLabel={sheet.mode === 'done' ? 'Update' : 'Save'}
         completeLabel={sheet.completeButton?.label}
         completeSpoken={sheet.completeButton?.spoken}
+        effort={sheet.effort}
         notice={sheet.notice}
         onSave={sheet.onSave}
         onComplete={sheet.mode === 'current' ? sheet.onComplete : undefined}

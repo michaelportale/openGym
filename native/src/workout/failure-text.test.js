@@ -8,7 +8,7 @@ const CODES = [
   'storage', 'unknown-set', 'known-set', 'last-set', 'unknown-exercise', 'known-exercise', 'last-exercise',
   'bad-index', 'bad-deadline', 'no-rest', 'bad-extend', 'bad-note', 'note-too-long', 'discarded', 'finished',
   'not-overnight', 'overnight', 'bad-end', 'end-before-start', 'not-ready', 'sender', 'payload', 'send',
-  'not-saved', 'failed',
+  'not-saved', 'failed', 'bad-rir',
 ]
 // What the screen was doing when the write was refused; undefined is a caller that did not say.
 // 'open' is the session failing to open; 'rest' is the rest restored on open, 'start-rest' the
@@ -70,6 +70,11 @@ describe('failureText', () => {
     expect(failureText('storage', { action: 'complete' })).toBe("Set not saved. The phone couldn't write it. Try again.")
     expect(failureText('not-ready', { action: 'open' })).toBe("Workout didn't open. This workout isn't open yet.")
     expect(failureText(undefined, { action: 'open' })).toBe(`Workout didn't open. ${GENERIC}`)
+  })
+
+  test('a refused reps-left value says the validator\'s sentence after what was not done', () => {
+    expect(failureText('bad-rir', { action: 'complete' })).toBe('Set not saved. Reps left must be a whole number from 0 to 10.')
+    expect(failureText('bad-rir', { action: 'edit' })).toBe('Change not saved. Reps left must be a whole number from 0 to 10.')
   })
 
   test('an overnight refusal keeps the stage-1 sentence, whatever was tapped', () => {

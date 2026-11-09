@@ -11,6 +11,7 @@ import { completeLabels } from './keypad'
 import { pendingRest, restMsFor } from './rest-after'
 import { shownAfterComplete, withTargets } from './session-screen'
 import { carriedWeight, lockedWeight, shownValues } from './workout-view'
+import { effortFailure, effortShown, withRir } from './effort-choice'
 import { NO_NOTICES, addSetCall, addWarmupCall, addWarmupsCall, addWarmupsInOrder, completeAfterCommit, completeCall, dockKeypadField, draftCall, editCall, findSet, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightRefusal, pauseRestCall, primaryAction, removeWarmupCall, restAfterComplete, resultNotice, resumeRestCall, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, sheetSide, thrown, undoWrite } from './set-calls'
 
 // The sessions already told that rest alerts are off. In memory: a relaunch tells again.
@@ -131,6 +132,8 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
   // it is checked again: a midnight between the commit and it refuses it (and reloads the view)
   // like any other.
   const complete = ({ setId, side, values }) => write(async (view, now) => {
+    const bad = effortFailure(values)
+    if (bad) return bad
     const call = completeCall(view, { setId, side, values, eventId: createEventId(), now })
     if (!call) return null
     return completeAfterCommit(await session.commitSet(call), async () => {
@@ -177,6 +180,8 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
     return overnightRefusal(view, now) ?? putDraft(setId, values)(view, now)
   }).catch(thrown)
   const edit = (setId, values) => write(async (view, now) => {
+    const bad = effortFailure(values)
+    if (bad) return bad
     const call = editCall(view, { setId, values, eventId: createEventId(), now })
     return call ? session.editSet(call) : null
   })
@@ -216,6 +221,8 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
       // A warm-up not done yet offers Remove warm-up: only where the tap would write.
       removable: removeWarmupCall(view, { setId, now: Date.now() }) !== null,
       initial: shownValues(found.slot, side, carriedWeight(found.entry, setId)),
+      // Reps left: shown for a work set that is current or done; starts at what the row holds.
+      effort: effortShown({ mode, warmup: row.warmup, perSide, side }) ? { rir: found.slot.row.rir ?? null } : null,
       initialField: keypadField(field, perSide, side),
       // A half-done per-side set's weight stays the one its first side was logged at.
       weightSetWith: lockedWeight(found.slot.row)?.side ?? null,
@@ -243,13 +250,15 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
 
   const sheetActions = {
     // Save keeps a draft; on a done set it is Update, an edit that keeps the set's time.
-    onSave: async values => {
+    // Reps left is not drafted: it lives in the sheet until Complete or Update (`rir` undefined =
+    // untouched, null = cleared). So Save on an unfinished set keeps the numbers only.
+    onSave: async (values, rir) => {
       const done = sheet.mode === 'done'
-      settle(done ? await edit(sheet.setId, values) : await draft(sheet.setId, values), sheet.key, done ? 'edit' : 'draft')
+      settle(done ? await edit(sheet.setId, withRir(values, rir)) : await draft(sheet.setId, values), sheet.key, done ? 'edit' : 'draft')
     },
     // A warm-up's Complete and Undo are named for it: its words say warm-up, and they leave the
     // work set's "Rest didn't start" line alone (noticesAfter).
-    onComplete: async values => settle(await complete({ setId: sheet.setId, side: sheet.side, values }), sheet.key, sheet.warmup ? 'complete-warmup' : 'complete'),
+    onComplete: async (values, rir) => settle(await complete({ setId: sheet.setId, side: sheet.side, values: withRir(values, rir) }), sheet.key, sheet.warmup ? 'complete-warmup' : 'complete'),
     // Undo also clears a draft a failed clear left on the set, first, in the same gated write.
     onUndo: async () => settle(await write((view, now) => undoWrite(session, view, { setId: sheet.setId, eventId: createEventId(), now })), sheet.key, sheet.warmup ? 'undo-warmup' : 'undo'),
     // Remove warm-up takes a mis-tapped warm-up off again, through the gate like every write.

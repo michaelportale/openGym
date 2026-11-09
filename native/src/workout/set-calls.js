@@ -1,6 +1,7 @@
 import { workoutModel } from '../shared/training.js'
 import { isOvernight, projectRest } from '../session/timing.js'
 import { OVERNIGHT_NOTICE, failureText } from './failure-text.js'
+import { rirFields } from './effort-choice.js'
 import { completeFields, restEventId } from './rest-after.js'
 import { carriedWeight, isDone, isWarmup, lockedWeight, shownValues } from './workout-view.js'
 
@@ -73,7 +74,11 @@ export function completeCall(view, { setId, side, values, eventId, now }) {
   // A half-done per-side set logs the weight its first side was logged at (lockedWeight).
   const w = lockedWeight(slot.row)?.w ?? shown.w
   if (w == null) return null
-  const call = fields => ({ eventId, exerciseId: entry.id, setId, fields })
+  // Reps left rides on the commit that finishes the set (a plain set's, a per-side set's second
+  // side), never a warm-up's; blank writes nothing. A bad value writes nothing at all.
+  const effort = rirFields(slot.row, values?.rir)
+  if (!effort.ok) return null
+  const call = (fields, withEffort = true) => ({ eventId, exerciseId: entry.id, setId, fields: withEffort ? { ...fields, ...effort.fields } : fields })
   if (!isSideSet(slot.row)) {
     return shown.r == null ? null : call(completeFields(slot.row, null, { w, r: shown.r }))
   }
@@ -85,7 +90,7 @@ export function completeCall(view, { setId, side, values, eventId, now }) {
   const other = side === 'L' ? 'R' : 'L'
   const typed = slot.row.sides[other]?.done === true ? null : shown.sides?.[other]?.r
   const row = typed == null ? slot.row : { ...slot.row, sides: { ...slot.row.sides, [other]: { ...slot.row.sides[other], r: typed } } }
-  return call(completeFields(row, side, { w, r: reps }))
+  return call(completeFields(row, side, { w, r: reps }), slot.row.sides[other]?.done === true)
 }
 
 // The rest a Complete earns, read from the view after the commit: only once the set is done
@@ -133,6 +138,10 @@ export function editCall(view, { setId, values, eventId, now }) {
     const side = s => ({ ...row.sides[s], ...(w != null ? { w } : {}), r: kept(values.sides?.[s]?.r, row.sides[s].r) })
     fields.sides = { L: side('L'), R: side('R') }
   }
+  // Reps left: untouched keeps the logged one, a number sets it, null removes it.
+  const effort = rirFields(row, values.rir, { clear: true })
+  if (!effort.ok) return null
+  Object.assign(fields, effort.fields)
   return { eventId, exerciseId: entry.id, setId, fields }
 }
 
