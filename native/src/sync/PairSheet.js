@@ -55,11 +55,11 @@ export default function PairSheet({ visible, onPair, onClose }) {
             <AppText variant="label" color={color.textSecondary}>Server address</AppText>
             <TextInput
               accessibilityLabel="Server address"
-              accessibilityHint="The address of your openGym server, for example gym.local:3000."
+              accessibilityHint="The address of your openGym server, for example https://gym.example.com or http://192.168.1.20:3000."
               style={styles.input}
               value={address}
               onChangeText={setAddress}
-              placeholder="gym.example.com"
+              placeholder="https://gym.example.com"
               placeholderTextColor={color.textMuted}
               keyboardType="url"
               autoCapitalize="none"

@@ -6,7 +6,7 @@ const HOSTNAME = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?
 const IPV4 = /^\d{1,3}(\.\d{1,3}){3}$/
 
 const NEEDS_HTTPS = 'Plain http only works for a server on your own network (a .local name, a 192.168 / 10 / 172.16 address, a Tailscale 100.x address). For anything else use https.'
-const NOT_AN_ADDRESS = "That doesn't look like a server address. Try something like gym.example.com or 192.168.1.20:3000."
+const NOT_AN_ADDRESS = "That doesn't look like a server address. Try something like https://gym.example.com or http://192.168.1.20:3000."
 
 const fail = error => ({ ok: false, error })
 
