@@ -8,18 +8,18 @@ const done = (w, r) => slot(`s${++n}`, { w, r, done: true, at: 1000 })
 const warm = (setId, row) => slot(setId, { ...row, phase: 'warmup', warmup: true }, { warmup: true })
 // 0025 barbell bench (chest), 0289 dumbbell bench (chest), 0300 dumbbell deadlift (upper legs)
 const ent = (id, sets, target = {}) => ({ id, target, sets })
-const ask = (entries, i, extra = {}) => warmupPromptFor({ entry: entries[i], entryIndex: i, entries, unit: 'lb', equipment: 'dumbbell', ...extra })
+const ask = (entries, i, extra = {}) => warmupPromptFor({ entry: entries[i], entryIndex: i, entries, unit: 'lb', ...extra })
 
 describe('warmupPromptFor', () => {
   test('the first exercise of a body part gets the ramp, 80 on a 5 step is 30 and 60', () => {
     const entries = [ent('0289', [todo(80, 8), todo(80, 8)])]
     expect(ask(entries, 0, { step: 5 })).toEqual({
-      sets: [{ w: 30, r: 6 }, { w: 60, r: 6 }], whyIds: ['warmup-loads', 'warmup-prompt']
+      sets: [{ w: 30, r: 6 }, { w: 60, r: 6 }]
     })
   })
   test('hidden for the second exercise of the same body part, shown for a new part', () => {
     const entries = [ent('0289', [todo(80, 8)]), ent('0025', [todo(135, 5)]), ent('0300', [todo(60, 8)])]
-    expect(ask(entries, 1, { equipment: 'barbell' })).toBeNull()
+    expect(ask(entries, 1, { floor: 45 })).toBeNull()
     expect(ask(entries, 2, { step: 5 })).not.toBeNull()
   })
   test('hidden once a warm-up row exists or a work set is done or half done', () => {
@@ -34,9 +34,9 @@ describe('warmupPromptFor', () => {
   })
   test('barbell: the bar is the floor; at or under it nothing is offered', () => {
     const bar = ent('0025', [todo(45, 5)])
-    expect(ask([bar], 0, { equipment: 'barbell', step: 5 })).toBeNull()
-    expect(ask([ent('0025', [todo(60, 5)])], 0, { equipment: 'barbell', step: 5 }).sets.map(s => s.w)).toEqual([45, 45])
-    expect(ask([ent('0025', [todo(100, 5)])], 0, { equipment: 'barbell', unit: 'kg', step: 2.5 }).sets.map(s => s.w)).toEqual([40, 80])
+    expect(ask([bar], 0, { floor: 45, step: 5 })).toBeNull()
+    expect(ask([ent('0025', [todo(60, 5)])], 0, { floor: 45, step: 5 }).sets.map(s => s.w)).toEqual([45, 45])
+    expect(ask([ent('0025', [todo(100, 5)])], 0, { floor: 20, unit: 'kg', step: 2.5 }).sets.map(s => s.w)).toEqual([40, 80])
   })
   test('no weight shown, or an unknown exercise, offers nothing', () => {
     expect(ask([ent('0289', [todo(null, 8)])], 0, { step: 5 })).toBeNull()
@@ -44,14 +44,14 @@ describe('warmupPromptFor', () => {
   })
   test('an assisted exercise gets no prompt: less weight is harder there', () => {
     // 1432 assisted standing pull-up, 50 lb of assistance
-    expect(ask([ent('1432', [todo(50, 8)])], 0, { equipment: 'machine', step: 5 })).toBeNull()
+    expect(ask([ent('1432', [todo(50, 8)])], 0, { step: 5 })).toBeNull()
     expect(ask([ent('0289', [todo(50, 8)], { assisted: true })], 0, { step: 5 })).toBeNull()
     expect(ask([ent('0289', [todo(50, 8)])], 0, { step: 5 })).not.toBeNull()
   })
   test('a timed hold gets no prompt, a reps-mode barbell lift still does', () => {
     // 2135 weighted front plank at 25
-    expect(ask([ent('2135', [todo(25, 30)], { mode: 'time' })], 0, { equipment: 'weighted', step: 5 })).toBeNull()
-    expect(ask([ent('0025', [todo(135, 5)], { mode: 'reps' })], 0, { equipment: 'barbell', step: 5 })).not.toBeNull()
+    expect(ask([ent('2135', [todo(25, 30)], { mode: 'time' })], 0, { step: 5 })).toBeNull()
+    expect(ask([ent('0025', [todo(135, 5)], { mode: 'reps' })], 0, { floor: 45, step: 5 })).not.toBeNull()
   })
   test('a first rung that rounds to 0 offers nothing', () => {
     // 10 lb dumbbell on a 5 lb step: 40% rounds down to 0
@@ -66,8 +66,8 @@ describe('warmupPromptFor', () => {
 describe('kg profiles', () => {
   test('the bar floor is 20 kg, not 45', () => {
     const entries = [ent('0025', [todo(60, 5)])]
-    expect(ask(entries, 0, { equipment: 'barbell', unit: 'kg', step: 2.5 }).sets.map(s => s.w)).toEqual([22.5, 47.5])
-    expect(ask([ent('0025', [todo(20, 5)])], 0, { equipment: 'barbell', unit: 'kg', step: 2.5 })).toBeNull()
+    expect(ask(entries, 0, { floor: 20, unit: 'kg', step: 2.5 }).sets.map(s => s.w)).toEqual([22.5, 47.5])
+    expect(ask([ent('0025', [todo(20, 5)])], 0, { floor: 20, unit: 'kg', step: 2.5 })).toBeNull()
   })
   test('without a step the kg grid is used', () => {
     const entries = [ent('0289', [todo(30, 8)])]
@@ -91,6 +91,19 @@ describe('promptForExercise reads the profile unit', () => {
   test('no unit means lb; an exercise not in the view has no prompt', () => {
     expect(promptForExercise(view([ent('0025', [todo(60, 5)])]), '0025', {}).sets.map(s => s.w)).toEqual([45, 45])
     expect(promptForExercise(view([]), '0025', {})).toBeNull()
+  })
+})
+
+describe('promptForExercise floors at the shared bar', () => {
+  const view = entries => ({ entries })
+  const ws = (id, w, state) => promptForExercise(view([ent(id, [todo(w, 5)])]), id, state).sets.map(s => s.w)
+  test('EZ bar, trap bar and Olympic bar keep their own floors', () => {
+    expect(ws('1226', 60, { unit: 'lb' })).toEqual([25, 45])
+    expect(ws('2912', 135, { unit: 'lb' })).toEqual([55, 100])
+    expect(ws('3183', 95, { unit: 'lb' })).toEqual([45, 75])
+  })
+  test('the owner own bar weight is the floor', () => {
+    expect(ws('1045', 60, { unit: 'lb', barWeights: { '1045': 35 } })).toEqual([35, 45])
   })
 })
 
