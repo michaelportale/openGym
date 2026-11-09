@@ -59,7 +59,8 @@ export function healthAfterFinish() {
 // with nothing to do makes no HealthKit call.
 export function healthOnForeground() {
   const now = Date.now()
-  if (!shouldSyncOnForeground({ paired: true, lastAt: lastAttemptAt, now })) return Promise.resolve()
+  // Throttled: no pass, but a watching screen still re-reads, so a changed write access shows at once.
+  if (!shouldSyncOnForeground({ paired: true, lastAt: lastAttemptAt, now })) return refresh()
   lastAttemptAt = now
   return getHealth().then(health => health.run()).catch(() => {})
 }
