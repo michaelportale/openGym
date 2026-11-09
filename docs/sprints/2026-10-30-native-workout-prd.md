@@ -242,7 +242,7 @@ proxies the API and serves exercise media, so its replacement is planned before 
 | --- | --- | --- |
 | 0 | Done | PR #41 |
 | 1 | Done | PR #110 ("Promote native phase 1 foundation to main") |
-| 2 | Done | Engine hardening PRs #101-#109 and #111 (real-SQLite kill tests); real workout stage 1 in PR #112 (merged 2026-11-09); stage 2 in this branch |
+| 2 | Code done; the owner's device checklist is pending | Engine hardening PRs #101–#105, #107–#109 and #111 (real-SQLite kill tests); real workout stage 1 in PR #112 (merged 2026-11-09); stage 2 in this branch |
 | 3-10 | Not started | |
 
 Phase 9's device acceptance and the real gym sessions are the owner's to run. The checklist is
