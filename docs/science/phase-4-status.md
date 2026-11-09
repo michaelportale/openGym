@@ -27,6 +27,8 @@ Lines are double-only. Linear, Greyskull, triple, pyramid, off, excluded, timed,
 
 Phase 4 added no rule, number or citation. The register entries are as before.
 
+Known gap: when an exercise stores one rep target and no `repsMin`, the shared normalizer (`frontend/src/lib/rep-range.js`) treats the range as two below it, so a routine with 8 reps gives a Next time line "back to 6 reps". That default has no register entry and no Why. It reaches the screen only for an exercise with progression on.
+
 ## Register rows
 
 | Rule | Status |
