@@ -3,7 +3,6 @@ import snapshot from '../data/snapshot'
 import { openAppDatabase } from '../storage/database'
 import { createSqliteFinishedWorkouts } from '../session/finished-workouts'
 import { createSqliteSessionStorage } from '../session/sqlite-storage'
-import { localDate } from '../session/timing'
 import { sessionState } from './history-state'
 import { nextRoutineId } from './next-up'
 import { buildSessionBase } from './start-session'
@@ -34,7 +33,7 @@ export function useWorkoutHome() {
         next = { ...LOADING, status: 'session', db, state, workouts, base: stored, sessionId: stored.id }
       } else {
         const now = Date.now()
-        next = { ...LOADING, status: 'start', db, state, workouts, nextId: nextRoutineId(state, localDate(now, deviceTimeZone()), now) }
+        next = { ...LOADING, status: 'start', db, state, workouts, nextId: nextRoutineId(state, now) }
       }
     } catch (error) {
       next = { ...LOADING, status: 'error', error: { message: error?.message || String(error) } }

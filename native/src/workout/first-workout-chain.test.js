@@ -55,7 +55,7 @@ describe.each(SQLITE_DRIVERS)('%s: snapshot to finished workout to next start', 
 
     // Start: Push is next, and bench opens at last time's top weight.
     const state = sessionState(snapshot, await createSqliteFinishedWorkouts(db).list())
-    expect(nextRoutineId(state, today, clock)).toBe('push')
+    expect(nextRoutineId(state, clock)).toBe('push')
     const base = buildSessionBase({ state, routine: state.routines.find(r => r.id === 'push'), now: clock, timeZone, id: 'phone-1' })
     const options = { names: snapshot.names, lastTimes: lastTimesFor(state, base), title: base.name }
     const open = async withBase => {
@@ -116,7 +116,7 @@ describe.each(SQLITE_DRIVERS)('%s: snapshot to finished workout to next start', 
 
     // The next start: Pull is next, and Push's last time is the phone session.
     const after = sessionState(snapshot, phone)
-    expect(nextRoutineId(after, today, clock)).toBe('pull')
+    expect(nextRoutineId(after, clock)).toBe('pull')
     expect(lastTime(after, 'bench', 'push')).toMatchObject({ workoutId: 'phone-1', top: 80, sets: [{ w: 80, r: 8 }, { w: 80, r: 8 }] })
     expect(lastTime(after, 'lat', 'push')).toMatchObject({ workoutId: 'phone-1', top: 10 })
     const again = buildSessionBase({ state: after, routine: after.routines.find(r => r.id === 'push'), now: clock, timeZone, id: 'phone-2' })

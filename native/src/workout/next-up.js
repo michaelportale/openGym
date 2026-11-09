@@ -6,7 +6,7 @@ const byDateThenStart = (a, b) => String(a.d ?? '').localeCompare(String(b.d ?? 
 // refillAfter as each finished workout lands; the phone never saves one, so it replays those
 // finishes in date-then-start order. Works on a JSON copy: refillAfter rewrites the queue in
 // place, and the caller's state must stay as it was.
-export function nextRoutineId(state, today, now) {
+export function nextRoutineId(state, now) {
   const copy = JSON.parse(JSON.stringify(state))
   const finished = [...(copy.workouts ?? [])].sort(byDateThenStart)
   copy.workouts = []
