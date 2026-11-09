@@ -168,6 +168,28 @@ describe.each(Object.entries(makers))('%s routine edits', (_, make) => {
     expect((await s.listNotices()).map(n => n.rid)).toEqual(['b'])
   })
 
+  test('a row resetAcked re-pends (a resend to a restored server) that then supersedes is settled silently: acked, no notice', async () => {
+    const s = make()
+    await s.put({ rid: 'a', baseTs: 1, routine: { name: 'A' }, t: 1 })
+    await s.markAcked([{ rid: 'a', t: 1 }], 'x')
+    await s.resetAcked()
+    expect((await s.listPending()).map(e => e.rid)).toEqual(['a'])
+    await s.markSuperseded([{ rid: 'a', t: 1, kind: 'changed' }], 'y')
+    expect(await s.listPending()).toEqual([])
+    expect(await s.listNotices()).toEqual([])
+    // re-pended again by a later resend, it is still the old edit
+    await s.resetAcked()
+    await s.markSuperseded([{ rid: 'a', t: 1, kind: 'deleted' }], 'z')
+    expect(await s.listNotices()).toEqual([])
+    // a put after the re-pend is a new edit: superseding that one says so
+    await s.put({ rid: 'b', baseTs: 1, routine: { name: 'B' }, t: 2 })
+    await s.markAcked([{ rid: 'b', t: 2 }], 'x')
+    await s.resetAcked()
+    await s.put({ rid: 'b', baseTs: 1, routine: { name: 'B2' }, t: 3 })
+    await s.markSuperseded([{ rid: 'b', t: 3, kind: 'changed' }], 'z')
+    expect(await s.listNotices()).toEqual([{ rid: 'b', name: 'B2', kind: 'changed', at: 'z' }])
+  })
+
   test('invalid input throws', async () => {
     const s = make()
     await expect(s.put({ baseTs: 1, routine: r1, t: 1 })).rejects.toThrow()
@@ -190,6 +212,20 @@ test('real sqlite: survives a reopen with routine and sent as objects', async ()
   await s.markSent([{ rid: 'r1', t: 5, routine: r1 }])
   db = db.reopen()
   expect(await createSqliteRoutineEdits(db).get('r1')).toEqual({ rid: 'r1', baseTs: null, routine: r1, sent: r1, t: 5 })
+})
+
+test('a table from before the resent flag gains it once, its rows not resent', async () => {
+  const db = createNodeSqliteDb()
+  await db.exec(`CREATE TABLE routine_edits (
+    rid TEXT PRIMARY KEY, base_ts INTEGER, routine TEXT NOT NULL, sent TEXT, t INTEGER NOT NULL,
+    acked_at TEXT, superseded_at TEXT, superseded_kind TEXT, dismissed INTEGER NOT NULL DEFAULT 0)`)
+  await db.run("INSERT INTO routine_edits (rid, base_ts, routine, t) VALUES ('r1', 5, '{\"name\":\"Push\"}', 1)")
+  const s = createSqliteRoutineEdits(db)
+  expect(await s.listPending()).toEqual([{ rid: 'r1', baseTs: 5, routine: { name: 'Push' }, sent: null, t: 1 }])
+  await s.markSuperseded([{ rid: 'r1', t: 1, kind: 'changed' }], 'y')
+  expect(await s.listNotices()).toEqual([{ rid: 'r1', name: 'Push', kind: 'changed', at: 'y' }])
+  await createSqliteRoutineEdits(db).list()
+  expect(db.executed.filter(sql => /ALTER TABLE routine_edits ADD COLUMN resent/.test(sql))).toHaveLength(1)
 })
 
 test('two stores on one db migrate once', async () => {

@@ -1319,6 +1319,23 @@ describe('routine edits', () => {
     expect(await t.routineEdits.listNotices()).toEqual([])
   })
 
+  test('resendAll: an edit acked long ago, of a routine the web changed since, is settled with no notice and not sent', async () => {
+    const t = await planSetup()
+    await t.edit('r1', setsOn(4))
+    await t.sync.syncNow()
+    t.server.webEditsRoutine('r1', r => ({ ...r, name: 'Push (web, later)' }))
+    // restored from a backup taken after that web change: older than what the phone last saw
+    t.server.doc = { ...clone(t.server.doc), _rev: 2, _wids: ['other'] }
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'problem', problem: 'server-older' })
+    const before = clone(t.server.routine('r1'))
+    t.server.pushes.length = 0
+    expect(await t.sync.resendAll()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+    expect(t.server.pushes).toEqual([])
+    expect(t.server.routine('r1')).toEqual(before)
+    expect(await t.routineEdits.listPending()).toEqual([])
+    expect(await t.routineEdits.listNotices()).toEqual([])
+  })
+
   test('a save landing between the push reading the edits and markSent: the pull rebases it, no notice, and the next sync sends it', async () => {
     const t = await planSetup()
     const first = await t.edit('r1', setsOn(4))

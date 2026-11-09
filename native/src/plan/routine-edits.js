@@ -1,6 +1,9 @@
 // Local routine edits waiting to sync. One row per routine holding what this phone last
 // saved for it; acked_at is NULL until the push has settled it, superseded_at is set when
-// the server moved on first (the outbox is the rows with both NULL). routine and sent are
+// the server moved on first (the outbox is the rows with both NULL). resent is 1 on an acked
+// row resetAcked put back in the outbox (a resend to a restored server) until a put replaces
+// it: that edit went out long ago, so if it no longer fits it is settled with no notice
+// (markSuperseded acks it). routine and sent are
 // JSON text in SQLite and objects here. The handle is injected. This file does not import
 // expo-sqlite and does not send anything. Columns are snake_case; edits are camelCase.
 
@@ -14,7 +17,8 @@ CREATE TABLE IF NOT EXISTS routine_edits (
   acked_at TEXT,
   superseded_at TEXT,
   superseded_kind TEXT,
-  dismissed INTEGER NOT NULL DEFAULT 0
+  dismissed INTEGER NOT NULL DEFAULT 0,
+  resent INTEGER NOT NULL DEFAULT 0
 );
 `.trim()
 
@@ -43,7 +47,7 @@ function merged({ fresh, ...s }, existing) {
   const keep = !fresh && existing && isPending(existing)
   const acked = !fresh && existing && existing.ackedAt != null && existing.supersededAt == null
   const next = { ...s, baseTs: keep ? existing.baseTs : s.baseTs, sent: keep ? existing.sent : acked ? existing.routine : null,
-    ackedAt: null, supersededAt: null, supersededKind: null, dismissed: 0 }
+    ackedAt: null, supersededAt: null, supersededKind: null, dismissed: 0, resent: 0 }
   if (existing && existing.t === next.t &&
     (JSON.stringify(existing.routine) !== JSON.stringify(next.routine) || existing.baseTs !== next.baseTs)) next.t += 1
   return next
@@ -97,7 +101,7 @@ export function createMemoryRoutineEdits() {
     async markSuperseded(items, at) {
       for (const { rid, t, kind } of items) {
         const row = live(rid, t)
-        if (row) { row.supersededAt = at; row.supersededKind = kind }
+        if (row?.resent) { if (row.ackedAt == null) row.ackedAt = at } else if (row) { row.supersededAt = at; row.supersededKind = kind }
       }
       return { ok: true }
     },
@@ -110,7 +114,7 @@ export function createMemoryRoutineEdits() {
       return { ok: true }
     },
     async resetAcked() {
-      for (const row of rows.values()) if (row.ackedAt != null && row.supersededAt == null) row.ackedAt = null
+      for (const row of rows.values()) if (row.ackedAt != null && row.supersededAt == null) { row.ackedAt = null; row.resent = 1 }
       return { ok: true }
     },
   }
@@ -122,13 +126,24 @@ function requireDb(db) {
   }
 }
 
-// One schema run per db handle, shared by every store made on it.
+// One schema/migration run per db handle, shared by every store made on it.
 const migrations = new WeakMap()
 
 function migrate(db) {
   let opening = migrations.get(db)
   if (!opening) {
-    opening = db.exec(ROUTINE_EDITS_SCHEMA).catch(error => {
+    opening = (async () => {
+      await db.exec(ROUTINE_EDITS_SCHEMA)
+      // A table made before the resent flag: add it once, its rows not resent.
+      const columns = await db.getAll('PRAGMA table_info(routine_edits)')
+      if (!columns.some(column => column.name === 'resent')) {
+        try {
+          await db.run('ALTER TABLE routine_edits ADD COLUMN resent INTEGER NOT NULL DEFAULT 0')
+        } catch (error) {
+          if (!/duplicate column/i.test(String(error?.message))) throw error
+        }
+      }
+    })().catch(error => {
       migrations.delete(db)
       throw error
     })
@@ -141,7 +156,7 @@ function fromRow(row) {
   return {
     rid: row.rid, baseTs: row.base_ts, routine: JSON.parse(row.routine),
     sent: row.sent == null ? null : JSON.parse(row.sent), t: row.t,
-    ackedAt: row.acked_at, supersededAt: row.superseded_at, supersededKind: row.superseded_kind, dismissed: row.dismissed,
+    ackedAt: row.acked_at, supersededAt: row.superseded_at, supersededKind: row.superseded_kind, dismissed: row.dismissed, resent: row.resent,
   }
 }
 
@@ -157,10 +172,10 @@ export function createSqliteRoutineEdits(db) {
       const found = await rowsOf('SELECT * FROM routine_edits WHERE rid = ?', [s.rid])
       const next = merged(s, found[0])
       await db.run(
-        `INSERT INTO routine_edits (rid, base_ts, routine, sent, t, acked_at, superseded_at, superseded_kind, dismissed)
-         VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, 0)
+        `INSERT INTO routine_edits (rid, base_ts, routine, sent, t, acked_at, superseded_at, superseded_kind, dismissed, resent)
+         VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, 0, 0)
          ON CONFLICT(rid) DO UPDATE SET base_ts = excluded.base_ts, routine = excluded.routine, sent = excluded.sent,
-           t = excluded.t, acked_at = NULL, superseded_at = NULL, superseded_kind = NULL, dismissed = 0`,
+           t = excluded.t, acked_at = NULL, superseded_at = NULL, superseded_kind = NULL, dismissed = 0, resent = 0`,
         [next.rid, next.baseTs, JSON.stringify(next.routine), next.sent == null ? null : JSON.stringify(next.sent), next.t],
       )
       return { ok: true, rid: next.rid, t: next.t }
@@ -197,7 +212,16 @@ export function createSqliteRoutineEdits(db) {
     },
     async markSuperseded(items, at) {
       await ready()
-      for (const { rid, t, kind } of items) await db.run('UPDATE routine_edits SET superseded_at = ?, superseded_kind = ? WHERE rid = ? AND t = ?', [at, kind, rid, t])
+      // A resent row is acked instead (see the top of this file).
+      for (const { rid, t, kind } of items) {
+        await db.run(
+          `UPDATE routine_edits SET acked_at = CASE WHEN resent = 1 THEN COALESCE(acked_at, ?) ELSE acked_at END,
+             superseded_at = CASE WHEN resent = 1 THEN superseded_at ELSE ? END,
+             superseded_kind = CASE WHEN resent = 1 THEN superseded_kind ELSE ? END
+           WHERE rid = ? AND t = ?`,
+          [at, at, kind, rid, t],
+        )
+      }
       return { ok: true }
     },
     async listNotices() {
@@ -211,7 +235,7 @@ export function createSqliteRoutineEdits(db) {
     },
     async resetAcked() {
       await ready()
-      await db.run('UPDATE routine_edits SET acked_at = NULL WHERE acked_at IS NOT NULL AND superseded_at IS NULL')
+      await db.run('UPDATE routine_edits SET acked_at = NULL, resent = 1 WHERE acked_at IS NOT NULL AND superseded_at IS NULL')
       return { ok: true }
     },
   }
