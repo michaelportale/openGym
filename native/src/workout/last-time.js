@@ -50,10 +50,12 @@ export function lastTime(state, exerciseId, routineId) {
 // Without a routine, last time decides. A per-side row's reps are both sides together, as the
 // shared model stores them: each side gets half. Warm-ups are untouched. With a prescription the
 // entry's target takes the same weight and reps, as buildPlannedEntry stamps its own plan, so the
-// session is graded against what it opened at. Returns new objects.
+// session is graded against what it opened at. A drop-set or rest-pause exercise under a
+// prescription keeps the shared builder's rows and target as built. Returns new objects.
 export function applyOpeningWeights(entries, state, routineId, routine) {
   return entries.map(entry => {
     const opening = prescribedOpening(state, routine, entry.id)
+    if (opening?.asBuilt) return { ...entry }
     const top = opening ? opening.weight : lastTime(state, entry.id, routineId)?.top ?? null
     const reps = opening?.reps ?? null
     const sets = (entry.sets ?? []).map(set => {

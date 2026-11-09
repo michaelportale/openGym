@@ -1,4 +1,4 @@
-import { dumbbells, history, workoutModel } from '../shared/training.js'
+import { dumbbells, history } from '../shared/training.js'
 import { withEffortNote } from '../science/effort.js'
 import { nativePrescription, nativeRepPolicy } from '../science/native-progression.js'
 import { programRepRange } from '../science/rep-range.js'
@@ -31,13 +31,21 @@ function weightedPrescription(state, routine, exerciseId) {
   return p && p.kind !== 'off' && num(p.weight) ? { p, cfg } : null
 }
 
+// Drop-sets and rest-pause: the shared builder derives these rows' reps, a drop's weights and a
+// burst's split from the plan's structure. A suggestion cannot speak for that, so such an
+// exercise has no line and opens exactly as the shared builder built it.
+const structured = cfg => cfg?.intensifier?.type === 'dropset' || cfg?.intensifier?.type === 'restpause'
+
 /**
  * What a new session opens this exercise at from its prescription: `{ weight, reps }`, reps null
- * when the engine sets none. Null falls back to last time.
+ * when the engine sets none; `{ asBuilt: true }` for a drop-set or rest-pause exercise, which
+ * keeps the shared builder's rows. Null falls back to last time.
  */
 export function prescribedOpening(state, routine, exerciseId) {
-  const p = weightedPrescription(state, routine, exerciseId)?.p
-  if (!p) return null
+  const found = weightedPrescription(state, routine, exerciseId)
+  if (!found) return null
+  if (structured(found.cfg)) return { asBuilt: true }
+  const { p } = found
   return { weight: p.weight, reps: num(p.reps) && p.reps > 0 ? p.reps : null }
 }
 
@@ -59,8 +67,8 @@ function repsText(p, cfg) {
 }
 
 /**
- * One line per exercise in `entries` (the just-saved workout's) with a completed work set, that
- * the routine holds, and whose prescription has a weight: "Bench press — next time 85 lb × 8–12". `state` is the session's
+ * One line per exercise in `entries` (the just-saved workout's) with a done work set, that the
+ * routine holds without a drop-set or rest-pause structure, and whose prescription has a weight: "Bench press — next time 85 lb × 8–12". `state` is the session's
  * history with that workout in it. Off, a first session, and timed work have no line. The effort
  * note reads that exercise's done work sets and never changes the weight. `whyId` is the
  * register entry that explains the line: the deload one for a deload, else double progression.
@@ -73,10 +81,11 @@ export function nextTimeLines(state, routine, entries, names = {}) {
     if (!entry || seen.has(entry.id)) continue
     seen.add(entry.id)
     const found = weightedPrescription(state, routine, entry.id)
-    if (!found) continue
+    if (!found || structured(found.cfg)) continue
     const { cfg } = found
-    // Only an exercise trained today: a skipped one's line would describe an older session.
-    const work = setsFor('progression', entry.sets).filter(workoutModel.hasCompletedWork)
+    // Only an exercise trained today: a skipped one's line would describe an older session. A set
+    // counts as the engine counts it, done as a row: a per-side set with one side ticked is not.
+    const work = setsFor('progression', entry.sets).filter(s => s?.done)
     if (work.length === 0) continue
     const p = withEffortNote(found.p, work)
     const weight = p.weight

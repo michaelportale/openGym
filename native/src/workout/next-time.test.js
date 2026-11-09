@@ -184,6 +184,44 @@ test('an exercise with no completed work set in the saved session has no line', 
   }
 })
 
+test('a per-side set with only one side done is not a completed set: no line', () => {
+  const curl = { id: '0289', sets: 1, reps: 24, repsMin: 16, side: true }
+  const r = { ...routine, ex: [curl] }
+  const both = { w: 20, r: 24, done: true, sides: { L: work(20, 12), R: work(20, 12) } }
+  const half = { w: 20, r: 12, done: false, sides: { L: work(20, 12), R: work(20, 12, { done: false }) } }
+  const lastWeek = session('w1', '2026-11-02', [both], curl)
+  const today = session('s1', '2026-11-09', [half], curl)
+  // Only L ticked today: the engine reads last week's session, so a line would describe that.
+  expect(nextTimeLines({ unit: 'lb', routines: [r], workouts: [lastWeek, today] }, r, today.entries, names)).toEqual([])
+  const full = session('s1', '2026-11-09', [both], curl)
+  expect(nextTimeLines({ unit: 'lb', routines: [r], workouts: [lastWeek, full] }, r, full.entries, names)).toHaveLength(1)
+})
+
+test('rest-pause and drop-set exercises open exactly as the shared builder builds them, with no line', () => {
+  // Both topped last week. Rest-pause: one work set of 20 reps in bursts. Drop-set: two drops.
+  const rp = { id: '0025', sets: 1, reps: 12, repsMin: 8, intensifier: { type: 'restpause', totalReps: 20, restSec: 15 } }
+  const ds = { id: '0289', sets: 2, reps: 12, repsMin: 8, intensifier: { type: 'dropset', count: 2, pct: 20 } }
+  const last = {
+    id: 'w1', d: '2026-11-02', routineIds: ['r1'],
+    entries: [
+      { id: '0025', rid: 'r1', target: { ...rp }, planned: progression.plannedOf(rp), sets: [warm(80, 12), work(80, 20, { type: 'restpause', clusters: [10, 5, 3, 1, 1].map(r => ({ r, restSec: 15 })) })] },
+      { id: '0289', rid: 'r1', target: { ...ds }, planned: progression.plannedOf(ds), sets: [1, 2].map(() => work(40, 12, { type: 'dropset', drops: [{ w: 30, r: 12 }, { w: 25, r: 12 }] })) },
+    ],
+  }
+  for (const r of [{ ...routine, ex: [rp, ds] }, { ...routine, prog: 'double', ex: [rp, ds] }]) {
+    const S = { unit: 'lb', routines: [r], workouts: [last] }
+    const built = sessionStart.buildSessionEntries(S, r).map(e => ({ ...e, rid: r.id }))
+    // The reference is consistent: a rest-pause row's bursts sum to its reps, a drop keeps its row's reps.
+    const work0 = built[0].sets.find(s => s.type === 'restpause')
+    expect(work0.clusters.reduce((n, c) => n + c.r, 0)).toBe(work0.r)
+    for (const row of built[1].sets) expect(row.drops.every(d => d.r === row.r)).toBe(true)
+
+    const next = buildSessionBase({ state: S, routine: r, now, timeZone, id: 'n1' })
+    expect(next.entries).toStrictEqual(built)
+    expect(nextTimeLines(S, r, last.entries, names)).toEqual([])
+  }
+})
+
 test('an unnamed pyramid has no line: the engine never progresses one', () => {
   const pyramid = { ...routine, ex: [{ ...bench, pyramid: [12, 10, 8] }] }
   expect(nextTimeLines({ ...withSaved, routines: [pyramid] }, pyramid, saved.entries, names)).toEqual([])
