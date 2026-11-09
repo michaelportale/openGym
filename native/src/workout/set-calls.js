@@ -1,6 +1,6 @@
 import { workoutModel } from '../shared/training.js'
 import { completeFields, restEventId } from './rest-after.js'
-import { carriedWeight, isDone } from './workout-view.js'
+import { carriedWeight, isDone, shownValues } from './workout-view.js'
 
 // Which engine call a tap makes, and with what. Each returns null when the tap must not write.
 
@@ -25,16 +25,8 @@ export function findSet(view, setId) {
   return null
 }
 
-// What the screen shows for a set (the draft, then `carry` from carriedWeight, then the row, as
-// workoutScreen reads it), in the keypad's shape: { w, r }, or per side { w, sides: { L: { r }, R: { r } } }.
-export function shownValues(slot, side, carry) {
-  const { row } = slot
-  const d = slot.draft || {}
-  if (!isSideSet(row)) return { w: d.w ?? carry ?? row.w ?? null, r: d.r ?? row.r ?? null }
-  const own = row.sides[side === 'R' ? 'R' : 'L']
-  const reps = s => d.sides?.[s]?.r ?? d.r ?? row.sides[s].r ?? null
-  return { w: d.w ?? carry ?? own.w ?? row.w ?? null, sides: { L: { r: reps('L') }, R: { r: reps('R') } } }
-}
+// Complete logs what the screen shows (workout-view.js), and the keypad opens on it.
+export { shownValues }
 
 // The field the keypad opens on: the reps box opens on reps (the side being worked, per side).
 export function keypadField(field, perSide, side) {

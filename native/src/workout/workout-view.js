@@ -75,30 +75,29 @@ function nextSide(row) {
   return row.sides.L?.done === true ? 'R' : 'L'
 }
 
-// The numbers a row shows: the draft's fields, then the carried weight, then the row's. A
-// per-side row shows the side being worked (or both sides' reps once neither is pending).
+// The numbers a set shows, and what one-tap Complete logs: the draft's fields, then `carry` from
+// carriedWeight, then the row's. In the keypad's shape: { w, r }, or per side
+// { w, sides: { L: { r }, R: { r } } } with the weight of the side being worked.
+export function shownValues(slot, side, carry) {
+  const { row } = slot
+  const d = slot.draft || {}
+  if (!isSideSet(row)) return { w: d.w ?? carry ?? row.w ?? null, r: d.r ?? row.r ?? null }
+  const own = row.sides[side === 'R' ? 'R' : 'L']
+  const reps = s => d.sides?.[s]?.r ?? d.r ?? row.sides[s].r ?? null
+  return { w: d.w ?? carry ?? own.w ?? row.w ?? null, sides: { L: { r: reps('L') }, R: { r: reps('R') } } }
+}
+
+// One weight and one reps figure: per side, the reps of the side being worked.
 function shown(slot, side, carry) {
-  const { row, draft } = slot
-  const d = draft || {}
-  if (isSideSet(row)) {
-    const own = side ? row.sides[side] : row.sides.L
-    const dSide = side && d.sides && d.sides[side] ? d.sides[side] : {}
-    return {
-      w: dSide.w ?? d.w ?? carry ?? own.w ?? row.w,
-      r: dSide.r ?? d.r ?? own.r,
-    }
-  }
-  return { w: d.w ?? carry ?? row.w, r: d.r ?? row.r }
+  const v = shownValues(slot, side, carry)
+  return { w: v.w, r: v.sides ? v.sides[side === 'R' ? 'R' : 'L'].r : v.r }
 }
 
 function repsText(slot) {
-  const { row, draft } = slot
-  if (isSideSet(row) && !draft?.r) {
-    const l = draft?.sides?.L?.r ?? row.sides.L?.r
-    const r = draft?.sides?.R?.r ?? row.sides.R?.r
-    return l === r ? num(l) : `${num(l)} / ${num(r)}`
-  }
-  return num(shown(slot, null).r)
+  const v = shownValues(slot, null)
+  if (!v.sides) return num(v.r)
+  const { L, R } = v.sides
+  return L.r === R.r ? num(L.r) : `${num(L.r)} / ${num(R.r)}`
 }
 
 const lastLine = s => `${num(s.w)} × ${num(s.r)}`
