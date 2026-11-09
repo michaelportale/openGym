@@ -49,13 +49,11 @@ test('text styles keep a size and a weight', () => {
     expect(String(style.fontWeight)).toMatch(/^[1-9]00$/)
   }
 })
-// Dynamic Type. LARGEST is iOS's largest accessibility text size as a multiple of the default:
-// body text at AX5 is about 53 pt against 17 pt, so about 3.1. A style with no fontScale cap
-// grows that far; a capped one stops at its cap. Every size from the smallest up is checked, so
-// the rule holds at each step, not only at the end. (React Native's own table goes further, to
-// 3.571 at AX5, in RCTAccessibilityManager; every style today has a cap below both.)
-const LARGEST = 3.1
-const multipliers = [...Array.from({ length: 23 }, (_, i) => Math.round((0.8 + i * 0.1) * 10) / 10), LARGEST]
+// Dynamic Type. A style with no fontScale cap grows to LARGEST; a capped one stops at its cap.
+// Every size from the smallest up is checked, so the rule holds at each step, not only at the end.
+// LARGEST is React Native's multiplier at AX5, the largest size (RCTAccessibilityManager.mm).
+const LARGEST = 3.571
+const multipliers = [...Array.from({ length: 28 }, (_, i) => Math.round((0.8 + i * 0.1) * 10) / 10), LARGEST]
 const shownSize = (style, m) => type[style].fontSize * Math.min(m, fontScale[style] ?? LARGEST)
 
 test('at every text size nothing but the resting timer is larger than the lead', () => {
