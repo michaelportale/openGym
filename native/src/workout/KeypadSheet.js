@@ -5,7 +5,7 @@ import AppText from '../ui/AppText'
 import IconButton from '../ui/IconButton'
 import PrimaryButton from '../ui/PrimaryButton'
 import ScaleButton from '../ui/ScaleButton'
-import { actionsStacked, applyKey, completeBlocker, fieldText, keypadState, keypadValues, sheetCloseAction, weightLockNote } from './keypad'
+import { actionsStacked, applyKey, completeBlocker, fieldText, keypadState, keypadValues, sheetCloseAction, weightLockHint, weightLockNote } from './keypad'
 import { spokenField } from './spoken'
 
 const CHIPS = ['-10', '-5', '+5', '+10']
@@ -21,22 +21,23 @@ function Key({ text, label, hint, style = styles.key, disabled = false, onPress 
 }
 
 // `id` is the keypad field ('w', 'r', 'L.r', 'R.r'); `title` is what it shows ('Lb each').
-// `setWith` ('L' or 'R') marks a weight logged with that side: it shows, says so, and takes no input.
+// `setWith` ('L' or 'R') marks a weight logged with that side: it shows and takes no input. Its
+// note sits under the field row (weightLockNote); VoiceOver hears it here, the side in the label
+// and the way to change it as the hint.
 function Field({ id, title, text, active, perHand, setWith = null, onPress }) {
-  const note = weightLockNote(setWith)
+  const lockHint = weightLockHint(setWith)
   return (
     <ScaleButton
       accessibilityLabel={spokenField(id, text, { perHand, setWith })}
-      accessibilityHint={note ? undefined : 'Selects this field for the keypad.'}
-      accessibilityState={{ selected: active, disabled: note !== null }}
-      disabled={note !== null}
+      accessibilityHint={lockHint ?? 'Selects this field for the keypad.'}
+      accessibilityState={{ selected: active, disabled: lockHint !== null }}
+      disabled={lockHint !== null}
       onPress={onPress}
       style={styles.fieldSlot}
       faceStyle={[styles.field, active && styles.fieldActive]}
     >
       <AppText variant="label" color={color.textSecondary}>{title}</AppText>
       <AppText variant="lead">{text}</AppText>
-      {note ? <AppText variant="label" color={color.textSecondary}>{note}</AppText> : null}
     </ScaleButton>
   )
 }
@@ -66,6 +67,7 @@ export default function KeypadSheet({ visible, title, initial, perSide, side = n
     if (visible) setState(keypadState(initial, initialField, { weightSetWith }))
   }, [visible])
   const stacked = actionsStacked(useWindowDimensions().fontScale)
+  const lockNote = weightLockNote(state.lock)
   const values = keypadValues(state)
   const blocked = completeBlocker(values, side)
   const press = key => () => setState(current => applyKey(current, key))
@@ -100,6 +102,11 @@ export default function KeypadSheet({ visible, title, initial, perSide, side = n
               <Field key={id} id={id} title={name} text={fieldText(state, id)} active={state.field === id} onPress={press(`field:${id}`)} />
             ))}
           </View>
+          {/* Under the row, so the weight field stays the height of its neighbours. VoiceOver
+              hears it with the weight field (Field), so not here a second time. */}
+          {lockNote ? (
+            <AppText variant="label" color={color.textSecondary} accessibilityElementsHidden importantForAccessibility="no">{lockNote}</AppText>
+          ) : null}
           <View style={styles.chips}>
             {CHIPS.map(chip => (
               <Key key={chip} text={chip.replace('-', '−')} label={`${chip.startsWith('-') ? 'Minus' : 'Plus'} ${chip.slice(1)} pounds`} hint="Changes the weight." style={styles.chip} disabled={state.lock !== null} onPress={press(`chip:${chip}`)} />

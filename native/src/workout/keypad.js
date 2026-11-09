@@ -44,9 +44,19 @@ export function keypadState({ w = null, r = null, sides } = {}, field = 'w', { w
   return { field: opens, entry: null, w: w ?? null, r: sided ? null : (r ?? null), sides: sided, lock }
 }
 
-// The line under a weight set with the other side: 'Set with the left side.', or null.
+const LOCK_SIDES = { L: 'left', R: 'right' }
+const LOCK_WAY_OUT = 'To change it, finish the set, then Update it.'
+
+// The line under the fields when a half-done per-side set's weight was set with `side` ('L' or
+// 'R'): which side, and the way to change it, since the keypad will not. Null otherwise.
 export function weightLockNote(side) {
-  return side === 'L' ? 'Set with the left side.' : side === 'R' ? 'Set with the right side.' : null
+  return Object.hasOwn(LOCK_SIDES, side ?? '') ? `Weight set with the ${LOCK_SIDES[side]} side. ${LOCK_WAY_OUT}` : null
+}
+
+// What VoiceOver hears of that note, as the locked weight field's hint: its label already names
+// the side (spokenField). Null when the weight is not locked.
+export function weightLockHint(side) {
+  return Object.hasOwn(LOCK_SIDES, side ?? '') ? LOCK_WAY_OUT : null
 }
 
 export function keypadValues(state) {

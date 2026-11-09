@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { STACK_ACTIONS_FROM, actionsStacked, applyKey, completeBlocker, completeLabels, fieldText, keypadState, keypadValues, sheetCloseAction, weightLockNote } from './keypad.js'
+import { STACK_ACTIONS_FROM, actionsStacked, applyKey, completeBlocker, completeLabels, fieldText, keypadState, keypadValues, sheetCloseAction, weightLockHint, weightLockNote } from './keypad.js'
 
 const press = (state, ...keys) => keys.reduce(applyKey, state)
 const values = (state, ...keys) => keypadValues(press(state, ...keys))
@@ -126,11 +126,19 @@ test('a half-done per-side set refuses weight input; the other side\'s reps stay
   // A tapped reps box still opens on it.
   expect(keypadState(initial, 'R.r', { weightSetWith: 'L' }).field).toBe('R.r')
 })
-test('weightLockNote says which side set the weight', () => {
-  expect(weightLockNote('L')).toBe('Set with the left side.')
-  expect(weightLockNote('R')).toBe('Set with the right side.')
+test('weightLockNote says which side set the weight, and how to change it', () => {
+  expect(weightLockNote('L')).toBe('Weight set with the left side. To change it, finish the set, then Update it.')
+  expect(weightLockNote('R')).toBe('Weight set with the right side. To change it, finish the set, then Update it.')
   expect(weightLockNote(null)).toBeNull()
   expect(weightLockNote(undefined)).toBeNull()
+  expect(weightLockNote('constructor')).toBeNull()
+})
+test('weightLockHint gives VoiceOver the way out with the field; the side is in its label', () => {
+  expect(weightLockHint('L')).toBe('To change it, finish the set, then Update it.')
+  expect(weightLockHint('R')).toBe('To change it, finish the set, then Update it.')
+  expect(weightLockNote('R')).toContain(weightLockHint('R'))
+  expect(weightLockHint(null)).toBeNull()
+  expect(weightLockHint('toString')).toBeNull()
 })
 
 test('completeLabels: a warm-up shows plain Complete and is spoken as the warm-up', () => {
