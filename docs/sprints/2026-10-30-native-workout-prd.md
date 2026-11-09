@@ -247,7 +247,8 @@ proxies the API and serves exercise media, so its replacement is planned before 
 | 4 | Code done; the owner's device checklist is pending | PR #115 |
 | 5 | Code done; the owner's device checklist is pending | PR #116 |
 | 6 | Code done; the owner's device checklist is pending | PRs #117 and #118 |
-| 7-10 | Not started | |
+| 7 | Stage 7A (Exercises) code done; the owner's device checklist is pending; 7B–7D not started | PR #119 |
+| 8-10 | Not started | |
 
 Phase 9's device acceptance and the real gym sessions are the owner's to run. The checklist is
 [`2026-11-native-first-workout-checklist.md`](2026-11-native-first-workout-checklist.md).

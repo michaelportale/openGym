@@ -13,11 +13,6 @@ const destinations = {
     title: 'Progress',
     phase: 7,
     summary: 'Body weight, lift history and e1RM, measurements and nutrition. WHOOP follows in Phase 8.'
-  },
-  exercises: {
-    title: 'Exercises',
-    phase: 7,
-    summary: 'Browse and search the catalogue and your custom exercises.'
   }
 }
 

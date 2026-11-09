@@ -4,7 +4,7 @@ import { readCopy } from './server-copy.js'
 import { exercises } from '../shared/training.js'
 import { sessionState } from '../workout/history-state.js'
 
-const cap = s => (s ? s[0].toUpperCase() + s.slice(1) : '')
+export const cap = s => (s ? s[0].toUpperCase() + s.slice(1) : '')
 
 function nameOf(id, builtIn, custom) {
   const c = custom.get(id)

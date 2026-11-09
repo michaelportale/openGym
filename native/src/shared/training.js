@@ -1,5 +1,5 @@
-// The only file in native/ that may import from frontend/src/lib. Everything else goes through here,
-// so scripts/check-shared-lib.mjs has a single entry point to scan.
+// One of two files in native/ that may import from frontend/ (the other is exercise-text.js). Everything
+// else goes through here, so scripts/check-shared-lib.mjs has a known set of entry points to scan.
 export * as sessionStart from '../../../frontend/src/lib/session-start.js'
 export * as finishWorkout from '../../../frontend/src/lib/finish-workout.js'
 export * as progression from '../../../frontend/src/lib/progression.js'
@@ -14,3 +14,7 @@ export * as effort from '../../../frontend/src/lib/effort.js'
 export * as nutrition from '../../../frontend/src/lib/nutrition.js'
 export * as measurements from '../../../frontend/src/lib/measurements.js'
 export * as bodyweight from '../../../frontend/src/lib/bodyweight.js'
+export * as libraryFilter from '../../../frontend/src/lib/library-filter.js'
+export * as favourites from '../../../frontend/src/lib/favourites.js'
+export * as i18nCore from '../../../frontend/src/lib/i18n-core.js'
+export * as equipment from '../../../frontend/src/lib/equipment.js'

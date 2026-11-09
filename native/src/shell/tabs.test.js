@@ -72,10 +72,10 @@ test('the app opens on Workout: the launch route is the Workout tab, and Home is
   expect(read('home.js')).toContain("destinationCopy('home')")
 })
 
-test('workout logs real sessions and the other four tabs are unbuilt', () => {
-  expect(TABS.find(tab => tab.label === 'Workout').availability).toBe('ready')
+test('workout and exercises are ready and the other three tabs are unbuilt', () => {
+  expect(TABS.filter(tab => tab.availability === 'ready').map(tab => tab.label)).toEqual(['Workout', 'Exercises'])
   expect(TABS.filter(tab => tab.availability === 'unbuilt').map(tab => tab.label)).toEqual([
-    'Home', 'Plan', 'Progress', 'Exercises'
+    'Home', 'Plan', 'Progress'
   ])
   expect(TABS.some(tab => tab.availability === 'preview')).toBe(false)
 })

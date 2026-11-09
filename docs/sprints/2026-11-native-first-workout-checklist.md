@@ -2,7 +2,7 @@
 
 Run this on the iPhone before the first real gym session. Tick each line. Record pass or fail per line in the PR, not here.
 
-Read this first: the dev build and the Release build share one bundle id, so they share one database. Everything you log while testing is written to the same place as real sessions. That is why step 13 wipes the app once. After the wipe, any later test on that phone writes into the real record.
+Read this first: the dev build and the Release build share one bundle id, so they share one database. Everything you log while testing is written to the same place as real sessions. That is why step 14 wipes the app once. After the wipe, any later test on that phone writes into the real record.
 
 ## Before you build
 
@@ -27,7 +27,7 @@ Swipe up from the bottom edge and pause to open the app switcher. Then swipe the
 - [ ] `--no-bundler` is required. Without it Expo starts Metro on 8081, which is taken on this Mac, and its TypeScript check fails on a test fixture.
 - [ ] The app opens on the Workout tab, not Home.
 - [ ] The example-data banner is absent. If you see "Example data. Your routines are not loaded on this build.", the snapshot is missing. Stop and rebuild.
-- [ ] Only if this phone already holds real gym sessions (logged since an earlier wipe), do this now, before any test below: the reinstall in step 10 and the wipe in step 13 delete everything on the phone. On the Mac, from the repository root, note the count: `node -e "console.log(JSON.parse(require('fs').readFileSync('data/state-<user id>.json','utf8')).workouts.length)"` (the user id is the part of the file name between `state-` and `.json`). In ··· More, Diagnostics, pair with the **real** server: print a code with `docker compose exec api node scripts/pair-code.mjs` (or the bare-metal form in SELF_HOSTING) and enter the https address you open the web app at and the code. Run the count again: it went up by the sessions on the phone. Then tap "Forget this server" and confirm, so no test below reaches the real server. With no real sessions on the phone, skip this line.
+- [ ] Only if this phone already holds real gym sessions (logged since an earlier wipe), do this now, before any test below: the reinstall in step 10 and the wipe in step 14 delete everything on the phone. On the Mac, from the repository root, note the count: `node -e "console.log(JSON.parse(require('fs').readFileSync('data/state-<user id>.json','utf8')).workouts.length)"` (the user id is the part of the file name between `state-` and `.json`). In ··· More, Diagnostics, pair with the **real** server: print a code with `docker compose exec api node scripts/pair-code.mjs` (or the bare-metal form in SELF_HOSTING) and enter the https address you open the web app at and the code. Run the count again: it went up by the sessions on the phone. Then tap "Forget this server" and confirm, so no test below reaches the real server. With no real sessions on the phone, skip this line.
 
 ## 2. Airplane Mode
 
@@ -104,13 +104,13 @@ Phase 4. Start Push A from the routine list on the Workout start screen. Discard
 
 ## 10. Pairing and restore, on a copy
 
-This rehearses sync and restore against a **copy** of `data/`, never the real one. Do it before the wipe. It needs the Mac and the phone on the same network, and the Release build from step 1 on the phone. Anything you log here goes into the phone's database, like every other test in this file; the wipe in step 13 clears it.
+This rehearses sync and restore against a **copy** of `data/`, never the real one. Do it before the wipe. It needs the Mac and the phone on the same network, and the Release build from step 1 on the phone. Anything you log here goes into the phone's database, like every other test in this file; the wipe in step 14 clears it.
 
 - [ ] Back up the real data, with the tar from [SELF_HOSTING section 6](../SELF_HOSTING.md#6-backups): `tar czf opengym-backup-$(date +%F).tar.gz data/`. Only the real folder is read; nothing here changes it.
 - [ ] Make the copy, from the repository root: `cp -a data ../opengym-data-copy`. The copy sits outside the repository so it cannot be committed. Then remove the copy's secret: `rm ../opengym-data-copy/secret`. The copy makes its own secret on first start, so nothing it signs (including the phone's sign-in token) works on the real server.
 - [ ] Start a second API on the copy, on another port, with Docker, leaving the real container and the real `./data` alone: `docker build -t opengym-api-copy ./api`, then `docker run -d --name opengym-api-copy -p 3100:3000 -e DATA_DIR=/data -v "$PWD/../opengym-data-copy:/data" opengym-api-copy`. Use any free host port in place of `3100`; write it as `<port>` below. Without Docker, from `api/` (needs `npm install` there): `DATA_DIR=<the copy> PORT=<port> node server.js`. The copy has the real push subscriptions, so day reminders may arrive twice while it runs.
 - [ ] Print a pairing code for the copy: `docker exec opengym-api-copy node scripts/pair-code.mjs` (bare metal: `cd api && DATA_DIR=<the copy> PORT=<port> node scripts/pair-code.mjs`). With more than one profile, add `--user <name>`. The code lasts 5 minutes.
-- [ ] On the phone, open ··· More, then Diagnostics. In "Your server" tap "Pair with your server". Enter `http://<the Mac's LAN IP>:<port>` and the code, then tap Pair. The first connection shows the iOS Local Network prompt: tap Allow. If Pair says it couldn't reach the server, tap Allow on that prompt and tap Pair again with the same code: a request that never reached the server does not use the code up. If 5 minutes have passed, or Pair then says the code didn't work, print a new code. Plain http is for this rehearsal only: it sends the sign-in token unencrypted, which is acceptable here because the copy has its own secret, so the token opens nothing on the real server, but not for the real pairing (step 13 uses https). This uses the Release build from step 1. The section now shows the host, "Signed in as" your profile, the status line "Synced to <host> at <time>" and, if anything is queued, "N workouts waiting". A separate "Last synced" line shows only while the status line does not say when it last synced. Routines, rotation and history now come from the copy. Note the count on the Mac now: `node -e "console.log(JSON.parse(require('fs').readFileSync('<the copy>/state-<user id>.json','utf8')).workouts.length)"` (the user id is the part of the file name between `state-` and `.json`).
+- [ ] On the phone, open ··· More, then Diagnostics. In "Your server" tap "Pair with your server". Enter `http://<the Mac's LAN IP>:<port>` and the code, then tap Pair. The first connection shows the iOS Local Network prompt: tap Allow. If Pair says it couldn't reach the server, tap Allow on that prompt and tap Pair again with the same code: a request that never reached the server does not use the code up. If 5 minutes have passed, or Pair then says the code didn't work, print a new code. Plain http is for this rehearsal only: it sends the sign-in token unencrypted, which is acceptable here because the copy has its own secret, so the token opens nothing on the real server, but not for the real pairing (step 14 uses https). This uses the Release build from step 1. The section now shows the host, "Signed in as" your profile, the status line "Synced to <host> at <time>" and, if anything is queued, "N workouts waiting". A separate "Last synced" line shows only while the status line does not say when it last synced. Routines, rotation and history now come from the copy. Note the count on the Mac now: `node -e "console.log(JSON.parse(require('fs').readFileSync('<the copy>/state-<user id>.json','utf8')).workouts.length)"` (the user id is the part of the file name between `state-` and `.json`).
 - [ ] Finish a short workout. The saved screen says "Synced to <host> at <time>".
 - [ ] Turn Airplane Mode on, and Wi-Fi off in Control Centre. Finish another workout. The saved screen says "Saved on this phone. It will sync when <host> is reachable." Diagnostics shows "1 workout waiting".
 - [ ] Turn Airplane Mode off and Wi-Fi back on, then return to the app. Tap "Sync now" in Diagnostics. Returning to the app syncs by itself only when the last try was more than a minute ago, and the Control Centre toggle may not background the app at all. The line then says "Synced to <host> at <time>" and no workouts are waiting.
@@ -141,13 +141,22 @@ Phase 6, Stages A (workouts) and B (weigh-ins). Do it before the wipe, on test w
 - [ ] Turn it off and remove. Turn the "Apple Health" switch off. The alert "Turn off Apple Health?" shows three buttons: "Keep what's there", "Also remove openGym's workouts and weights" and "Cancel". Tap "Also remove openGym's workouts and weights". The section goes back to "Off. Your workouts are not sent to Apple Health." In the Health app, Browse, Activity, Workouts, none of openGym's workouts are left, and Weight → Show All Data lists none from openGym (the weights you added in the Health app yourself stay). The workouts are still in the app: Export workouts lists them.
 - [ ] Discard any test session still open: tap Finish, then Discard workout, then Discard. A finished test workout needs no discard; it stays in the app until the wipe.
 
-## 12. Before the wipe
+## 12. Exercises
+
+Phase 7A, text side. Do it before the wipe, with the Release build. This adds a native dependency (expo-video), so the phone needs a fresh Release build first: `npx expo run:ios --configuration Release …`, the command from step 1. The phone is unpaired here, so exercise screens show text only; the animation checks come after the cutover, in step 14. Open the Exercises tab.
+
+- [ ] Search. Tap the "Search exercises" field and type `db press`. Dumbbell presses are listed, each row showing the name and "target · equipment". A search with no match (try `zzzz`) says `No exercise matches “zzzz”.`, then "Close matches".
+- [ ] Tap with the keyboard up. With the keyboard still showing, tap a row. The exercise screen opens at once, without a first tap that only closes the keyboard.
+- [ ] Text. Clear the search and open Barbell Bench Press. The screen shows Back, the name, tags, the description, and "How to" with numbered steps, plus "Best: …" and "Last time: …" lines if you have logged it.
+- [ ] Diagnostics ends with the media credit line.
+
+## 13. Before the wipe
 
 - [ ] Every line above has a recorded pass or fail in the PR. Fix any failure before wiping.
 - [ ] From the repository root, `git status` does not list `native/local/`.
 - [ ] The privacy search covers every tracked file in the repository, not only `native/` and `docs/sprints/`: `git grep -n -I -e '<your user id>' -e '<one of your routine ids>' -e '<one of your custom exercise ids>'` prints nothing. Your user id is the part of your data file's name between `state-` and `.json`. Type the real values only in the terminal, never into a tracked file, this one included.
 
-## 13. The wipe
+## 14. The wipe
 
 This removes the test workouts so your first real session starts clean.
 
@@ -162,6 +171,15 @@ This removes the test workouts so your first real session starts clean.
 - [ ] Do not use "Sign out everywhere" on the web unless you mean to: it also unpairs the phone. The phone then says the server signed it out, keeps every workout, and syncs again after you pair it again.
 
 - [ ] After pairing with the real server, turn Apple Health on in ··· More, Diagnostics and allow access, so real sessions go to Health from then on.
+
+Exercise animations, now that the phone is paired with your real server (read-only checks). Open the Exercises tab.
+
+- [ ] Animation. Open Barbell Bench Press. Within a few seconds the animation plays, muted, with the credit line under it.
+- [ ] Music. Start music in another app, then open an exercise with an animation. The music keeps playing.
+- [ ] Offline, new exercise. Turn Airplane Mode on. Open an exercise whose animation you have not watched. It shows text only, with no spinner and no error.
+- [ ] Offline, watched exercise. Still in Airplane Mode, open an exercise whose animation you watched earlier. It plays again, from the cache. Turn Airplane Mode off.
+- [ ] Reduce Motion. Turn on Settings, Accessibility, Motion, Reduce Motion. Open an exercise with an animation: the still shows, and a tap plays the clip. Turn it back off.
+- [ ] A custom exercise. Do not create one on the web: the phone is the only writer now. If you already have a custom exercise, find it in the list: its row says "Yours" and its screen shows its own description and no animation. Skip this row if you have none.
 
 From here on, do not install a dev build over the Release app. Any test on this phone now writes into the real record.
 

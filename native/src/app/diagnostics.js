@@ -3,7 +3,10 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { deleteDatabaseAsync, openDatabaseAsync } from 'expo-sqlite'
 import { color, radius, space, touch } from '../theme/tokens'
 import AppText from '../ui/AppText'
+import PairSheet from '../sync/PairSheet'
 import ServerSection from '../sync/ServerSection'
+import { MEDIA_CREDIT } from '../exercises/detail-view'
+import { useSync } from '../sync/use-sync'
 import HealthSection from '../health/HealthSection'
 import { readVerdict } from '../health/gates'
 import { toSessionDbHandle } from '../storage/db-handle'
@@ -48,6 +51,8 @@ export default function Diagnostics() {
   const { e1rm, catalogueSize, loadMs } = proof
   const [lines, setLines] = useState([])
   const [busy, setBusy] = useState(false)
+  const sync = useSync()
+  const [pairing, setPairing] = useState(false)
 
   const run = async fn => {
     setBusy(true)
@@ -104,26 +109,30 @@ export default function Diagnostics() {
     }))
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content} alwaysBounceVertical={false}>
-      <ServerSection />
-      <HealthSection />
-      <AppText variant="value">e1RM {e1rm}</AppText>
-      <AppText variant="body" color={color.textSecondary}>{catalogueSize} exercises</AppText>
-      <AppText variant="body" color={color.textSecondary}>training.js load: {loadMs} ms</AppText>
-      <View style={styles.buttons}>
-        <ActionButton title="Request access" disabled={busy} onPress={() => run(async () => { await requestHealthAccess(); return ['access requested'] })} />
-        <ActionButton title="Run workout gates" disabled={busy} onPress={gates} />
-        <ActionButton title="Read body weight" disabled={busy} onPress={readWeight} />
-        <ActionButton title="Save one test workout" disabled={busy} onPress={saveManual} />
-        <ActionButton title="Remove test workouts" disabled={busy} onPress={removeTests} />
-        <ActionButton title="Storage check" disabled={busy} onPress={storageCheck} />
-      </View>
-      <View style={styles.output}>
-        {lines.map((l, i) => (
-          <AppText key={i} variant="body">{l}</AppText>
-        ))}
-      </View>
-    </ScrollView>
+    <>
+      <ScrollView style={styles.container} contentContainerStyle={styles.content} alwaysBounceVertical={false}>
+        <ServerSection sync={sync} onPair={() => setPairing(true)} />
+        <HealthSection />
+        <AppText variant="value">e1RM {e1rm}</AppText>
+        <AppText variant="body" color={color.textSecondary}>{catalogueSize} exercises</AppText>
+        <AppText variant="body" color={color.textSecondary}>training.js load: {loadMs} ms</AppText>
+        <View style={styles.buttons}>
+          <ActionButton title="Request access" disabled={busy} onPress={() => run(async () => { await requestHealthAccess(); return ['access requested'] })} />
+          <ActionButton title="Run workout gates" disabled={busy} onPress={gates} />
+          <ActionButton title="Read body weight" disabled={busy} onPress={readWeight} />
+          <ActionButton title="Save one test workout" disabled={busy} onPress={saveManual} />
+          <ActionButton title="Remove test workouts" disabled={busy} onPress={removeTests} />
+          <ActionButton title="Storage check" disabled={busy} onPress={storageCheck} />
+        </View>
+        <View style={styles.output}>
+          {lines.map((l, i) => (
+            <AppText key={i} variant="body">{l}</AppText>
+          ))}
+        </View>
+        <AppText variant="label" color={color.textMuted} style={styles.credit}>{MEDIA_CREDIT}</AppText>
+      </ScrollView>
+    <PairSheet visible={pairing} onPair={sync.pair} onClose={() => setPairing(false)} />
+    </>
   )
 }
 
@@ -139,5 +148,6 @@ const styles = StyleSheet.create({
     backgroundColor: color.accent
   },
   buttonDisabled: { opacity: 0.4 },
+  credit: { alignSelf: 'stretch', paddingHorizontal: space.lg },
   output: { alignSelf: 'stretch', padding: space.lg }
 })
