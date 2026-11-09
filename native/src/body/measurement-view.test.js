@@ -100,10 +100,10 @@ describe('applyLogForm', () => {
   test('body fat is a percent, written as typed to 0.1', () => {
     expect(applyLogForm({}, D, { values: { bodyFat: 17.26 } }, { now: NOW }).entry.bodyFat).toBe(17.3)
   })
-  test('body fat over 100 becomes null (normalizeMeasurementEntry)', () => {
-    const { entry } = applyLogForm({}, D, { values: { waist: 32, bodyFat: 120 } }, { now: NOW })
-    expect(entry.bodyFat).toBeNull()
-    expect(applyLogForm({}, D, { values: { bodyFat: 120 } }, { now: NOW }).error).toBe('Enter at least one measurement')
+  test('body fat over 100 is refused and saves nothing (Measurements.jsx:59; the read path nulls it, measurements.js:50)', () => {
+    expect(applyLogForm({}, D, { values: { waist: 32, bodyFat: 120 } }, { now: NOW })).toEqual({ entry: null, error: 'Body fat must be between 0 and 100%.' })
+    expect(applyLogForm({}, D, { values: { bodyFat: 100.1 } }, { now: NOW }).error).toBe('Body fat must be between 0 and 100%.')
+    expect(applyLogForm({}, D, { values: { bodyFat: 100 } }, { now: NOW }).entry.bodyFat).toBe(100)
   })
   test('an untouched field keeps its exact stored cm, an unknown key survives, only the changed field moves', () => {
     const s = { measurements: [{ d: D, t: 100, waist: 81.28, chest: 99.123, hips: 90, future: { a: 1 }, other: [{ id: 'zz', name: 'Gone', value: 7.77 }] }] }

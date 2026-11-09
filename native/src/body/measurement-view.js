@@ -145,12 +145,15 @@ export function applyLogForm(state, d, form, { now } = {}) {
   const values = isObj(form?.values) ? form.values : {}
   const before = logForm(state, d).values
 
+  // Measurements.jsx:59: body fat over 100 stops the save (the read path nulls it, measurements.js:50).
+  if (typed(values.bodyFat) > 100) return fail('Body fat must be between 0 and 100%.')
+
   for (const [key, given] of Object.entries(values)) {
     const isCustom = key.startsWith('other:')
     if (!isCustom && !KEYS.includes(key)) continue
     const value = typed(given)
     if (value === (before[key] ?? null)) continue // untouched: its stored cm stays as it is
-    const stored = value == null ? null : key === 'bodyFat' ? (value > 100 ? null : value) : M.fromMeasurementDisplay(value, UNIT)
+    const stored = value == null ? null : key === 'bodyFat' ? (value) : M.fromMeasurementDisplay(value, UNIT)
     if (isCustom) {
       const id = key.slice(6)
       const item = entry.other.find(o => o.id === id)
