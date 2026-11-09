@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { NO_NOTICES, OVERNIGHT_NOTICE, addSetCall, addWarmupCall, completeCall, completeResult, dockKeypadField, draftCall, editCall, keypadField, noticeAnnouncement, noticesAfter, overnightNotice, overnightNow, overnightRefusal, primaryAction, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, undoCall, writeOutcome } from './set-calls.js'
+import { NO_NOTICES, OVERNIGHT_NOTICE, PAST_MIDNIGHT, addSetCall, addWarmupCall, completeCall, completeResult, dockKeypadField, draftCall, editCall, finishRetarget, keypadField, noticeAnnouncement, noticesAfter, overnightNotice, overnightNow, overnightRefusal, primaryAction, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, undoCall, writeOutcome } from './set-calls.js'
 import { shownValues, workoutScreen } from './workout-view.js'
 import { pendingRest, restEventId, restMsFor } from './rest-after.js'
 import { withTargets } from './session-screen.js'
@@ -326,13 +326,23 @@ describe('overnight at write time', () => {
     expect(overnightNow(evening, later)).toBe(false)
     expect(overnightNow(evening, later, 'UTC')).toBe(true)
   })
-  test('a view the engine already called overnight stays so; a finished or discarded one never is; no clock keeps what the view said', () => {
+  test('a view the engine already called overnight stays so; a finished or discarded one never is', () => {
     expect(overnightNow(drawn({ disposition: { kind: 'overnight', actions: ['resume', 'finish', 'discard'], suggestedEnd: at2350 } }), at2350)).toBe(true)
     expect(overnightNow(drawn({ status: 'finished', disposition: { kind: 'finished', actions: [], suggestedEnd: null } }), at0010)).toBe(false)
     expect(overnightNow(drawn({ status: 'discarded', disposition: { kind: 'discarded', actions: [], suggestedEnd: null }, activityAt: null }), at0010)).toBe(false)
-    expect(overnightNow(drawn(), undefined)).toBe(false)
     expect(overnightNow(drawn({ activityAt: null }), at0010)).toBe(false)
     expect(overnightNow(null, at0010)).toBe(false)
+  })
+  // Any real date between these two: no test here depends on what day it is.
+  test('without a clock, the real one: a call never falls back to what the view said when drawn', () => {
+    const longAgo = drawn({ activityAt: Date.parse('2000-01-01T12:00:00Z') })
+    const ahead = drawn({ activityAt: Date.parse('2100-01-01T12:00:00Z') })
+    expect(overnightNow(longAgo)).toBe(true)
+    expect(overnightNow(ahead)).toBe(false)
+    expect(completeCall(longAgo, { setId: 'b1', side: null, eventId: 'e1' })).toBeNull()
+    expect(draftCall(longAgo, { setId: 'b1', values: { w: 80, r: 8 } })).toBeNull()
+    expect(addSetCall(longAgo, '0289', 'e1')).toBeNull()
+    expect(overnightRefusal(longAgo)).toEqual({ ok: false, saved: false, error: { code: 'overnight' } })
   })
   test('at 00:10 complete, add, add warm-up, edit, undo and draft all refuse; at 23:55 they go through', () => {
     const calls = now => [
@@ -368,6 +378,32 @@ describe('overnight at write time', () => {
     const result = completeResult({ ok: true, saved: true }, overnightRefusal(drawn(), at0010))
     expect(result).toEqual({ ok: true, saved: true, restFailed: true })
     expect(noticesAfter(NO_NOTICES, result, 'complete')).toEqual({ notice: null, rest: SAVED_REST })
+  })
+})
+
+// Finish opened before midnight carries no end (the engine ends it "now"); saved after midnight,
+// the engine refuses that. The sheet then takes the overnight end, from the view reloaded by the
+// refusal, and the next Save is the overnight Finish. The refusal itself finishes nothing.
+describe('finishRetarget', () => {
+  const night = { status: 'active', startedAt: 1000, disposition: { kind: 'overnight', actions: ['resume', 'finish', 'discard'], suggestedEnd: 5000 } }
+  const overnight = { ok: false, saved: false, error: { code: 'overnight' } }
+  test('a Finish with no end refused overnight takes the overnight end and says why', () => {
+    expect(finishRetarget(overnight, null, night)).toEqual({ end: 5000, notice: PAST_MIDNIGHT })
+    expect(finishRetarget(overnight, undefined, night)).toEqual({ end: 5000, notice: PAST_MIDNIGHT })
+    expect(PAST_MIDNIGHT).toBe("It's past midnight.")
+  })
+  test('with no logged work it ends at the start, as the overnight dock does', () => {
+    const empty = { ...night, disposition: { ...night.disposition, suggestedEnd: null } }
+    expect(finishRetarget(overnight, null, empty)).toEqual({ end: 1000, notice: PAST_MIDNIGHT })
+  })
+  test('a Finish that already has an end, any other result, or no end to give is left as it is', () => {
+    expect(finishRetarget(overnight, 5000, night)).toBeNull()
+    expect(finishRetarget(refused, null, night)).toBeNull()
+    expect(finishRetarget({ ok: true, saved: true }, null, night)).toBeNull()
+    expect(finishRetarget({ ignored: true }, null, night)).toBeNull()
+    expect(finishRetarget(null, null, night)).toBeNull()
+    expect(finishRetarget(overnight, null, { ...night, startedAt: null, disposition: { ...night.disposition, suggestedEnd: null } })).toBeNull()
+    expect(finishRetarget(overnight, null, null)).toBeNull()
   })
 })
 
@@ -708,7 +744,7 @@ describe.each(SQLITE_DRIVERS)('%s: the calls drive the engine', (_name, createDb
     clock = T0 + 1000
     let db = createDb()
     const first = await open(db)
-    const call = completeCall(current(first), { setId: benchSet, side: null, eventId: 'c1' })
+    const call = completeCall(current(first), { setId: benchSet, side: null, eventId: 'c1', now: clock })
     expect((await first.call('commitSet', call)).saved).toBe(true)
     const rest = restAfterComplete(current(first), benchSet, restMsOf)
     expect(rest).toEqual({ eventId: restEventId(benchSet, T0 + 1000), deadline: T0 + 1000 + 120_000 })
@@ -720,7 +756,7 @@ describe.each(SQLITE_DRIVERS)('%s: the calls drive the engine', (_name, createDb
     expect(view.entries[0].sets[0].row).toMatchObject({ w: 75, r: 8, done: true })
     expect(view.rest).toMatchObject({ status: 'running', remainingMs: 90_000 })
     // A second Complete on the same set, as a stale tap would send it, writes nothing.
-    expect(completeCall(current(second), { setId: benchSet, side: null, eventId: 'c2' })).toBeNull()
+    expect(completeCall(current(second), { setId: benchSet, side: null, eventId: 'c2', now: clock })).toBeNull()
   })
 
   test('per side: left, kill, right; rest waits for both and typed reps survive', async () => {
@@ -728,34 +764,34 @@ describe.each(SQLITE_DRIVERS)('%s: the calls drive the engine', (_name, createDb
     let db = createDb()
     const first = await open(db)
     const values = { w: 10, sides: { L: { r: 12 }, R: { r: 11 } } }
-    await first.call('commitSet', completeCall(current(first), { setId: latSet, side: 'L', values, eventId: 'l1' }))
+    await first.call('commitSet', completeCall(current(first), { setId: latSet, side: 'L', values, eventId: 'l1', now: clock }))
     expect(restAfterComplete(current(first), latSet, restMsOf)).toBeNull()
     db = db.reopen()
     clock = T0 + 20_000
     const second = await open(db, false)
     const row = second.getState().view.entries[1].sets[0].row
     expect(row.sides).toEqual({ L: { w: 10, r: 12, done: true }, R: { w: 10, r: 11, done: false } })
-    await second.call('commitSet', completeCall(current(second), { setId: latSet, side: 'R', eventId: 'r1' }))
+    await second.call('commitSet', completeCall(current(second), { setId: latSet, side: 'R', eventId: 'r1', now: clock }))
     expect(restAfterComplete(current(second), latSet, restMsOf)).toEqual({ eventId: restEventId(latSet, T0 + 20_000), deadline: T0 + 20_000 + 90_000 })
   })
 
   test('an edit keeps the set time, so its rest keeps its id; undo clears done', async () => {
     clock = T0 + 1000
     const session = await open(createDb())
-    await session.call('commitSet', completeCall(current(session), { setId: benchSet, side: null, eventId: 'c1' }))
+    await session.call('commitSet', completeCall(current(session), { setId: benchSet, side: null, eventId: 'c1', now: clock }))
     const before = restAfterComplete(current(session), benchSet, restMsOf)
     clock = T0 + 60_000
-    await session.call('editSet', editCall(current(session), { setId: benchSet, values: { w: 80, r: 7 }, eventId: 'e1' }))
+    await session.call('editSet', editCall(current(session), { setId: benchSet, values: { w: 80, r: 7 }, eventId: 'e1', now: clock }))
     expect(current(session).entries[0].sets[0].row).toMatchObject({ w: 80, r: 7, done: true, at: T0 + 1000 })
     expect(restAfterComplete(current(session), benchSet, restMsOf)).toEqual(before)
-    await session.call('undoSet', undoCall(current(session), { setId: benchSet, eventId: 'u1' }))
+    await session.call('undoSet', undoCall(current(session), { setId: benchSet, eventId: 'u1', now: clock }))
     expect(current(session).entries[0].sets[0].row.done).toBe(false)
   })
 
   test('Add set on a per-side exercise adds a per-side set that survives a kill', async () => {
     let db = createDb()
     const first = await open(db)
-    expect((await first.call('addSet', addSetCall(current(first), 'lat', 'a1'))).saved).toBe(true)
+    expect((await first.call('addSet', addSetCall(current(first), 'lat', 'a1', clock))).saved).toBe(true)
     db = db.reopen()
     const added = (await open(db, false)).getState().view.entries[1].sets[1]
     expect(added.setId).toBe('add:lat:a1')
@@ -766,9 +802,9 @@ describe.each(SQLITE_DRIVERS)('%s: the calls drive the engine', (_name, createDb
     clock = T0 + 1000
     let db = createDb()
     const first = await open(db)
-    const add = addWarmupCall(current(first), 'bench', 'w1')
+    const add = addWarmupCall(current(first), 'bench', 'w1', clock)
     expect((await first.call('addSet', add)).saved).toBe(true)
-    const call = completeCall(current(first), { setId: add.setId, side: null, values: { w: 45, r: 10 }, eventId: 'c1' })
+    const call = completeCall(current(first), { setId: add.setId, side: null, values: { w: 45, r: 10 }, eventId: 'c1', now: clock })
     expect((await first.call('commitSet', call)).saved).toBe(true)
     expect(restAfterComplete(current(first), add.setId, restMsOf)).toBeNull()
     db = db.reopen()
@@ -798,7 +834,7 @@ describe.each(SQLITE_DRIVERS)('%s: the calls drive the engine', (_name, createDb
     const db = createDb()
     const session = await open(db)
     db.failNext(/INSERT OR IGNORE INTO session_events/, new Error('disk full'))
-    const result = await session.call('commitSet', completeCall(current(session), { setId: benchSet, side: null, eventId: 'c1' }))
+    const result = await session.call('commitSet', completeCall(current(session), { setId: benchSet, side: null, eventId: 'c1', now: clock }))
     expect(resultNotice(result, 'complete')).toBe("Set not saved. The phone couldn't write it. Try again.")
     expect(noticesAfter(NO_NOTICES, completeResult(result, null), 'complete')).toEqual({ notice: "Set not saved. The phone couldn't write it. Try again.", rest: null })
     expect(current(session).entries[0].sets[0].row.done).toBe(false)
@@ -810,7 +846,7 @@ describe.each(SQLITE_DRIVERS)('%s: the calls drive the engine', (_name, createDb
     clock = T0 + 1000
     const db = createDb()
     const session = await open(db)
-    const commit = await session.call('commitSet', completeCall(current(session), { setId: benchSet, side: null, eventId: 'c1' }))
+    const commit = await session.call('commitSet', completeCall(current(session), { setId: benchSet, side: null, eventId: 'c1', now: clock }))
     const rest = restAfterComplete(current(session), benchSet, restMsOf)
     db.failNext(/INSERT OR IGNORE INTO session_events/, new Error('disk full'))
     const result = completeResult(commit, await session.call('startRest', rest))
@@ -836,7 +872,7 @@ describe.each(SQLITE_DRIVERS)('%s: the calls drive the engine', (_name, createDb
     clock = T0 + 1000
     const db = createDb()
     const session = await open(db)
-    const commit = await session.call('commitSet', completeCall(current(session), { setId: benchSet, side: null, eventId: 'c1' }))
+    const commit = await session.call('commitSet', completeCall(current(session), { setId: benchSet, side: null, eventId: 'c1', now: clock }))
     db.failNext(/INSERT OR IGNORE INTO session_events/, new Error('disk full'))
     const notices = noticesAfter(NO_NOTICES, completeResult(commit, await session.call('startRest', restAfterComplete(current(session), benchSet, restMsOf))), 'complete')
     db.failNext(/INSERT OR IGNORE INTO session_events/, new Error('disk full'))
@@ -852,7 +888,7 @@ describe.each(SQLITE_DRIVERS)('%s: the calls drive the engine', (_name, createDb
     const first = await open(db)
     await first.call('putDraft', benchSet, { w: 80, r: 5 })
     db.failNext(/DELETE FROM session_drafts/, new Error('disk full'))
-    const commit = await first.call('commitSet', completeCall(current(first), { setId: benchSet, side: null, values: { w: 80, r: 6 }, eventId: 'c1' }))
+    const commit = await first.call('commitSet', completeCall(current(first), { setId: benchSet, side: null, values: { w: 80, r: 6 }, eventId: 'c1', now: clock }))
     expect(commit).toMatchObject({ ok: true, saved: true, draftError: { code: 'storage' } })
     expect(noticesAfter(NO_NOTICES, completeResult(commit, null), 'complete'))
       .toEqual({ notice: "Saved. The typed numbers for this set couldn't be cleared.", rest: null })
@@ -863,7 +899,7 @@ describe.each(SQLITE_DRIVERS)('%s: the calls drive the engine', (_name, createDb
       expect(shownValues(done0, null)).toEqual({ w: 80, r: 6 })
       expect(workoutScreen(view, { names: {}, lastTimes: {} }).card.rows[0]).toMatchObject({ weightText: '80', repsText: '6', status: 'done' })
       // Update opens on the logged numbers, so an unchanged Update writes them back, not 80 x 5.
-      expect(editCall(view, { setId: benchSet, values: shownValues(done0, null), eventId: 'e1' }).fields).toEqual({ w: 80, r: 6 })
+      expect(editCall(view, { setId: benchSet, values: shownValues(done0, null), eventId: 'e1', now: clock }).fields).toEqual({ w: 80, r: 6 })
     }
     logged(current(first))
     db = db.reopen()
@@ -874,7 +910,7 @@ describe.each(SQLITE_DRIVERS)('%s: the calls drive the engine', (_name, createDb
     clock = T0 + 1000
     const db = createDb()
     const session = await open(db)
-    const commit = await session.call('commitSet', completeCall(current(session), { setId: benchSet, side: null, eventId: 'c1' }))
+    const commit = await session.call('commitSet', completeCall(current(session), { setId: benchSet, side: null, eventId: 'c1', now: clock }))
     db.failNext(/INSERT OR IGNORE INTO session_events/, new Error('disk full'))
     const notices = noticesAfter(NO_NOTICES, completeResult(commit, await session.call('startRest', restAfterComplete(current(session), benchSet, restMsOf))), 'complete')
     clock = T0 + 1000 + 120_000
@@ -889,7 +925,7 @@ describe.each(SQLITE_DRIVERS)('%s: the calls drive the engine', (_name, createDb
     const session = await open(db)
     clock = T0 + 20_000
     db.failNext(/UPDATE session_base/, new Error('disk full'))
-    const commit = await session.call('commitSet', completeCall(current(session), { setId: benchSet, side: null, eventId: 'c1' }))
+    const commit = await session.call('commitSet', completeCall(current(session), { setId: benchSet, side: null, eventId: 'c1', now: clock }))
     expect(commit).toMatchObject({ ok: true, saved: true, checkpointError: { code: 'storage' } })
     expect(writeOutcome(completeResult(commit, null), 'complete'))
       .toEqual({ kind: 'warning', text: "Saved. The workout time couldn't be updated, so it may be off after a restart." })
@@ -941,8 +977,9 @@ describe.each(SQLITE_DRIVERS)('%s: a view drawn before midnight takes no write a
     expect(overnightNow(drawn, clock)).toBe(true)
     // The device's zone would have missed it: both instants fall on the same UTC day.
     expect(overnightNow(drawn, clock, 'UTC')).toBe(false)
-    // The view alone (stage 1's check) would have taken the next set into last night's workout.
-    expect(completeCall(drawn, { setId: set1, side: null, eventId: 'c2' })).not.toBeNull()
+    // Checked at the time it was drawn, the same view would have taken the next set into last
+    // night's workout.
+    expect(completeCall(drawn, { setId: set1, side: null, eventId: 'c2', now: at2350 + 5 * 60_000 })).not.toBeNull()
 
     // Each write as the hook builds it inside the gate, with the clock now: no call is built, so
     // nothing goes to the engine, and the refusal is the stage-1 sentence.
@@ -981,5 +1018,28 @@ describe.each(SQLITE_DRIVERS)('%s: a view drawn before midnight takes no write a
     expect((await killed.call('commitSet', completeCall(resumed, { setId: set1, side: null, eventId: 'c2', now: clock }))).saved).toBe(true)
     db = db.reopen()
     expect(current(await open(db, 'UTC', false)).entries[0].sets.map(s => s.row.done)).toEqual([true, true])
+  })
+
+  // Last set 23:30, Finish opened at 23:40 (no end: the engine would end it then), Save at 00:05.
+  test('a Finish opened before midnight and saved after it is refused, then saves at the last set', async () => {
+    clock = start
+    const db = createDb()
+    const session = await open(db, zone)
+    const lastSet = Date.parse('2026-11-09T23:30:00-05:00')
+    clock = lastSet
+    await session.call('commitSet', completeCall(current(session), { setId: set0, side: null, eventId: 'c1', now: clock }))
+    clock = Date.parse('2026-11-09T23:40:00-05:00')
+    const end = null
+    clock = Date.parse('2026-11-10T00:05:00-05:00')
+    const sender = async () => ({ saved: true })
+    const refusedSave = await session.finishSession({ sender })
+    expect(refusedSave).toMatchObject({ ok: false, saved: false, error: { code: 'overnight' } })
+    expect((await stored(db)).events).toEqual(['c1'])
+    await session.refresh()
+    const retarget = finishRetarget(refusedSave, end, current(session))
+    expect(retarget).toEqual({ end: lastSet, notice: PAST_MIDNIGHT })
+    const saved = await session.finishSession({ sender, end: retarget.end })
+    expect(saved).toMatchObject({ ok: true, saved: true })
+    expect(saved.payload.workout).toMatchObject({ start, end: lastSet })
   })
 })

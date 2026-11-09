@@ -68,7 +68,7 @@ describe.each(SQLITE_DRIVERS)('%s: snapshot to finished workout to next start', 
     const complete = async (controller, values) => {
       const { dock } = screenOf(controller)
       clock += 60_000
-      const call = completeCall(viewOf(controller), { setId: dock.setId, side: dock.side, values, eventId: `c-${clock}` })
+      const call = completeCall(viewOf(controller), { setId: dock.setId, side: dock.side, values, eventId: `c-${clock}`, now: clock })
       expect(call).not.toBeNull()
       expect((await controller.call('commitSet', call)).saved).toBe(true)
       const rest = restAfterComplete(viewOf(controller), dock.setId, entry => (entry.target?.restSec ?? 90) * 1000)

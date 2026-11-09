@@ -17,8 +17,8 @@ export { OVERNIGHT_NOTICE }
 // before it: overnight is checked again at `now`, the clock as the write runs, from the view's
 // last activity in `timeZone`, the session's own (the view's; the engine decides in it, so a
 // zone change mid-session reads as it does there). A view the engine already called overnight
-// stays so. Without a clock, what the view said when drawn.
-export function overnightNow(view, now, timeZone = view?.timeZone) {
+// stays so. Without a clock, the real one: never only what the view said when it was drawn.
+export function overnightNow(view, now = Date.now(), timeZone = view?.timeZone) {
   if (view?.disposition?.kind === 'overnight') return true
   return view?.status === 'active' && isOvernight(view.activityAt, now, timeZone)
 }
@@ -31,6 +31,19 @@ export function overnightNotice(view, now) {
 // tap), or null when the session is not overnight.
 export function overnightRefusal(view, now) {
   return overnightNow(view, now) ? { ok: false, saved: false, error: { code: 'overnight' } } : null
+}
+
+export const PAST_MIDNIGHT = "It's past midnight."
+
+// Finish opened before midnight carries no end, so the engine ends it "now"; saved after
+// midnight, the engine refuses that ('overnight'). The sheet then takes the overnight end from
+// the view the refusal reloaded (the last logged work, or the start), as the overnight dock
+// does, and says why: the next Save is the overnight Finish. The refusal itself finishes nothing.
+// Null when there is nothing to retarget.
+export function finishRetarget(result, end, view) {
+  if (end != null || result?.error?.code !== 'overnight') return null
+  const target = view?.disposition?.suggestedEnd ?? view?.startedAt
+  return Number.isFinite(target) ? { end: target, notice: PAST_MIDNIGHT } : null
 }
 
 export function findSet(view, setId) {

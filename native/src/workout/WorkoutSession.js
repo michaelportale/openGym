@@ -56,10 +56,11 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
     if (session.status === 'discarded') onExit()
   }, [session.status])
   // The engine reads the clock only when an action runs. Back from the background on a new
-  // local day, reopen (as after a kill) so an overnight session asks before any set is logged.
+  // local day in the session's own zone (the one the engine decides overnight in), reopen (as
+  // after a kill) so an overnight session asks before any set is logged.
   useEffect(() => {
     const sub = AppState.addEventListener('change', next => {
-      const zone = deviceTimeZone()
+      const zone = read.current.view?.timeZone ?? deviceTimeZone()
       if (next === 'active' && read.current.view && localDate(Date.now(), zone) !== localDate(read.current.at, zone)) onExit()
     })
     return () => sub.remove()

@@ -14,7 +14,8 @@ function Figure({ title, text }) {
 }
 
 // Finish confirmation with the summary. `summary` is finishSummary(view). `endsAtLastSet` is the
-// overnight finish, which ends at the last logged work instead of now. Discard is its own,
+// overnight finish, which ends at the engine's suggested end: the last logged work, or the time
+// it was offered when that work was under 20 minutes before (sessionEnd). Discard is its own,
 // destructive confirmation (the caller's).
 export default function FinishSheet({ visible, title, summary, endsAtLastSet, notice, busy, onConfirm, onDiscard, onClose }) {
   return (
@@ -32,7 +33,7 @@ export default function FinishSheet({ visible, title, summary, endsAtLastSet, no
           </View>
         ) : null}
         {endsAtLastSet ? (
-          <AppText variant="body" color={color.textSecondary}>It ends at the last set you logged.</AppText>
+          <AppText variant="body" color={color.textSecondary}>It ends at your last set, or now if that was under 20 minutes ago.</AppText>
         ) : null}
         {notice ? (
           <AppText variant="body" accessibilityLiveRegion="polite" accessibilityRole="alert">{notice}</AppText>

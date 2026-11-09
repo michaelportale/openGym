@@ -6,7 +6,7 @@ import { createActionGate } from './action-gate'
 import { pendingRest, restMsFor } from './rest-after'
 import { shownAfterComplete, withTargets } from './session-screen'
 import { carriedWeight, shownValues } from './workout-view'
-import { NO_NOTICES, addSetCall, addWarmupCall, completeCall, completeResult, dockKeypadField, draftCall, editCall, findSet, keypadField, noticeAnnouncement, noticesAfter, overnightNotice, overnightRefusal, primaryAction, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, undoCall } from './set-calls'
+import { NO_NOTICES, addSetCall, addWarmupCall, completeCall, completeResult, dockKeypadField, draftCall, editCall, findSet, finishRetarget, keypadField, noticeAnnouncement, noticesAfter, overnightNotice, overnightRefusal, primaryAction, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, undoCall } from './set-calls'
 
 const sideLabel = { L: 'Complete left', R: 'Complete right' }
 const failed = error => ({ ok: false, saved: false, error: { code: 'storage', message: error?.message || String(error) } })
@@ -125,7 +125,8 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
     const text = overnightNotice(latest(), Date.now())
     if (text == null) return false
     setNotices(current => ({ ...current, notice: text }))
-    session.refresh()
+    // A reload that fails leaves the notice; the next tap refuses and reloads again.
+    session.refresh().catch(() => {})
     return true
   }
 
@@ -257,6 +258,14 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
         const end = finishing?.end
         const result = await act(() => session.finishSession({ sender: async () => ({ saved: true }), ...(end != null ? { end } : {}) }))
         if (result?.ignored) return
+        // Opened before midnight, saved after it: refused, and the view is reloaded. The sheet
+        // takes the overnight end and says why; the next Save is the overnight Finish.
+        const retarget = finishRetarget(result, end, latest())
+        if (retarget) {
+          setFinishing({ end: retarget.end })
+          setFinishNotice(retarget.notice)
+          return
+        }
         const text = resultNotice(result, 'finish')
         if (text) setFinishNotice(text)
         else setFinishing(null)
