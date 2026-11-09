@@ -1,5 +1,43 @@
 import { describe, expect, test, vi } from 'vitest'
-import { afterGatedWrite } from './after-write.js'
+import { ALERTS_OFF_NOTICE } from '../notify/permission.js'
+import { afterGatedWrite, alertsOffNotice } from './after-write.js'
+
+describe('alertsOffNotice', () => {
+  const marked = extra => ({ ok: true, saved: true, alertsOff: true, ...extra })
+
+  test('shows for a clean write that started a rest, and marks the session told', () => {
+    const told = new Set()
+    expect(alertsOffNotice(marked(), 'complete', 's1', told)).toBe(ALERTS_OFF_NOTICE)
+    expect(told.has('s1')).toBe(true)
+  })
+
+  test('at most once for each session id', () => {
+    const told = new Set()
+    expect(alertsOffNotice(marked(), 'complete', 's1', told)).toBe(ALERTS_OFF_NOTICE)
+    expect(alertsOffNotice(marked(), 'complete', 's1', told)).toBeNull()
+    expect(alertsOffNotice(marked(), 'complete', 's2', told)).toBe(ALERTS_OFF_NOTICE)
+  })
+
+  test.each([
+    ['a failure', { ok: false, saved: false, error: { code: 'storage' } }],
+    ['a warning', { checkpointError: new Error('x') }],
+    ['saved, rest did not start', { restFailed: true }],
+  ])('never replaces %s, and is not marked told', (_n, extra) => {
+    const told = new Set()
+    expect(alertsOffNotice(marked(extra), 'complete', 's1', told)).toBeNull()
+    expect(told.size).toBe(0)
+    // Shown later, once nothing else is said.
+    expect(alertsOffNotice(marked(), 'complete', 's1', told)).toBe(ALERTS_OFF_NOTICE)
+  })
+
+  test('only a result marked alertsOff, with a session id', () => {
+    const told = new Set()
+    expect(alertsOffNotice({ ok: true, saved: true }, 'complete', 's1', told)).toBeNull()
+    expect(alertsOffNotice(null, 'complete', 's1', told)).toBeNull()
+    expect(alertsOffNotice(marked(), 'complete', null, told)).toBeNull()
+    expect(told.size).toBe(0)
+  })
+})
 
 const NOW = Date.parse('2026-11-07T15:00:00.000Z')
 const running = deadline => ({ status: 'running', deadline, totalMs: 90_000, remainingMs: 90_000 })

@@ -2,14 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import { AccessibilityInfo, Alert } from 'react-native'
 import { workoutModel } from '../shared/training.js'
 import { createEventId } from '../session/ids'
-import { ALERTS_OFF_NOTICE, shouldExplainAlertsOff } from '../notify/permission'
 import { createActionGate } from './action-gate'
-import { afterGatedWrite } from './after-write'
+import { afterGatedWrite, alertsOffNotice } from './after-write'
 import { completeLabels } from './keypad'
 import { pendingRest, restMsFor } from './rest-after'
 import { shownAfterComplete, withTargets } from './session-screen'
 import { carriedWeight, lockedWeight, shownValues } from './workout-view'
-import { NO_NOTICES, addSetCall, addWarmupCall, completeAfterCommit, completeCall, dockKeypadField, draftCall, editCall, findSet, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightRefusal, pauseRestCall, primaryAction, removeWarmupCall, restAfterComplete, resultNotice, resumeRestCall, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, sheetSide, thrown, undoWrite, writeOutcome } from './set-calls'
+import { NO_NOTICES, addSetCall, addWarmupCall, completeAfterCommit, completeCall, dockKeypadField, draftCall, editCall, findSet, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightRefusal, pauseRestCall, primaryAction, removeWarmupCall, restAfterComplete, resultNotice, resumeRestCall, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, sheetSide, thrown, undoWrite } from './set-calls'
 
 // The sessions already told that rest alerts are off. In memory: a relaunch tells again.
 const explainedAlertsOff = new Set()
@@ -88,9 +87,9 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
   const report = (result, action) => {
     const stamp = nextStamp()
     setNotices(current => noticesAfter(current, result, action, stamp))
-    if (result?.alertsOff && !writeOutcome(result, action) && shouldExplainAlertsOff(base?.id, explainedAlertsOff)) {
-      explainedAlertsOff.add(base.id)
-      const notice = nextStamp()(ALERTS_OFF_NOTICE)
+    const off = alertsOffNotice(result, action, base?.id, explainedAlertsOff)
+    if (off) {
+      const notice = nextStamp()(off)
       setNotices(current => ({ ...current, notice }))
     }
   }

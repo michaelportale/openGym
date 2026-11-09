@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest'
-import { REQUEST_OPTIONS, permissionStep, readStep, restBegan, shouldExplainAlertsOff, stepForRestStart } from './permission.js'
+import { REQUEST_OPTIONS, permissionStep, readStep, restBegan, shouldExplainAlertsOff } from './permission.js'
 
 const NOW = Date.parse('2026-11-07T15:00:00.000Z')
 const perm = (status, iosStatus, granted = false) => ({ status, granted, canAskAgain: true, ios: iosStatus == null ? undefined : { status: iosStatus } })
@@ -26,43 +26,16 @@ describe('permissionStep', () => {
   })
 })
 
+describe('REQUEST_OPTIONS', () => {
+  test('alert and sound, no badge', () => {
+    expect(REQUEST_OPTIONS).toEqual({ ios: { allowAlert: true, allowSound: true, allowBadge: false } })
+  })
+})
+
 describe('readStep', () => {
   test('a read that rejects is off', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     expect(await readStep(async () => { throw new Error('boom') })).toBe('off')
-    warn.mockRestore()
-  })
-})
-
-describe('stepForRestStart', () => {
-  const requested = []
-  const request = answer => async options => { requested.push(options); return answer }
-
-  test('asks once, with the alert and sound options, while the step is ask', async () => {
-    requested.length = 0
-    const out = await stepForRestStart({ read: async () => perm('undetermined', 0), request: request(perm('granted', 2, true)), mayAsk: true })
-    expect(out).toEqual({ step: 'granted', asked: true })
-    expect(requested).toEqual([{ ios: { allowAlert: true, allowSound: true, allowBadge: false } }])
-    expect(requested[0]).toBe(REQUEST_OPTIONS)
-  })
-
-  test('an answer of no is off, and asked', async () => {
-    const out = await stepForRestStart({ read: async () => perm('undetermined', 0), request: request(perm('denied', 1)), mayAsk: true })
-    expect(out).toEqual({ step: 'off', asked: true })
-  })
-
-  test('does not ask again once asked, and never asks when granted or off', async () => {
-    requested.length = 0
-    expect(await stepForRestStart({ read: async () => perm('undetermined', 0), request: request(perm('granted', 2, true)), mayAsk: false })).toEqual({ step: 'ask', asked: false })
-    expect(await stepForRestStart({ read: async () => perm('granted', 2, true), request: request(null), mayAsk: true })).toEqual({ step: 'granted', asked: false })
-    expect(await stepForRestStart({ read: async () => perm('denied', 1), request: request(null), mayAsk: true })).toEqual({ step: 'off', asked: false })
-    expect(requested).toEqual([])
-  })
-
-  test('a request that rejects is off', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const out = await stepForRestStart({ read: async () => perm('undetermined', 0), request: async () => { throw new Error('boom') }, mayAsk: true })
-    expect(out).toEqual({ step: 'off', asked: true })
     warn.mockRestore()
   })
 })

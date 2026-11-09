@@ -33,20 +33,6 @@ export async function readStep(read) {
   }
 }
 
-// The step a rest start works with. Ask (once: `mayAsk` false after the first ask) only while the
-// step is 'ask'; a request that rejects counts as 'off'. `asked` says the system prompt was just
-// shown, so the caller does not explain an answer the owner just gave.
-export async function stepForRestStart({ read, request, mayAsk }) {
-  const step = await readStep(read)
-  if (step !== 'ask' || !mayAsk) return { step, asked: false }
-  try {
-    return { step: permissionStep(await request(REQUEST_OPTIONS)), asked: true }
-  } catch (error) {
-    console.warn('Notification permission not requested:', error?.message ?? error)
-    return { step: 'off', asked: true }
-  }
-}
-
 // Say "alerts are off" once for each session id. `explained` is a Set of the ids already told.
 export const shouldExplainAlertsOff = (sessionId, explained) => Boolean(sessionId) && !explained.has(sessionId)
 

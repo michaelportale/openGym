@@ -1,4 +1,15 @@
-import { restBegan } from '../notify/permission.js'
+import { ALERTS_OFF_NOTICE, restBegan, shouldExplainAlertsOff } from '../notify/permission.js'
+import { writeOutcome } from './set-calls.js'
+
+// The words for "rest alerts are off" after a write, or null. Only a result afterGatedWrite marked
+// `alertsOff`, and never over something the write already says (a failure, a warning, "Rest didn't
+// start"). `explained` is the Set of session ids already told; the id is added only when the
+// notice is returned, so a write that had to say something else leaves it for the next.
+export function alertsOffNotice(result, action, sessionId, explained) {
+  if (!result?.alertsOff || writeOutcome(result, action) || !shouldExplainAlertsOff(sessionId, explained)) return null
+  explained.add(sessionId)
+  return ALERTS_OFF_NOTICE
+}
 
 // What happens once a gated write has settled, outside the gate. Pure apart from calling the
 // `afterWrite` it is given (useRestAlerts' reconcile).
