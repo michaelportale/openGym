@@ -79,9 +79,9 @@ describe('failureText', () => {
 })
 
 describe('a partial warm-up add', () => {
-  test('says one was added, whatever the reason, even overnight', () => {
+  test('says one was added, whatever the reason; overnight keeps its own sentence', () => {
     const text = "One warm-up added; the other didn't save. Use Add warm-up to add it."
     expect(failureText('storage', { action: 'add-warmups-partial' })).toBe(text)
-    expect(failureText('overnight', { action: 'add-warmups-partial' })).toBe(text)
+    expect(failureText('overnight', { action: 'add-warmups-partial' })).toBe(OVERNIGHT_NOTICE)
   })
 })

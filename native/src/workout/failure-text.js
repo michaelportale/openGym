@@ -66,8 +66,8 @@ const lookup = (table, key) => (typeof key === 'string' && Object.hasOwn(table, 
 // One sentence for a refused write's code. `action` is what was tapped (a key of NOT_DONE).
 // An overnight refusal keeps stage 1's sentence whatever was tapped.
 export function failureText(code, { action } = {}) {
-  if (action === 'add-warmups-partial') return NOT_DONE[action]
   if (code === 'overnight') return OVERNIGHT_NOTICE
+  if (action === 'add-warmups-partial') return NOT_DONE[action]
   const why = (action === 'open' ? lookup(OPEN_WHY, code) : null) ?? lookup(WHY, code) ?? GENERIC
   return `${lookup(NOT_DONE, action) ?? 'Not saved.'} ${why}`
 }

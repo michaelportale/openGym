@@ -334,7 +334,7 @@ describe('addWarmupsInOrder', () => {
     const result = await addWarmupsInOrder(s, calls, { now: () => clock })
     expect(s.added).toEqual(['warm:0289:e1'])
     expect(result).toMatchObject({ saved: false, partial: true, error: { code: 'overnight' } })
-    expect(resultNotice(result, 'add-warmups-partial')).toBe("One warm-up added; the other didn't save. Use Add warm-up to add it.")
+    expect(resultNotice(result, 'add-warmups-partial')).toBe(OVERNIGHT_NOTICE)
   })
 })
 
