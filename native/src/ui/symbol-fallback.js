@@ -1,13 +1,15 @@
-// SF Symbol names used by this phase. Off iOS, expo-symbols ignores a string name.
+// SF Symbol names the app draws, and no others (a scripts/ test checks the list against src/).
+// Off iOS, expo-symbols ignores a string name.
 const TEXT = Object.assign(Object.create(null), {
   ellipsis: '…',
-  'pause.fill': 'II',
   plus: '+',
   'checkmark.circle.fill': '✓',
   square: '□',
   dumbbell: '●',
   'chevron.right': '›'
 })
+
+export const FALLBACK_NAMES = Object.freeze(Object.keys(TEXT))
 
 export function symbolPresentation(name, os) {
   if (typeof name !== 'string' || name.length === 0) {
