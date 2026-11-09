@@ -4,6 +4,7 @@ import { resetIdsOf } from '../../../frontend/src/lib/sync-merge.js'
 import { createSqliteFinishedWorkouts } from '../session/finished-workouts.js'
 import { createSqliteWeighIns } from '../body/weigh-ins.js'
 import { createSqliteHealthStore } from '../health/health-store.js'
+import { createSqliteRoutineEdits } from '../plan/routine-edits.js'
 import { createCredentials } from './credentials.js'
 import { buildPush } from './outbox.js'
 import { createSqliteServerCopy, createSqliteSyncMeta } from './server-copy.js'
@@ -30,6 +31,8 @@ const initialDoc = () => ({
   _wid: 'wid-3',
   _wids: ['wid-1', 'wid-2'],
 })
+// The API's test for an entry changed beyond its stamps (sync-stamps.js sameEntry).
+const sameEntry = (a, b) => JSON.stringify({ ...a, _ts: 0, _f: 0, _u: 0 }) === JSON.stringify({ ...b, _ts: 0, _f: 0, _u: 0 })
 const phone = (id, d = '2026-11-08') => ({ id, d, start: T0, end: T0 + 60_000, name: 'Push', entries: [{ id: 'bench', sets: [{ w: 60, r: 5, done: true }] }], vol: 300 })
 const web = id => ({ id, d: '2026-11-07', entries: [], from: 'web' })
 
@@ -46,11 +49,13 @@ function fakeKeychain() {
 
 // One profile's document with the real server's bookkeeping: _rev counts writes, every write gets
 // a new _wid and keeps its ancestors in _wids, a push over anything but the current rev/wid is a
-// 409 carrying the current document, and new workouts come back stamped (_ts), as the API stamps
-// what an unstamped writer sends. `once[method]` holds one-off answers or hooks.
+// 409 carrying the current document, and new workouts and changed routines come back stamped
+// (_ts), as the API stamps what an unstamped writer sends. `once[method]` holds one-off answers or
+// hooks.
 function fakeServer(doc = initialDoc()) {
   let n = 0
   const srv = {
+    lastStamp: 5000, // every routine stamp is later than the last
     doc: clone(doc),
     tokens: new Set(['T1']),
     codes: new Map([['GOODCODE', { token: 'T1', user: { id: 'u1', name: 'Mo', admin: false } }]]),
@@ -68,6 +73,19 @@ function fakeServer(doc = initialDoc()) {
     srv.doc = next
     return next
   }
+  // The web stamps its own edits (a stamped writer): a routine it changes gets a new _ts.
+  srv.webEditsRoutine = (rid, change) => {
+    const s = clone(srv.doc)
+    s.routines = s.routines.map(r => (r.id === rid ? { ...change(r), _ts: ++srv.lastStamp } : r))
+    srv.write(s)
+  }
+  srv.webDeletesRoutine = rid => {
+    const s = clone(srv.doc)
+    s.routines = s.routines.filter(r => r.id !== rid)
+    s.deleted = { ...s.deleted, routines: { ...s.deleted?.routines, [rid]: ++srv.lastStamp } }
+    srv.write(s)
+  }
+  srv.routine = rid => srv.doc.routines.find(r => r.id === rid)
   srv.webAdds = w => {
     const s = clone(srv.doc)
     s.workouts = [...(s.workouts ?? []), w]
@@ -120,6 +138,14 @@ function fakeServer(doc = initialDoc()) {
       const state = clone(body.state)
       const held = new Set((srv.doc.workouts ?? []).map(w => w.id))
       for (const w of state.workouts ?? []) if (!held.has(w.id)) w._ts = 999
+      // A routine the push changed, or a new one without a stamp, gets a new _ts (sync-stamps.js
+      // stampUnstamped: sameEntry, then stampEntry); one sent as it is stored keeps its own.
+      const before = new Map((Array.isArray(srv.doc.routines) ? srv.doc.routines : []).filter(r => r?.id != null).map(r => [r.id, r]))
+      for (const r of Array.isArray(state.routines) ? state.routines : []) {
+        if (!r || typeof r !== 'object' || r.id == null) continue
+        const old = before.get(r.id)
+        if (old ? !sameEntry(old, r) : r._ts == null) r._ts = ++srv.lastStamp
+      }
       const next = srv.write(state)
       return { ok: true, ts: null, rev: next._rev, wid: next._wid }
     },
@@ -135,6 +161,7 @@ async function setup({ server = fakeServer(), paired = true, local = [] } = {}) 
   const meta = createSqliteSyncMeta(db)
   const workouts = createSqliteFinishedWorkouts(db)
   const weighIns = createSqliteWeighIns(db)
+  const routineEdits = createSqliteRoutineEdits(db)
   let clock = T0
   const now = () => clock
   for (const w of local) await workouts.put(w)
@@ -143,11 +170,11 @@ async function setup({ server = fakeServer(), paired = true, local = [] } = {}) 
     await meta.set('server', BASE)
     await meta.set('profile', 'Mo')
   }
-  const sync = createSync({ client: server.client, credentials, copy, workouts, weighIns, meta, now })
+  const sync = createSync({ client: server.client, credentials, copy, workouts, weighIns, routineEdits, meta, now })
   const pendingIds = async () => (await workouts.listPending()).map(w => w.id)
   const serverIds = () => server.doc.workouts.map(w => w.id)
   const fresh = () => { server.calls.length = 0 }
-  return { sync, server, db, keychain, credentials, copy, meta, workouts, weighIns, now, pendingIds, serverIds, fresh, tick: ms => { clock += ms } }
+  return { sync, server, db, keychain, credentials, copy, meta, workouts, weighIns, routineEdits, now, pendingIds, serverIds, fresh, tick: ms => { clock += ms } }
 }
 
 function gate() {
@@ -170,7 +197,7 @@ describe('syncNow', () => {
     const r = await t.sync.syncNow()
     expect(t.server.calls).toEqual(['me', 'rev', 'pull'])
     expect(await t.copy.get()).toEqual({ state: initialDoc(), rev: 3, wid: 'wid-3' })
-    expect(r).toEqual({ paired: true, state: 'idle', lastSyncedAt: iso(T0), pending: 0, pendingWeighIns: 0, copyKey: '3|wid-3', server: BASE, profile: 'Mo' })
+    expect(r).toEqual({ paired: true, state: 'idle', lastSyncedAt: iso(T0), pending: 0, pendingWeighIns: 0, pendingRoutineEdits: 0, copyKey: '3|wid-3', server: BASE, profile: 'Mo' })
     expect(t.server.pushes).toEqual([])
   })
 
@@ -661,7 +688,7 @@ describe('pair', () => {
     expect(await t.meta.get('profile')).toBe('Mo')
     expect(t.serverIds()).toEqual(['web-1', 'p1', 'p2'])
     expect((await t.copy.get()).state).toEqual(t.server.doc)
-    expect(await t.sync.status()).toEqual({ paired: true, state: 'idle', lastSyncedAt: iso(T0), pending: 0, pendingWeighIns: 0, copyKey: '4|wid-s1', server: BASE, profile: 'Mo' })
+    expect(await t.sync.status()).toEqual({ paired: true, state: 'idle', lastSyncedAt: iso(T0), pending: 0, pendingWeighIns: 0, pendingRoutineEdits: 0, copyKey: '4|wid-s1', server: BASE, profile: 'Mo' })
   })
 
   test('the old token is removed before the new address is written, and the new token is written last', async () => {
@@ -725,7 +752,7 @@ describe('pair', () => {
     expect(await t.copy.get()).toBeNull()
     expect((await t.workouts.list()).map(w => w.id)).toEqual(['p1', 'p2'])
     expect(await t.pendingIds()).toEqual(['p2'])
-    expect(await t.sync.status()).toEqual({ paired: false, state: 'unpaired', pending: 1, pendingWeighIns: 0 })
+    expect(await t.sync.status()).toEqual({ paired: false, state: 'unpaired', pending: 1, pendingWeighIns: 0, pendingRoutineEdits: 0 })
   })
 
   test('refusing a kilogram profile leaves the current pairing as it was', async () => {
@@ -792,13 +819,13 @@ describe('forget', () => {
     const t = await setup({ local: [phone('p1')] })
     await t.sync.syncNow()
     expect(await t.pendingIds()).toEqual([])
-    expect(await t.sync.forget()).toEqual({ paired: false, state: 'unpaired', pending: 1, pendingWeighIns: 0 })
+    expect(await t.sync.forget()).toEqual({ paired: false, state: 'unpaired', pending: 1, pendingWeighIns: 0, pendingRoutineEdits: 0 })
     expect(t.keychain.m.size).toBe(0)
     expect(await t.copy.get()).toBeNull()
     for (const k of ['server', 'profile', 'lastSyncedAt', 'problem', 'lastRenewedAt']) expect(await t.meta.get(k)).toBeNull()
     expect((await t.workouts.list()).map(w => w.id)).toEqual(['p1'])
     expect(await t.pendingIds()).toEqual(['p1'])
-    expect(await t.sync.status()).toEqual({ paired: false, state: 'unpaired', pending: 1, pendingWeighIns: 0 })
+    expect(await t.sync.status()).toEqual({ paired: false, state: 'unpaired', pending: 1, pendingWeighIns: 0, pendingRoutineEdits: 0 })
   })
 
   test('waits for a running sync, so the sync cannot write a copy back afterwards', async () => {
@@ -819,10 +846,10 @@ describe('forget', () => {
 describe('status', () => {
   test('says paired, server, profile, last sync and the pending count', async () => {
     const t = await setup({ local: [phone('p1')] })
-    expect(await t.sync.status()).toEqual({ paired: true, state: 'idle', pending: 1, pendingWeighIns: 0, server: BASE, profile: 'Mo' })
+    expect(await t.sync.status()).toEqual({ paired: true, state: 'idle', pending: 1, pendingWeighIns: 0, pendingRoutineEdits: 0, server: BASE, profile: 'Mo' })
     t.server.once.rev = [OFFLINE]
     await t.sync.syncNow()
-    expect(await t.sync.status()).toEqual({ paired: true, state: 'waiting', pending: 1, pendingWeighIns: 0, server: BASE, profile: 'Mo' })
+    expect(await t.sync.status()).toEqual({ paired: true, state: 'waiting', pending: 1, pendingWeighIns: 0, pendingRoutineEdits: 0, server: BASE, profile: 'Mo' })
   })
 })
 
@@ -1003,7 +1030,7 @@ describe('weigh-ins', () => {
     const t = await setup({ paired: false, local: [phone('p1')] })
     await t.weighIns.put(typed('2026-11-08', 181.2, 5))
     await t.weighIns.put(typed('2026-11-09', 181, 6))
-    expect(await t.sync.status()).toEqual({ paired: false, state: 'unpaired', pending: 1, pendingWeighIns: 2 })
+    expect(await t.sync.status()).toEqual({ paired: false, state: 'unpaired', pending: 1, pendingWeighIns: 2, pendingRoutineEdits: 0 })
   })
 })
 
@@ -1086,6 +1113,203 @@ describe('weigh-ins and the server record', () => {
   })
 
   test('createSync refuses to be built without a weigh-in store', () => {
-    expect(() => createSync({ client: {}, credentials: {}, copy: {}, workouts: {}, meta: {}, now: Date.now })).toThrow(/weighIns/)
+    expect(() => createSync({ client: {}, credentials: {}, copy: {}, workouts: {}, routineEdits: {}, meta: {}, now: Date.now })).toThrow(/weighIns/)
+  })
+})
+
+// Routines with their own stamps, as the web keeps them.
+const planDoc = () => ({
+  ...initialDoc(),
+  routines: [
+    { id: 'r1', name: 'Push', ex: [{ id: 'bench', sets: 3, reps: 5, pyramid: [{ w: 60, r: 8 }] }, { id: 'row', sets: 3, reps: 8 }], _ts: 1000, _f: { ex: 900 } },
+    { id: 'r2', name: 'Pull', ex: [{ id: 'row', sets: 3, reps: 8 }], _ts: 1000 },
+  ],
+})
+// What the Plan screen saves: the copy's routine as edited, on that routine's _ts.
+const routineEdit = (base, change, t) => ({ rid: base.id, baseTs: base._ts ?? null, routine: change(clone(base)), t })
+const setsOn = n => r => ({ ...r, ex: r.ex.map((s, i) => (i === 0 ? { ...s, sets: n } : s)) })
+const swapped = r => ({ ...r, ex: [r.ex[1], r.ex[0]] })
+const content = r => { const { _ts, _f, _u, ...rest } = r; return rest }
+
+async function planSetup() {
+  const t = await setup({ server: fakeServer(planDoc()) })
+  await t.sync.syncNow()
+  t.fresh()
+  const edit = async (rid, change, at = T0 + 1) => {
+    const base = (await t.copy.get()).state.routines.find(r => r.id === rid)
+    const e = routineEdit(base, change, at)
+    await t.routineEdits.put(e)
+    return e
+  }
+  return { ...t, edit }
+}
+
+describe('routine edits', () => {
+  test('an edit alone is pushed on the copy it was made on, then acked once the pulled copy holds it', async () => {
+    const t = await planSetup()
+    const mine = await t.edit('r1', r => setsOn(4)(swapped(r)))
+    const r = await t.sync.syncNow()
+    expect(t.server.calls).toEqual(['rev', 'push', 'pull'])
+    const sent = t.server.pushes[0]
+    expect(sent.baseRev).toBe(3)
+    expect(sent.state).toEqual({ ...planDoc(), routines: [mine.routine, planDoc().routines[1]] })
+    // the server stamped it; the stored copy is the server's, with every key on its own slot
+    expect(t.server.routine('r1')._ts).toBeGreaterThan(1000)
+    expect(content(t.server.routine('r1'))).toEqual(content(mine.routine))
+    expect((await t.copy.get()).state).toEqual(t.server.doc)
+    expect(await t.routineEdits.listPending()).toEqual([])
+    expect(await t.db.getAll('SELECT rid, acked_at, superseded_at FROM routine_edits')).toEqual([{ rid: 'r1', acked_at: iso(T0), superseded_at: null }])
+    expect((await t.routineEdits.get('r1')).sent).toEqual(mine.routine)
+    expect(await t.routineEdits.listNotices()).toEqual([])
+    expect(r).toMatchObject({ state: 'idle', pending: 0, pendingWeighIns: 0, pendingRoutineEdits: 0 })
+
+    t.fresh()
+    await t.sync.syncNow()
+    expect(t.server.calls).toEqual(['rev'])
+    expect(t.server.pushes).toHaveLength(1)
+  })
+
+  test('an edit made while the push is in flight is rebased on the landed one, and the next sync sends it', async () => {
+    const t = await planSetup()
+    const first = await t.edit('r1', setsOn(4))
+    // The owner edits again between the PUT and the pull that follows it.
+    let second
+    t.server.once.pull = [async () => {
+      second = await t.edit('r1', setsOn(5), T0 + 2)
+      return undefined
+    }]
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 1 })
+    expect(t.server.calls).toEqual(['rev', 'push', 'pull'])
+    expect(content(t.server.routine('r1'))).toEqual(content(first.routine))
+    const landed = t.server.routine('r1')._ts
+    expect(landed).toBeGreaterThan(1000)
+    expect(await t.routineEdits.listPending()).toEqual([{ rid: 'r1', baseTs: landed, routine: second.routine, sent: null, t: T0 + 2 }])
+    expect(await t.routineEdits.listNotices()).toEqual([])
+
+    t.fresh()
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+    expect(t.server.calls).toEqual(['rev', 'push', 'pull'])
+    expect(t.server.pushes[1].baseRev).toBe(4)
+    expect(t.server.pushes[1].state.routines[0]).toEqual(second.routine)
+    expect(content(t.server.routine('r1'))).toEqual(content(second.routine))
+    expect(t.server.routine('r1')._ts).toBeGreaterThan(landed)
+    expect(await t.routineEdits.listPending()).toEqual([])
+    expect(await t.routineEdits.listNotices()).toEqual([])
+  })
+
+  test('a 409 whose document changed the same routine supersedes the edit, and no push carries it again', async () => {
+    const t = await planSetup()
+    await t.edit('r1', setsOn(4))
+    t.server.once.push = [async () => { t.server.webEditsRoutine('r1', r => ({ ...r, name: 'Push A' })) }]
+    const r = await t.sync.syncNow()
+    expect(t.server.pushes).toHaveLength(1)
+    expect(t.server.calls).toEqual(['rev', 'push'])
+    expect(t.server.routine('r1')).toMatchObject({ name: 'Push A', ex: planDoc().routines[0].ex })
+    expect((await t.copy.get()).state).toEqual(t.server.doc)
+    expect(await t.routineEdits.listPending()).toEqual([])
+    expect(await t.routineEdits.listNotices()).toEqual([{ rid: 'r1', name: 'Push', kind: 'changed', at: iso(T0) }])
+    expect(r).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+    expect(r.problem).toBeUndefined()
+
+    t.fresh()
+    await t.sync.syncNow()
+    expect(t.server.calls).toEqual(['rev'])
+  })
+
+  test('a 409 that changed another routine still pushes the edit, on top of it, marked sent before each attempt', async () => {
+    const t = await planSetup()
+    const mine = await t.edit('r1', setsOn(4))
+    const markSent = t.routineEdits.markSent
+    t.routineEdits.markSent = async items => {
+      t.server.calls.push(`markSent ${items.map(i => `${i.rid}@${i.t}`).join(',')}`)
+      return markSent(items)
+    }
+    t.server.once.push = [async () => { t.server.webEditsRoutine('r2', r => ({ ...r, name: 'Pull A' })) }]
+    const r = await t.sync.syncNow()
+    expect(t.server.calls).toEqual(['rev', `markSent r1@${T0 + 1}`, 'push', `markSent r1@${T0 + 1}`, 'push', 'pull'])
+    expect(t.server.pushes[1].baseRev).toBe(4)
+    expect(t.server.pushes[1].state.routines[0]).toEqual(mine.routine)
+    expect(t.server.pushes[1].state.routines[1]).toMatchObject({ name: 'Pull A' })
+    expect(content(t.server.routine('r1'))).toEqual(content(mine.routine))
+    expect(t.server.routine('r2').name).toBe('Pull A')
+    expect(await t.routineEdits.listPending()).toEqual([])
+    expect(await t.routineEdits.listNotices()).toEqual([])
+    expect(r).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+  })
+
+  test('a routine deleted on the web supersedes the edit as deleted, and it is not pushed back', async () => {
+    const t = await planSetup()
+    await t.edit('r1', setsOn(4))
+    t.server.webDeletesRoutine('r1')
+    const r = await t.sync.syncNow()
+    expect(t.server.calls).toEqual(['rev', 'pull'])
+    expect(t.server.pushes).toEqual([])
+    expect(t.server.doc.routines.map(x => x.id)).toEqual(['r2'])
+    expect(await t.routineEdits.listPending()).toEqual([])
+    expect(await t.routineEdits.listNotices()).toEqual([{ rid: 'r1', name: 'Push', kind: 'deleted', at: iso(T0) }])
+    expect(r).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+  })
+
+  test('a push whose follow-up pull fails keeps the edit pending; the next sync acks it without sending it again', async () => {
+    const t = await planSetup()
+    const mine = await t.edit('r1', setsOn(4))
+    t.server.once.pull = [OFFLINE]
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'waiting', pendingRoutineEdits: 1 })
+    expect((await t.routineEdits.get('r1')).sent).toEqual(mine.routine)
+    t.fresh()
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+    expect(t.server.calls).toEqual(['rev', 'pull'])
+    expect(t.server.pushes).toHaveLength(1)
+    expect(await t.routineEdits.listNotices()).toEqual([])
+  })
+
+  test('an edit rides in the same push as a workout and a weigh-in', async () => {
+    const t = await planSetup()
+    const mine = await t.edit('r1', setsOn(4))
+    await t.workouts.put(phone('p1'))
+    await t.weighIns.put(typed('2026-11-08', 181.2, 5))
+    await t.sync.syncNow()
+    expect(t.server.pushes).toHaveLength(1)
+    expect(t.serverIds()).toEqual(['web-1', 'p1'])
+    expect(t.server.doc.bodyweight).toHaveLength(1)
+    expect(content(t.server.routine('r1'))).toEqual(content(mine.routine))
+    expect(await t.sync.status()).toMatchObject({ pending: 0, pendingWeighIns: 0, pendingRoutineEdits: 0 })
+  })
+
+  test('status counts routine edits waiting, paired or not', async () => {
+    const t = await setup({ paired: false })
+    await t.routineEdits.put(routineEdit(planDoc().routines[0], setsOn(4), 1))
+    await t.routineEdits.put(routineEdit(planDoc().routines[1], setsOn(4), 2))
+    expect(await t.sync.status()).toEqual({ paired: false, state: 'unpaired', pending: 0, pendingWeighIns: 0, pendingRoutineEdits: 2 })
+  })
+
+  test('forget makes every acked edit pending again, and pair and resendAll send one the server lost', async () => {
+    const t = await planSetup()
+    const mine = await t.edit('r1', setsOn(4))
+    await t.sync.syncNow()
+    expect(await t.routineEdits.listPending()).toEqual([])
+    expect(await t.sync.forget()).toMatchObject({ pendingRoutineEdits: 1 })
+    expect((await t.routineEdits.listPending()).map(e => e.rid)).toEqual(['r1'])
+
+    // pair: the server is back to the routine the edit was made on, so it goes again
+    await t.routineEdits.markAcked([{ rid: 'r1', t: mine.t }], iso(T0))
+    t.server.doc = clone(planDoc())
+    expect((await t.sync.pair(BASE, 'GOODCODE')).ok).toBe(true)
+    expect(content(t.server.routine('r1'))).toEqual(content(mine.routine))
+    expect(await t.routineEdits.listPending()).toEqual([])
+
+    // resendAll: the server went back to a backup from before the edit
+    t.server.doc = clone(planDoc())
+    t.server.doc._wids = ['other']
+    t.server.webAdds(web('web-9'))
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'problem', problem: 'server-older' })
+    expect(await t.sync.resendAll()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+    expect(content(t.server.routine('r1'))).toEqual(content(mine.routine))
+    expect(await t.routineEdits.listPending()).toEqual([])
+    expect(await t.routineEdits.listNotices()).toEqual([])
+  })
+
+  test('createSync refuses to be built without a routine edits store', () => {
+    expect(() => createSync({ client: {}, credentials: {}, copy: {}, workouts: {}, weighIns: {}, meta: {}, now: Date.now })).toThrow(/routineEdits/)
   })
 })
