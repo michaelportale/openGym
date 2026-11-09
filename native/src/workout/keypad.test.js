@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { applyKey, completeBlocker, completeLabels, fieldText, keypadState, keypadValues, sheetCloseAction, weightLockNote } from './keypad.js'
+import { STACK_ACTIONS_FROM, actionsStacked, applyKey, completeBlocker, completeLabels, fieldText, keypadState, keypadValues, sheetCloseAction, weightLockNote } from './keypad.js'
 
 const press = (state, ...keys) => keys.reduce(applyKey, state)
 const values = (state, ...keys) => keypadValues(press(state, ...keys))
@@ -139,4 +139,22 @@ test('completeLabels: a warm-up shows plain Complete and is spoken as the warm-u
   expect(completeLabels({ side: 'L', number: 1 })).toEqual({ label: 'Complete left', spoken: 'Complete left' })
   expect(completeLabels({ side: 'R', number: 1 })).toEqual({ label: 'Complete right', spoken: 'Complete right' })
   expect(completeLabels({ side: 'constructor', number: 2 })).toEqual({ label: 'Complete set 2', spoken: 'Complete set 2' })
+})
+
+// React Native's multipliers for iOS's text sizes (RCTAccessibilityManager.mm): the seven standard
+// sizes, then AX1 to AX5.
+const STANDARD = [0.823, 0.882, 0.941, 1, 1.118, 1.235, 1.353]
+const ACCESSIBILITY = [1.786, 2.143, 2.643, 3.143, 3.571]
+
+test('actionsStacked: Save and Complete share the row at every standard text size', () => {
+  for (const m of STANDARD) expect(actionsStacked(m), `x${m}`).toBe(false)
+})
+test('actionsStacked: from the first accessibility size up to the largest they stack full width', () => {
+  for (const m of ACCESSIBILITY) expect(actionsStacked(m), `x${m}`).toBe(true)
+  expect(STACK_ACTIONS_FROM).toBeGreaterThan(Math.max(...STANDARD))
+  expect(STACK_ACTIONS_FROM).toBeLessThanOrEqual(Math.min(...ACCESSIBILITY))
+})
+test('actionsStacked: no font scale yet keeps the default row', () => {
+  expect(actionsStacked(undefined)).toBe(false)
+  expect(actionsStacked(Number.NaN)).toBe(false)
 })

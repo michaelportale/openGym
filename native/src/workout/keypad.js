@@ -106,6 +106,17 @@ export function completeBlocker(values, side) {
   return reps == null ? 'reps' : null
 }
 
+// Dynamic Type, as React Native's font scale: x1 is the default size, x1.353 the largest standard
+// size, x1.786 the first accessibility size (AX1) and x3.571 the largest (AX5). From AX1 on, the
+// button style (17 pt, up to x2.5) is about 30 pt or more, and half the row on a 375 to 393 pt
+// wide iPhone no longer holds "Complete" on one line: the word breaks inside itself. So from there
+// Save and Complete stack, each the full width; below it they share the row as they always have.
+export const STACK_ACTIONS_FROM = 1.5
+
+export function actionsStacked(fontScale) {
+  return Number.isFinite(fontScale) && fontScale >= STACK_ACTIONS_FROM
+}
+
 const SIDE_COMPLETE = { L: 'Complete left', R: 'Complete right' }
 
 // The sheet's Complete button: `label` is what it shows, `spoken` what VoiceOver says. A warm-up

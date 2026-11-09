@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { AppState, Modal, StyleSheet, View } from 'react-native'
+import { AppState, Modal, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native'
 import { color, radius, size, space, touch } from '../theme/tokens'
 import AppText from '../ui/AppText'
 import IconButton from '../ui/IconButton'
 import PrimaryButton from '../ui/PrimaryButton'
 import ScaleButton from '../ui/ScaleButton'
-import { applyKey, completeBlocker, fieldText, keypadState, keypadValues, sheetCloseAction, weightLockNote } from './keypad'
+import { actionsStacked, applyKey, completeBlocker, fieldText, keypadState, keypadValues, sheetCloseAction, weightLockNote } from './keypad'
 import { spokenField } from './spoken'
 
 const CHIPS = ['-10', '-5', '+5', '+10']
@@ -51,8 +51,10 @@ const keyHint = key => (key === 'back' ? 'Deletes the last character.' : 'Types 
 // opens on reps). `weightTitle` is 'Lb each' for a per-hand exercise, which also passes `perHand`
 // so the weight field is spoken "pounds each". A done set passes saveLabel 'Update', onUndo, and
 // no onComplete. `completeLabel` and `completeSpoken` are completeLabels(...) (keypad.js): what the
-// Complete button shows and what VoiceOver says. A warm-up not done yet passes onRemove, its Remove warm-up. `notice` shows a
-// write that was refused.
+// Complete button shows and what VoiceOver says. A warm-up not done yet passes onRemove, its Remove
+// warm-up. `notice` shows a write that was refused.
+// Under the title and Close, the sheet scrolls, so at the largest text sizes every control can be
+// reached; from the accessibility sizes on, Save and Complete stack full width (actionsStacked).
 // `side` is the side Complete logs on a per-side set; Complete waits for its reps and the weight.
 // `weightSetWith` ('L' or 'R') is the side a half-done per-side set's weight was logged with: the
 // weight field and the weight chips take no input, and the sheet opens on the other side's reps.
@@ -63,6 +65,7 @@ export default function KeypadSheet({ visible, title, initial, perSide, side = n
   useEffect(() => {
     if (visible) setState(keypadState(initial, initialField, { weightSetWith }))
   }, [visible])
+  const stacked = actionsStacked(useWindowDimensions().fontScale)
   const values = keypadValues(state)
   const blocked = completeBlocker(values, side)
   const press = key => () => setState(current => applyKey(current, key))
@@ -87,60 +90,65 @@ export default function KeypadSheet({ visible, title, initial, perSide, side = n
           <AppText variant="screenTitle" accessibilityRole="header" style={styles.title}>{title}</AppText>
           <IconButton label="Close" accessibilityLabel="Close" accessibilityHint="Closes the keypad." onPress={close} />
         </View>
-        {notice ? (
-          <AppText variant="body" color={color.text} accessibilityLiveRegion="polite" accessibilityRole="alert">{notice}</AppText>
-        ) : null}
-        <View style={styles.fields}>
-          <Field id="w" title={weightTitle} text={fieldText(state, 'w')} active={state.field === 'w'} perHand={perHand} setWith={state.lock} onPress={press('field:w')} />
-          {fields.map(([id, name]) => (
-            <Field key={id} id={id} title={name} text={fieldText(state, id)} active={state.field === id} onPress={press(`field:${id}`)} />
-          ))}
-        </View>
-        <View style={styles.chips}>
-          {CHIPS.map(chip => (
-            <Key key={chip} text={chip.replace('-', '−')} label={`${chip.startsWith('-') ? 'Minus' : 'Plus'} ${chip.slice(1)} pounds`} hint="Changes the weight." style={styles.chip} disabled={state.lock !== null} onPress={press(`chip:${chip}`)} />
-          ))}
-        </View>
-        <View style={styles.grid}>
-          {KEYS.map(key => (
-            <Key key={key} text={key === 'back' ? '⌫' : key} label={keyLabel(key)} hint={keyHint(key)} onPress={press(key)} />
-          ))}
-        </View>
-        <View style={styles.actions}>
-          <View style={styles.action}>
-            <ScaleButton
-              accessibilityLabel={saveLabel}
-              accessibilityHint={onComplete ? 'Keeps these numbers without completing the set.' : 'Changes this set to these numbers.'}
-              onPress={() => onSave(values)}
-              faceStyle={styles.save}
-            >
-              <AppText variant="button">{saveLabel}</AppText>
-            </ScaleButton>
-          </View>
-          {onComplete ? (
-            <View style={styles.action}>
-              <PrimaryButton label={completeLabel} accessibilityLabel={completeSpoken} disabled={blocked !== null} accessibilityHint={blocked === 'weight' ? 'Enter a weight first.' : blocked === 'reps' ? 'Enter the reps first.' : 'Logs this set.'} onPress={() => onComplete(values)} />
-            </View>
+        <ScrollView style={styles.body} contentContainerStyle={styles.content} alwaysBounceVertical={false}>
+          {notice ? (
+            <AppText variant="body" color={color.text} accessibilityLiveRegion="polite" accessibilityRole="alert">{notice}</AppText>
           ) : null}
-        </View>
-        {onUndo ? (
-          <ScaleButton accessibilityLabel="Undo set" accessibilityHint="Marks this set as not done." onPress={onUndo} faceStyle={styles.quiet}>
-            <AppText variant="button" color={color.textSecondary}>Undo set</AppText>
-          </ScaleButton>
-        ) : null}
-        {onRemove ? (
-          <ScaleButton accessibilityLabel="Remove warm-up" accessibilityHint="Takes this warm-up out of the workout." onPress={onRemove} faceStyle={styles.quiet}>
-            <AppText variant="button" color={color.textSecondary}>Remove warm-up</AppText>
-          </ScaleButton>
-        ) : null}
+          <View style={styles.fields}>
+            <Field id="w" title={weightTitle} text={fieldText(state, 'w')} active={state.field === 'w'} perHand={perHand} setWith={state.lock} onPress={press('field:w')} />
+            {fields.map(([id, name]) => (
+              <Field key={id} id={id} title={name} text={fieldText(state, id)} active={state.field === id} onPress={press(`field:${id}`)} />
+            ))}
+          </View>
+          <View style={styles.chips}>
+            {CHIPS.map(chip => (
+              <Key key={chip} text={chip.replace('-', '−')} label={`${chip.startsWith('-') ? 'Minus' : 'Plus'} ${chip.slice(1)} pounds`} hint="Changes the weight." style={styles.chip} disabled={state.lock !== null} onPress={press(`chip:${chip}`)} />
+            ))}
+          </View>
+          <View style={styles.grid}>
+            {KEYS.map(key => (
+              <Key key={key} text={key === 'back' ? '⌫' : key} label={keyLabel(key)} hint={keyHint(key)} onPress={press(key)} />
+            ))}
+          </View>
+          <View style={stacked ? styles.stacked : styles.actions}>
+            <View style={stacked ? null : styles.action}>
+              <ScaleButton
+                accessibilityLabel={saveLabel}
+                accessibilityHint={onComplete ? 'Keeps these numbers without completing the set.' : 'Changes this set to these numbers.'}
+                onPress={() => onSave(values)}
+                faceStyle={styles.save}
+              >
+                <AppText variant="button">{saveLabel}</AppText>
+              </ScaleButton>
+            </View>
+            {onComplete ? (
+              <View style={stacked ? null : styles.action}>
+                <PrimaryButton label={completeLabel} accessibilityLabel={completeSpoken} disabled={blocked !== null} accessibilityHint={blocked === 'weight' ? 'Enter a weight first.' : blocked === 'reps' ? 'Enter the reps first.' : 'Logs this set.'} onPress={() => onComplete(values)} />
+              </View>
+            ) : null}
+          </View>
+          {onUndo ? (
+            <ScaleButton accessibilityLabel="Undo set" accessibilityHint="Marks this set as not done." onPress={onUndo} faceStyle={styles.quiet}>
+              <AppText variant="button" color={color.textSecondary}>Undo set</AppText>
+            </ScaleButton>
+          ) : null}
+          {/* A non-breaking hyphen: a large label wraps at the space, never inside "warm-up". */}
+          {onRemove ? (
+            <ScaleButton accessibilityLabel="Remove warm-up" accessibilityHint="Takes this warm-up out of the workout." onPress={onRemove} faceStyle={styles.quiet}>
+              <AppText variant="button" color={color.textSecondary}>{'Remove warm\u2011up'}</AppText>
+            </ScaleButton>
+          ) : null}
+        </ScrollView>
       </View>
     </Modal>
   )
 }
 
 const styles = StyleSheet.create({
-  sheet: { flex: 1, gap: space.lg, padding: space.lg, backgroundColor: color.bg },
-  top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md },
+  sheet: { flex: 1, gap: space.lg, paddingTop: space.lg, backgroundColor: color.bg },
+  top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md, paddingHorizontal: space.lg },
+  body: { flex: 1 },
+  content: { gap: space.lg, paddingHorizontal: space.lg, paddingBottom: space.lg },
   title: { flexShrink: 1 },
   fields: { flexDirection: 'row', gap: space.sm },
   fieldSlot: { flex: 1 },
@@ -154,6 +162,7 @@ const styles = StyleSheet.create({
   off: { opacity: 0.4 },
   actions: { flexDirection: 'row', gap: space.sm },
   action: { flex: 1 },
+  stacked: { gap: space.sm },
   save: { minHeight: touch.primary, alignItems: 'center', justifyContent: 'center', backgroundColor: color.control, borderColor: color.stroke, borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.md },
   quiet: { minHeight: touch.min, alignItems: 'center', justifyContent: 'center' }
 })
