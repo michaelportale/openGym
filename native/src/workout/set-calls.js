@@ -80,9 +80,10 @@ export function completeCall(view, { setId, side, values, eventId, now }) {
   if (!SIDES.includes(side) || slot.row.sides[side]?.done === true) return null
   const reps = shown.sides?.[side]?.r
   if (reps == null) return null
-  // The commit clears the draft, so reps typed for the other side go into the row now.
+  // The commit clears the draft, so reps typed for the other side go into the row now; once that
+  // side is logged, its reps stay the ones it was logged with, whatever the sheet hands over.
   const other = side === 'L' ? 'R' : 'L'
-  const typed = shown.sides?.[other]?.r
+  const typed = slot.row.sides[other]?.done === true ? null : shown.sides?.[other]?.r
   const row = typed == null ? slot.row : { ...slot.row, sides: { ...slot.row.sides, [other]: { ...slot.row.sides[other], r: typed } } }
   return call(completeFields(row, side, { w, r: reps }))
 }
@@ -144,13 +145,16 @@ export async function undoWrite(session, view, { setId, eventId, now }) {
 
 // A draft (Save, or typed numbers kept on close) is for a set not done yet; a done set changes
 // only through editCall. A half-done per-side set's draft keeps the weight its first side was
-// logged at (lockedWeight), so what is stored is what the set shows.
+// logged at (lockedWeight) and that side's logged reps, never typed ones, so what is stored is
+// what the set shows (and what the read-only keypad shows: leaving the app writes it once).
 export function draftCall(view, { setId, values, now }) {
   if (overnightNow(view, now)) return null
   const found = findSet(view, setId)
   if (!found || isDone(found.slot)) return null
   const locked = lockedWeight(found.slot.row)
-  return { setId, values: locked ? { ...values, w: locked.w } : values }
+  if (!locked) return { setId, values }
+  const sides = values.sides && { ...values.sides, [locked.side]: { r: found.slot.row.sides[locked.side].r ?? null } }
+  return { setId, values: { ...values, w: locked.w, ...(sides ? { sides } : {}) } }
 }
 
 // One more set like the last work set, as the web's Add set does; per side stays per side.

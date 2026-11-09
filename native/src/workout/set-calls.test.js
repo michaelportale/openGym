@@ -132,6 +132,17 @@ describe('completeCall', () => {
       sides: { L: { w: 10, r: 12, done: true }, R: { w: 10, r: 11, done: false } },
     })
   })
+  // Left logged at 10 reps; the sheet hands over 12 for the left with the right's Complete.
+  test("per side: the second side's Complete never rewrites the logged side's reps", () => {
+    const v = view([lateral([slot('s', sided(7.5, { r: 10, done: true }, { r: 10, done: false }), { completed: true })])])
+    const values = { w: 7.5, sides: { L: { r: 12 }, R: { r: 9 } } }
+    expect(completeCall(v, { setId: 's', side: 'R', values, eventId: 'e1', now: 0 }).fields.sides).toEqual({
+      L: { w: 7.5, r: 10, done: true }, R: { w: 7.5, r: 9, done: true },
+    })
+    const right = view([lateral([slot('s', sided(7.5, { r: 10, done: false }, { r: 8, done: true }), { completed: true })])])
+    expect(completeCall(right, { setId: 's', side: 'L', values: { w: 7.5, sides: { L: { r: 11 }, R: { r: 12 } } }, eventId: 'e1', now: 0 }).fields.sides.R)
+      .toEqual({ w: 7.5, r: 8, done: true })
+  })
   // Both sides share one weight: on a half-done set it is the one the first side was logged at,
   // whatever the sheet hands over.
   test('per side: the second side logs the first side\'s weight even if the sheet sends another', () => {
@@ -299,6 +310,15 @@ describe('draftCall', () => {
       .toEqual({ setId: 's', values: { w: 7.5, sides: { L: { r: 9 }, R: { r: 8 } } } })
     const fresh = view([lateral([slot('s', sided(7.5, { r: 10, done: false }, { r: 8, done: false }))])])
     expect(draftCall(fresh, { setId: 's', values: { w: 10, sides: { L: { r: 9 }, R: { r: 8 } } } }).values.w).toBe(10)
+  })
+  // The draft carries the logged side's own reps, so it is what the keypad shows (the field is
+  // read-only) and leaving the app still writes it once (sheetBackgroundCall).
+  test('per side, one side done: the draft drops reps typed for that side, keeping the logged ones', () => {
+    const v = view([lateral([slot('s', sided(7.5, { r: 10, done: true }, { r: 8, done: false }), { completed: true })])])
+    expect(draftCall(v, { setId: 's', values: { w: 7.5, sides: { L: { r: 12 }, R: { r: 9 } } }, now: 0 }))
+      .toEqual({ setId: 's', values: { w: 7.5, sides: { L: { r: 10 }, R: { r: 9 } } } })
+    const fresh = view([lateral([slot('s', sided(7.5, { r: 10, done: false }, { r: 8, done: false }))])])
+    expect(draftCall(fresh, { setId: 's', values: { w: 7.5, sides: { L: { r: 12 }, R: { r: 9 } } }, now: 0 }).values.sides.L.r).toBe(12)
   })
   test('never on a done set (only Update changes it) or an unknown one', () => {
     const v = view([bench([slot('b0', done(75, 10))])])
@@ -1036,6 +1056,22 @@ describe.each(SQLITE_DRIVERS)('%s: the calls drive the engine', (_name, createDb
     const logged = view => expect(view.entries[1].sets[0].row.sides).toEqual({ L: { w: 7.5, r: 10, done: true }, R: { w: 7.5, r: 9, done: true } })
     logged(current(session))
     expect(current(session).entries[1].sets[0].row.w).toBe(7.5)
+    db = db.reopen()
+    logged(current(await open(db, false)))
+  })
+
+  // Left logged at 10. Typed 12 for the left (the keypad refuses it now; the call must too), then
+  // Complete right: the left keeps its 10, through a kill.
+  test("per side: Complete right with the left's reps changed keeps the left's logged reps", async () => {
+    clock = T0 + 1000
+    let db = createDb()
+    const session = await open(db)
+    await session.call('commitSet', completeCall(current(session), { setId: latSet, side: 'L', values: { w: 7.5, sides: { L: { r: 10 }, R: { r: 10 } } }, eventId: 'l1', now: clock }))
+    clock = T0 + 20_000
+    const right = completeCall(current(session), { setId: latSet, side: 'R', values: { w: 7.5, sides: { L: { r: 12 }, R: { r: 9 } } }, eventId: 'r1', now: clock })
+    expect((await session.call('commitSet', right)).saved).toBe(true)
+    const logged = view => expect(view.entries[1].sets[0].row.sides).toEqual({ L: { w: 7.5, r: 10, done: true }, R: { w: 7.5, r: 9, done: true } })
+    logged(current(session))
     db = db.reopen()
     logged(current(await open(db, false)))
   })

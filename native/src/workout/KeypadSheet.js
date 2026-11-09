@@ -5,7 +5,7 @@ import AppText from '../ui/AppText'
 import IconButton from '../ui/IconButton'
 import PrimaryButton from '../ui/PrimaryButton'
 import ScaleButton from '../ui/ScaleButton'
-import { actionsStacked, applyKey, completeBlocker, fieldText, keypadState, keypadValues, sheetCloseAction, weightLockHint, weightLockNote } from './keypad'
+import { actionsStacked, applyKey, completeBlocker, fieldLocked, fieldText, keypadState, keypadValues, sheetCloseAction, sideLockHint, sideLockNote } from './keypad'
 import { spokenField } from './spoken'
 
 const CHIPS = ['-10', '-5', '+5', '+10']
@@ -21,11 +21,11 @@ function Key({ text, label, hint, style = styles.key, disabled = false, onPress 
 }
 
 // `id` is the keypad field ('w', 'r', 'L.r', 'R.r'); `title` is what it shows ('Lb each').
-// `setWith` ('L' or 'R') marks a weight logged with that side: it shows and takes no input. Its
-// note sits under the field row (weightLockNote); VoiceOver hears it here, the side in the label
-// and the way to change it as the hint.
+// `setWith` ('L' or 'R') marks a field that logged side holds (fieldLocked: the shared weight, or
+// that side's reps): it shows and takes no input. The note sits under the field row (sideLockNote);
+// VoiceOver hears it here, the side in the weight's label and the way to change it as the hint.
 function Field({ id, title, text, active, perHand, setWith = null, onPress }) {
-  const lockHint = weightLockHint(setWith)
+  const lockHint = sideLockHint(setWith)
   return (
     <ScaleButton
       accessibilityLabel={spokenField(id, text, { perHand, setWith })}
@@ -58,8 +58,9 @@ const keyHint = key => (key === 'back' ? 'Deletes the last character.' : 'Types 
 // control can be reached; from the accessibility sizes on, Save and Complete stack full width
 // (actionsStacked).
 // `side` is the side Complete logs on a per-side set; Complete waits for its reps and the weight.
-// `weightSetWith` ('L' or 'R') is the side a half-done per-side set's weight was logged with: the
-// weight field and the weight chips take no input, and the sheet opens on the other side's reps.
+// `weightSetWith` ('L' or 'R') is the side a half-done per-side set was logged with: the weight
+// field, the weight chips and that side's reps take no input, and the sheet opens on the other
+// side's reps.
 // While open, every app state change calls onAppState(next, values, changed), so the caller can
 // keep typed numbers when the app leaves the front (a kill from the app switcher follows).
 export default function KeypadSheet({ visible, title, initial, perSide, side = null, initialField = 'w', weightSetWith = null, weightTitle = 'Lb', perHand = false, saveLabel = 'Save', completeLabel = 'Complete', completeSpoken, notice, onSave, onComplete, onUndo, onRemove, onClose, onAppState }) {
@@ -68,7 +69,7 @@ export default function KeypadSheet({ visible, title, initial, perSide, side = n
     if (visible) setState(keypadState(initial, initialField, { weightSetWith }))
   }, [visible])
   const stacked = actionsStacked(useWindowDimensions().fontScale)
-  const lockNote = weightLockNote(state.lock)
+  const lockNote = sideLockNote(state.lock)
   const values = keypadValues(state)
   const blocked = completeBlocker(values, side)
   const press = key => () => setState(current => applyKey(current, key))
@@ -99,9 +100,9 @@ export default function KeypadSheet({ visible, title, initial, perSide, side = n
         ) : null}
         <ScrollView style={styles.body} contentContainerStyle={styles.content} alwaysBounceVertical={false}>
           <View style={styles.fields}>
-            <Field id="w" title={weightTitle} text={fieldText(state, 'w')} active={state.field === 'w'} perHand={perHand} setWith={state.lock} onPress={press('field:w')} />
+            <Field id="w" title={weightTitle} text={fieldText(state, 'w')} active={state.field === 'w'} perHand={perHand} setWith={fieldLocked(state, 'w') ? state.lock : null} onPress={press('field:w')} />
             {fields.map(([id, name]) => (
-              <Field key={id} id={id} title={name} text={fieldText(state, id)} active={state.field === id} onPress={press(`field:${id}`)} />
+              <Field key={id} id={id} title={name} text={fieldText(state, id)} active={state.field === id} setWith={fieldLocked(state, id) ? state.lock : null} onPress={press(`field:${id}`)} />
             ))}
           </View>
           {/* Under the row, so the weight field stays the height of its neighbours. VoiceOver

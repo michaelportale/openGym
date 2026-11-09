@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { STACK_ACTIONS_FROM, actionsStacked, applyKey, completeBlocker, completeLabels, fieldText, keypadState, keypadValues, sheetCloseAction, weightLockHint, weightLockNote } from './keypad.js'
+import { STACK_ACTIONS_FROM, actionsStacked, applyKey, completeBlocker, completeLabels, fieldLocked, fieldText, keypadState, keypadValues, sheetCloseAction, sideLockHint, sideLockNote } from './keypad.js'
 
 const press = (state, ...keys) => keys.reduce(applyKey, state)
 const values = (state, ...keys) => keypadValues(press(state, ...keys))
@@ -126,19 +126,36 @@ test('a half-done per-side set refuses weight input; the other side\'s reps stay
   // A tapped reps box still opens on it.
   expect(keypadState(initial, 'R.r', { weightSetWith: 'L' }).field).toBe('R.r')
 })
-test('weightLockNote says which side set the weight, and how to change it', () => {
-  expect(weightLockNote('L')).toBe('Weight set with the left side. To change it, finish the set, then Update it.')
-  expect(weightLockNote('R')).toBe('Weight set with the right side. To change it, finish the set, then Update it.')
-  expect(weightLockNote(null)).toBeNull()
-  expect(weightLockNote(undefined)).toBeNull()
-  expect(weightLockNote('constructor')).toBeNull()
+// The logged side's reps are logged too: typing 12 over a left logged at 10 would vanish on Save
+// and rewrite the log on Complete right. Only Update, once the set is done, changes them.
+test("a half-done per-side set refuses the logged side's reps; the sheet never opens on them", () => {
+  const initial = { w: 7.5, sides: { L: { r: 10 }, R: { r: 8 } } }
+  const left = keypadState(initial, 'w', { weightSetWith: 'L' })
+  expect(press(left, 'field:L.r').field).toBe('R.r')
+  expect(values(left, 'field:L.r', '1', '2')).toEqual({ w: 7.5, sides: { L: { r: 10 }, R: { r: 12 } } })
+  expect(keypadState(initial, 'L.r', { weightSetWith: 'L' }).field).toBe('R.r')
+  const right = keypadState(initial, 'w', { weightSetWith: 'R' })
+  expect(press(right, 'field:R.r').field).toBe('L.r')
+  expect(values(right, 'field:R.r', '9')).toEqual({ w: 7.5, sides: { L: { r: 9 }, R: { r: 8 } } })
+  expect(fieldLocked(left, 'w')).toBe(true)
+  expect(fieldLocked(left, 'L.r')).toBe(true)
+  expect(fieldLocked(left, 'R.r')).toBe(false)
+  expect(fieldLocked(keypadState(initial, 'w'), 'w')).toBe(false)
+  expect(fieldLocked(keypadState(initial, 'w'), 'L.r')).toBe(false)
 })
-test('weightLockHint gives VoiceOver the way out with the field; the side is in its label', () => {
-  expect(weightLockHint('L')).toBe('To change it, finish the set, then Update it.')
-  expect(weightLockHint('R')).toBe('To change it, finish the set, then Update it.')
-  expect(weightLockNote('R')).toContain(weightLockHint('R'))
-  expect(weightLockHint(null)).toBeNull()
-  expect(weightLockHint('toString')).toBeNull()
+test('sideLockNote says which side is logged, and how to change its weight or reps', () => {
+  expect(sideLockNote('L')).toBe('Left side logged. To change its weight or reps, finish the set, then Update it.')
+  expect(sideLockNote('R')).toBe('Right side logged. To change its weight or reps, finish the set, then Update it.')
+  expect(sideLockNote(null)).toBeNull()
+  expect(sideLockNote(undefined)).toBeNull()
+  expect(sideLockNote('constructor')).toBeNull()
+})
+test('sideLockHint gives VoiceOver the same way out with each locked field', () => {
+  expect(sideLockHint('L')).toBe('To change it, finish the set, then Update it.')
+  expect(sideLockHint('R')).toBe('To change it, finish the set, then Update it.')
+  expect(sideLockNote('R')).toMatch(/finish the set, then Update it\.$/)
+  expect(sideLockHint(null)).toBeNull()
+  expect(sideLockHint('toString')).toBeNull()
 })
 
 test('completeLabels: a warm-up shows plain Complete and is spoken as the warm-up', () => {

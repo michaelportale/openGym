@@ -31,31 +31,37 @@ const validField = (field, sided) => (sided ? ['w', 'L.r', 'R.r'] : ['w', 'r']).
 const OTHER = { L: 'R', R: 'L' }
 
 // `field` is the one the sheet opens on: 'w' by default, 'r' when the reps box was tapped.
-// `weightSetWith` ('L' or 'R') is the side a half-done per-side set's weight was logged with:
-// that weight is shared and stays (lockedWeight), so the weight field takes no input and the
-// sheet opens on the other side's reps instead.
+// `weightSetWith` ('L' or 'R') is the side a half-done per-side set was logged with (`lock`): its
+// weight is shared and stays (lockedWeight), and its reps are logged, so neither field takes input
+// (fieldLocked) and the sheet opens on the other side's reps instead.
 export function keypadState({ w = null, r = null, sides } = {}, field = 'w', { weightSetWith = null } = {}) {
   const sided = sides
     ? { L: { r: sides.L?.r ?? null }, R: { r: sides.R?.r ?? null } }
     : null
   const lock = sided && Object.hasOwn(OTHER, weightSetWith ?? '') ? weightSetWith : null
   const valid = validField(field, sided !== null) ? field : 'w'
-  const opens = lock && valid === 'w' ? `${OTHER[lock]}.r` : valid
+  const opens = lock && fieldLocked({ lock }, valid) ? `${OTHER[lock]}.r` : valid
   return { field: opens, entry: null, w: w ?? null, r: sided ? null : (r ?? null), sides: sided, lock }
 }
 
-const LOCK_SIDES = { L: 'left', R: 'right' }
-const LOCK_WAY_OUT = 'To change it, finish the set, then Update it.'
-
-// The line under the fields when a half-done per-side set's weight was set with `side` ('L' or
-// 'R'): which side, and the way to change it, since the keypad will not. Null otherwise.
-export function weightLockNote(side) {
-  return Object.hasOwn(LOCK_SIDES, side ?? '') ? `Weight set with the ${LOCK_SIDES[side]} side. ${LOCK_WAY_OUT}` : null
+// A field the logged side of a half-done per-side set holds: the weight both sides share, and
+// that side's own reps. Only Update, once the set is done, changes them.
+export function fieldLocked(state, field) {
+  return state.lock != null && (field === 'w' || field === `${state.lock}.r`)
 }
 
-// What VoiceOver hears of that note, as the locked weight field's hint: its label already names
-// the side (spokenField). Null when the weight is not locked.
-export function weightLockHint(side) {
+const LOCK_SIDES = { L: 'Left', R: 'Right' }
+const LOCK_WAY_OUT = 'To change it, finish the set, then Update it.'
+
+// The line under the fields when one side of a per-side set is logged (`side`, 'L' or 'R'): which
+// side, and the way to change its weight or reps, since the keypad will not. Null otherwise.
+export function sideLockNote(side) {
+  return Object.hasOwn(LOCK_SIDES, side ?? '') ? `${LOCK_SIDES[side]} side logged. To change its weight or reps, finish the set, then Update it.` : null
+}
+
+// What VoiceOver hears of that note with each locked field, as its hint: the weight field's label
+// already names the side (spokenField). Null when nothing is locked.
+export function sideLockHint(side) {
   return Object.hasOwn(LOCK_SIDES, side ?? '') ? LOCK_WAY_OUT : null
 }
 
@@ -89,7 +95,7 @@ function chip(state, amount) {
 }
 
 function pick(state, field) {
-  if (field === 'w' && state.lock) return state
+  if (fieldLocked(state, field)) return state
   if (field !== 'w' && field !== 'r' && !/^[LR]\.r$/.test(field)) return state
   if (field === 'r' ? isSided(state) : field !== 'w' && !isSided(state)) return state
   return { ...commit(state), field }
