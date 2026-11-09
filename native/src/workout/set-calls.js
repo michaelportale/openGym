@@ -204,9 +204,14 @@ export function sheetCloseCall(mode, changed) {
 const LEAVING = ['background', 'inactive']
 
 // The app leaving the front with the sheet open keeps the typed numbers as a swipe would, so a
-// kill from the app switcher loses nothing. The sheet stays open.
-export function sheetBackgroundCall(appState, mode, changed) {
-  return LEAVING.includes(appState) ? sheetCloseCall(mode, changed) : 'none'
+// kill from the app switcher loses nothing (iOS sends 'inactive' first; a kill from the switcher
+// may follow with no 'background'). The sheet stays open. Numbers the set already holds as its
+// draft (`stored`, the set's draft in the engine's latest view) are not written again, so the
+// 'background' after an 'inactive' writes nothing.
+export function sheetBackgroundCall(appState, mode, changed, { values, stored } = {}) {
+  if (!LEAVING.includes(appState)) return 'none'
+  if (stored != null && JSON.stringify(stored) === JSON.stringify(values)) return 'none'
+  return sheetCloseCall(mode, changed)
 }
 
 export const SAVED_REST_FAILED = "Saved. Rest didn't start."

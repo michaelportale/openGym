@@ -109,10 +109,20 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
   }).then(result => report(result, action))
   const restoreRest = () => startPendingRest('rest')
 
-  const draft = (setId, values) => write(async (view, now) => {
+  const putDraft = (setId, values) => async (view, now) => {
     const call = draftCall(view, { setId, values, now })
     return call ? session.putDraft(call.setId, call.values) : null
-  })
+  }
+  const draft = (setId, values) => write(putDraft(setId, values))
+  // The typed numbers kept as the app leaves the front. Through the gate like every write, and the
+  // same checks, but it holds the gate for that one draft write and nothing more: no busy flag and
+  // no view reload after an overnight refusal (nothing on screen changes while the app leaves; the
+  // next tap, or the new-day reopen, reloads it). A tap on coming back waits on that write at most.
+  const keepDraft = (setId, values) => gate.current(async () => {
+    const view = latest()
+    const now = Date.now()
+    return overnightRefusal(view, now) ?? putDraft(setId, values)(view, now)
+  }).catch(failed)
   const edit = (setId, values) => write(async (view, now) => {
     const call = editCall(view, { setId, values, eventId: createEventId(), now })
     return call ? session.editSet(call) : null
@@ -185,12 +195,14 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
       if (sheetCloseCall(sheet.mode, changed) === 'draft') report(await draft(sheet.setId, values), 'draft')
     },
     // The app leaving the front with typed numbers keeps them as a draft through the same gate,
-    // so a kill from the app switcher loses nothing. The sheet stays open; a refusal shows in it
-    // while it is, else on the screen.
+    // so a kill from the app switcher loses nothing. Numbers already kept are not written again
+    // (the 'background' after an 'inactive'), so leaving holds the gate for one write. The sheet
+    // stays open; a refusal shows in it while it is, else on the screen.
     onAppState: async (appState, values, changed) => {
-      if (sheetBackgroundCall(appState, sheet.mode, changed) !== 'draft') return
+      const stored = findSet(latest(), sheet.setId)?.slot.draft
+      if (sheetBackgroundCall(appState, sheet.mode, changed, { values, stored }) !== 'draft') return
       const { key, setId } = sheet
-      const text = resultNotice(await draft(setId, values), 'draft')
+      const text = resultNotice(await keepDraft(setId, values), 'draft')
       if (!text) return
       if (openKey.current === key) setSheetNotice(text)
       else setNotices(current => ({ ...current, notice: text }))

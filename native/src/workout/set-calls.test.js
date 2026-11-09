@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { NO_NOTICES, OVERNIGHT_NOTICE, PAST_MIDNIGHT, addSetCall, addWarmupCall, completeCall, completeResult, dockKeypadField, draftCall, editCall, finishRetarget, keypadField, noticeAnnouncement, noticesAfter, overnightNotice, overnightNow, overnightRefusal, primaryAction, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, undoCall, undoWrite, writeOutcome } from './set-calls.js'
+import { NO_NOTICES, OVERNIGHT_NOTICE, PAST_MIDNIGHT, addSetCall, addWarmupCall, completeCall, completeResult, dockKeypadField, draftCall, editCall, finishRetarget, keypadField, noticeAnnouncement, noticesAfter, overnightNotice, overnightNow, overnightRefusal, primaryAction, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, undoCall, undoWrite, writeOutcome, findSet } from './set-calls.js'
 import { shownValues, workoutScreen } from './workout-view.js'
 import { pendingRest, restEventId, restMsFor } from './rest-after.js'
 import { withTargets } from './session-screen.js'
@@ -441,6 +441,17 @@ describe('sheetBackgroundCall', () => {
     expect(sheetBackgroundCall('active', 'current', true)).toBe('none')
     expect(sheetBackgroundCall(undefined, 'current', true)).toBe('none')
   })
+  // iOS sends 'inactive' then 'background' on the way out: the second finds the numbers kept by
+  // the first and writes nothing, so leaving takes the gate for one write.
+  test('numbers the set already holds as its draft are not written again', () => {
+    const values = { w: 80, r: 5 }
+    expect(sheetBackgroundCall('background', 'current', true, { values, stored: { w: 80, r: 5 } })).toBe('none')
+    expect(sheetBackgroundCall('inactive', 'pending', true, { values, stored: { w: 80, r: 6 } })).toBe('draft')
+    expect(sheetBackgroundCall('inactive', 'current', true, { values, stored: null })).toBe('draft')
+    const sides = { w: 7.5, sides: { L: { r: 10 }, R: { r: null } } }
+    expect(sheetBackgroundCall('background', 'current', true, { values: sides, stored: { w: 7.5, sides: { L: { r: 10 }, R: { r: null } } } })).toBe('none')
+    expect(sheetBackgroundCall('background', 'current', true, { values: sides, stored: { w: 7.5, sides: { L: { r: 10 }, R: { r: 9 } } } })).toBe('draft')
+  })
 })
 
 const STORAGE = { code: 'storage', message: 'disk full' }
@@ -819,6 +830,20 @@ describe.each(SQLITE_DRIVERS)('%s: the calls drive the engine', (_name, createDb
     expect(screen.card.rows.map(r => [r.label, r.status])).toEqual([['W', 'done'], ['1', 'current'], ['2', 'pending']])
     expect(screen.dock).toMatchObject({ lead: 'Set 1 · 75 lb × 8', setId: benchSet })
     expect(screen.header.progress).toBe(0)
+  })
+
+  // The draft the 'inactive' wrote is in the engine's view as the same numbers, so the
+  // 'background' right after it writes nothing.
+  test("leaving the app writes the typed numbers once: 'inactive' keeps them, 'background' finds them kept", async () => {
+    const db = createDb()
+    const session = await open(db)
+    for (const [setId, values] of [[benchSet, { w: 77.5, r: 6 }], [latSet, { w: 7.5, sides: { L: { r: 10 }, R: { r: null } } }]]) {
+      const storedNow = () => findSet(current(session), setId).slot.draft
+      expect(sheetBackgroundCall('inactive', 'current', true, { values, stored: storedNow() })).toBe('draft')
+      const call = draftCall(current(session), { setId, values, now: clock })
+      expect((await session.call('putDraft', call.setId, call.values)).saved).toBe(true)
+      expect(sheetBackgroundCall('background', 'current', true, { values, stored: storedNow() })).toBe('none')
+    }
   })
 
   test('a draft from the sheet survives a kill and is what the set shows', async () => {
