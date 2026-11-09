@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { carriedWeight, currentExerciseIndex, shownValues, workoutScreen } from './workout-view.js'
+import { carriedWeight, currentExerciseIndex, lockedWeight, shownValues, workoutScreen } from './workout-view.js'
 
 const set = (setId, row, extra = {}) => ({
   setId, completed: row.done === true, warmup: false, draft: null, row, ...extra,
@@ -357,7 +357,8 @@ describe('a draft left on a done set', () => {
     expect(shownValues(right, 'L')).toEqual({ w: 10, sides: { L: { r: 9 }, R: { r: 11 } } })
   })
   // The weight is shared by both sides: a leftover draft's would overwrite the done side's logged
-  // weight through the second side's Complete. Only a weight typed in the sheet now changes it.
+  // weight through the second side's Complete. Nothing changes it until the set is done (the
+  // keypad takes no weight, lockedWeight); after that, only Update does.
   test('per side, one side done: the weight is the one that side was logged at, not the draft\'s', () => {
     const slot = set('s', sided(7.5, { r: 10, done: true }, { r: 10, done: false }), { completed: true, draft: { w: 10, sides: { L: { r: 10 }, R: { r: 9 } } } })
     expect(shownValues(slot, 'R')).toEqual({ w: 7.5, sides: { L: { r: 10 }, R: { r: 9 } } })
@@ -369,5 +370,25 @@ describe('a draft left on a done set', () => {
   })
   test('a set not done keeps its draft', () => {
     expect(shownValues(set('a', todo(75, 8), { draft: { w: 80, r: 5 } }), null)).toEqual({ w: 80, r: 5 })
+  })
+})
+
+// A per-side set with one side logged keeps the weight that side was logged at.
+describe('lockedWeight', () => {
+  test('one side done: that side and its weight', () => {
+    expect(lockedWeight(sided(7.5, { r: 10, done: true }, { r: 10, done: false }))).toEqual({ side: 'L', w: 7.5 })
+    expect(lockedWeight(sided(10, { r: 10, done: false }, { r: 8, done: true }))).toEqual({ side: 'R', w: 10 })
+  })
+  test("the side's own weight, else the row's", () => {
+    const row = { w: 12.5, r: 10, done: false, sides: { L: { w: 10, r: 10, done: true }, R: { w: 12.5, r: 10, done: false } } }
+    expect(lockedWeight(row)).toEqual({ side: 'L', w: 10 })
+    expect(lockedWeight({ ...row, sides: { ...row.sides, L: { r: 10, done: true } } })).toEqual({ side: 'L', w: 12.5 })
+  })
+  test('none when no side or both are done, the set is not per side, or there is no weight to keep', () => {
+    expect(lockedWeight(sided(7.5, { r: 10, done: false }, { r: 10, done: false }))).toBeNull()
+    expect(lockedWeight(sided(7.5, { r: 10, done: true }, { r: 10, done: true }))).toBeNull()
+    expect(lockedWeight(todo(75, 8))).toBeNull()
+    expect(lockedWeight(done(75, 8))).toBeNull()
+    expect(lockedWeight(sided(null, { r: 10, done: true }, { r: 10, done: false }))).toBeNull()
   })
 })

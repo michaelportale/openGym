@@ -229,7 +229,7 @@ export function sheetBackgroundCall(appState, mode, changed, { values, stored } 
   return sheetCloseCall(mode, changed)
 }
 
-export const SAVED_REST_FAILED = "Saved. Rest didn't start."
+const SAVED_REST_FAILED = "Saved. Rest didn't start."
 const DRAFT_NOT_CLEARED = "The typed numbers for this set couldn't be cleared."
 const TIME_NOT_UPDATED = "The workout time couldn't be updated, so it may be off after a restart."
 const NOT_CLOSED = "The workout isn't closed yet. Tap Save workout again."

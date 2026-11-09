@@ -288,7 +288,7 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
     sheet: { ...sheet, open: sheetOpen, notice: sheetNotice?.text ?? null, ...sheetActions },
     finish: {
       open: finishing != null,
-      endsAtLastSet: finishing?.end != null,
+      endsAtSuggestedEnd: finishing?.end != null,
       notice: finishNotice?.text ?? null,
       show: openFinish,
       close: () => setFinishing(null),

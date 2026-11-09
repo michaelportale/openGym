@@ -182,7 +182,7 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
         visible={finish.open}
         title={base?.name ?? 'workout'}
         summary={finish.open ? finishSummary(view) : null}
-        endsAtLastSet={finish.endsAtLastSet}
+        endsAtSuggestedEnd={finish.endsAtSuggestedEnd}
         notice={finish.notice}
         busy={actions.busy}
         onConfirm={finish.confirm}
