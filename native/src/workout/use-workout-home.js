@@ -3,6 +3,8 @@ import snapshot from '../data/snapshot'
 import { openAppDatabase } from '../storage/database'
 import { createSqliteFinishedWorkouts } from '../session/finished-workouts'
 import { createSqliteSessionStorage } from '../session/sqlite-storage'
+import { homeKey, shouldReloadHome } from '../sync/sync-triggers'
+import { useSync } from '../sync/use-sync'
 import { createSqliteServerCopy } from '../sync/server-copy'
 import { readCopy, screenSource } from '../sync/source'
 import { nextRoutineId } from './next-up'
@@ -49,6 +51,18 @@ export function useWorkoutHome() {
   useEffect(() => {
     reload()
   }, [reload])
+
+  // A sync that pulled (or a pairing, or forgetting) while the start screen is showing reloads it,
+  // so routines and next-up reflect the server. Never while a session is open: leaving it reloads.
+  const { status: syncStatus } = useSync()
+  const seenKey = useRef(undefined)
+  useEffect(() => {
+    const next = homeKey(syncStatus)
+    if (next === null) return
+    const prev = seenKey.current
+    seenKey.current = next
+    if (shouldReloadHome({ prev, next, homeStatus: home.status })) reload()
+  }, [syncStatus, home.status, reload])
 
   // One tap starts one session: a second tap before the screen changes is ignored.
   const begin = useCallback(routineId => {

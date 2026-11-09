@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ScrollView, StyleSheet, View } from 'react-native'
 import { createSqliteFinishedWorkouts } from '../session/finished-workouts'
+import { useSync } from '../sync/use-sync'
 import { color, space, touch } from '../theme/tokens'
 import AppText from '../ui/AppText'
 import Card from '../ui/Card'
@@ -52,6 +53,7 @@ function NextTimeLine({ line, onWhy }) {
 export default function SavedScreen({ db, state, base, names, onDone }) {
   const [lines, setLines] = useState([])
   const [why, setWhy] = useState(null)
+  const { text: syncText } = useSync()
 
   // Read once: the session's state, base and names are fixed for its life (it is keyed by id).
   useEffect(() => {
@@ -70,7 +72,7 @@ export default function SavedScreen({ db, state, base, names, onDone }) {
       <ScreenHeader title="Workout" />
       <View style={styles.body}>
         <Card accessibilityLiveRegion="polite" style={styles.card}>
-          <AppText variant="heading">Saved on this phone. Not synced yet.</AppText>
+          <AppText variant="heading">{syncText ? `Saved on this phone. ${syncText}` : 'Saved on this phone.'}</AppText>
         </Card>
         {lines.length ? (
           <Card style={[styles.card, styles.lines]}>
