@@ -4,7 +4,8 @@
 // typed entry and a removal only removes the entry the phone saw. No I/O.
 
 export function roundLb(x) {
-  return Math.round(Number(x) * 10) / 10
+  const n = typeof x === 'string' && x.trim() !== '' ? Number(x) : x
+  return typeof n === 'number' ? Math.round(n * 10) / 10 : NaN
 }
 
 function isHealth(value) {
@@ -28,7 +29,8 @@ function reflected(op, entry) {
 function canApply(op, entry) {
   const health = isHealth(op)
   if (op.op === 'set') {
-    if (!health) return true
+    // Between typed entries the later edit wins (as the web's merge does); equal t applies.
+    if (!health) return !entry || isHealth(entry) || !(Number(entry.t) > op.t)
     return !entry || isHealth(entry) || (op.baseT != null && entry.t === op.baseT)
   }
   if (!entry) return true
@@ -37,17 +39,18 @@ function canApply(op, entry) {
 }
 
 // bodyweight: the list to start from (undefined, not an array, or holding non-objects is
-// tolerated: a non-array counts as empty, and elements that are not objects with a string
-// d cannot be placed on a day, so they are left out of next). If two entries share a day
-// the one with the larger t is kept. Every other entry is passed through as the same
+// tolerated: a non-array counts as empty, and elements that are not objects or have no d
+// cannot be placed on a day, so they are left out of next; this matches sync-merge.js). If
+// two entries share a day the one with the larger t is kept, the first on equal t, as the
+// web does. Every other entry is passed through as the same
 // object, so fields this code does not know survive. Inputs are never mutated.
 // Returns { next, applied, done, superseded }; each of the last three lists { d, t } of the ops.
 export function applyDayOps(bodyweight, ops) {
   const byDay = new Map()
   for (const entry of Array.isArray(bodyweight) ? bodyweight : []) {
-    if (!entry || typeof entry !== 'object' || Array.isArray(entry) || typeof entry.d !== 'string') continue
+    if (!entry || typeof entry !== 'object' || entry.d == null) continue
     const kept = byDay.get(entry.d)
-    if (!kept || (Number(entry.t) || 0) >= (Number(kept.t) || 0)) byDay.set(entry.d, entry)
+    if (!kept || (Number(entry.t) || 0) > (Number(kept.t) || 0)) byDay.set(entry.d, entry)
   }
   const applied = []
   const done = []

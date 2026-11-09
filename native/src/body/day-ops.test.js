@@ -6,9 +6,10 @@ const health = (d, w, t, hk = 'u' + t) => ({ d, w, t, src: 'health', hk })
 const set = (d, w, t, extra = {}) => ({ d, op: 'set', w, t, ...extra })
 const remove = (d, t, extra = {}) => ({ d, op: 'remove', t, ...extra })
 
-test('roundLb gives one decimal', () => {
+test('roundLb gives one decimal and NaN for a non-number', () => {
   expect(roundLb(180.04)).toBe(180)
   expect(roundLb(180.06)).toBe(180.1)
+  for (const bad of [null, '', false, undefined]) expect(roundLb(bad)).toBeNaN()
 })
 
 test('entryFromOp carries src and hk only when present', () => {
@@ -109,4 +110,57 @@ test('a missing or malformed list is tolerated; non-objects are left out of next
   expect(applyDayOps('nope', []).next).toEqual([])
   const good = typed('2026-01-01', 1, 1)
   expect(applyDayOps([null, 5, 'x', [], { w: 1 }, good], []).next).toEqual([good])
+})
+
+test('only non-objects and entries with no d are dropped; others pass through', () => {
+  const odd = { d: 20260101, w: 1, t: 1 }
+  const r = applyDayOps([{ d: null, w: 1 }, odd], [])
+  expect(r.next).toEqual([odd])
+  expect(r.next[0]).toBe(odd)
+})
+
+test('duplicate days keep the larger t, and the first on equal t', () => {
+  const first = { d: '2026-01-01', w: 1, t: 5, tag: 'first' }
+  const second = { d: '2026-01-01', w: 2, t: 5, tag: 'second' }
+  expect(applyDayOps([first, second], []).next[0]).toBe(first)
+  const later = { d: '2026-01-01', w: 3, t: 6 }
+  expect(applyDayOps([first, later], []).next[0]).toBe(later)
+  expect(applyDayOps([later, first], []).next[0]).toBe(later)
+})
+
+test('a typed set loses to a typed entry with a larger t, wins on equal or smaller t', () => {
+  const older = applyDayOps([typed('2026-01-01', 181, 9)], [set('2026-01-01', 180, 5)])
+  expect(older.next).toEqual([typed('2026-01-01', 181, 9)])
+  expect(older.superseded).toEqual([{ d: '2026-01-01', t: 5 }])
+  expect(applyDayOps([typed('2026-01-01', 181, 5)], [set('2026-01-01', 180, 5)]).applied).toHaveLength(1)
+  const newer = applyDayOps([typed('2026-01-01', 181, 2)], [set('2026-01-01', 180, 5)])
+  expect(newer.next).toEqual([typed('2026-01-01', 180, 5)])
+  expect(newer.applied).toHaveLength(1)
+  const overHealth = applyDayOps([health('2026-01-01', 181, 99)], [set('2026-01-01', 180, 5)])
+  expect(overHealth.next).toEqual([typed('2026-01-01', 180, 5)])
+  expect(overHealth.applied).toHaveLength(1)
+})
+
+test('a reflected op keeps the original entry object', () => {
+  const entry = { d: '2026-01-01', w: 180, t: 5, note: 'x' }
+  const r = applyDayOps([entry], [set('2026-01-01', 180, 5)])
+  expect(r.done).toHaveLength(1)
+  expect(r.next[0]).toBe(entry)
+})
+
+test('a typed remove removes a Health entry whose t equals baseT', () => {
+  const r = applyDayOps([health('2026-01-01', 181, 4)], [remove('2026-01-01', 9, { baseT: 4 })])
+  expect(r.next).toEqual([])
+  expect(r.applied).toHaveLength(1)
+})
+
+test('one call can mix applied, done and superseded', () => {
+  const r = applyDayOps(
+    [typed('2026-01-01', 181, 9), typed('2026-01-02', 180, 5)],
+    [set('2026-01-01', 170, 2), set('2026-01-02', 180, 5), set('2026-01-03', 179, 6)],
+  )
+  expect(r.superseded).toEqual([{ d: '2026-01-01', t: 2 }])
+  expect(r.done).toEqual([{ d: '2026-01-02', t: 5 }])
+  expect(r.applied).toEqual([{ d: '2026-01-03', t: 6 }])
+  expect(r.next.map(e => e.d)).toEqual(['2026-01-01', '2026-01-02', '2026-01-03'])
 })

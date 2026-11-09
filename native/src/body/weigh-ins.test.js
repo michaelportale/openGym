@@ -34,6 +34,75 @@ async function roundTrip(store) {
   expect(await store.listPending()).toHaveLength(3)
 }
 
+async function validation(store) {
+  await expect(store.put({ ...typed, src: 'scale' })).rejects.toThrow()
+  await expect(store.put({ ...typed, baseT: 'x' })).rejects.toThrow()
+  await expect(store.put({ ...typed, baseT: Infinity })).rejects.toThrow()
+  await expect(store.put({ ...typed, w: 0 })).rejects.toThrow()
+  await expect(store.put({ ...typed, w: -3 })).rejects.toThrow()
+  await expect(store.put({ ...typed, src: 'health', hk: 'u', baseT: 4 })).resolves.toBeTruthy()
+  await expect(store.putFromHealth(typed)).rejects.toThrow()
+  await expect(store.putFromHealth({ ...imported, w: 0 })).rejects.toThrow()
+}
+
+// Same t, different content: the stored t moves up one so an older ack cannot settle it.
+async function sameTime(store) {
+  await store.put(typed)
+  await store.put({ ...typed })
+  expect((await store.get(typed.d)).t).toBe(10)
+  await store.put({ ...typed, w: 175 })
+  expect(await store.get(typed.d)).toEqual({ ...typed, w: 175, t: 11 })
+  await store.markAcked([{ d: typed.d, t: 10 }], 'at')
+  expect((await store.listPending()).map(o => o.d)).toEqual([typed.d])
+}
+
+async function fromHealth(store) {
+  // empty day
+  expect(await store.putFromHealth(imported)).toEqual({ written: true })
+  expect(await store.get(imported.d)).toEqual(imported)
+  // over an acked or pending Health set
+  await store.markAcked([{ d: imported.d, t: 5 }], 'at')
+  const newer = { ...imported, w: 180, t: 6, hk: 'uuid-2' }
+  expect(await store.putFromHealth(newer)).toEqual({ written: true })
+  expect(await store.listPending()).toEqual([newer])
+  // never over a typed set, acked or not
+  await store.put(typed)
+  const intruder = { d: typed.d, op: 'set', w: 150, t: 99, src: 'health', hk: 'x' }
+  expect(await store.putFromHealth(intruder)).toEqual({ written: false })
+  await store.markAcked([{ d: typed.d, t: typed.t }], 'at')
+  expect(await store.putFromHealth(intruder)).toEqual({ written: false })
+  expect(await store.get(typed.d)).toEqual(typed)
+  // over a pending typed remove: keeps that remove's baseT
+  await store.put(removal)
+  const over = { d: removal.d, op: 'set', w: 160, t: 20, src: 'health', hk: 'y', baseT: 77 }
+  expect(await store.putFromHealth(over)).toEqual({ written: true })
+  expect(await store.get(removal.d)).toEqual({ ...over, baseT: 3 })
+  expect((await store.listPending()).map(o => o.d)).toContain(removal.d)
+  // over an acked typed remove: uses the op's own baseT
+  await store.put({ d: '2026-01-09', op: 'remove', t: 7, baseT: 3 })
+  await store.markAcked([{ d: '2026-01-09', t: 7 }], 'at')
+  expect(await store.putFromHealth({ d: '2026-01-09', op: 'set', w: 160, t: 21, src: 'health', hk: 'z', baseT: 55 })).toEqual({ written: true })
+  expect((await store.get('2026-01-09')).baseT).toBe(55)
+  // a Health remove replaces too, and clears the ack
+  await store.put({ d: '2026-01-10', op: 'set', w: 1, t: 1, src: 'health', hk: 'h' })
+  await store.markAcked([{ d: '2026-01-10', t: 1 }], 'at')
+  expect(await store.putFromHealth({ d: '2026-01-10', op: 'remove', t: 2, src: 'health' })).toEqual({ written: true })
+  expect(await store.get('2026-01-10')).toEqual({ d: '2026-01-10', op: 'remove', t: 2, src: 'health' })
+  expect((await store.listPending()).map(o => o.d)).toContain('2026-01-10')
+}
+
+test('memory store: validation, same-t puts and putFromHealth', async () => {
+  await validation(createMemoryWeighIns())
+  await sameTime(createMemoryWeighIns())
+  await fromHealth(createMemoryWeighIns())
+})
+
+test('real sqlite: validation, same-t puts and putFromHealth', async () => {
+  await validation(createSqliteWeighIns(createNodeSqliteDb()))
+  await sameTime(createSqliteWeighIns(createNodeSqliteDb()))
+  await fromHealth(createSqliteWeighIns(createNodeSqliteDb()))
+})
+
 test('memory store round trips, replaces per day and ignores a stale ack', async () => {
   await roundTrip(createMemoryWeighIns())
 })

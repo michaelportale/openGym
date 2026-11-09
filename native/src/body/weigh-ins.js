@@ -21,7 +21,25 @@ function requireOp(op) {
   if (typeof op.d !== 'string' || op.d === '') throw new Error('weigh-in needs a day')
   if (op.op !== 'set' && op.op !== 'remove') throw new Error('weigh-in op must be set or remove')
   if (!Number.isFinite(op.t)) throw new Error('weigh-in needs a time')
-  if (op.op === 'set' && !Number.isFinite(op.w)) throw new Error('a set weigh-in needs a weight')
+  if (op.src != null && op.src !== 'health') throw new Error("weigh-in src must be 'health' when present")
+  if (op.baseT != null && !Number.isFinite(op.baseT)) throw new Error('weigh-in baseT must be a number')
+  if (op.op === 'set' && !(Number.isFinite(op.w) && op.w > 0)) throw new Error('a set weigh-in needs a weight above zero')
+}
+
+function requireHealth(op) {
+  requireOp(op)
+  if (op.src !== 'health') throw new Error("putFromHealth takes only ops with src 'health'")
+}
+
+function sameContent(a, b) {
+  return a.op === b.op && (a.w ?? null) === (b.w ?? null) && (a.src ?? null) === (b.src ?? null) &&
+    (a.hk ?? null) === (b.hk ?? null) && (a.baseT ?? null) === (b.baseT ?? null)
+}
+
+// Same t but different content: the row takes t + 1, so an older ack keyed on { d, t }
+// cannot settle the new content.
+function bumped(stored, existing) {
+  return existing && existing.t === stored.t && !sameContent(existing, stored) ? { ...stored, t: stored.t + 1 } : stored
 }
 
 // Op object from the fields; null src, hk and baseT are left out, and a remove has no w.
@@ -53,10 +71,25 @@ export function createMemoryWeighIns() {
   const acked = new Map()
   return {
     async put(op) {
-      const stored = normalized(op)
+      const stored = bumped(normalized(op), rows.get(op?.d))
       rows.set(stored.d, stored)
       acked.delete(stored.d)
-      return { ok: true, d: stored.d }
+      return { ok: true, d: stored.d, t: stored.t }
+    },
+    // A Health op never replaces a typed set; over a pending typed remove it keeps that
+    // remove's baseT, so it still names the entry the owner meant to remove.
+    async putFromHealth(op) {
+      requireHealth(op)
+      const stored = normalized(op)
+      const existing = rows.get(stored.d)
+      if (existing && existing.op === 'set' && existing.src == null) return { written: false }
+      if (existing && existing.op === 'remove' && existing.src == null && !acked.has(stored.d)) {
+        if (existing.baseT != null) stored.baseT = existing.baseT
+        else delete stored.baseT
+      }
+      rows.set(stored.d, stored)
+      acked.delete(stored.d)
+      return { written: true }
     },
     async get(d) {
       const row = rows.get(d)
@@ -110,14 +143,34 @@ export function createSqliteWeighIns(db) {
   return {
     async put(op) {
       await ready()
-      const s = normalized(op)
+      let s = normalized(op)
+      const found = await db.getAll('SELECT * FROM weigh_ins WHERE d = ?', [s.d])
+      s = bumped(s, found.length ? fromRow(found[0]) : null)
       await db.run(
         `INSERT INTO weigh_ins (d, op, w, t, src, hk, base_t, acked_at) VALUES (?, ?, ?, ?, ?, ?, ?, NULL)
          ON CONFLICT(d) DO UPDATE SET op = excluded.op, w = excluded.w, t = excluded.t, src = excluded.src,
            hk = excluded.hk, base_t = excluded.base_t, acked_at = NULL`,
         [s.d, s.op, s.w ?? null, s.t, s.src ?? null, s.hk ?? null, s.baseT ?? null],
       )
-      return { ok: true, d: s.d }
+      return { ok: true, d: s.d, t: s.t }
+    },
+    // One conditional upsert: never replaces a typed set; over a pending typed remove the
+    // row keeps that remove's base_t (SET sees the old row's value).
+    async putFromHealth(op) {
+      requireHealth(op)
+      await ready()
+      const s = normalized(op)
+      const { changes } = await db.run(
+        `INSERT INTO weigh_ins (d, op, w, t, src, hk, base_t, acked_at) VALUES (?, ?, ?, ?, ?, ?, ?, NULL)
+         ON CONFLICT(d) DO UPDATE SET op = excluded.op, w = excluded.w, t = excluded.t, src = excluded.src,
+           hk = excluded.hk,
+           base_t = CASE WHEN weigh_ins.op = 'remove' AND weigh_ins.src IS NULL AND weigh_ins.acked_at IS NULL
+                         THEN weigh_ins.base_t ELSE excluded.base_t END,
+           acked_at = NULL
+         WHERE NOT (weigh_ins.op = 'set' AND weigh_ins.src IS NULL)`,
+        [s.d, s.op, s.w ?? null, s.t, s.src, s.hk ?? null, s.baseT ?? null],
+      )
+      return { written: changes > 0 }
     },
     async get(d) {
       await ready()
