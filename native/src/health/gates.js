@@ -11,6 +11,11 @@ export function syncMetadata(id, version, volumeLb, { partial } = {}) {
   return metadata
 }
 
+// A typed weigh-in's sample: the sync keys plus the user-entered flag; no undefined values.
+export function bodyMassMetadata(id, version) {
+  return { HKMetadataKeySyncIdentifier: id, HKMetadataKeySyncVersion: version, HKWasUserEntered: true }
+}
+
 // An empty source list means no filter to the library, which would match every app's objects.
 export function syncIdFilter(syncId, ownSources, equalTo) {
   if (ownSources.length === 0) return null

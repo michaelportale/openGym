@@ -5,6 +5,7 @@
 import { applyDayOps } from '../body/day-ops.js'
 import { localDate } from '../session/timing.js'
 import { dayOpsFromReadings, isExternal, startOfLocalDay } from './weight-import.js'
+import { planWeightExport } from './weight-export.js'
 import { exportHash, exportable, planWorkoutExport, workoutSyncId } from './workout-export.js'
 
 const message = (error) => String(error?.message ?? error)
@@ -108,6 +109,49 @@ export function createHealthSync({ adapter, store, workouts, now, weighIns, read
           volumeLb: doc.vol,
           partial: !!doc.volumePartial,
         })
+      } catch (error) {
+        await fail(pending, error)
+        return
+      }
+      await links.put({ ...pending, state: 'exported', updatedAt: now() })
+    }
+  }
+
+  // The day -> entry the server copy plus this phone's pending ops give (no copy: the ops alone).
+  async function effectiveEntries() {
+    const doc = (await readCopy())?.state ?? {}
+    const removals = doc.deleted?.bodyweight
+    const deleted = removals && typeof removals === 'object' && !Array.isArray(removals) ? removals : {}
+    const byDay = {}
+    for (const entry of applyDayOps(doc.bodyweight, await weighIns.listPending(), deleted).next) byDay[entry.d] = entry
+    return byDay
+  }
+
+  // Typed weigh-ins out: a day is in Health only while this phone's typed entry is the day's entry.
+  async function exportWeighIns(mine) {
+    const rows = await weighIns.list()
+    const current = await links.list('bw')
+    const plan = planWeightExport({ rows, effectiveByDay: await effectiveEntries(), links: current, now: now() })
+    const linkOf = new Map(current.map((l) => [l.key, l]))
+
+    for (const { key, syncId } of plan.remove) {
+      if (generation !== mine) return
+      try {
+        await adapter.deleteBodyMassBySyncId(syncId)
+      } catch (error) {
+        await fail(linkOf.get(key), error)
+        return
+      }
+      await links.remove('bw', key)
+      linkOf.delete(key)
+    }
+
+    for (const { key, syncId, version, hash, w, at } of plan.save) {
+      const pending = { kind: 'bw', key, syncId, version, hash, state: 'pending', error: null, updatedAt: now() }
+      await links.put(pending)
+      if (generation !== mine) return
+      try {
+        await adapter.saveBodyMass({ id: syncId, version, lb: w, at: new Date(at) })
       } catch (error) {
         await fail(pending, error)
         return
@@ -229,7 +273,7 @@ export function createHealthSync({ adapter, store, workouts, now, weighIns, read
     const mine = generation
     if (!(await isOn())) return
     let broke = null
-    for (const step of [exportWorkouts, importWeighIns]) {
+    for (const step of [exportWorkouts, exportWeighIns, importWeighIns]) {
       if (generation !== mine) return
       try {
         await step(mine)
@@ -293,7 +337,9 @@ export function createHealthSync({ adapter, store, workouts, now, weighIns, read
         if (remove && enables === enablesThen) {
           // Links first: if the delete then fails or the app dies, nothing claims a workout is in Health that is not.
           await links.clear('w')
+          await links.clear('bw')
           await adapter.deleteAllOwnWorkouts()
+          await adapter.deleteAllOwnBodyMass()
         }
         heldError = null
         await state.set('error', '')
@@ -311,7 +357,7 @@ export function createHealthSync({ adapter, store, workouts, now, weighIns, read
   }
 
   async function status() {
-    const result = { on: false, write: 'unknown', exported: 0, waiting: 0, skipped: 0, error: lastError || heldError }
+    const result = { on: false, write: 'unknown', exported: 0, weighInsInHealth: 0, waiting: 0, skipped: 0, error: lastError || heldError }
     try {
       result.write = adapter.workoutWriteAccess()
     } catch {
@@ -322,6 +368,7 @@ export function createHealthSync({ adapter, store, workouts, now, weighIns, read
       let failed = null
       const current = await links.list('w')
       result.exported = current.filter((l) => l.state === 'exported').length
+      result.weighInsInHealth = (await links.list('bw')).filter((l) => l.state === 'exported').length
       if (result.on) {
         const rows = await workouts.list()
         result.skipped = rows.filter((d) => !exportable(d)).length
@@ -329,9 +376,13 @@ export function createHealthSync({ adapter, store, workouts, now, weighIns, read
         const plan = planWorkoutExport({ rows, links: current, now: now() })
         result.waiting = plan.save.length
         const removing = new Set(plan.remove.map((r) => r.key))
-        failed = current
-          .filter((l) => l.error && (l.state === 'pending' || removing.has(l.key)))
-          .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))[0]
+        const bwLinks = await links.list('bw')
+        const bwPlan = planWeightExport({ rows: await weighIns.list(), effectiveByDay: await effectiveEntries(), links: bwLinks, now: now() })
+        const bwRemoving = new Set(bwPlan.remove.map((r) => r.key))
+        failed = [
+          ...current.filter((l) => l.error && (l.state === 'pending' || removing.has(l.key))),
+          ...bwLinks.filter((l) => l.error && (l.state === 'pending' || bwRemoving.has(l.key))),
+        ].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))[0]
       }
       result.error = failed ? failed.error : lastError || (await state.get('error')) || heldError || null
     } catch {

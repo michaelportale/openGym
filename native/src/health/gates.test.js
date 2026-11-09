@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { gateSyncId, syncMetadata, syncIdOf, sortOwnWorkouts, externalBodyMass, readVerdict, syncIdFilter, toOwnWorkout, toBodyMassReading, toBodyMassChanges } from './gates.js'
+import { gateSyncId, syncMetadata, syncIdOf, sortOwnWorkouts, externalBodyMass, readVerdict, syncIdFilter, toOwnWorkout, toBodyMassReading, toBodyMassChanges, bodyMassMetadata } from './gates.js'
 
 const own = 'io.github.michaelportale.opengym'
 
@@ -148,4 +148,12 @@ test('a deleted sample without a uuid is skipped, and a missing list or anchor i
   expect(toBodyMassChanges({})).toEqual({ samples: [], deleted: [], anchor: null })
   expect(toBodyMassChanges({ samples: [], deletedSamples: [], newAnchor: '' }).anchor).toBeNull()
   expect(toBodyMassChanges(undefined)).toEqual({ samples: [], deleted: [], anchor: null })
+})
+
+test('body-mass metadata carries the sync id and version and marks the sample user entered', () => {
+  expect(bodyMassMetadata('opengym-bw-2026-11-09', 7)).toEqual({
+    HKMetadataKeySyncIdentifier: 'opengym-bw-2026-11-09',
+    HKMetadataKeySyncVersion: 7,
+    HKWasUserEntered: true,
+  })
 })

@@ -9,9 +9,10 @@ import {
   queryQuantitySamplesWithAnchor,
   queryWorkoutSamples,
   requestAuthorization,
+  saveQuantitySample,
   saveWorkoutSample
 } from '@kingstinct/react-native-healthkit'
-import { syncIdFilter, syncMetadata, toBodyMassChanges, toBodyMassReading, toOwnWorkout } from './gates.js'
+import { bodyMassMetadata, syncIdFilter, syncMetadata, toBodyMassChanges, toBodyMassReading, toOwnWorkout } from './gates.js'
 
 const WORKOUT = 'HKWorkoutTypeIdentifier'
 const BODY_MASS = 'HKQuantityTypeIdentifierBodyMass'
@@ -134,5 +135,36 @@ export async function readBodyMassChanges({ anchor, since }) {
     return toBodyMassChanges(result)
   } finally {
     result?.samples?.forEach(s => s.dispose?.())
+  }
+}
+
+// A typed weigh-in as one body-mass sample at `at`. id is the sync id.
+export async function saveBodyMass({ id, version, lb, at }) {
+  const sample = await saveQuantitySample(BODY_MASS, 'lb', lb, at, at, bodyMassMetadata(id, version))
+  if (!sample) throw new Error('Health did not save the weigh-in')
+  try {
+    return { uuid: sample.uuid }
+  } finally {
+    sample.dispose?.()
+  }
+}
+
+export async function deleteBodyMassBySyncId(syncId) {
+  const source = currentAppSource()
+  try {
+    const filter = syncIdFilter(syncId, [source], ComparisonPredicateOperator.equalTo)
+    return await deleteObjects(BODY_MASS, filter)
+  } finally {
+    source.dispose()
+  }
+}
+
+// Every body-mass sample this app's source wrote, linked or not.
+export async function deleteAllOwnBodyMass() {
+  const source = currentAppSource()
+  try {
+    return await deleteObjects(BODY_MASS, { sources: [source] })
+  } finally {
+    source.dispose()
   }
 }

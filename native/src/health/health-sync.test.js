@@ -47,6 +47,19 @@ function fakeAdapter() {
       if (adapter.failDelete) throw adapter.failDelete
       return 2
     },
+    async saveBodyMass(args) {
+      calls.push(['saveBW', args])
+      if (adapter.failSaveBW) throw adapter.failSaveBW
+      return { uuid: 'u-' + args.id }
+    },
+    async deleteBodyMassBySyncId(syncId) {
+      calls.push(['deleteBW', syncId])
+      return 1
+    },
+    async deleteAllOwnBodyMass() {
+      calls.push(['deleteAllBW'])
+      return 1
+    },
     async readBodyMassChanges(args) {
       calls.push(['readBodyMass', args])
       return { samples: [], deleted: [], anchor: 'a' }
@@ -399,4 +412,169 @@ test('a workout export that throws does not stop the import; its error shows', a
   await health.run()
   expect(adapter.calls.map(c => c[0])).toEqual(['readBodyMass'])
   expect((await health.status()).error).toBe('db locked')
+})
+
+// Typed weigh-ins
+const bwSaves = adapter => adapter.calls.filter(c => c[0] === 'saveBW').map(c => c[1])
+const typed = (d, w, t) => ({ d, op: 'set', w, t })
+
+async function bwSetup(over = {}) {
+  const weighIns = createMemoryWeighIns()
+  const env = await setup([], { ...importDeps(), weighIns, ...over })
+  await env.store.state.set('on', '1')
+  return { ...env, weighIns }
+}
+
+test('a typed set is saved once, user entered, at its time; a second pass saves nothing', async () => {
+  const { adapter, store, weighIns, health } = await bwSetup()
+  await weighIns.put(typed('2026-11-09', 180.4, 5000))
+  await health.run()
+  await health.run()
+  expect(bwSaves(adapter)).toEqual([{ id: 'opengym-bw-2026-11-09', version: expect.any(Number), lb: 180.4, at: new Date(5000) }])
+  expect(await store.links.list('bw')).toEqual([expect.objectContaining({ key: '2026-11-09', state: 'exported' })])
+  expect((await health.status()).weighInsInHealth).toBe(1)
+})
+
+test('the pass order is workouts, typed weigh-ins out, then the import', async () => {
+  const { adapter, workouts, weighIns, health } = await bwSetup()
+  await workouts.put(doc('w1'))
+  await weighIns.put(typed('2026-11-09', 180, 5000))
+  await health.run()
+  expect(adapter.calls.map(c => c[0])).toEqual(['save', 'saveBW', 'readBodyMass'])
+})
+
+test('a failed save keeps the pending link and its version for the retry', async () => {
+  const { adapter, store, weighIns, health } = await bwSetup()
+  await weighIns.put(typed('2026-11-09', 180, 5000))
+  adapter.failSaveBW = new Error('denied')
+  await health.run()
+  const [pending] = await store.links.list('bw')
+  expect(pending).toMatchObject({ state: 'pending', error: 'denied' })
+  adapter.failSaveBW = null
+  await health.run()
+  expect(bwSaves(adapter).map(s => s.version)).toEqual([pending.version, pending.version])
+  expect((await store.links.list('bw'))[0].state).toBe('exported')
+})
+
+test('an edit saves a greater version', async () => {
+  const { adapter, weighIns, health } = await bwSetup()
+  await weighIns.put(typed('2026-11-09', 180, 5000))
+  await health.run()
+  await weighIns.put(typed('2026-11-09', 181, 6000))
+  await health.run()
+  const [a, b] = bwSaves(adapter)
+  expect(b.lb).toBe(181)
+  expect(b.version).toBeGreaterThan(a.version)
+})
+
+test('a typed removal deletes by sync id and drops the link', async () => {
+  const { adapter, store, weighIns, health } = await bwSetup()
+  await weighIns.put(typed('2026-11-09', 180, 5000))
+  await health.run()
+  await weighIns.put({ d: '2026-11-09', op: 'remove', t: 6000, baseT: 5000 })
+  await health.run()
+  expect(adapter.calls.filter(c => c[0] === 'deleteBW')).toEqual([['deleteBW', 'opengym-bw-2026-11-09']])
+  expect(await store.links.list('bw')).toEqual([])
+})
+
+test('an imported weigh-in is never saved to Health', async () => {
+  const { adapter, weighIns, health } = await bwSetup()
+  await weighIns.putFromHealth({ d: '2026-11-09', op: 'set', w: 180, t: 5000, src: 'health', hk: 'u1' })
+  await health.run()
+  expect(bwSaves(adapter)).toEqual([])
+})
+
+test('a typed set the server superseded with a newer web edit is not saved; if it was, it is removed', async () => {
+  let copy = null
+  const { adapter, store, weighIns, health } = await bwSetup({ readCopy: async () => copy })
+  await weighIns.put(typed('2026-11-09', 180, 5000))
+  copy = { state: { bodyweight: [{ d: '2026-11-09', w: 175, t: 9000 }] } }
+  await health.run()
+  expect(bwSaves(adapter)).toEqual([])
+  copy = null
+  await health.run()
+  expect(bwSaves(adapter)).toHaveLength(1)
+  copy = { state: { bodyweight: [{ d: '2026-11-09', w: 175, t: 9000 }] } }
+  await health.run()
+  expect(adapter.calls.filter(c => c[0] === 'deleteBW')).toHaveLength(1)
+  expect(await store.links.list('bw')).toEqual([])
+})
+
+test('a day deleted on the server is removed from Health', async () => {
+  let copy = null
+  const { adapter, weighIns, health } = await bwSetup({ readCopy: async () => copy })
+  await weighIns.put(typed('2026-11-09', 180, 5000))
+  await health.run()
+  copy = { state: { bodyweight: [], deleted: { bodyweight: { '2026-11-09': 8000 } } } }
+  await health.run()
+  expect(adapter.calls.filter(c => c[0] === 'deleteBW')).toEqual([['deleteBW', 'opengym-bw-2026-11-09']])
+})
+
+test('a failed weigh-in save stops that list but the import still runs', async () => {
+  const { adapter, weighIns, health } = await bwSetup()
+  await weighIns.put(typed('2026-11-08', 180, 5000))
+  await weighIns.put(typed('2026-11-09', 181, 6000))
+  adapter.failSaveBW = new Error('denied')
+  await health.run()
+  expect(bwSaves(adapter)).toHaveLength(1)
+  expect(adapter.calls.map(c => c[0])).toEqual(['saveBW', 'readBodyMass'])
+  expect((await health.status()).error).toBe('denied')
+})
+
+test('turning Health off mid-export stops further adapter calls', async () => {
+  const { adapter, weighIns, health } = await bwSetup()
+  await weighIns.put(typed('2026-11-08', 180, 5000))
+  await weighIns.put(typed('2026-11-09', 181, 6000))
+  let release
+  const gate = new Promise(resolve => (release = resolve))
+  const original = adapter.saveBodyMass
+  adapter.saveBodyMass = async args => { await gate; return original(args) }
+  const running = health.run()
+  await new Promise(r => setTimeout(r, 5))
+  const off = health.disable({ remove: false })
+  release()
+  await Promise.all([running, off])
+  expect(bwSaves(adapter)).toHaveLength(1)
+  expect(adapter.calls.some(c => c[0] === 'readBodyMass')).toBe(false)
+})
+
+test('disable with remove clears bw links and deletes the app\'s own body mass', async () => {
+  const { adapter, store, weighIns, health } = await bwSetup()
+  await weighIns.put(typed('2026-11-09', 180, 5000))
+  await health.run()
+  await health.disable({ remove: true })
+  expect(await store.links.list('bw')).toEqual([])
+  expect(adapter.calls.filter(c => c[0] === 'deleteAllBW')).toHaveLength(1)
+  expect(adapter.calls.filter(c => c[0] === 'deleteAll')).toHaveLength(1)
+})
+
+test('disable without remove keeps bw links and deletes nothing', async () => {
+  const { adapter, store, weighIns, health } = await bwSetup()
+  await weighIns.put(typed('2026-11-09', 180, 5000))
+  await health.run()
+  await health.disable({ remove: false })
+  expect(await store.links.list('bw')).toHaveLength(1)
+  expect(adapter.calls.some(c => c[0] === 'deleteAllBW')).toBe(false)
+})
+
+test('a typed weigh-in written to Health and read back makes no day op', async () => {
+  const { adapter, weighIns, health } = await bwSetup()
+  await weighIns.put(typed('2026-11-09', 180, 5000))
+  await health.run()
+  const own = 'io.github.michaelportale.opengym'
+  adapter.readBodyMassChanges = async () => ({
+    samples: [{ uuid: 'echo', lb: 180, at: 5000, bundleId: own, syncId: 'opengym-bw-2026-11-09' }],
+    deleted: [],
+    anchor: 'b',
+  })
+  await health.run()
+  expect(await weighIns.list()).toEqual([typed('2026-11-09', 180, 5000)])
+  // The same sample under another bundle id is still not external: the sync id marks it.
+  adapter.readBodyMassChanges = async () => ({
+    samples: [{ uuid: 'echo2', lb: 180, at: 5000, bundleId: 'other', syncId: 'opengym-bw-2026-11-09' }],
+    deleted: [],
+    anchor: 'c',
+  })
+  await health.run()
+  expect(await weighIns.list()).toEqual([typed('2026-11-09', 180, 5000)])
 })
