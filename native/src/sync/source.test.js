@@ -23,7 +23,7 @@ test('unpaired: the bundled snapshot with pending workouts, exactly as sessionSt
   const pending = [w('p1', '2026-11-01')]
   const out = screenSource({ copy: null, bundled, pending })
   expect(out.state).toEqual(sessionState(bundled, pending))
-  expect(out.names).toBe(bundled.names)
+  expect(out.names).toEqual(bundled.names)
 })
 
 test('paired: the copy wins, pending are appended, a shared id keeps the copy', () => {
@@ -124,7 +124,7 @@ test('readScreenSource: not paired, the bundled snapshot with every workout on t
   const all = [w('a1', '2026-10-20'), w('p1', '2026-11-01')]
   const out = await readScreenSource({ ...stores({ copy: null, all, pending: all }), bundled })
   expect(out.state).toEqual(sessionState(bundled, all))
-  expect(out.names).toBe(bundled.names)
+  expect(out.names).toEqual(bundled.names)
   expect(out.workouts).toBe(all)
 })
 
@@ -150,7 +150,7 @@ test('readScreenSource: a copy the screen still cannot read reads as no copy, as
   const all = [w('a1', '2026-10-20'), w('p1', '2026-11-01')]
   const out = await readScreenSource({ ...stores({ copy, all, pending: [all[1]] }), bundled })
   expect(out.state).toEqual(sessionState(bundled, all))
-  expect(out.names).toBe(bundled.names)
+  expect(out.names).toEqual(bundled.names)
   expect(out.workouts).toBe(all)
 })
 
@@ -244,4 +244,12 @@ test('readScreenSource over the real store: an edit shows, and goes once acked',
   expect((await readScreenSource({ ...s, routineEdits, bundled })).state.routines[0].name).toBe('Mine')
   await routineEdits.markAcked([{ rid: 'r', t: 5 }], 'now')
   expect((await readScreenSource({ ...s, routineEdits, bundled })).state.routines[0].name).toBe('R')
+})
+
+test('routine edits: unpaired, a swapped-in built-in exercise gets its catalogue name and the snapshot names stay', () => {
+  const before = JSON.stringify(bundled.names)
+  const out = screenSource({ copy: null, bundled, pending: [], routineEdits: [edit('r', { id: 'r', name: 'R', ex: [{ id: builtIn.id }] })] })
+  expect(out.names[builtIn.id].name).toBe(cap(builtIn.n))
+  expect(out.names.snap).toEqual(bundled.names.snap)
+  expect(JSON.stringify(bundled.names)).toBe(before)
 })

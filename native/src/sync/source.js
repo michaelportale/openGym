@@ -61,7 +61,10 @@ function withRoutineEdits(state, routineEdits) {
 
 // `example`: whether the screen shows the example snapshot, and so its banner. Never over the copy.
 export function screenSource({ copy, bundled, pending, routineEdits }) {
-  if (!copy) return { state: withRoutineEdits(sessionState(bundled, pending), routineEdits), names: bundled.names, example: bundled.example === true }
+  if (!copy) {
+    const state = withRoutineEdits(sessionState(bundled, pending), routineEdits)
+    return { state, names: { ...namesFor(state), ...bundled.names }, example: bundled.example === true }
+  }
   const doc = readable(copy.state)
   // Acked workouts are in the copy and it wins; only unsent ones are added.
   const held = new Set((doc.workouts ?? []).map(w => w.id))
