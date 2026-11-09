@@ -9,20 +9,31 @@ import { reconcileRestAlerts, restAlertPossible } from './rest-alert.js'
 // as if alerts were off. The prompt itself is never waited on inside the queue.
 export const ASK_WAIT_MS = 30_000
 
+// How long one queued job (a reconcile's native calls) may take before the queue moves on without
+// it. A native call that never settles would otherwise stall every later reconcile and every write
+// waiting on one. A job that times out is logged; the next reconcile reads the journal afresh.
+export const JOB_WAIT_MS = 10_000
+
 const NO_SESSION = () => ({ sessionId: null, status: 'none', view: null, nextLabel: null })
 
-export function createRestAlerts({ adapter, now = Date.now, waitMs = ASK_WAIT_MS }) {
+export function createRestAlerts({ adapter, now = Date.now, waitMs = ASK_WAIT_MS, jobWaitMs = JOB_WAIT_MS }) {
   // One reconcile at a time, each reading the journal when it runs rather than when it was asked
-  // for. Every failure is logged and swallowed, so the promise never rejects (it resolves to the
-  // job's answer, or null) and nothing a write reports depends on it.
+  // for. Every failure, a timeout included, is logged and swallowed, so the promise never rejects
+  // (it resolves to the job's answer, or null) and nothing a write reports depends on it.
   let queue = Promise.resolve()
   const enqueue = job => {
     const next = queue.then(async () => {
+      let timer
+      const timeout = new Promise((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(`timed out after ${jobWaitMs} ms`)), jobWaitMs)
+      })
       try {
-        return await job()
+        return await Promise.race([job(), timeout])
       } catch (error) {
         console.warn('Rest alert not updated:', error?.message ?? error)
         return null
+      } finally {
+        clearTimeout(timer)
       }
     })
     queue = next

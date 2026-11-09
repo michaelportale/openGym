@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { ASK_WAIT_MS, createRestAlerts } from './rest-alerts-core.js'
+import { ASK_WAIT_MS, JOB_WAIT_MS, createRestAlerts } from './rest-alerts-core.js'
 
 const NOW = Date.parse('2026-11-07T15:00:00.000Z')
 const DEADLINE = NOW + 90_000
@@ -154,5 +154,54 @@ describe('asking when a rest starts', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const adapter = fakeAdapter({ permissions: async () => ask, request: async () => { throw new Error('boom') } })
     expect(await make(adapter).reconcile(journal('active'), { restStarted: true })).toEqual({ step: 'off', asked: true })
+  })
+})
+
+describe('a native call that never settles', () => {
+  // Hangs the adapter call `name` the first time only; later calls work.
+  const hangOnce = (adapter, name) => {
+    const real = adapter[name]
+    let calls = 0
+    adapter[name] = (...args) => (++calls === 1 ? new Promise(() => {}) : real(...args))
+  }
+
+  test('the job times out after JOB_WAIT_MS and warns, and the queue moves on', async () => {
+    vi.useFakeTimers()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const adapter = fakeAdapter()
+    hangOnce(adapter, 'listScheduled')
+    const alerts = make(adapter)
+    let first
+    let second
+    alerts.reconcile(journal('active')).then(r => { first = r })
+    alerts.reconcile(journal('active')).then(r => { second = r })
+    await vi.advanceTimersByTimeAsync(JOB_WAIT_MS - 1)
+    expect(first).toBeUndefined()
+    expect(second).toBeUndefined()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(first).toBeNull()
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(String(warn.mock.calls[0][1])).toMatch(/timed out/)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(second).toEqual({ step: 'granted', asked: false })
+    expect(ids(adapter)).toEqual(['rest-s1'])
+  })
+
+  test('a rest start whose permission read hangs is answered once the job times out', async () => {
+    vi.useFakeTimers()
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const adapter = fakeAdapter({ permissions: () => new Promise(() => {}) })
+    let answer
+    make(adapter).reconcile(journal('active'), { restStarted: true }).then(r => { answer = r })
+    await vi.advanceTimersByTimeAsync(JOB_WAIT_MS - 1)
+    expect(answer).toBeUndefined()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(answer).toBeNull()
+  })
+
+  test('a job that settles in time leaves no timer behind', async () => {
+    vi.useFakeTimers()
+    await make(fakeAdapter()).reconcile(journal('active'))
+    expect(vi.getTimerCount()).toBe(0)
   })
 })
