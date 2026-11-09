@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect, test } from 'vitest'
-import { symbolPresentation } from '../src/ui/symbol-fallback.js'
+import { FALLBACK_NAMES, symbolPresentation } from '../src/ui/symbol-fallback.js'
 import { nativeSourceFiles } from './shared-lib-graph.mjs'
 import { scanSymbolSources, scanSymbolTree } from './symbol-names.mjs'
 
@@ -32,6 +32,8 @@ test('the app tree names every symbol and each one has a web glyph', () => {
     expect(symbolPresentation(name, 'web').text.length).toBeGreaterThan(0)
     expect(symbolPresentation(name, 'ios')).toEqual({ kind: 'sf-symbol', name })
   }
+  // And no glyph is kept for a symbol nothing draws any more.
+  expect([...FALLBACK_NAMES].sort()).toEqual(names)
 })
 
 test('a prop the scanner cannot follow fails before a blank glyph ships', () => {

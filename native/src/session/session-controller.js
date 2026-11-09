@@ -196,5 +196,15 @@ export function createSessionController({ base, storage, finishedWorkouts, now, 
     call(name, ...args) {
       return enqueue(() => callNow(name, args))
     },
+
+    // The view again at the clock now, writing nothing. The engine reads the clock only when
+    // an action runs; the screen asks for this when a write was refused overnight on a view
+    // drawn before midnight, so the overnight choices show without another tap.
+    refresh() {
+      return enqueue(async () => {
+        if (session && state.status === 'ready') state = { ...state, view: session.view() }
+        return snapshot()
+      })
+    },
   }
 }

@@ -1,7 +1,7 @@
 import { history } from '../shared/training.js'
 import { DURATION_GAP_MS, clampMs } from '../session/timing.js'
 import { lastTime } from './last-time.js'
-import { clock, isDone } from './workout-view.js'
+import { clock, isDone, isWarmup } from './workout-view.js'
 
 // What the session screen derives from the engine's view, the stored base and the history.
 
@@ -34,12 +34,15 @@ export function liveView(view, takenAt, now) {
   return { ...view, elapsedMs, rest }
 }
 
-const workSets = entry => (entry?.sets ?? []).filter(slot => !slot.warmup)
+const workSets = entry => (entry?.sets ?? []).filter(slot => !isWarmup(slot))
 
 // After a Complete, an exercise picked by hand stays on screen while it has a set left; after its
-// last set the screen follows the first exercise with one (null means follow).
-export function shownAfterComplete(view, shownIndex) {
+// last set the screen follows the first exercise with one (null means follow). A completed
+// warm-up (`setId`) moves nothing.
+export function shownAfterComplete(view, shownIndex, setId) {
   if (shownIndex == null) return null
+  const completed = (view?.entries ?? []).flatMap(entry => entry.sets ?? []).find(slot => slot.setId === setId)
+  if (completed && isWarmup(completed)) return shownIndex
   return workSets(view?.entries?.[shownIndex]).some(slot => !isDone(slot)) ? shownIndex : null
 }
 

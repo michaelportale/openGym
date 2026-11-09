@@ -21,7 +21,12 @@ export const type = {
   screenTitle: { fontSize: 20, fontWeight: '700' },
   button: { fontSize: 17, fontWeight: '700' }
 }
-export const fontScale = { value: 1.3, timer: 1.3, label: 1.5, heading: 3, lead: 1.3, screenTitle: 1.5 }
+// Dynamic Type caps (maxFontSizeMultiplier). The lead stops at 34 × 1.3 = 44.2 pt so the dock
+// stays on screen, and no other style but the resting timer may outgrow it at any text size.
+export const fontScale = {
+  wordmark: 2.2, wordmarkStrong: 2.2, title: 1.5, timer: 1.3, value: 1.3, heading: 2.5,
+  body: 2.9, label: 1.5, lead: 1.3, screenTitle: 1.5, button: 2.5
+}
 export const motion = { press: 120, progress: 300 }
 export const pressScale = 0.97
 export const size = { icon: 22, marker: 24, progress: 6, stroke: 1 }

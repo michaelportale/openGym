@@ -65,3 +65,24 @@ export function storageCheckLines(outcome, cleanupErrors = []) {
   for (const e of cleanupErrors) lines.push('cleanup failed: ' + messageOf(e))
   return lines
 }
+
+// Diagnostics' Storage check on its scratch database. `open()` gives { handle, close } and
+// `remove()` deletes the file (expo-sqlite throws when there is none). A check killed partway
+// leaves its rows in the file, and they would fail the next one, so the file is deleted before
+// it is opened; that delete failing (usually: no file) is not reported. Afterwards it is closed
+// and deleted again, each step on its own so one failure neither skips the other nor hides the
+// verdict. Returns the screen's lines.
+export async function runStorageCheck({ open, remove }) {
+  try { await remove() } catch {}
+  const db = await open()
+  let outcome
+  const cleanupErrors = []
+  try {
+    outcome = await runStorageProbe(db.handle)
+  } catch (e) {
+    outcome = { error: e }
+  }
+  try { await db.close() } catch (e) { cleanupErrors.push(e) }
+  try { await remove() } catch (e) { cleanupErrors.push(e) }
+  return storageCheckLines(outcome, cleanupErrors)
+}

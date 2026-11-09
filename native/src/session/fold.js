@@ -433,6 +433,7 @@ export function projectSession(model, { now, timeZone, drafts, discarded, sample
       status: 'discarded',
       timeZone,
       startedAt: null,
+      activityAt: null,
       elapsedMs: 0,
       overnight: false,
       disposition: { kind: 'discarded', actions: [], suggestedEnd: null },
@@ -479,6 +480,8 @@ export function projectSession(model, { now, timeZone, drafts, discarded, sample
     status: finished ? 'finished' : 'active',
     timeZone,
     startedAt: Number.isFinite(model.start) ? model.start : null,
+    // The instant overnight is read from, so a screen can check it again at a later clock.
+    activityAt: activity,
     elapsedMs: elapsedMs(stamps, clockEnd, DURATION_GAP_MS, timeZone),
     overnight,
     disposition: finished

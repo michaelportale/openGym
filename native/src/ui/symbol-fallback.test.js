@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { expect, test } from 'vitest'
 import { symbolPresentation } from './symbol-fallback.js'
 
-const USED = ['ellipsis', 'pause.fill', 'plus', 'checkmark.circle.fill', 'square', 'dumbbell', 'chevron.right']
+const USED = ['ellipsis', 'plus', 'checkmark.circle.fill', 'square', 'dumbbell', 'chevron.right']
 
 test('iOS keeps the SF Symbol name', () => {
   for (const name of USED) {
@@ -20,7 +20,6 @@ test('other platforms get a visible glyph and do not receive the SF Symbol name'
     }
   }
   expect(symbolPresentation('ellipsis', 'web').text).toBe('…')
-  expect(symbolPresentation('pause.fill', 'web').text).toBe('II')
   expect(symbolPresentation('plus', 'web').text).toBe('+')
 })
 
@@ -33,6 +32,8 @@ test('an unknown symbol stays blank nowhere except iOS', () => {
   expect(() => symbolPresentation('gear', 'android')).toThrow('No visible fallback')
   expect(() => symbolPresentation('', 'ios')).toThrow('Symbol name is required')
   expect(() => symbolPresentation('constructor', 'web')).toThrow('No visible fallback')
+  // Nothing on screen pauses: the fallback names only symbols the app draws.
+  expect(() => symbolPresentation('pause.fill', 'web')).toThrow('No visible fallback')
   expect(() => symbolPresentation(undefined, 'web')).toThrow('Symbol name is required')
 })
 

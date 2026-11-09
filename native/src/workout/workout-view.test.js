@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { carriedWeight, currentExerciseIndex, workoutScreen } from './workout-view.js'
+import { carriedWeight, currentExerciseIndex, lockedWeight, shownValues, workoutScreen } from './workout-view.js'
 
 const set = (setId, row, extra = {}) => ({
   setId, completed: row.done === true, warmup: false, draft: null, row, ...extra,
@@ -73,13 +73,23 @@ describe('dock', () => {
     const all = view([bench([set('a', done(75, 10))])])
     expect(screen(all).dock).toMatchObject({ mode: 'all-done', primaryLabel: 'Finish workout' })
   })
+  // The spoken lead is built from these, not by reading the lead text back.
+  test('carries the set number, figures and time left that the lead shows', () => {
+    expect(screen(mid()).dock).toMatchObject({ number: 2, figures: { w: 75, r: 8 } })
+    expect(screen(view([bench([set('a', todo(null, 12))])])).dock).toMatchObject({ number: 1, figures: { w: null, r: 12 } })
+    expect(screen({ ...mid(), rest: { status: 'running', remainingMs: 64_000 } }).dock)
+      .toMatchObject({ mode: 'resting', remainingMs: 64_000, number: 2, figures: { w: 75, r: 8 } })
+    const last = view([bench([set('a', done(75, 10))])], { rest: { status: 'running', remainingMs: 5_000 } })
+    expect(screen(last).dock).toMatchObject({ mode: 'resting', remainingMs: 5_000, number: null, figures: null })
+    expect(screen(view([bench([set('a', done(75, 10))])])).dock).toMatchObject({ number: null, figures: null })
+  })
 })
 
 describe('per-side sets', () => {
   const lateral = (L, R) => view([{ id: '0300', target: {}, sets: [set('s1', sided(7.5, { r: 20, done: L }, { r: 18, done: R }), { completed: L || R })] }])
   test('left first, then right', () => {
-    expect(screen(lateral(false, false)).dock).toMatchObject({ primaryLabel: 'Complete left', side: 'L' })
-    expect(screen(lateral(true, false)).dock).toMatchObject({ primaryLabel: 'Complete right', side: 'R' })
+    expect(screen(lateral(false, false)).dock).toMatchObject({ primaryLabel: 'Complete left', side: 'L', figures: { w: 7.5, r: 20 } })
+    expect(screen(lateral(true, false)).dock).toMatchObject({ primaryLabel: 'Complete right', side: 'R', figures: { w: 7.5, r: 18 } })
   })
   test('blank reps on the side being worked ask for the reps', () => {
     const blankRight = view([{ id: '0300', target: {}, sets: [set('s1', {
@@ -112,9 +122,9 @@ describe('card', () => {
     ])]))
     expect(card).toMatchObject({ name: 'Bench press', category: 'chest', noHistory: false })
     expect(card.rows.map(r => [r.number, r.status, r.lastText])).toEqual([
-      [1, 'done', '75 × 10'], [2, 'current', '75 × 10'], [3, 'pending', '–'],
+      [null, 'current', '–'], [1, 'done', '75 × 10'], [2, 'current', '75 × 10'], [3, 'pending', '–'],
     ])
-    expect(card.rows[1]).toMatchObject({ setId: 'b', weightText: '75', repsText: '8' })
+    expect(card.rows[2]).toMatchObject({ setId: 'b', weightText: '75', repsText: '8' })
   })
   test('per-side last time and decimal weights', () => {
     const { card } = screen(view([{ id: '0300', target: {}, sets: [set('s1', sided(7.5, { r: 20, done: false }, { r: 18, done: false }))] }]), {
@@ -138,6 +148,13 @@ describe('card', () => {
     expect(rowsOf(false, false).sideDone).toBeNull()
     expect(rowsOf(true, true).sideDone).toBeNull()
     expect(screen(mid()).card.rows.map(r => r.sideDone)).toEqual([null, null, null])
+  })
+  // The screen passes these to the table, the keypad and the dock's spoken lead as they are.
+  test('a per-hand exercise titles the weight "Lb each" and says so; any other just "Lb"', () => {
+    expect(screen(view([bench(mid().entries[0].sets, { dbLoad: 'each' })])).card).toMatchObject({ weightTitle: 'Lb each', perHand: true })
+    expect(screen(mid()).card).toMatchObject({ weightTitle: 'Lb', perHand: false })
+    expect(screen(view([bench(mid().entries[0].sets, { dbLoad: 'total' })])).card).toMatchObject({ weightTitle: 'Lb', perHand: false })
+    expect(screen(view([])).card).toMatchObject({ weightTitle: 'Lb', perHand: false })
   })
   test('no history and unknown exercise', () => {
     const v = view([{ id: '9999', target: {}, sets: [set('a', todo(null, null))] }])
@@ -249,6 +266,137 @@ describe('carry forward', () => {
       set('w', { w: 40, r: 10, done: true, warmup: true }, { warmup: true }),
       set('a', todo(75, 8)),
     ])])
-    expect(screen(v).card.rows[0].weightText).toBe('75')
+    expect(screen(v).card.rows.map(r => [r.label, r.weightText])).toEqual([['W', '40'], ['1', '75']])
+  })
+})
+
+// A warm-up is logged as the engine writes it (addWarmupCall): its own row, phase 'warmup'. It is
+// shown first, labelled W, and never counts: not in set numbers, the dock's set, progress, the
+// exercise the screen follows, or the weight the work sets carry.
+describe('warm-ups', () => {
+  const warm = (setId, row) => set(setId, { ...row, phase: 'warmup', warmup: true }, { warmup: true })
+  test('show first, labelled W, even when added after the work sets', () => {
+    const { card } = screen(view([bench([
+      set('a', done(75, 10)), set('b', todo(75, 8)),
+      warm('w1', done(45, 10)), warm('w2', todo(null, null)),
+    ])]))
+    expect(card.rows.map(r => [r.setId, r.label, r.number, r.status, r.warmup])).toEqual([
+      ['w1', 'W', null, 'done', true],
+      ['w2', 'W', null, 'current', true],
+      ['a', '1', 1, 'done', false],
+      ['b', '2', 2, 'current', false],
+    ])
+  })
+  test('a later open warm-up waits for the one before it', () => {
+    const { card } = screen(view([bench([warm('w1', todo(45, 10)), warm('w2', todo(65, 5)), set('a', todo(75, 8))])]))
+    expect(card.rows.map(r => r.status)).toEqual(['current', 'pending', 'current'])
+  })
+  test('a warm-up shows its own numbers and no last time; the work sets keep theirs', () => {
+    const { card } = screen(view([bench([set('a', todo(75, 10)), warm('w', done(45, 10))])]))
+    expect(card.rows[0]).toMatchObject({ setId: 'w', weightText: '45', repsText: '10', lastText: '–', perSide: false, sideDone: null })
+    expect(card.rows[1]).toMatchObject({ setId: 'a', lastText: '75 × 10' })
+  })
+  // A planned warm-up on a per-side exercise is per side too (the web's insertWarmupRow).
+  test('a per-side warm-up is a per-side row that marks its logged side', () => {
+    const sidedWarm = (L, R) => set('w', { ...sided(20, L, R), phase: 'warmup', warmup: true }, { warmup: true })
+    const open = screen(view([bench([sidedWarm({ r: 5, done: false }, { r: 5, done: false }), set('a', todo(75, 8))])])).card.rows[0]
+    expect(open).toMatchObject({ setId: 'w', warmup: true, perSide: true, sideDone: null, status: 'current' })
+    const half = screen(view([bench([sidedWarm({ r: 5, done: true }, { r: 5, done: false }), set('a', todo(75, 8))])])).card.rows[0]
+    expect(half).toMatchObject({ setId: 'w', warmup: true, perSide: true, sideDone: 'L', status: 'current' })
+  })
+  test("the dock's Set 1 ignores a done warm-up, and an open one is never the dock's set", () => {
+    expect(screen(view([bench([warm('w', done(45, 10)), set('a', todo(75, 8))])])).dock)
+      .toMatchObject({ mode: 'ready', lead: 'Set 1 · 75 lb × 8', primaryLabel: 'Complete set 1', setId: 'a' })
+    expect(screen(view([bench([warm('w', todo(45, 10)), set('a', todo(75, 8))])])).dock)
+      .toMatchObject({ lead: 'Set 1 · 75 lb × 8', setId: 'a' })
+  })
+  test('an open warm-up leaves a finished exercise finished', () => {
+    const v = view([bench([set('a', done(75, 8)), warm('w', todo(45, 10))])])
+    expect(screen(v).dock).toMatchObject({ mode: 'all-done', setId: null })
+  })
+  // Counted, the warm-ups here would make progress 3 of 5 (0.6) and keep the screen on the bench.
+  test('progress and the exercise the screen follows ignore warm-ups', () => {
+    const v = view([
+      bench([set('a', done(75, 8)), warm('w', todo(45, 10))]),
+      { id: '0300', target: {}, sets: [warm('w2', done(5, 10)), warm('w3', done(7.5, 8)), set('b', todo(10, 12))] },
+    ])
+    expect(currentExerciseIndex(v)).toBe(1)
+    expect(screen(v).header.progress).toBe(0.5)
+  })
+  test('a warm-up takes no carried weight, even after a done work set', () => {
+    const v = view([bench([set('a', done(80, 10)), warm('w', todo(null, 10)), set('b', todo(75, 8))])])
+    expect(carriedWeight(v.entries[0], 'w')).toBeUndefined()
+    expect(screen(v).card.rows.map(r => r.weightText)).toEqual(['–', '80', '80'])
+  })
+  test('a done warm-up is never the weight the work sets carry', () => {
+    const v = view([bench([set('a', done(80, 10)), warm('w', done(40, 10)), set('b', todo(75, 8))])])
+    expect(carriedWeight(v.entries[0], 'b')).toBe(80)
+  })
+  // The row decides, as volume and "Last time" read it: an explicit phase beats the old flag.
+  test("a row marked phase 'work' counts as work even with the old warmup flag", () => {
+    const legacy = set('x', { ...done(60, 5), phase: 'work', warmup: true }, { warmup: true })
+    const { card } = screen(view([bench([legacy, set('a', todo(75, 8))])]))
+    expect(card.rows.map(r => [r.setId, r.label])).toEqual([['x', '1'], ['a', '2']])
+  })
+})
+
+// A done set never takes a draft (draftCall refuses one, and Complete clears it), so a draft on
+// one is what a failed clear left behind. The set shows, and the keypad opens on, what was logged.
+describe('a draft left on a done set', () => {
+  test('a done set shows what was logged, not the leftover draft', () => {
+    const v = view([bench([set('a', done(80, 6), { draft: { w: 82.5, r: 5 } }), set('b', todo(75, 8))])])
+    expect(screen(v).card.rows[0]).toMatchObject({ weightText: '80', repsText: '6', status: 'done' })
+    expect(shownValues(v.entries[0].sets[0], null)).toEqual({ w: 80, r: 6 })
+  })
+  test('the set after it carries the logged weight, not the draft\'s', () => {
+    const v = view([bench([set('a', done(80, 6), { draft: { w: 82.5, r: 5 } }), set('b', todo(75, 8))])])
+    expect(screen(v).dock.lead).toBe('Set 2 · 80 lb × 8')
+  })
+  test('per side, both sides done: the row\'s numbers', () => {
+    const slot = set('s', sided(10, { r: 12, done: true }, { r: 11, done: true }), { draft: { w: 7.5, sides: { L: { r: 9 }, R: { r: 8 } } } })
+    expect(shownValues(slot, null)).toEqual({ w: 10, sides: { L: { r: 12 }, R: { r: 11 } } })
+    expect(shownValues(slot, 'R')).toEqual({ w: 10, sides: { L: { r: 12 }, R: { r: 11 } } })
+    expect(screen(view([{ id: '0300', target: {}, sets: [slot] }])).card.rows[0]).toMatchObject({ weightText: '10', repsText: '12 / 11' })
+  })
+  test('per side, one side done: that side\'s reps from the row; the side being worked keeps its draft', () => {
+    const slot = set('s', sided(10, { r: 12, done: true }, { r: 11, done: false }), { completed: true, draft: { w: 10, sides: { L: { r: 9 }, R: { r: 14 } } } })
+    expect(shownValues(slot, 'R')).toEqual({ w: 10, sides: { L: { r: 12 }, R: { r: 14 } } })
+    const right = set('s', sided(10, { r: 12, done: false }, { r: 11, done: true }), { completed: true, draft: { r: 9 } })
+    expect(shownValues(right, 'L')).toEqual({ w: 10, sides: { L: { r: 9 }, R: { r: 11 } } })
+  })
+  // The weight is shared by both sides: a leftover draft's would overwrite the done side's logged
+  // weight through the second side's Complete. Nothing changes it until the set is done (the
+  // keypad takes no weight, lockedWeight); after that, only Update does.
+  test('per side, one side done: the weight is the one that side was logged at, not the draft\'s', () => {
+    const slot = set('s', sided(7.5, { r: 10, done: true }, { r: 10, done: false }), { completed: true, draft: { w: 10, sides: { L: { r: 10 }, R: { r: 9 } } } })
+    expect(shownValues(slot, 'R')).toEqual({ w: 7.5, sides: { L: { r: 10 }, R: { r: 9 } } })
+    const right = set('s', { w: 7.5, done: false, sides: { L: { w: 7.5, r: 10, done: false }, R: { w: 7.5, r: 8, done: true } } }, { completed: true, draft: { w: 12.5 } })
+    expect(shownValues(right, 'L').w).toBe(7.5)
+    const s = screen(view([{ id: '0300', target: {}, sets: [slot] }]))
+    expect(s.dock).toMatchObject({ side: 'R', figures: { w: 7.5, r: 9 }, lead: 'Set 1 · 7.5 lb × 9' })
+    expect(s.card.rows[0].weightText).toBe('7.5')
+  })
+  test('a set not done keeps its draft', () => {
+    expect(shownValues(set('a', todo(75, 8), { draft: { w: 80, r: 5 } }), null)).toEqual({ w: 80, r: 5 })
+  })
+})
+
+// A per-side set with one side logged keeps the weight that side was logged at.
+describe('lockedWeight', () => {
+  test('one side done: that side and its weight', () => {
+    expect(lockedWeight(sided(7.5, { r: 10, done: true }, { r: 10, done: false }))).toEqual({ side: 'L', w: 7.5 })
+    expect(lockedWeight(sided(10, { r: 10, done: false }, { r: 8, done: true }))).toEqual({ side: 'R', w: 10 })
+  })
+  test("the side's own weight, else the row's", () => {
+    const row = { w: 12.5, r: 10, done: false, sides: { L: { w: 10, r: 10, done: true }, R: { w: 12.5, r: 10, done: false } } }
+    expect(lockedWeight(row)).toEqual({ side: 'L', w: 10 })
+    expect(lockedWeight({ ...row, sides: { ...row.sides, L: { r: 10, done: true } } })).toEqual({ side: 'L', w: 12.5 })
+  })
+  test('none when no side or both are done, the set is not per side, or there is no weight to keep', () => {
+    expect(lockedWeight(sided(7.5, { r: 10, done: false }, { r: 10, done: false }))).toBeNull()
+    expect(lockedWeight(sided(7.5, { r: 10, done: true }, { r: 10, done: true }))).toBeNull()
+    expect(lockedWeight(todo(75, 8))).toBeNull()
+    expect(lockedWeight(done(75, 8))).toBeNull()
+    expect(lockedWeight(sided(null, { r: 10, done: true }, { r: 10, done: false }))).toBeNull()
   })
 })

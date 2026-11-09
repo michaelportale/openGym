@@ -5,7 +5,7 @@ import { color, radius, space, touch } from '../theme/tokens'
 import AppText from '../ui/AppText'
 import { readVerdict } from '../health/gates'
 import { toSessionDbHandle } from '../storage/db-handle'
-import { runStorageProbe, storageCheckLines } from '../storage/probe'
+import { runStorageCheck } from '../storage/probe'
 import { removeGateWorkouts, runWorkoutGates } from '../health/run-gates'
 import {
   deleteWorkout,
@@ -91,21 +91,15 @@ export default function Diagnostics() {
       return out
     })
 
+  // A stale scratch file from a killed check is deleted before it is opened (runStorageCheck).
   const storageCheck = () =>
-    run(async () => {
-      const expoDb = await openDatabaseAsync(PROBE_DATABASE_NAME)
-      let outcome
-      const cleanupErrors = []
-      try {
-        outcome = await runStorageProbe(toSessionDbHandle(expoDb))
-      } catch (e) {
-        outcome = { error: e }
-      }
-      // Each cleanup step runs on its own so one failure neither skips the other nor hides the verdict.
-      try { await expoDb.closeAsync() } catch (e) { cleanupErrors.push(e) }
-      try { await deleteDatabaseAsync(PROBE_DATABASE_NAME) } catch (e) { cleanupErrors.push(e) }
-      return storageCheckLines(outcome, cleanupErrors)
-    })
+    run(() => runStorageCheck({
+      open: async () => {
+        const expoDb = await openDatabaseAsync(PROBE_DATABASE_NAME)
+        return { handle: toSessionDbHandle(expoDb), close: () => expoDb.closeAsync() }
+      },
+      remove: () => deleteDatabaseAsync(PROBE_DATABASE_NAME),
+    }))
 
   return (
     <View style={styles.container}>

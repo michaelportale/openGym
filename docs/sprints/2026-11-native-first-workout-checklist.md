@@ -2,7 +2,7 @@
 
 Run this on the iPhone before the first real gym session. Tick each line. Record pass or fail per line in the PR, not here.
 
-Read this first: the dev build and the Release build share one bundle id, so they share one database. Everything you log while testing is written to the same place as real sessions. That is why step 8 wipes the app once. After the wipe, any later test on that phone writes into the real record.
+Read this first: the dev build and the Release build share one bundle id, so they share one database. Everything you log while testing is written to the same place as real sessions. That is why step 9 wipes the app once. After the wipe, any later test on that phone writes into the real record.
 
 ## Before you build
 
@@ -27,7 +27,7 @@ Swipe up from the bottom edge and pause to open the app switcher. Then swipe the
 
 ## 2. Airplane Mode
 
-- [ ] Turn Airplane Mode on. Keep it on for steps 3 to 6.
+- [ ] Turn Airplane Mode on. Keep it on for steps 3 to 7.
 
 ## 3. Storage check
 
@@ -47,22 +47,30 @@ Start Push A for these. Kill the app as described above each time.
 - [ ] 6. Next workout. Start Push A again from the routine list on the Workout start screen, not from the Next button: Next has moved on to Pull A, whose exercises differ. The bench opens at the weight you just lifted.
 - [ ] Discard that second Push A before the Export step: tap Finish, then Discard workout, then Discard. Export only shows on the Workout start screen and on the "Saved on this phone" screen, not while a workout is open.
 
-## 5. Export
+## 5. VoiceOver, large text and midnight
+
+Start Push A again for these, and discard it when they are done (Finish, then Discard workout, then Discard).
+
+- [ ] VoiceOver. Turn VoiceOver on. Swipe through the workout screen: the dock, a set row and its boxes. Then open the keypad and swipe through its fields and buttons. Every label reads as words, for example "Set 2, 75 pounds each, 8 reps", never a dash or a symbol. Turn VoiceOver off.
+- [ ] Largest text. In Settings, turn on Larger Accessibility Sizes and drag the text size to the largest. Open the keypad. It scrolls to its last button, and every button label reads whole: no word is broken across lines. Set the text size back.
+- [ ] Midnight. Set Auto-Lock to Never. Leave a workout open on screen, in the foreground, past midnight. Then tap a set. It asks you to choose Resume, Finish or Discard, and logs nothing. Set Auto-Lock back.
+
+## 6. Export
 
 - [ ] On the Workout start screen, tap Export workouts. The share sheet opens.
 - [ ] AirDrop the JSON to the Mac. It arrives and opens as JSON.
 
-## 6. Airplane Mode off
+## 7. Airplane Mode off
 
 - [ ] Turn Airplane Mode off when the checks above are done.
 
-## 7. Before the wipe
+## 8. Before the wipe
 
 - [ ] Every line above has a recorded pass or fail in the PR. Fix any failure before wiping.
 - [ ] From the repository root, `git status` does not list `native/local/`.
 - [ ] The privacy search covers every tracked file in the repository, not only `native/` and `docs/sprints/`: `git grep -n -I -e '<your user id>' -e '<one of your routine ids>' -e '<one of your custom exercise ids>'` prints nothing. Your user id is the part of your data file's name between `state-` and `.json`. Type the real values only in the terminal, never into a tracked file, this one included.
 
-## 8. The wipe
+## 9. The wipe
 
 This removes the test workouts so your first real session starts clean.
 

@@ -49,18 +49,38 @@ test('text styles keep a size and a weight', () => {
     expect(String(style.fontWeight)).toMatch(/^[1-9]00$/)
   }
 })
-test('dynamic type is capped where a row has to stay on screen', () => {
-  expect(fontScale.value).toBeGreaterThan(1)
-  expect(fontScale.timer).toBeGreaterThan(1)
-  expect(fontScale.label).toBeGreaterThan(1)
-  expect(fontScale.heading).toBeGreaterThanOrEqual(fontScale.label)
+// Dynamic Type. A style with no fontScale cap grows to LARGEST; a capped one stops at its cap.
+// Every size from the smallest up is checked, so the rule holds at each step, not only at the end.
+// LARGEST is React Native's multiplier at AX5, the largest size (RCTAccessibilityManager.mm).
+const LARGEST = 3.571
+const multipliers = [...Array.from({ length: 28 }, (_, i) => Math.round((0.8 + i * 0.1) * 10) / 10), LARGEST]
+const shownSize = (style, m) => type[style].fontSize * Math.min(m, fontScale[style] ?? LARGEST)
+
+test('at every text size nothing but the resting timer is larger than the lead', () => {
+  for (const m of multipliers) {
+    for (const style of Object.keys(type)) {
+      if (style === 'timer') continue
+      expect(shownSize(style, m), `${style} at ×${m}`).toBeLessThanOrEqual(shownSize('lead', m))
+    }
+  }
 })
-test('the gym type scale keeps the lead figure the largest on screen', () => {
-  expect(type.label).toEqual({ fontSize: 13, fontWeight: '500' })
-  expect(type.lead.fontSize).toBe(34)
-  expect(type.screenTitle.fontSize).toBe(20)
-  expect(type.timer.fontSize).toBeGreaterThan(type.lead.fontSize)
-  expect(type.lead.fontSize).toBeGreaterThan(type.title.fontSize)
-  expect(fontScale.lead).toBe(1.3)
-  expect(fontScale.screenTitle).toBe(1.5)
+test('at every text size the resting timer stays the largest figure', () => {
+  for (const m of multipliers) {
+    for (const style of Object.keys(type)) {
+      expect(shownSize(style, m), `${style} at ×${m}`).toBeLessThanOrEqual(shownSize('timer', m))
+    }
+  }
+})
+// The countdown replaces the lead in the same dock, whose height is set by the lead's cap, so the
+// two dock figures stop growing at the same text size: an uncapped timer would reach 157 pt.
+test('the resting timer stops growing no later than the lead', () => {
+  expect(fontScale.timer ?? LARGEST).toBeLessThanOrEqual(fontScale.lead)
+})
+test('every style still grows with the text size', () => {
+  for (const style of Object.keys(type)) {
+    expect(fontScale[style] ?? LARGEST, style).toBeGreaterThan(1)
+  }
+})
+test('every cap names a text style', () => {
+  for (const style of Object.keys(fontScale)) expect(Object.hasOwn(type, style), style).toBe(true)
 })

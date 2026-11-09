@@ -10,6 +10,7 @@ import PrimaryButton from '../ui/PrimaryButton'
 import ProgressBar from '../ui/ProgressBar'
 import { dockFits } from './dock-layout'
 import ExerciseCard from './ExerciseCard'
+import { failureText } from './failure-text'
 import FinishSheet from './FinishSheet'
 import KeypadSheet from './KeypadSheet'
 import SavedScreen from './SavedScreen'
@@ -56,10 +57,11 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
     if (session.status === 'discarded') onExit()
   }, [session.status])
   // The engine reads the clock only when an action runs. Back from the background on a new
-  // local day, reopen (as after a kill) so an overnight session asks before any set is logged.
+  // local day in the session's own zone (the one the engine decides overnight in), reopen (as
+  // after a kill) so an overnight session asks before any set is logged.
   useEffect(() => {
     const sub = AppState.addEventListener('change', next => {
-      const zone = deviceTimeZone()
+      const zone = read.current.view?.timeZone ?? deviceTimeZone()
       if (next === 'active' && read.current.view && localDate(Date.now(), zone) !== localDate(read.current.at, zone)) onExit()
     })
     return () => sub.remove()
@@ -72,9 +74,9 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
     return (
       <View style={styles.message}>
         <AppText variant="body" color={color.textSecondary} accessibilityLiveRegion="polite">
-          {failed ? `Could not open this workout: ${session.error?.message ?? 'unknown error'}` : 'Opening workout'}
+          {failed ? failureText(session.error?.code, { action: 'open' }) : 'Opening workout'}
         </AppText>
-        {failed ? <PrimaryButton label="Retry" onPress={onExit} /> : null}
+        {failed ? <PrimaryButton label="Retry" accessibilityHint="Tries to open the workout again." onPress={onExit} /> : null}
       </View>
     )
   }
@@ -87,9 +89,9 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
   const dockHeight = pinned ? measured.dock : 0
   const { header, card } = screen
   const overnight = view.disposition?.kind === 'overnight'
-  // An overnight session ends at its last logged work; the engine refuses a finish without an end.
+  // An overnight session ends at the engine's suggested end (its last logged work, or the time it
+  // was offered when that work was under 20 minutes before); the engine refuses a finish without one.
   const finishEnd = overnight ? view.disposition.suggestedEnd ?? view.startedAt : null
-  const weightTitle = shownEntry?.target?.dbLoad === 'each' ? 'Lb each' : 'Lb'
   const upNext = view.entries[index + 1]
   const move = step => setShownIndex(Math.max(0, Math.min(count - 1, index + step)))
   const { sheet, finish } = actions
@@ -101,26 +103,35 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
         <IconButton label="Finish" accessibilityLabel="Finish workout" accessibilityHint="Shows the summary before saving." onPress={() => finish.show(finishEnd)} />
       </View>
       <View style={styles.navRow}>
-        <IconButton label="‹" accessibilityLabel="Previous exercise" onPress={() => move(-1)} />
+        <IconButton label="‹" accessibilityLabel="Previous exercise" accessibilityHint="Shows the exercise before this one." onPress={() => move(-1)} />
         <AppText variant="body" color={color.textSecondary} style={styles.grow}>
           {`Exercise ${header.exerciseNumber} of ${header.exerciseCount}`}
         </AppText>
         <AppText variant="value" color={color.textSecondary} accessibilityLabel={`Elapsed ${header.elapsedText}`}>{header.elapsedText}</AppText>
-        <IconButton label="›" accessibilityLabel="Next exercise" onPress={() => move(1)} />
+        <IconButton label="›" accessibilityLabel="Next exercise" accessibilityHint="Shows the exercise after this one." onPress={() => move(1)} />
       </View>
       <ProgressBar value={header.progress} />
       {actions.notice ? (
         <Card accessibilityLiveRegion="polite" style={styles.notice}>
-          <AppText variant="body">{actions.notice}</AppText>
+          <AppText variant="body" accessibilityRole="alert">{actions.notice}</AppText>
+        </Card>
+      ) : null}
+      {/* A set saved but its rest did not start: Start rest starts that same rest, through the gate. */}
+      {actions.restNotice ? (
+        <Card accessibilityLiveRegion="polite" style={[styles.notice, styles.restNotice]}>
+          <AppText variant="body" accessibilityRole="alert">{actions.restNotice}</AppText>
+          <View style={styles.restAction}>
+            <IconButton label="Start rest" accessibilityLabel="Start rest" accessibilityHint="Starts the rest after your last set." onPress={actions.startRest} />
+          </View>
         </Card>
       ) : null}
     </View>
   )
 
-  // Overnight, the likely choice is to end last night's workout at its last set, so Finish is
-  // the filled button; Resume and Discard sit under it.
+  // Overnight, the likely choice is to end last night's workout, so Finish is the filled button;
+  // Resume and Discard sit under it. Its label claims no end time: the hint and the sheet say it.
   const dock = overnight ? (
-    <WorkoutDock dock={{ mode: 'overnight', lead: 'Left open overnight', primaryLabel: 'Finish at last set' }} onLayout={measure('dock')} inline={!pinned} onPrimary={() => finish.show(finishEnd)} busy={actions.busy}>
+    <WorkoutDock dock={{ mode: 'overnight', lead: 'Left open overnight', primaryLabel: 'Finish workout' }} onLayout={measure('dock')} inline={!pinned} onPrimary={() => finish.show(finishEnd)} busy={actions.busy}>
       <View style={styles.choices}>
         <IconButton label="Resume" accessibilityLabel="Resume workout" accessibilityHint="Keeps logging sets in this workout." onPress={actions.resume} />
         <IconButton label="Discard" accessibilityLabel="Discard workout" accessibilityHint="Asks before deleting this workout." onPress={actions.askDiscard} />
@@ -130,7 +141,7 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
     // Finished in the journal but not yet stored (a kill between the two): Save completes it.
     <WorkoutDock dock={{ mode: 'finished', lead: 'Not saved yet', primaryLabel: 'Save workout' }} onLayout={measure('dock')} inline={!pinned} onPrimary={() => finish.show(null)} busy={actions.busy} />
   ) : (
-    <WorkoutDock dock={screen.dock} onLayout={measure('dock')} inline={!pinned} busy={actions.busy} {...actions.dock} />
+    <WorkoutDock dock={screen.dock} perHand={card.perHand} onLayout={measure('dock')} inline={!pinned} busy={actions.busy} {...actions.dock} />
   )
 
   return (
@@ -139,7 +150,7 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
       <ScrollView style={styles.screen} contentContainerStyle={{ paddingBottom: dockHeight }} scrollIndicatorInsets={{ bottom: dockHeight }}>
         {pinned ? null : head}
         <View style={styles.body}>
-          <ExerciseCard {...card} weightTitle={weightTitle} onPressRow={actions.openSheet} onAddSet={actions.addSet} />
+          <ExerciseCard {...card} onPressRow={actions.openSheet} onAddSet={actions.addSet} onAddWarmup={actions.addWarmup} />
           {upNext ? <UpNextRow name={nameOf(names, upNext.id)} onPress={() => move(1)} /> : null}
         </View>
         {pinned ? null : dock}
@@ -153,13 +164,17 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
         perSide={sheet.perSide}
         side={sheet.side}
         initialField={sheet.initialField}
-        weightTitle={weightTitle}
+        weightSetWith={sheet.weightSetWith}
+        weightTitle={card.weightTitle}
+        perHand={card.perHand}
         saveLabel={sheet.mode === 'done' ? 'Update' : 'Save'}
-        completeLabel={sheet.completeLabel}
+        completeLabel={sheet.completeButton?.label}
+        completeSpoken={sheet.completeButton?.spoken}
         notice={sheet.notice}
         onSave={sheet.onSave}
         onComplete={sheet.mode === 'current' ? sheet.onComplete : undefined}
         onUndo={sheet.mode === 'done' ? sheet.onUndo : undefined}
+        onRemove={sheet.removable ? sheet.onRemove : undefined}
         onClose={sheet.onClose}
         onAppState={sheet.onAppState}
       />
@@ -167,7 +182,7 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
         visible={finish.open}
         title={base?.name ?? 'workout'}
         summary={finish.open ? finishSummary(view) : null}
-        endsAtLastSet={finish.endsAtLastSet}
+        endsAtSuggestedEnd={finish.endsAtSuggestedEnd}
         notice={finish.notice}
         busy={actions.busy}
         onConfirm={finish.confirm}
@@ -186,6 +201,8 @@ const styles = StyleSheet.create({
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   navRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   notice: { padding: space.md },
+  restNotice: { gap: space.sm },
+  restAction: { alignSelf: 'flex-start' },
   choices: { flexDirection: 'row', justifyContent: 'space-between', gap: space.sm },
   body: { gap: space.md, paddingHorizontal: space.lg, paddingBottom: space.lg }
 })

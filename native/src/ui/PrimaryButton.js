@@ -6,12 +6,14 @@ import AppText from './AppText'
 import { focusRingStyle } from './focus-ring'
 import { usePressScale } from './use-press-scale'
 
-export default function PrimaryButton({ label, onPress, disabled, accessibilityHint }) {
+// `accessibilityLabel` is what VoiceOver says when it differs from the shown `label`.
+export default function PrimaryButton({ label, onPress, disabled, accessibilityLabel, accessibilityHint }) {
   const press = usePressScale()
   const [focused, setFocused] = useState(false)
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
       accessibilityState={{ disabled: Boolean(disabled) }}
       accessibilityHint={accessibilityHint}
       disabled={disabled}

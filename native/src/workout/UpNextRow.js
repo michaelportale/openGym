@@ -1,25 +1,17 @@
-import { Pressable, StyleSheet, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 import { color, radius, size, space, touch } from '../theme/tokens'
 import NativeSymbol from '../ui/NativeSymbol'
 import AppText from '../ui/AppText'
 import Card from '../ui/Card'
+import ScaleButton from '../ui/ScaleButton'
+import { spokenUpNext } from './spoken'
 
-export function upNextAccessibilityLabel(name) {
-  if (typeof name !== 'string' || name.trim() === '') throw new Error('Up next needs a name')
-  return `Up next, ${name}.`
-}
-
-// The exercise after the one on screen. Tapping it moves there, as the header's › does.
+// The exercise after the one on screen. Tapping it moves there, as the header's › does; the
+// whole card shrinks while pressed.
 export default function UpNextRow({ name, onPress }) {
   return (
-    <Card>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={upNextAccessibilityLabel(name)}
-        accessibilityHint="Shows this exercise."
-        onPress={onPress}
-        style={styles.row}
-      >
+    <ScaleButton accessibilityLabel={spokenUpNext(name)} accessibilityHint="Shows this exercise." onPress={onPress}>
+      <Card style={styles.row}>
         <View style={styles.tile}>
           <NativeSymbol name="dumbbell" tintColor={color.textSecondary} size={size.icon} />
         </View>
@@ -28,8 +20,8 @@ export default function UpNextRow({ name, onPress }) {
           <AppText variant="heading">{name}</AppText>
         </View>
         <NativeSymbol name="chevron.right" tintColor={color.textSecondary} size={size.icon} />
-      </Pressable>
-    </Card>
+      </Card>
+    </ScaleButton>
   )
 }
 

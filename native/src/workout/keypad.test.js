@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { applyKey, completeBlocker, fieldText, keypadState, keypadValues, sheetCloseAction } from './keypad.js'
+import { STACK_ACTIONS_FROM, actionsStacked, applyKey, completeBlocker, completeLabels, fieldLocked, fieldText, keypadState, keypadValues, sheetCloseAction, sideLockHint, sideLockNote } from './keypad.js'
 
 const press = (state, ...keys) => keys.reduce(applyKey, state)
 const values = (state, ...keys) => keypadValues(press(state, ...keys))
@@ -108,4 +108,78 @@ test('completeBlocker: per side, only the side being completed needs reps', () =
   expect(completeBlocker(v, 'L')).toBeNull()
   expect(completeBlocker(v, 'R')).toBe('reps')
   expect(completeBlocker({ w: null, sides: { L: { r: 10 }, R: { r: 10 } } }, 'L')).toBe('weight')
+})
+
+// A per-side set with one side logged: both sides share one weight (one machine setting), so it
+// stays the one logged with that side. Only the other side's reps can change.
+test('a half-done per-side set refuses weight input; the other side\'s reps stay editable', () => {
+  const initial = { w: 7.5, sides: { L: { r: 10 }, R: { r: 10 } } }
+  const left = keypadState(initial, 'w', { weightSetWith: 'L' })
+  expect(left.field).toBe('R.r')
+  expect(values(left, '1', '2')).toEqual({ w: 7.5, sides: { L: { r: 10 }, R: { r: 12 } } })
+  expect(values(left, 'field:w', '1', '0')).toEqual({ w: 7.5, sides: { L: { r: 10 }, R: { r: 10 } } })
+  expect(press(left, 'field:w').field).toBe('R.r')
+  expect(values(left, 'chip:+5', 'chip:-10').w).toBe(7.5)
+  expect(values(left, 'back').w).toBe(7.5)
+  expect(fieldText(press(left, 'field:w', '1'), 'w')).toBe('7.5')
+  expect(keypadState(initial, 'w', { weightSetWith: 'R' }).field).toBe('L.r')
+  // A tapped reps box still opens on it.
+  expect(keypadState(initial, 'R.r', { weightSetWith: 'L' }).field).toBe('R.r')
+})
+// The logged side's reps are logged too: typing 12 over a left logged at 10 would vanish on Save
+// and rewrite the log on Complete right. Only Update, once the set is done, changes them.
+test("a half-done per-side set refuses the logged side's reps; the sheet never opens on them", () => {
+  const initial = { w: 7.5, sides: { L: { r: 10 }, R: { r: 8 } } }
+  const left = keypadState(initial, 'w', { weightSetWith: 'L' })
+  expect(press(left, 'field:L.r').field).toBe('R.r')
+  expect(values(left, 'field:L.r', '1', '2')).toEqual({ w: 7.5, sides: { L: { r: 10 }, R: { r: 12 } } })
+  expect(keypadState(initial, 'L.r', { weightSetWith: 'L' }).field).toBe('R.r')
+  const right = keypadState(initial, 'w', { weightSetWith: 'R' })
+  expect(press(right, 'field:R.r').field).toBe('L.r')
+  expect(values(right, 'field:R.r', '9')).toEqual({ w: 7.5, sides: { L: { r: 9 }, R: { r: 8 } } })
+  expect(fieldLocked(left, 'w')).toBe(true)
+  expect(fieldLocked(left, 'L.r')).toBe(true)
+  expect(fieldLocked(left, 'R.r')).toBe(false)
+  expect(fieldLocked(keypadState(initial, 'w'), 'w')).toBe(false)
+  expect(fieldLocked(keypadState(initial, 'w'), 'L.r')).toBe(false)
+})
+test('sideLockNote says which side is logged, and how to change its weight or reps', () => {
+  expect(sideLockNote('L')).toBe('Left side logged. To change its weight or reps, finish the set, then Update it.')
+  expect(sideLockNote('R')).toBe('Right side logged. To change its weight or reps, finish the set, then Update it.')
+  expect(sideLockNote(null)).toBeNull()
+  expect(sideLockNote(undefined)).toBeNull()
+  expect(sideLockNote('constructor')).toBeNull()
+})
+test('sideLockHint gives VoiceOver the same way out with each locked field', () => {
+  expect(sideLockHint('L')).toBe('To change it, finish the set, then Update it.')
+  expect(sideLockHint('R')).toBe('To change it, finish the set, then Update it.')
+  expect(sideLockNote('R')).toMatch(/finish the set, then Update it\.$/)
+  expect(sideLockHint(null)).toBeNull()
+  expect(sideLockHint('toString')).toBeNull()
+})
+
+test('completeLabels: a warm-up shows plain Complete and is spoken as the warm-up', () => {
+  expect(completeLabels({ warmup: true })).toEqual({ label: 'Complete', spoken: 'Complete warm-up' })
+  expect(completeLabels({ number: 3 })).toEqual({ label: 'Complete set 3', spoken: 'Complete set 3' })
+  expect(completeLabels({ side: 'L', number: 1 })).toEqual({ label: 'Complete left', spoken: 'Complete left' })
+  expect(completeLabels({ side: 'R', number: 1 })).toEqual({ label: 'Complete right', spoken: 'Complete right' })
+  expect(completeLabels({ side: 'constructor', number: 2 })).toEqual({ label: 'Complete set 2', spoken: 'Complete set 2' })
+})
+
+// React Native's multipliers for iOS's text sizes (RCTAccessibilityManager.mm): the seven standard
+// sizes, then AX1 to AX5.
+const STANDARD = [0.823, 0.882, 0.941, 1, 1.118, 1.235, 1.353]
+const ACCESSIBILITY = [1.786, 2.143, 2.643, 3.143, 3.571]
+
+test('actionsStacked: Save and Complete share the row at every standard text size', () => {
+  for (const m of STANDARD) expect(actionsStacked(m), `x${m}`).toBe(false)
+})
+test('actionsStacked: from the first accessibility size up to the largest they stack full width', () => {
+  for (const m of ACCESSIBILITY) expect(actionsStacked(m), `x${m}`).toBe(true)
+  expect(STACK_ACTIONS_FROM).toBeGreaterThan(Math.max(...STANDARD))
+  expect(STACK_ACTIONS_FROM).toBeLessThanOrEqual(Math.min(...ACCESSIBILITY))
+})
+test('actionsStacked: no font scale yet keeps the default row', () => {
+  expect(actionsStacked(undefined)).toBe(false)
+  expect(actionsStacked(Number.NaN)).toBe(false)
 })

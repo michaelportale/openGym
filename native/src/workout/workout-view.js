@@ -1,6 +1,6 @@
 import { workoutModel } from '../shared/training.js'
 
-const { isSideSet } = workoutModel
+const { isSideSet, isWarmupRow } = workoutModel
 
 const DASH = '–'
 
@@ -12,7 +12,12 @@ export function isDone(slot) {
   return slot.completed === true
 }
 
-const workSets = entry => (entry.sets || []).filter(slot => !slot.warmup)
+// A warm-up never counts: not in set numbers, the dock's set, rest, progress, the exercise the
+// screen follows, carried weight or the finish count. The row decides, as volume and "Last time"
+// read it: an explicit phase beats the old warmup flag.
+export const isWarmup = slot => isWarmupRow(slot?.row)
+
+const workSets = entry => (entry.sets || []).filter(slot => !isWarmup(slot))
 const hasOpenWork = entry => workSets(entry).some(slot => !isDone(slot))
 
 // Exactly one side of a per-side set logged.
@@ -41,14 +46,14 @@ export function currentExerciseIndex(view) {
 // The weight a set with nothing logged yet opens at: the last done work set before it in the
 // exercise (sets are done in order, so the latest lifted), as the web cascades a changed weight
 // onto the sets after it. Undefined when there is none, or the set has a side or all of it
-// logged: its own weight stands. A draft weight still beats it.
+// logged, or it is a warm-up: its own weight stands. A draft weight still beats it.
 export function carriedWeight(entry, setId) {
   let carried
   for (const slot of entry?.sets ?? []) {
     if (slot.setId === setId) {
-      return isDone(slot) || sideDoneOf(slot.row) !== null ? undefined : carried
+      return isDone(slot) || sideDoneOf(slot.row) !== null || isWarmup(slot) ? undefined : carried
     }
-    if (slot.warmup || !isDone(slot)) continue
+    if (isWarmup(slot) || !isDone(slot)) continue
     const w = slot.row.w ?? slot.row.sides?.L?.w
     if (w != null) carried = w
   }
@@ -78,13 +83,29 @@ function nextSide(row) {
 // The numbers a set shows, and what one-tap Complete logs: the draft's fields, then `carry` from
 // carriedWeight, then the row's. In the keypad's shape: { w, r }, or per side
 // { w, sides: { L: { r }, R: { r } } } with the weight of the side being worked.
+// A done set never takes a draft (draftCall refuses one), so a draft on it is one a failed clear
+// left behind after the commit: it shows what was logged. So does a half-done set's done side,
+// and its weight (lockedWeight).
 export function shownValues(slot, side, carry) {
   const { row } = slot
-  const d = slot.draft || {}
+  const d = isDone(slot) ? {} : slot.draft || {}
   if (!isSideSet(row)) return { w: d.w ?? carry ?? row.w ?? null, r: d.r ?? row.r ?? null }
   const own = row.sides[side === 'R' ? 'R' : 'L']
-  const reps = s => d.sides?.[s]?.r ?? d.r ?? row.sides[s].r ?? null
-  return { w: d.w ?? carry ?? own.w ?? row.w ?? null, sides: { L: { r: reps('L') }, R: { r: reps('R') } } }
+  const locked = lockedWeight(row)
+  const reps = s => (row.sides[s].done === true ? row.sides[s].r : d.sides?.[s]?.r ?? d.r ?? row.sides[s].r) ?? null
+  const w = locked ? locked.w : d.w ?? carry ?? own.w ?? row.w
+  return { w: w ?? null, sides: { L: { r: reps('L') }, R: { r: reps('R') } } }
+}
+
+// A per-side set with one side logged: both sides share one weight (one machine setting), so it
+// stays the one logged with that side. `side` is that side ('L' or 'R'), `w` its weight. The
+// keypad will not change it, a draft stores it and the second side's Complete logs it, whatever
+// was typed: anything else would ignore the owner or rewrite the first side's log. Null when the
+// set is not half done, or that side has no weight to keep (nothing logs one without a weight).
+export function lockedWeight(row) {
+  const side = sideDoneOf(row)
+  const w = side ? row.sides[side].w ?? row.w : null
+  return w != null ? { side, w } : null
 }
 
 // One weight and one reps figure: per side, the reps of the side being worked.
@@ -113,8 +134,12 @@ function lastText(last, index) {
   return lastLine(s)
 }
 
-function loadText(w, target) {
-  return `${num(w)} lb${target?.dbLoad === 'each' ? ' each' : ''}`
+// A dumbbell exercise loaded per hand: its weight is "each". Decided here once; the screen reads
+// it from the card.
+const perHandOf = entry => entry?.target?.dbLoad === 'each'
+
+function loadText(w, perHand) {
+  return `${num(w)} lb${perHand ? ' each' : ''}`
 }
 
 function progressOf(entries) {
@@ -129,13 +154,14 @@ function progressOf(entries) {
   return all === 0 ? 0 : finished / all
 }
 
+// `number` and `figures` ({ w, r } of the side being worked) are the set the lead shows, and
+// `remainingMs` the rest it counts down, so the spoken lead is built from them, not the text.
 function dockFor(view, entry, entries, index, current, number) {
   const rest = view.rest
   const resting = rest && (rest.status === 'running' || rest.status === 'paused')
-  const target = entry?.target
   const side = current && isSideSet(current.row) ? nextSide(current.row) : null
   const figures = current ? shown(current, side, carriedWeight(entry, current.setId)) : null
-  const figureText = figures ? `${loadText(figures.w, target)} × ${num(figures.r)}` : ''
+  const figureText = figures ? `${loadText(figures.w, perHandOf(entry))} × ${num(figures.r)}` : ''
 
   if (resting) {
     return {
@@ -145,6 +171,9 @@ function dockFor(view, entry, entries, index, current, number) {
       primaryLabel: '',
       setId: current ? current.setId : null,
       side,
+      number: current ? number : null,
+      figures,
+      remainingMs: rest.remainingMs,
     }
   }
   if (current) {
@@ -163,28 +192,54 @@ function dockFor(view, entry, entries, index, current, number) {
       primaryLabel: label,
       setId: current.setId,
       side,
+      number,
+      figures,
     }
   }
   const othersLeft = entries.some((other, i) => i !== index && hasOpenWork(other))
   return othersLeft
-    ? { mode: 'exercise-done', lead: 'Exercise done', sub: '', primaryLabel: 'Next exercise', setId: null, side: null }
-    : { mode: 'all-done', lead: 'All sets done', sub: '', primaryLabel: 'Finish workout', setId: null, side: null }
+    ? { mode: 'exercise-done', lead: 'Exercise done', sub: '', primaryLabel: 'Next exercise', setId: null, side: null, number: null, figures: null }
+    : { mode: 'all-done', lead: 'All sets done', sub: '', primaryLabel: 'Finish workout', setId: null, side: null, number: null, figures: null }
 }
 
 // `title` is the routine name; the engine view does not carry it, so the caller passes it.
+// `card.weightTitle` ('Lb each' per hand, else 'Lb') heads the weight column and the keypad's
+// weight field; `card.perHand` makes the rows, the keypad and the dock's spoken lead say "each".
 export function workoutScreen(view, { names = {}, lastTimes = {}, exerciseIndex, title } = {}) {
   const entries = view?.entries || []
   const index = exerciseIndex === undefined ? currentExerciseIndex(view) : exerciseIndex
   const entry = entries[index] || { id: null, sets: [] }
   const info = names[entry.id]
   const last = lastTimes[entry.id] || null
+  const perHand = perHandOf(entry)
+
+  // Warm-ups show first, wherever the engine appended them, labelled W with no number and no
+  // last time. Among themselves they go in order like work sets: the first open one is current.
+  let warmCurrent = null
+  const warmRows = (entry.sets || []).filter(isWarmup).map(slot => {
+    const finished = isDone(slot)
+    const isCurrent = !finished && warmCurrent === null
+    if (isCurrent) warmCurrent = slot
+    return {
+      setId: slot.setId,
+      number: null,
+      label: 'W',
+      weightText: num(shown(slot, null).w),
+      repsText: repsText(slot),
+      lastText: DASH,
+      status: finished ? 'done' : isCurrent ? 'current' : 'pending',
+      // A planned warm-up on a per-side exercise is per side, each side logged on its own.
+      perSide: isSideSet(slot.row),
+      sideDone: sideDoneOf(slot.row),
+      warmup: true,
+    }
+  })
 
   let counter = 0
   const rows = []
   let current = null
   let currentNumber = 0
-  for (const slot of entry.sets || []) {
-    if (slot.warmup) continue
+  for (const slot of workSets(entry)) {
     counter += 1
     const finished = isDone(slot)
     const isCurrent = !finished && current === null
@@ -196,12 +251,14 @@ export function workoutScreen(view, { names = {}, lastTimes = {}, exerciseIndex,
     rows.push({
       setId: slot.setId,
       number: counter,
+      label: String(counter),
       weightText: num(shown(slot, isCurrent && perSide ? nextSide(slot.row) : null, carriedWeight(entry, slot.setId)).w),
       repsText: repsText(slot),
       lastText: lastText(last, counter - 1),
       status: finished ? 'done' : isCurrent ? 'current' : 'pending',
       perSide,
       sideDone: sideDoneOf(slot.row),
+      warmup: false,
     })
   }
 
@@ -217,7 +274,9 @@ export function workoutScreen(view, { names = {}, lastTimes = {}, exerciseIndex,
       name: info ? info.name : `Unknown exercise (${entry.id})`,
       category: info ? info.category || '' : '',
       noHistory: last === null,
-      rows,
+      weightTitle: perHand ? 'Lb each' : 'Lb',
+      perHand,
+      rows: [...warmRows, ...rows],
     },
     dock: dockFor(view || {}, entry, entries, index, current, currentNumber),
   }

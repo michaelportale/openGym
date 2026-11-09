@@ -1,6 +1,6 @@
 # Native openGym sprint: PRD
 
-Status: agreed scope, awaiting review. No implementation has started.
+Status: agreed scope. Implementation is under way; see the Status table under Delivery phases.
 Replaces the October 30 draft. Decisions come from the grilling sessions of November 2026.
 
 ## Summary
@@ -236,6 +236,18 @@ body weight from another app. If any gate fails, build a small custom Expo modul
 Phase 10 depends on Phase 9 passing and on the pair command existing. The nginx `web` container also
 proxies the API and serves exercise media, so its replacement is planned before removal.
 
+### Status
+
+| Phase | State | Where |
+| --- | --- | --- |
+| 0 | Done | PR #41 |
+| 1 | Done | PR #110 ("Promote native phase 1 foundation to main") |
+| 2 | Code done; the owner's device checklist is pending | Engine hardening PRs #101–#105, #107–#109 and #111 (real-SQLite kill tests); real workout stage 1 in PR #112 (merged 2026-11-09); stage 2 in PR #113 |
+| 3-10 | Not started | |
+
+Phase 9's device acceptance and the real gym sessions are the owner's to run. The checklist is
+[`2026-11-native-first-workout-checklist.md`](2026-11-native-first-workout-checklist.md).
+
 ## Acceptance criteria
 
 **Logging**
@@ -290,7 +302,8 @@ proxies the API and serves exercise media, so its replacement is planned before 
 
 Unit tests cover pure logic, using a fake clock for timers, time-zone changes, expired rest and
 overnight sessions. The owner runs manual device checks against the scenario table. UI automation is
-not in scope. GitHub Actions is disabled on this fork, so suites run locally before merging.
+not in scope. GitHub Actions runs five jobs (test (frontend), api, api-image, mcp, native) on pull requests
+that touch those folders. The suites still run locally before merging.
 
 ## Licence and media guardrails
 
