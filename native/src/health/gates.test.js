@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { gateSyncId, syncMetadata, syncIdOf, sortOwnWorkouts, externalBodyMass, readVerdict, syncIdFilter, toOwnWorkout, toBodyMassReading } from './gates.js'
+import { gateSyncId, syncMetadata, syncIdOf, sortOwnWorkouts, externalBodyMass, readVerdict, syncIdFilter, toOwnWorkout, toBodyMassReading, toBodyMassChanges } from './gates.js'
 
 const own = 'io.github.michaelportale.opengym'
 
@@ -85,4 +85,61 @@ test('a volume that is not a finite number leaves the volume key out', () => {
     expect(Object.values(metadata).includes(undefined)).toBe(false)
   }
   expect(syncMetadata('x', 5, 0).openGymTotalVolumeLb).toBe(0)
+})
+
+const sample = (uuid, over = {}) => ({
+  uuid,
+  quantity: 181.2,
+  startDate: new Date(1730000000000),
+  sourceRevision: { source: { bundleIdentifier: 'com.withings.wiScaleNG', name: 'Health Mate' } },
+  metadata: {},
+  ...over,
+})
+
+test('anchored changes map to readings, deleted uuids and the new anchor', () => {
+  const out = toBodyMassChanges({
+    samples: [sample('a'), sample('b', { metadata: { HKMetadataKeySyncIdentifier: 'opengym-bw-2026-11-09', HKMetadataKeySyncVersion: 3 } })],
+    deletedSamples: [{ uuid: 'gone' }, { uuid: 'also', metadata: {} }],
+    newAnchor: 'anchor-2',
+  })
+  expect(out).toEqual({
+    samples: [
+      { uuid: 'a', lb: 181.2, at: 1730000000000, bundleId: 'com.withings.wiScaleNG', syncId: null },
+      { uuid: 'b', lb: 181.2, at: 1730000000000, bundleId: 'com.withings.wiScaleNG', syncId: 'opengym-bw-2026-11-09' },
+    ],
+    deleted: ['gone', 'also'],
+    anchor: 'anchor-2',
+  })
+})
+
+test('an anchored sample without a source, metadata, finite quantity, start or uuid is skipped', () => {
+  const bad = [
+    sample('no-revision', { sourceRevision: undefined }),
+    sample('no-source', { sourceRevision: {} }),
+    sample('no-bundle', { sourceRevision: { source: { name: 'x' } } }),
+    sample('no-metadata', { metadata: undefined }),
+    sample('null-metadata', { metadata: null }),
+    sample('nan', { quantity: NaN }),
+    sample('infinite', { quantity: Infinity }),
+    sample('text', { quantity: '181' }),
+    sample('no-start', { startDate: undefined }),
+    sample('bad-start', { startDate: new Date('nope') }),
+    sample(''),
+    sample(undefined),
+    null,
+  ]
+  expect(toBodyMassChanges({ samples: bad, deletedSamples: [], newAnchor: 'x' }).samples).toEqual([])
+})
+
+test('only a string sync identifier counts; the early workout key is not read', () => {
+  const read = metadata => toBodyMassChanges({ samples: [sample('a', { metadata })], deletedSamples: [], newAnchor: 'x' }).samples[0].syncId
+  expect(read({ HKMetadataKeySyncIdentifier: 42 })).toBeNull()
+  expect(read({ HKSyncIdentifier: 'opengym-bw-2026-11-09' })).toBeNull()
+})
+
+test('a deleted sample without a uuid is skipped, and a missing list or anchor is tolerated', () => {
+  expect(toBodyMassChanges({ samples: [], deletedSamples: [{}, { uuid: '' }, null, { uuid: 'ok' }], newAnchor: 'x' }).deleted).toEqual(['ok'])
+  expect(toBodyMassChanges({})).toEqual({ samples: [], deleted: [], anchor: null })
+  expect(toBodyMassChanges({ samples: [], deletedSamples: [], newAnchor: '' }).anchor).toBeNull()
+  expect(toBodyMassChanges(undefined)).toEqual({ samples: [], deleted: [], anchor: null })
 })

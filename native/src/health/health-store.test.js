@@ -54,3 +54,51 @@ test('two stores on one db migrate once', async () => {
   await stores[1].links.put(link('x'))
   expect((await stores[0].links.list('w')).map(r => r.key)).toEqual(['x'])
 })
+
+const reading = (uuid, over = {}) => ({ uuid, d: '2026-11-09', lb: 181.2, at: 1000, ...over })
+
+async function readingsRoundTrip(store) {
+  const { readings } = store
+  expect(await readings.listDay('2026-11-09')).toEqual([])
+  expect(await readings.get('a')).toBeNull()
+  await readings.put(reading('b', { at: 2000 }))
+  await readings.put(reading('a'))
+  await readings.put(reading('c', { d: '2026-11-10' }))
+  await readings.put(reading('a', { lb: 180.4 })) // the same uuid again replaces it
+  expect(await readings.listDay('2026-11-09')).toEqual([reading('a', { lb: 180.4 }), reading('b', { at: 2000 })])
+  expect(await readings.get('c')).toEqual(reading('c', { d: '2026-11-10' }))
+  expect(await readings.remove('a')).toEqual(reading('a', { lb: 180.4 }))
+  expect(await readings.remove('a')).toBeNull()
+  expect(await readings.remove('never')).toBeNull()
+  expect(await readings.listDay('2026-11-09')).toEqual([reading('b', { at: 2000 })])
+}
+
+test('memory store: readings put, get, list by day and remove', async () => {
+  await readingsRoundTrip(createMemoryHealthStore())
+})
+
+test('memory store hands out reading copies', async () => {
+  const store = createMemoryHealthStore()
+  await store.readings.put(reading('a'))
+  ;(await store.readings.listDay('2026-11-09'))[0].lb = 1
+  ;(await store.readings.get('a')).lb = 1
+  expect((await store.readings.get('a')).lb).toBe(181.2)
+})
+
+test('real sqlite: readings round trip and survive a reopen', async () => {
+  let db = createNodeSqliteFileDb()
+  await readingsRoundTrip(createSqliteHealthStore(db))
+  await createSqliteHealthStore(db).readings.put(reading('k', { at: 1730000000123 }))
+  db = db.reopen()
+  const again = createSqliteHealthStore(db)
+  expect(await again.readings.get('k')).toEqual(reading('k', { at: 1730000000123 }))
+  expect((await again.readings.listDay('2026-11-09')).map(r => r.uuid)).toEqual(['b', 'k'])
+})
+
+test('readings share the one migration with links and state', async () => {
+  const db = createNodeSqliteDb()
+  const stores = [createSqliteHealthStore(db), createSqliteHealthStore(db)]
+  await Promise.all([stores[0].readings.listDay('2026-11-09'), stores[1].links.list('w'), stores[1].readings.get('x')])
+  expect(db.executed.filter(sql => /CREATE TABLE IF NOT EXISTS health_readings/.test(sql))).toHaveLength(1)
+  expect(db.executed.filter(sql => /CREATE TABLE/.test(sql))).toHaveLength(1)
+})

@@ -37,6 +37,31 @@ export function toBodyMassReading(s) {
   return { uuid: s.uuid, lb: s.quantity, at: s.startDate, bundleId: s.sourceRevision?.source?.bundleIdentifier ?? null }
 }
 
+const nonEmpty = v => typeof v === 'string' && v !== ''
+
+// One anchored body-mass sample, or null when it cannot be trusted: without a source the import
+// cannot tell its own samples from a scale's, and without metadata it cannot see a sync id.
+function toAnchoredBodyMass(s) {
+  if (!s || !nonEmpty(s.uuid) || !Number.isFinite(s.quantity)) return null
+  const bundleId = s.sourceRevision?.source?.bundleIdentifier
+  if (!nonEmpty(bundleId) || !s.metadata || typeof s.metadata !== 'object') return null
+  const at = s.startDate instanceof Date ? s.startDate.getTime() : NaN
+  if (!Number.isFinite(at)) return null
+  const syncId = s.metadata.HKMetadataKeySyncIdentifier
+  return { uuid: s.uuid, lb: s.quantity, at, bundleId, syncId: nonEmpty(syncId) ? syncId : null }
+}
+
+// The anchored query's answer as the import reads it: { samples, deleted: [uuid], anchor }.
+export function toBodyMassChanges(result) {
+  const samples = Array.isArray(result?.samples) ? result.samples : []
+  const deleted = Array.isArray(result?.deletedSamples) ? result.deletedSamples : []
+  return {
+    samples: samples.map(toAnchoredBodyMass).filter(Boolean),
+    deleted: deleted.map(s => s?.uuid).filter(nonEmpty),
+    anchor: nonEmpty(result?.newAnchor) ? result.newAnchor : null,
+  }
+}
+
 // HKSyncIdentifier is what builds before the key fix saved under, so their workouts need it to be found.
 export function syncIdOf(metadata) {
   return metadata?.HKMetadataKeySyncIdentifier ?? metadata?.HKSyncIdentifier

@@ -6,11 +6,12 @@ import {
   currentAppSource,
   deleteObjects,
   queryQuantitySamples,
+  queryQuantitySamplesWithAnchor,
   queryWorkoutSamples,
   requestAuthorization,
   saveWorkoutSample
 } from '@kingstinct/react-native-healthkit'
-import { syncIdFilter, syncMetadata, toBodyMassReading, toOwnWorkout } from './gates.js'
+import { syncIdFilter, syncMetadata, toBodyMassChanges, toBodyMassReading, toOwnWorkout } from './gates.js'
 
 const WORKOUT = 'HKWorkoutTypeIdentifier'
 const BODY_MASS = 'HKQuantityTypeIdentifierBodyMass'
@@ -121,5 +122,17 @@ export async function readBodyMass({ start, end }) {
     return samples.map(toBodyMassReading).filter(Boolean)
   } finally {
     samples.forEach(s => s.dispose?.())
+  }
+}
+
+// Body-mass changes since the anchor (every sample from `since` when there is none), in lb.
+// A malformed anchor throws; the caller clears it and reads again without one.
+export async function readBodyMassChanges({ anchor, since }) {
+  const options = { limit: 0, unit: 'lb', filter: { date: { startDate: since } } }
+  const result = await queryQuantitySamplesWithAnchor(BODY_MASS, anchor ? { ...options, anchor } : options)
+  try {
+    return toBodyMassChanges(result)
+  } finally {
+    result?.samples?.forEach(s => s.dispose?.())
   }
 }

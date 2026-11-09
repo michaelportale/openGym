@@ -1,13 +1,24 @@
-// Writes finished workouts to Apple Health, one pass at a time. The adapter, the store and the
-// finished-workouts store are injected. Nothing here throws to a caller, and the finished
-// workouts are only ever listed, never changed.
+// Writes finished workouts to Apple Health and imports body-mass readings as weigh-ins, one pass
+// at a time. The adapter, the stores, the server copy reader and the sync trigger are injected.
+// Nothing here throws to a caller, and the finished workouts are only ever listed, never changed.
 
+import { applyDayOps } from '../body/day-ops.js'
+import { localDate } from '../session/timing.js'
+import { dayOpsFromReadings, isExternal, startOfLocalDay } from './weight-import.js'
 import { exportHash, exportable, planWorkoutExport, workoutSyncId } from './workout-export.js'
 
 const message = (error) => String(error?.message ?? error)
 
-export function createHealthSync({ adapter, store, workouts, now }) {
-  const { links, state } = store
+const BW_SINCE = 'bwSince' // health_state: the start of the local day the import first ran
+const BW_ANCHOR = 'bwAnchor' // health_state: the anchored body-mass query's anchor
+
+// weighIns: the weigh-in store (createSqliteWeighIns); readCopy: () => the server copy or null;
+// ownBundleId: () => the app's own Health bundle id; timeZone: the local days' zone;
+// onWeighIns: called when an import wrote an op (the server sync), never awaited.
+export function createHealthSync({ adapter, store, workouts, now, weighIns, readCopy, ownBundleId, timeZone, onWeighIns }) {
+  const missing = Object.entries({ weighIns, readCopy, ownBundleId, timeZone, onWeighIns }).filter(([, v]) => !v).map(([k]) => k)
+  if (missing.length) throw new Error('createHealthSync needs ' + missing.join(', '))
+  const { links, state, readings } = store
 
   // run, enable and disable never interleave.
   let tail = Promise.resolve()
@@ -48,9 +59,7 @@ export function createHealthSync({ adapter, store, workouts, now }) {
     } catch { /* the pass stops either way; the next one tries again */ }
   }
 
-  async function pass() {
-    const mine = generation
-    if (!(await isOn())) return
+  async function exportWorkouts(mine) {
     const rows = await workouts.list()
     const current = await links.list('w')
     const plan = planWorkoutExport({ rows, links: current, now: now() })
@@ -102,6 +111,112 @@ export function createHealthSync({ adapter, store, workouts, now }) {
       }
       await links.put({ ...pending, state: 'exported', updatedAt: now() })
     }
+  }
+
+  let own = null // the app's own bundle id, looked up once
+  async function ownId() {
+    if (own === null) {
+      const id = await ownBundleId()
+      if (typeof id !== 'string' || id === '') throw new Error("the app's own Health bundle id is unknown")
+      own = id
+    }
+    return own
+  }
+
+  // The anchored read. A throw with a stored anchor clears it and reads once from `since`.
+  // null when Health was turned off meanwhile.
+  async function readChanges(mine, since) {
+    const anchor = (await state.get(BW_ANCHOR)) || null
+    try {
+      return await adapter.readBodyMassChanges({ anchor, since })
+    } catch (error) {
+      if (generation !== mine) return null
+      if (!anchor) throw error
+      await state.set(BW_ANCHOR, '')
+      return adapter.readBodyMassChanges({ anchor: null, since })
+    }
+  }
+
+  function notifyWeighIns() {
+    try {
+      Promise.resolve(onWeighIns()).catch(() => {})
+    } catch { /* the server sync is never a reason to fail a pass */ }
+  }
+
+  // Body-mass readings from other sources become weigh-in ops, written only through
+  // putFromHealth so a weight typed meanwhile is never replaced. The anchor moves only after
+  // the ops are written and the cache updated, so a failure reads the same changes again.
+  async function importWeighIns(mine) {
+    let since = Number((await state.get(BW_SINCE)) || NaN)
+    if (!Number.isFinite(since)) {
+      since = startOfLocalDay(now(), timeZone)
+      await state.set(BW_SINCE, String(since))
+    }
+    if (generation !== mine) return
+    const ownBundle = await ownId()
+    if (generation !== mine) return
+    const read = await readChanges(mine, new Date(since))
+    if (!read || generation !== mine) return
+
+    // New readings go in now; deleted ones leave the cache only after the ops are written, so a
+    // deletion read again after a failed write still finds its day.
+    const days = new Set()
+    for (const sample of read.samples) {
+      if (!isExternal(sample, ownBundle)) continue
+      const d = localDate(sample.at, timeZone)
+      await readings.put({ uuid: sample.uuid, d, lb: sample.lb, at: sample.at })
+      days.add(d)
+    }
+    const gone = new Set()
+    for (const uuid of read.deleted) {
+      const cached = await readings.get(uuid)
+      if (!cached) continue // not an external reading this import kept
+      gone.add(uuid)
+      days.add(cached.d)
+    }
+
+    const doc = (await readCopy())?.state ?? {}
+    const removals = doc.deleted?.bodyweight
+    const deleted = removals && typeof removals === 'object' && !Array.isArray(removals) ? removals : {}
+    const rows = await weighIns.list()
+    const pending = await weighIns.listPending()
+    const entryByDay = {}
+    for (const entry of applyDayOps(doc.bodyweight, pending, deleted).next) entryByDay[entry.d] = entry
+    const unacked = new Set(pending.map((o) => o.d + '@' + o.t))
+    const localOpByDay = {}
+    for (const row of rows) {
+      localOpByDay[row.d] = { ...row, acked: !unacked.has(row.d + '@' + row.t) }
+      // This phone's own typed removal lets the day's readings back in.
+      if (row.op === 'remove' && row.src == null && !entryByDay[row.d]) days.add(row.d)
+    }
+    const readingsByDay = {}
+    for (const d of days) readingsByDay[d] = (await readings.listDay(d)).filter((r) => !gone.has(r.uuid))
+    const ops = dayOpsFromReadings({ days: [...days], readingsByDay, entryByDay, localOpByDay, deleted, now: now() })
+
+    let written = 0
+    try {
+      for (const op of ops) if ((await weighIns.putFromHealth(op)).written) written++
+      for (const uuid of gone) await readings.remove(uuid)
+      if (read.anchor) await state.set(BW_ANCHOR, read.anchor)
+    } finally {
+      if (written > 0) notifyWeighIns()
+    }
+  }
+
+  // Each list runs even when an earlier one failed; the first failure is the pass's error.
+  async function pass() {
+    const mine = generation
+    if (!(await isOn())) return
+    let broke = null
+    for (const step of [exportWorkouts, importWeighIns]) {
+      if (generation !== mine) return
+      try {
+        await step(mine)
+      } catch (error) {
+        if (!broke) broke = error
+      }
+    }
+    if (broke) throw broke
   }
 
   // A call while a pass waits its turn joins it. A call while one runs schedules exactly one

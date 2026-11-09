@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest'
+import { createMemoryWeighIns } from '../body/weigh-ins.js'
 import { createMemoryFinishedWorkouts } from '../session/finished-workouts.js'
 import { createMemoryHealthStore } from './health-store.js'
 import { createHealthSync } from './health-sync.js'
@@ -46,9 +47,22 @@ function fakeAdapter() {
       if (adapter.failDelete) throw adapter.failDelete
       return 2
     },
+    async readBodyMassChanges(args) {
+      calls.push(['readBodyMass', args])
+      return { samples: [], deleted: [], anchor: 'a' }
+    },
   }
   return adapter
 }
+
+// The weigh-in import's dependencies, with nothing to import.
+const importDeps = () => ({
+  weighIns: createMemoryWeighIns(),
+  readCopy: async () => null,
+  ownBundleId: async () => 'io.github.michaelportale.opengym',
+  timeZone: 'UTC',
+  onWeighIns: () => {},
+})
 
 async function setup(ids = ['w1'], over = {}) {
   const adapter = fakeAdapter()
@@ -56,7 +70,7 @@ async function setup(ids = ['w1'], over = {}) {
   const workouts = createMemoryFinishedWorkouts()
   for (const id of ids) await workouts.put(doc(id))
   let t = 1000
-  const health = createHealthSync({ adapter, store, workouts, now: () => (t += 10), ...over })
+  const health = createHealthSync({ adapter, store, workouts, now: () => (t += 10), ...importDeps(), ...over })
   return { adapter, store, workouts, health }
 }
 const saves = adapter => adapter.calls.filter(c => c[0] === 'save').map(c => c[1])
@@ -333,6 +347,7 @@ test('status never throws and write is unknown when the adapter throws', async (
     store: { links: { list: async () => { throw new Error('db') } }, state: { get: async () => { throw new Error('db') } } },
     workouts: { list: async () => [] },
     now: () => 1,
+    ...importDeps(),
   })
   await expect(broken.status()).resolves.toMatchObject({ on: false, write: 'unknown' })
   await expect(broken.run()).resolves.toBeDefined()
@@ -353,4 +368,34 @@ test('subscribers hear about runs, enable and disable, and can unsubscribe', asy
   const settled = n
   await health.enable()
   expect(n).toBe(settled)
+})
+
+test('the import runs after the workout export, even when a save fails', async () => {
+  const { adapter, store, health } = await setup(['w1'])
+  await store.state.set('on', '1')
+  await health.run()
+  expect(adapter.calls.map(c => c[0])).toEqual(['save', 'readBodyMass'])
+  adapter.calls.length = 0
+  adapter.failSave = new Error('denied')
+  await store.links.clear('w')
+  await health.run()
+  expect(adapter.calls.map(c => c[0])).toEqual(['save', 'readBodyMass'])
+  expect((await health.status()).error).toBe('denied')
+})
+
+test('the engine needs every weigh-in import dependency', () => {
+  const base = { adapter: fakeAdapter(), store: createMemoryHealthStore(), workouts: createMemoryFinishedWorkouts(), now: () => 1, ...importDeps() }
+  expect(() => createHealthSync(base)).not.toThrow()
+  for (const key of ['weighIns', 'readCopy', 'ownBundleId', 'timeZone', 'onWeighIns']) {
+    expect(() => createHealthSync({ ...base, [key]: undefined }), key).toThrow(key)
+  }
+})
+
+test('a workout export that throws does not stop the import; its error shows', async () => {
+  const { adapter, store, workouts, health } = await setup(['w1'])
+  await store.state.set('on', '1')
+  workouts.list = async () => { throw new Error('db locked') }
+  await health.run()
+  expect(adapter.calls.map(c => c[0])).toEqual(['readBodyMass'])
+  expect((await health.status()).error).toBe('db locked')
 })
