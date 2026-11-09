@@ -57,7 +57,7 @@ Charlie can call those three from the journal later. This lane does not edit `na
 
 ## Why this sheet
 
-`WhyThisSheet` renders a `whyThis()` payload: the reason, the source, and a Convention or Definition label when the register uses that plain source. A cited rule shows the citation and no plain label. Gus mounts it by passing that payload. This lane does not mount it in any screen.
+`WhyThisSheet` renders a `whyThis()` payload: the reason, the source, and a Convention or Definition label when the register uses that plain source. A cited rule shows the citation and no plain label. Gus mounts it by passing that payload. It is mounted only by `native/src/workout/WhySheet.js`.
 
 ## Linear routines
 

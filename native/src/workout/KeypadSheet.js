@@ -68,10 +68,13 @@ const keyHint = key => (key === 'back' ? 'Deletes the last character.' : 'Types 
 // keep typed numbers when the app leaves the front (a kill from the app switcher follows).
 export default function KeypadSheet({ visible, title, initial, perSide, side = null, initialField = 'w', weightSetWith = null, weightTitle = 'Lb', perHand = false, saveLabel = 'Save', completeLabel = 'Complete', completeSpoken, notice, onSave, onComplete, onUndo, onRemove, onClose, onAppState }) {
   const [state, setState] = useState(() => keypadState(initial, initialField, { weightSetWith }))
+  const [why, setWhy] = useState(false)
   useEffect(() => {
+    // The keypad can close under an open Why sheet (the app returns after a long absence);
+    // never present it again on the next open.
+    setWhy(false)
     if (visible) setState(keypadState(initial, initialField, { weightSetWith }))
   }, [visible])
-  const [why, setWhy] = useState(false)
   const stacked = actionsStacked(useWindowDimensions().fontScale)
   const lockNote = sideLockNote(state.lock)
   const values = keypadValues(state)
@@ -119,7 +122,7 @@ export default function KeypadSheet({ visible, title, initial, perSide, side = n
               <Key key={chip} text={chip.replace('-', '−')} label={`${chip.startsWith('-') ? 'Minus' : 'Plus'} ${chip.slice(1)} pounds`} hint="Changes the weight." style={styles.chip} disabled={state.lock !== null} onPress={press(`chip:${chip}`)} />
             ))}
           </View>
-          <ScaleButton accessibilityLabel="Why these steps" accessibilityHint="Shows where this number comes from." onPress={() => setWhy(true)} style={styles.why} faceStyle={styles.whyFace}>
+          <ScaleButton accessibilityLabel="Why these steps?" accessibilityHint="Shows where this number comes from." onPress={() => setWhy(true)} style={styles.why} faceStyle={styles.whyFace}>
             <AppText variant="label" color={color.textSecondary}>Why these steps?</AppText>
           </ScaleButton>
           <View style={styles.grid}>
