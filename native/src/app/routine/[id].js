@@ -12,6 +12,7 @@ import { routeId } from '../../exercises/route-id'
 import { Notices } from '../../plan/PlanScreen'
 import SlotSheet from '../../plan/SlotSheet'
 import { waitForPick } from '../../plan/pick-relay'
+import { createWriteChain } from '../../plan/write-chain'
 import { MISSING_ROUTINE, UNSAFE_EDIT, findRoutine, noticeLines, routineView, savedRoutine } from '../../plan/plan-view'
 import { moveSlot, swapSlot } from '../../plan/slot-edit'
 import { usePlan } from '../../plan/use-plan'
@@ -53,36 +54,24 @@ export default function RoutineScreen() {
   const stored = ready ? findRoutine(plan.state, id) : null
   const base = plan.baseOf(id)
 
-  // This screen's writes go one after another, and the routine the last one leaves is shown at
-  // once, ahead of the store, until every write has been read back. Five taps on Move up move an
-  // exercise five places, each from the order on screen, however long a save takes.
-  const [ahead, setAheadState] = useState(null)
-  const aheadRef = useRef(null)
-  const writes = useRef({ queue: Promise.resolve(), pending: 0 })
-  const setAhead = next => {
-    aheadRef.current = next
-    setAheadState(next)
-  }
-  const routine = stored ? ahead ?? stored : null
+  // This screen's writes go one after another (plan/write-chain.js), each a routine with the base
+  // it was made on, and the last one's routine is shown at once, ahead of the store, until every
+  // write has run. Five taps on Move up move an exercise five places, each from the order on
+  // screen, however long a save takes; a sync landing mid-chain never lends its newer base to a
+  // routine made before it.
+  const [ahead, setAhead] = useState(null)
+  const saveRef = useRef(null)
+  saveRef.current = next => plan.save({ rid: id, routine: next.routine, copyRoutine: next.base })
+  const [chain] = useState(() => createWriteChain(next => saveRef.current(next), setAhead))
+  const routine = stored ? ahead?.routine ?? stored : null
   // Read when a tap lands or the picker answers, not when the handler was made.
   const latest = useRef(null)
-  latest.current = { stored, base, state: plan.state }
-  const current = () => aheadRef.current ?? latest.current.stored
-
-  const commit = next => {
-    setAhead(next)
-    writes.current.pending += 1
-    const run = writes.current.queue.then(() => plan.save({ rid: id, routine: next, copyRoutine: latest.current.base }))
-    writes.current.queue = run
-    return run.then(result => {
-      writes.current.pending -= 1
-      if (writes.current.pending === 0) setAhead(null)
-      return result
-    })
-  }
+  latest.current = { stored: { routine: stored, base }, state: plan.state }
+  // The routine the next edit builds on, with its base: the chain's while one runs, else the store's.
+  const current = () => chain.from(latest.current.stored)
 
   const view = useMemo(
-    () => (ready ? routineView(plan.state, id, { unit: 'lb', names: plan.names, routine: ahead }) : null),
+    () => (ready ? routineView(plan.state, id, { unit: 'lb', names: plan.names, routine: ahead?.routine ?? null }) : null),
     [ready, plan.state, plan.names, id, ahead]
   )
   const notices = useMemo(() => noticeLines(plan.notices).filter(n => n.rid === id), [plan.notices, id])
@@ -94,18 +83,19 @@ export default function RoutineScreen() {
   const onRowMove = (index, dir) => {
     setMessage(null)
     const from = current()
-    const result = from ? moveSlot(from, index, dir, latest.current.base) : null
+    const result = from.routine ? moveSlot(from.routine, index, dir, from.base) : null
     if (!result) return
     if (result.unsafe) {
       setMessage(UNSAFE_EDIT)
       return
     }
-    commit(result.routine).then(r => { if (!r.ok) setMessage(FAILED) })
+    chain.commit({ routine: result.routine, base: from.base }).then(r => { if (!r.ok) setMessage(FAILED) })
   }
 
   // The sheet: which slot it was opened on (index and exercise id, so a sync that moves that
-  // exercise away closes it), that slot and routine as they were (shown while it closes), and
-  // what it says. It stays mounted while closed, so it slides away; each open remounts it (key).
+  // exercise away closes it), that slot, the routine and base it was opened on (Save builds on
+  // that pair), and what it says. It stays mounted while closed, so it slides away; each open
+  // remounts it (key).
   const [sheet, setSheet] = useState(null)
   const opens = useRef(0)
   const live = sheet?.open && slotAt(routine, sheet.index)?.id === sheet.slotId ? slotAt(routine, sheet.index) : null
@@ -120,21 +110,22 @@ export default function RoutineScreen() {
   const patch = p => setSheet(s => (s ? { ...s, ...p } : s))
   const close = () => patch({ open: false })
   const open = row => {
-    const slot = slotAt(routine, row.index)
+    const from = current()
+    const slot = slotAt(from.routine, row.index)
     if (!slot) return
     setMessage(null)
-    setSheet({ no: ++opens.current, open: true, index: row.index, slotId: row.id, title: row.name, slot, routine, message: null, busy: false })
+    setSheet({ no: ++opens.current, open: true, index: row.index, slotId: row.id, title: row.name, slot, routine: from.routine, base: from.base, message: null, busy: false })
   }
 
   const onSave = async form => {
     if (!live) return
-    const next = savedRoutine(routine, sheet.index, form)
+    const next = savedRoutine(sheet.routine, sheet.index, form)
     if (!next) {
       close()
       return
     }
     patch({ busy: true, message: null })
-    const result = await commit(next)
+    const result = await chain.commit({ routine: next, base: sheet.base })
     patch(result.ok ? { busy: false, open: false } : { busy: false, message: FAILED })
   }
 
@@ -143,11 +134,11 @@ export default function RoutineScreen() {
     const { index, slotId, title } = sheet
     const token = waitForPick(exId => {
       const now = current()
-      if (slotAt(now, index)?.id !== slotId) return 'gone'
-      const result = swapSlot(now, index, exId, latest.current.state, latest.current.base)
+      if (slotAt(now.routine, index)?.id !== slotId) return 'gone'
+      const result = swapSlot(now.routine, index, exId, latest.current.state, now.base)
       if (!result) return 'same'
       if (result.unsafe) return 'unsafe'
-      commit(result.routine).then(r => { if (!r.ok) setMessage(FAILED) })
+      chain.commit({ routine: result.routine, base: now.base }).then(r => { if (!r.ok) setMessage(FAILED) })
       return 'saved'
     })
     afterClose.current = () => guard(() => router.push({ pathname: '/routine-pick', params: { token, name: title } }))
