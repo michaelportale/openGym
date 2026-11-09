@@ -10,7 +10,7 @@ import ExerciseMedia from '../../exercises/ExerciseMedia'
 import { exerciseDetail, findExercise } from '../../exercises/detail-view'
 import { routeId } from '../../exercises/route-id'
 import { useExerciseSource } from '../../exercises/use-exercise-source'
-import { loadExerciseText } from '../../shared/exercise-text'
+import { loadExerciseText, exerciseTextLoaded } from '../../shared/exercise-text'
 import { i18nCore } from '../../shared/training'
 
 export default function ExerciseScreen() {
@@ -18,8 +18,8 @@ export default function ExerciseScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const id = routeId(params.id)
-  const { status, state, server } = useExerciseSource()
-  const [textReady, setTextReady] = useState(false)
+  const { status, state, server, error } = useExerciseSource()
+  const [textReady, setTextReady] = useState(exerciseTextLoaded)
 
   useEffect(() => {
     let mounted = true
@@ -43,6 +43,13 @@ export default function ExerciseScreen() {
   )
   const body = () => {
     if (status === 'loading') return null
+    if (status === 'error') {
+      return (
+        <AppText variant="body" color={color.textSecondary} style={styles.pad}>
+          {error?.message || 'Could not load this exercise.'}
+        </AppText>
+      )
+    }
     if (!detail) {
       return (
         <AppText variant="body" color={color.textSecondary} style={styles.pad}>
@@ -57,10 +64,7 @@ export default function ExerciseScreen() {
           <AppText variant="label" color={color.textMuted} style={styles.pad}>{detail.tags.join(' · ')}</AppText>
         ) : null}
         {detail.media ? (
-          <View style={styles.pad}>
-            <ExerciseMedia key={detail.media.clip} media={detail.media} />
-            <AppText variant="label" color={color.textMuted} style={styles.credit}>{detail.credit}</AppText>
-          </View>
+          <ExerciseMedia key={detail.media.clip} media={detail.media} style={styles.pad} />
         ) : null}
         {detail.custom ? <AppText variant="value" color={color.accent} style={styles.pad}>Yours</AppText> : null}
         {desc ? <AppText variant="body" color={color.textSecondary} style={styles.pad}>{desc}</AppText> : null}
@@ -105,7 +109,6 @@ const styles = StyleSheet.create({
   content: { paddingBottom: space.xl * 2, gap: space.md },
   back: { paddingHorizontal: space.lg, alignItems: 'flex-start' },
   pad: { marginHorizontal: space.lg },
-  credit: { marginTop: space.xs },
   history: { marginHorizontal: space.lg, padding: space.lg, gap: space.xs, borderRadius: radius.md },
   step: { marginTop: space.sm }
 })

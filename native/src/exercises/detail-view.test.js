@@ -95,3 +95,12 @@ describe('exerciseDetail', () => {
     expect(exerciseDetail({ state, id, server }).last).toBe('Last time: Jan 5, 2026')
   })
 })
+
+describe('secondary-muscle tags', () => {
+  it('a custom whose sm is a string gives one tag, not letters', () => {
+    const odd = { id: 'c3', n: 'odd', bp: 'chest', tg: 'chest', eq: 'barbell', sm: 'triceps', custom: true }
+    const d = exerciseDetail({ state: { customEx: [odd] }, id: 'c3', server: null })
+    expect(d.tags).toContain('triceps')
+    expect(d.tags).not.toContain('t')
+  })
+})

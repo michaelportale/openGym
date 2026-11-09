@@ -4,6 +4,10 @@
 import { i18nCore } from './training.js'
 
 let loading = null
+let loaded = false
+
+// True once the packs are installed, so a screen can seed its state without waiting a tick.
+export const exerciseTextLoaded = () => loaded
 
 // Resolves true once instrFor / descFor can answer, false if a pack failed to load (a later call retries).
 export function loadExerciseText() {
@@ -13,6 +17,7 @@ export function loadExerciseText() {
       import('../../../frontend/src/exercise-desc/en.js'),
     ]).then(([instr, descs]) => {
       i18nCore._setDetails(instr.default, descs.default, null, 'en')
+      loaded = true
       return true
     }).catch(() => {
       loading = null

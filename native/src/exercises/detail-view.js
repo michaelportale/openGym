@@ -49,7 +49,7 @@ export function exerciseDetail({ state, id, server }) {
     id: ex.id,
     name: cap(ex.n),
     custom,
-    tags: [ex.bp, ex.tg, ex.eq, ex.cat, ...(ex.sm || [])].filter(Boolean),
+    tags: [ex.bp, ex.tg, ex.eq, ex.cat, ...exercises.smOf(ex)].filter(Boolean),
     media,
     best: bestW > 0 ? `Best: ${bestW} lb` : null,
     last,
