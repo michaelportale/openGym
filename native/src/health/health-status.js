@@ -2,7 +2,7 @@
 const count = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`
 
 export function healthLines(status) {
-  const { on, write, exported = 0, waiting = 0, skipped = 0, error } = status ?? {}
+  const { on, write, exported = 0, weighInsInHealth = 0, waiting = 0, skipped = 0, error } = status ?? {}
   if (!on) {
     const lines = ['Off. Your workouts are not sent to Apple Health.']
     if (error) lines.push(`Last try: ${error}`)
@@ -14,6 +14,7 @@ export function healthLines(status) {
       : 'On. Finished workouts go to Apple Health.',
     `${count(exported, 'workout')} in Health`,
   ]
+  if (weighInsInHealth > 0) lines.push(`${count(weighInsInHealth, 'weight')} in Health`)
   if (waiting > 0) lines.push(`${waiting} waiting`)
   if (error) lines.push(`Last try: ${error}`)
   if (skipped > 0) lines.push(`${skipped} skipped (no start or end time)`)

@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { canRemove, parseWeight, todayLine } from './weigh-in-view.js'
+import { canRemove, parseWeight, saveOp, todayLine } from './weigh-in-view.js'
 
 test('parseWeight accepts dot or comma, trims, rounds to 0.1', () => {
   expect(parseWeight('182.4')).toBe(182.4)
@@ -37,4 +37,22 @@ test('canRemove only for this phone\'s own typed set', () => {
   // an acked row (the shape weighIns.get returns) whose entry is on the server copy stays removable
   expect(canRemove({ d: '2026-01-02', w: 182.4, t: 10 }, { d: '2026-01-02', op: 'set', w: 182.4, t: 10 })).toBe(true)
   expect(canRemove({ d: '2026-01-02', w: 180, t: 12 }, row)).toBe(false) // the server copy moved on
+})
+
+test('saveOp stamps now on a plain day', () => {
+  expect(saveOp({ d: '2026-01-02', w: 182.44, now: 1000, entry: null, deleted: {} })).toEqual({ d: '2026-01-02', op: 'set', w: 182.4, t: 1000 })
+})
+
+test('saveOp goes past a typed entry with a larger t, but not a Health one', () => {
+  const d = '2026-01-02'
+  expect(saveOp({ d, w: 180, now: 1000, entry: { d, w: 181, t: 5000 }, deleted: {} }).t).toBe(5001)
+  expect(saveOp({ d, w: 180, now: 1000, entry: { d, w: 181, t: 5000, src: 'health' }, deleted: {} }).t).toBe(1000)
+})
+
+test('saveOp goes past a deletion stamp, and takes the max of all three', () => {
+  const d = '2026-01-02'
+  expect(saveOp({ d, w: 180, now: 1000, entry: null, deleted: { [d]: 3000 } }).t).toBe(3001)
+  expect(saveOp({ d, w: 180, now: 1000, entry: { d, w: 181, t: 5000 }, deleted: { [d]: 3000 } }).t).toBe(5001)
+  expect(saveOp({ d, w: 180, now: 1000, entry: { d, w: 181, t: 2000 }, deleted: { [d]: 3000 } }).t).toBe(3001)
+  expect(saveOp({ d, w: 180, now: 1000, entry: { d, w: 181, t: 'x' }, deleted: { [d]: 'y' } }).t).toBe(1000)
 })

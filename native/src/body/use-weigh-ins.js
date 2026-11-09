@@ -2,12 +2,12 @@ import { useCallback, useRef, useState } from 'react'
 import { useFocusEffect } from 'expo-router'
 import { openAppDatabase } from '../storage/database'
 import { createSqliteWeighIns } from './weigh-ins'
-import { applyDayOps, roundLb } from './day-ops'
+import { applyDayOps } from './day-ops'
 import { readCopy, createSqliteServerCopy } from '../sync/server-copy'
 import { localDate } from '../session/timing'
 import { healthAfterFinish } from '../health/use-health'
 import { syncAfterFinish } from '../sync/use-sync'
-import { canRemove, todayLine } from './weigh-in-view'
+import { canRemove, saveOp, todayLine } from './weigh-in-view'
 
 const CHANGED = "That weight changed. Check today's weight and try again."
 
@@ -65,11 +65,7 @@ export function useWeighIns() {
     return { ok: true }
   }
 
-  const save = w => write(({ d, deleted }) => {
-    const gone = Number(deleted[d])
-    const t = gone > 0 ? Math.max(Date.now(), gone + 1) : Date.now()
-    return { d, op: 'set', w: roundLb(w), t }
-  })
+  const save = w => write(({ d, deleted, entry }) => saveOp({ d, w, now: Date.now(), entry, deleted }))
 
   const remove = () => write(({ d, entry, row }) => {
     if (!canRemove(entry, row)) return null

@@ -22,3 +22,10 @@ export function todayLine(entry) {
 export function canRemove(entry, row) {
   return Boolean(entry && row && row.op === 'set' && row.src == null && entry.src == null && entry.t === row.t)
 }
+
+// The op a typed save writes. Its stamp beats now, this phone's own typed entry for the day and a
+// deletion stamp, so the save wins over both; a Health entry is no floor (a typed weight beats it anyway).
+export function saveOp({ d, w, now, entry, deleted }) {
+  const floors = [now, entry && !entry.src ? Number(entry.t) + 1 : NaN, Number(deleted?.[d]) > 0 ? Number(deleted[d]) + 1 : NaN]
+  return { d, op: 'set', w: roundLb(w), t: Math.max(...floors.filter(Number.isFinite)) }
+}
