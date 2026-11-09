@@ -72,12 +72,17 @@ test('the app opens on Workout: the launch route is the Workout tab, and Home is
   expect(read('home.js')).toContain("destinationCopy('home')")
 })
 
-test('workout and exercises are ready and the other three tabs are unbuilt', () => {
-  expect(TABS.filter(tab => tab.availability === 'ready').map(tab => tab.label)).toEqual(['Workout', 'Exercises'])
-  expect(TABS.filter(tab => tab.availability === 'unbuilt').map(tab => tab.label)).toEqual([
-    'Home', 'Plan', 'Progress'
-  ])
+test('plan, workout and exercises are ready and home and progress are unbuilt', () => {
+  expect(TABS.filter(tab => tab.availability === 'ready').map(tab => tab.label)).toEqual(['Plan', 'Workout', 'Exercises'])
+  expect(TABS.filter(tab => tab.availability === 'unbuilt').map(tab => tab.label)).toEqual(['Home', 'Progress'])
   expect(TABS.some(tab => tab.availability === 'preview')).toBe(false)
+})
+
+test('the Plan tab renders the Plan screen, not the placeholder', () => {
+  const src = readFileSync(new URL('../app/(tabs)/plan.js', import.meta.url), 'utf8')
+  expect(src).toContain('<PlanScreen')
+  expect(src).not.toContain('UnbuiltScreen')
+  expect(src).not.toContain('destinationCopy')
 })
 
 test('iOS pins both appearances to the same colour and other platforms keep the hex', () => {

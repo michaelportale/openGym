@@ -4,7 +4,7 @@ import { color } from '../theme/tokens.js'
 // opens the app at '/', the index route, so Workout is the index route: every launch lands there.
 export const TABS = [
   { name: 'home', label: 'Home', availability: 'unbuilt', sf: { default: 'house', selected: 'house.fill' } },
-  { name: 'plan', label: 'Plan', availability: 'unbuilt', sf: { default: 'calendar', selected: 'calendar' } },
+  { name: 'plan', label: 'Plan', availability: 'ready', sf: { default: 'calendar', selected: 'calendar' } },
   {
     name: 'index',
     label: 'Workout',
