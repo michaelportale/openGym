@@ -172,18 +172,25 @@ const topped = {
     id: 't1', d: '2026-11-09', routineIds: ['push-a'],
     entries: [
       { id: '0289', rid: 'push-a', target: { id: '0289', sets: 2, reps: 10, repsMin: 8 }, sets: [warm(40, 10), row(75, 10), row(75, 10)] },
-      { id: '0999', rid: 'push-a', target: { id: '0999', sets: 1, reps: 12, repsMin: 8 }, sets: [row(20, 12)] },
+      { id: '0999', rid: 'push-a', target: { id: '0999', sets: 1, reps: 24, repsMin: 16, side: true }, sets: [{ ...row(20, 24), sides: { L: row(20, 12), R: row(20, 12) } }] },
     ],
   }],
 }
 const pushA = (prog, extra = {}) => ({
   id: 'push-a', ...(prog ? { prog } : {}),
-  ex: [{ id: '0289', sets: 2, reps: 10, repsMin: 8 }, { id: '0999', sets: 1, reps: 12, repsMin: 8 }],
+  ex: [{ id: '0289', sets: 2, reps: 10, repsMin: 8 }, { id: '0999', sets: 1, reps: 24, repsMin: 16, side: true }],
   ...extra,
 })
 
-test('progression off opens exactly as before: deep equal to the old output', () => {
-  for (const routine of [pushA('off'), pushA(null, { ex: pushA().ex.map(c => ({ ...c, prog: 'off' })) }), pushA(null, { excludeFromProgression: true })]) {
+const withEach = extra => pushA(null, { ex: pushA().ex.map(c => ({ ...c, ...extra })) })
+
+test('progression off opens exactly as before, weights and reps: deep equal to the old output', () => {
+  // Under double the topped state would open at other weights and reps, so the oracle sees both.
+  const double = applyOpeningWeights(planned(), topped, 'push-a', pushA())
+  const before = openingWeightsBefore(planned(), topped, 'push-a')
+  expect(double[0].sets[1].r).not.toBe(before[0].sets[1].r)
+  expect(double[1].sets[0].sides.L.r).not.toBe(before[1].sets[0].sides.L.r)
+  for (const routine of [pushA('off'), withEach({ prog: 'off' }), pushA(null, { excludeFromProgression: true })]) {
     for (const s of [topped, state, {}]) {
       expect(applyOpeningWeights(planned(), s, 'push-a', routine)).toStrictEqual(openingWeightsBefore(planned(), s, 'push-a'))
     }
@@ -196,16 +203,14 @@ test('without a routine, or for an exercise it does not hold, last time decides 
   expect(applyOpeningWeights(planned(), topped, 'push-a', other)).toStrictEqual(openingWeightsBefore(planned(), topped, 'push-a'))
 })
 
-test('a prescription weight opens every work set, both sides of a per-side row, and leaves warm-ups', () => {
-  const out = applyOpeningWeights(planned(), topped, 'push-a', pushA())
-  // '0289' raises 75 → 80 on a 5 lb step; the warm-up row keeps its own weight.
-  expect(out[0].sets.map(s => s.w)).toEqual([0, 80, 80])
-  expect(out[0].sets.map(s => s.r)).toEqual([10, 10, 8])
-  // '0999' (band work, logged at 20) raises on its 10 lb step.
-  expect(out[1].sets[0].w).toBe(30)
-  expect(out[1].sets[0].sides.L.w).toBe(30)
-  expect(out[1].sets[0].sides.R.w).toBe(30)
-  expect(out[1].sets[0].sides.L.r).toBe(12)
+test('a prescription opens every work set at its weight and reps, per-side rows on both sides, warm-ups untouched', () => {
+  const input = planned()
+  const out = applyOpeningWeights(input, topped, 'push-a', pushA())
+  // '0289' raises 75 → 80 on a 5 lb step and goes back to the bottom of 8–10.
+  expect(out[0].sets[0]).toStrictEqual(input[0].sets[0])
+  expect(out[0].sets.map(s => [s.w, s.r])).toEqual([[0, 10], [80, 8], [80, 8]])
+  // '0999' is per side (16–24 for both sides together, 10 lb step): 20 → 30, back to 16, 8 a side.
+  expect(out[1].sets[0]).toMatchObject({ w: 30, r: 16, sides: { L: { w: 30, r: 8 }, R: { w: 30, r: 8 } } })
 })
 
 test('a timed exercise keeps last time\'s weight even when its prescription carries one', () => {
@@ -224,11 +229,9 @@ test('a timed exercise keeps last time\'s weight even when its prescription carr
   expect(out[0]).toStrictEqual(openingWeightsBefore(planned(), timedState, 'push-a')[0])
 })
 
-test('linear and greyskull open exactly as before: no register entry, so last time decides', () => {
-  for (const prog of ['linear', 'greyskull']) {
-    const onRoutine = pushA(prog)
-    const onExercise = pushA(null, { ex: pushA().ex.map(c => ({ ...c, prog })) })
-    for (const routine of [onRoutine, onExercise]) {
+test('linear, greyskull and triple open exactly as before: no register entry, so last time decides', () => {
+  for (const prog of ['linear', 'greyskull', 'triple']) {
+    for (const routine of [pushA(prog), withEach({ prog })]) {
       for (const s of [topped, state, {}]) {
         expect(applyOpeningWeights(planned(), s, 'push-a', routine)).toStrictEqual(openingWeightsBefore(planned(), s, 'push-a'))
       }
@@ -238,4 +241,10 @@ test('linear and greyskull open exactly as before: no register entry, so last ti
 
 test('a named double policy opens at its prescription like the unnamed default', () => {
   expect(applyOpeningWeights(planned(), topped, 'push-a', pushA('double'))).toStrictEqual(applyOpeningWeights(planned(), topped, 'push-a', pushA()))
+})
+
+test('an unnamed pyramid opens exactly as before', () => {
+  for (const s of [topped, state, {}]) {
+    expect(applyOpeningWeights(planned(), s, 'push-a', withEach({ pyramid: [10, 8] }))).toStrictEqual(openingWeightsBefore(planned(), s, 'push-a'))
+  }
 })

@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { progression } from '../shared/training.js'
+import { progression, sessionStart } from '../shared/training.js'
 import { FAR_FROM_FAILURE } from '../science/effort.js'
 import { whyEntry } from './why-entry.js'
 import { buildSessionBase } from './start-session.js'
@@ -45,8 +45,9 @@ test('a double-progression raise reads "next time" at the raised weight, and the
   // The line's Why opens the progression entry.
   expect(whyEntry('progression').id).toBe(lines[0].whyId)
 
+  // The next session opens at the line: the raised weight, the reps back at the bottom of the range.
   const next = buildSessionBase({ state: withSaved, routine, now, timeZone, id: 'n1' })
-  expect(next.entries[0].sets.map(s => s.w)).toEqual([85, 85, 85])
+  expect(next.entries[0].sets.map(s => [s.w, s.r])).toEqual([[85, 8], [85, 8], [85, 8]])
 })
 
 test('the just-saved workout drives the line: without it the older session would', () => {
@@ -170,6 +171,36 @@ test('a double-progression deload line opens the deload register entry', () => {
   expect(whyEntry('deload').id).toBe(line.whyId)
   // A raise or a hold keeps the progression entry.
   expect(nextTimeLines(withSaved, routine, saved.entries, names)[0].whyId).toBe('double-progression')
+})
+
+test('an exercise with no completed work set in the saved session has no line', () => {
+  // Last week topped the range; today bench was skipped (nothing done, or only a warm-up done).
+  for (const sets of [[], [work(80, 12, { done: false }), work(80, 12, { done: false })], [warm(45, 10)]]) {
+    const skipped = session('s1', '2026-11-09', sets)
+    const lines = nextTimeLines({ ...withSaved, workouts: [older, skipped] }, routine, skipped.entries, names)
+    expect(lines).toEqual([])
+  }
+})
+
+test('an unnamed pyramid has no line: the engine never progresses one', () => {
+  const pyramid = { ...routine, ex: [{ ...bench, pyramid: [12, 10, 8] }] }
+  expect(nextTimeLines({ ...withSaved, routines: [pyramid] }, pyramid, saved.entries, names)).toEqual([])
+})
+
+test('a dumbbell switched from total to each reads its history converted, as the shared builder does', () => {
+  // '1175' is a two-bell dumbbell lift with a 10 lb step. Logged at 80 total = 40 each; now each.
+  const curl = { id: '1175', sets: 3, reps: 12, repsMin: 8, dbLoad: 'each' }
+  const r = { ...routine, prog: 'double', ex: [curl] }
+  const total = session('s1', '2026-11-09', [work(80, 12), work(80, 12), work(80, 12)], { ...curl, dbLoad: 'total' })
+  total.entries[0].equipmentSnapshot = { stationId: null, loadConvention: 'db-total', unit: 'lb', status: 'unknown' }
+  const S = { unit: 'lb', routines: [r], workouts: [total] }
+  const shared = sessionStart.buildPlannedEntry(S, curl, r).plan
+  expect(shared).toMatchObject({ weight: 50, reps: 8 })
+
+  const [line] = nextTimeLines(S, r, total.entries, { '1175': { name: 'Curl' } })
+  expect(line).toMatchObject({ weight: 50, text: 'Curl — next time 50 lb each × 8–12' })
+  const next = buildSessionBase({ state: S, routine: r, now, timeZone, id: 'n1' })
+  expect(next.entries[0].sets.map(s => [s.w, s.r])).toEqual([[50, 8], [50, 8], [50, 8]])
 })
 
 test('bodyweight work reads as bodyweight, not 0 lb', () => {

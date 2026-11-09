@@ -1,4 +1,4 @@
-import { history, workoutModel } from '../shared/training.js'
+import { dumbbells, history, workoutModel } from '../shared/training.js'
 import { withEffortNote } from '../science/effort.js'
 import { nativePrescription, nativeRepPolicy } from '../science/native-progression.js'
 import { programRepRange } from '../science/rep-range.js'
@@ -24,13 +24,21 @@ const unitOf = state => state?.unit ?? 'lb'
 function weightedPrescription(state, routine, exerciseId) {
   const cfg = (routine?.ex ?? []).find(c => c?.id === exerciseId)
   if (!cfg || routine.excludeFromProgression === true || nativeRepPolicy(cfg, routine) !== 'double') return null
-  const p = nativePrescription({ ...(state ?? {}), unit: unitOf(state) }, cfg, routine)
+  // History read in the dumbbell meaning (each/total) the exercise is logged in now, as the
+  // shared session builder reads it before it asks the engine.
+  const st = { ...(state ?? {}), unit: unitOf(state) }
+  const p = nativePrescription(dumbbells.historyAs(st, cfg.id, dumbbells.dbLoadFor(st, cfg)), cfg, routine)
   return p && p.kind !== 'off' && num(p.weight) ? { p, cfg } : null
 }
 
-/** The weight a new session opens this exercise at from its prescription; null falls back to last time. */
-export function prescribedWeight(state, routine, exerciseId) {
-  return weightedPrescription(state, routine, exerciseId)?.p.weight ?? null
+/**
+ * What a new session opens this exercise at from its prescription: `{ weight, reps }`, reps null
+ * when the engine sets none. Null falls back to last time.
+ */
+export function prescribedOpening(state, routine, exerciseId) {
+  const p = weightedPrescription(state, routine, exerciseId)?.p
+  if (!p) return null
+  return { weight: p.weight, reps: num(p.reps) && p.reps > 0 ? p.reps : null }
 }
 
 // The engine's own reason, its {0} slots filled in.
@@ -51,8 +59,8 @@ function repsText(p, cfg) {
 }
 
 /**
- * One line per exercise in `entries` (the just-saved workout's) that the routine holds and whose
- * prescription has a weight: "Bench press — next time 85 lb × 8–12". `state` is the session's
+ * One line per exercise in `entries` (the just-saved workout's) with a completed work set, that
+ * the routine holds, and whose prescription has a weight: "Bench press — next time 85 lb × 8–12". `state` is the session's
  * history with that workout in it. Off, a first session, and timed work have no line. The effort
  * note reads that exercise's done work sets and never changes the weight. `whyId` is the
  * register entry that explains the line: the deload one for a deload, else double progression.
@@ -67,11 +75,14 @@ export function nextTimeLines(state, routine, entries, names = {}) {
     const found = weightedPrescription(state, routine, entry.id)
     if (!found) continue
     const { cfg } = found
+    // Only an exercise trained today: a skipped one's line would describe an older session.
     const work = setsFor('progression', entry.sets).filter(workoutModel.hasCompletedWork)
+    if (work.length === 0) continue
     const p = withEffortNote(found.p, work)
     const weight = p.weight
     const name = names?.[entry.id]?.name ?? `Unknown exercise (${entry.id})`
-    const load = weight === 0 ? 'bodyweight' : `${weight} ${unit}${entry.target?.dbLoad === 'each' ? ' each' : ''}`
+    // "each" as the next session's card will say it: the meaning the exercise is logged in now.
+    const load = weight === 0 ? 'bodyweight' : `${weight} ${unit}${dumbbells.dbLoadFor(state, cfg) === 'each' ? ' each' : ''}`
     const reps = repsText(p, cfg)
     lines.push({
       exerciseId: entry.id,
