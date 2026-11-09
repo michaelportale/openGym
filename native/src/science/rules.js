@@ -184,7 +184,7 @@ export const RULES = Object.freeze({
     id: 'bodyweight-trend',
     title: 'Body-weight 7-day average',
     claim: 'The trend line is a rolling mean of the weigh-ins in the 7 days up to each one.',
-    reason: 'A single weigh-in moves with water, salt and food. Averaging a week of them shows the direction more steadily.',
+    reason: 'A single weigh-in moves with water, salt and food. Averaging a week of them shows the direction more steadily. The week and 30-day lines compare the average now with the average then, so one heavy morning doesn\'t decide them.',
     source: 'Definition',
     sourceUrl: '',
     population: 'Not a study',
