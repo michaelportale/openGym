@@ -40,7 +40,7 @@ const Chip = memo(function Chip({ label, selected, onPress }) {
 
 function ChipRow({ options, value, onChange, anyLabel }) {
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+    <ScrollView horizontal keyboardShouldPersistTaps="handled" showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
       {options.map(o => (
         <Chip
           key={o || 'any'}
@@ -73,24 +73,26 @@ export default function ExerciseList({ state, onPick, header = null }) {
 
   const empty = dq.trim() ? (
     <View style={styles.empty}>
-      <AppText variant="body" color={color.textSecondary}>{`No exercise matches “${dq.trim()}”.`}</AppText>
+      <AppText variant="body" color={color.textSecondary} style={styles.inset}>{`No exercise matches “${dq.trim()}”.`}</AppText>
       {view.similar.length ? (
         <View style={styles.similar}>
-          <AppText variant="label" color={color.textMuted} accessibilityRole="header">Close matches</AppText>
+          <AppText variant="label" color={color.textMuted} accessibilityRole="header" style={styles.inset}>Close matches</AppText>
           {view.similar.map(r => <Row key={r.id} row={r} onPick={onPick} />)}
         </View>
       ) : null}
     </View>
   ) : null
 
-  const controls = (
+  // The search field is uncontrolled (no `value`): a controlled field inside the list header races
+  // fast typing against the deferred recompute and scrambles the text. The header is memoised so a
+  // keystroke does not re-render it.
+  const controls = useMemo(() => (
     <View>
       {header}
       <View style={styles.searchWrap}>
         <TextInput
           accessibilityLabel="Search exercises"
           style={styles.input}
-          value={q}
           onChangeText={setQ}
           placeholder="Search exercises"
           placeholderTextColor={color.textMuted}
@@ -100,7 +102,7 @@ export default function ExerciseList({ state, onPick, header = null }) {
           clearButtonMode="while-editing"
         />
       </View>
-      <ChipRow options={view.bodyParts} value={bp} onChange={setBp} anyLabel="All" />
+      <ChipRow options={view.bodyParts} value={bp} onChange={b => { setBp(b); if (!b) setEq('') }} anyLabel="All" />
       {view.catOpts.length > 1 ? (
         <ChipRow options={['', ...view.catOpts]} value={view.catOn} onChange={setCat} anyLabel="Any type" />
       ) : null}
@@ -119,7 +121,7 @@ export default function ExerciseList({ state, onPick, header = null }) {
         </View>
       ) : null}
     </View>
-  )
+  ), [header, view.bodyParts, view.catOpts, view.catOn, view.eqOpts, view.eqOn, view.profileActive, bp, showAll])
 
   return (
     <FlatList
@@ -184,6 +186,7 @@ const styles = StyleSheet.create({
   pressed: { backgroundColor: color.surfaceActive },
   rowText: { flex: 1, gap: 2 },
   tag: { paddingHorizontal: space.sm, paddingVertical: 2, borderRadius: radius.sm, borderWidth: 1, borderColor: color.accent },
+  inset: { paddingHorizontal: space.lg },
   empty: { paddingTop: space.lg, gap: space.lg },
   similar: { gap: space.xs }
 })

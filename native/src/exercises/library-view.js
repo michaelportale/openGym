@@ -16,7 +16,7 @@ export function libraryView({ state, q = '', bp = '', cat = '', eq = '', showAll
   const row = ex => ({
     id: ex.id,
     name: cap(ex.n),
-    sub: `${ex.tg} · ${ex.eq}`,
+    sub: [ex.tg || ex.bp, ex.eq].filter(Boolean).join(' · '),
     yours: storedCustom(ex) || exercises.isCustomEx(ex),
     fav: favourites.isFav(S, ex.id),
   })

@@ -69,8 +69,9 @@ describe('libraryView', () => {
   })
 
   test('similar rows have the row shape and respect the body part', () => {
-    const v = libraryView({ state: {}, q: 'dumbell curl zzqq', bp: 'chest' })
+    const v = libraryView({ state: {}, q: 'bench press banana', bp: 'chest' })
     expect(v.rows).toEqual([])
+    expect(v.similar.length).toBeGreaterThan(0)
     const byId = new Map(exercises.allExercises({}).map(e => [e.id, e]))
     for (const r of v.similar) {
       expect(Object.keys(r).sort()).toEqual(['fav', 'id', 'name', 'sub', 'yours'])
@@ -92,5 +93,13 @@ describe('libraryView', () => {
   test('null and undefined state work', () => {
     expect(libraryView({ state: null }).rows).toHaveLength(5632)
     expect(libraryView({}).rows).toHaveLength(5632)
+  })
+
+  test('a row subtitle is body part or target, then equipment, with no blanks', () => {
+    const none = { id: 'c9', custom: true, n: 'bare', cat: 'strength' }
+    const hevy = { id: 'c8', custom: true, n: 'hevy lift', bp: 'chest', tg: '', eq: 'custom' }
+    const v = libraryView({ state: { customEx: [none, hevy] } })
+    expect(v.rows.find(r => r.id === 'c9').sub).toBe('')
+    expect(v.rows.find(r => r.id === 'c8').sub).toBe('chest · custom')
   })
 })
