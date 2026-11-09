@@ -47,6 +47,7 @@ are in [Phase 4 status](phase-4-status.md). Defaults that still need a reviewed 
 | e1RM formula | [e1RM formula](e1rm-formula.md) | Convention until audited |
 | Rest defaults | [Rest defaults](rest-defaults.md) | Convention until audited |
 | Load increments | [Load increments](load-increments.md) | Convention until audited |
+| Body-weight 7-day average | [Body-weight 7-day average](bodyweight-trend.md) | Definition |
 
 ## Evidence sources
 
