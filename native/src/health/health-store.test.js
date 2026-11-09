@@ -74,6 +74,31 @@ async function readingsRoundTrip(store) {
   expect(await readings.list()).toEqual([reading('b', { at: 2000 }), reading('c', { d: '2026-11-10' })])
 }
 
+async function seenLbRoundTrip(store) {
+  const { readings } = store
+  expect(await readings.seenLb('a')).toBeNull()
+  await readings.put(reading('a'))
+  expect(await readings.seenLb('a')).toBe(181.2)
+  await readings.remove('a')
+  expect(await readings.get('a')).toBeNull()
+  expect(await readings.seenLb('a')).toBe(181.2) // a deleted reading's weight is remembered
+  expect(await readings.seenLb('never')).toBeNull()
+  await readings.put(reading('b'))
+  await readings.put(reading('b', { lb: 183.6 })) // a re-put with a new weight updates it
+  expect(await readings.seenLb('b')).toBe(183.6)
+}
+
+test('memory store: seenLb remembers a reading\'s weight after its removal', async () => {
+  await seenLbRoundTrip(createMemoryHealthStore())
+})
+
+test('real sqlite: seenLb remembers a reading\'s weight after its removal and a reopen', async () => {
+  let db = createNodeSqliteFileDb()
+  await seenLbRoundTrip(createSqliteHealthStore(db))
+  db = db.reopen()
+  expect(await createSqliteHealthStore(db).readings.seenLb('a')).toBe(181.2)
+})
+
 test('memory store: readings put, get, list by day and remove', async () => {
   await readingsRoundTrip(createMemoryHealthStore())
 })

@@ -1,6 +1,8 @@
 import { expect, test } from 'vitest'
+import { applyDayOps } from '../body/day-ops.js'
 import { createMemoryWeighIns } from '../body/weigh-ins.js'
 import { createMemoryFinishedWorkouts } from '../session/finished-workouts.js'
+import { buildPush } from '../sync/outbox.js'
 import { createMemoryHealthStore } from './health-store.js'
 import { createHealthSync } from './health-sync.js'
 
@@ -642,4 +644,86 @@ test('disable with remove tries both deletes even when the first throws, and rep
   expect((await health.status()).error).toBe('first')
   expect(await store.links.list('bw')).toEqual([])
   adapter.deleteAllOwnWorkouts = original
+})
+
+// C1 residual: a weight the owner typed on the web over an imported day, then a Health deletion
+// the app-open pass plans on a stale copy.
+const OWN = 'io.github.michaelportale.opengym'
+const DAY = '2026-11-09'
+const atHour = h => Date.parse(`${DAY}T${String(h).padStart(2, '0')}:00:00Z`)
+const scale = (uuid, lb, at) => ({ uuid, lb, at, bundleId: 'com.withings', syncId: null })
+
+async function webEditSetup() {
+  const reads = []
+  const adapter = fakeAdapter()
+  adapter.readBodyMassChanges = async () => reads.shift() ?? { samples: [], deleted: [], anchor: 'a' }
+  const store = createMemoryHealthStore()
+  await store.state.set('on', '1')
+  await store.state.set('bwSince', String(atHour(0)))
+  const weighIns = createMemoryWeighIns()
+  const w = { clock: atHour(8), copy: { state: { bodyweight: [] } }, server: { bodyweight: [] } }
+  const health = createHealthSync({
+    adapter, store, workouts: createMemoryFinishedWorkouts(), now: () => w.clock, weighIns,
+    readCopy: async () => w.copy, ownBundleId: async () => OWN, timeZone: () => 'UTC', onWeighIns: () => {},
+  })
+  // the sync engine, reduced: pull, reconcile, push, pull, reconcile
+  const reconcile = async () => {
+    const r = applyDayOps(w.copy.state.bodyweight, await weighIns.listPending(), w.copy.state.deleted?.bodyweight)
+    await weighIns.markAcked([...r.done, ...r.superseded], 'ack')
+  }
+  const pull = async () => {
+    w.copy = { state: structuredClone(w.server) }
+    await reconcile()
+  }
+  const sync = async () => {
+    await pull()
+    const plan = buildPush(w.copy, [], await weighIns.listPending())
+    if (plan) {
+      w.server = structuredClone(plan.state)
+      await pull()
+    }
+  }
+  const editOnWeb = () => {
+    const entry = w.server.bodyweight.find(b => b.d === DAY)
+    entry.w = 182
+    entry.t = atHour(9)
+  }
+  return { reads, health, w, sync, pull, editOnWeb }
+}
+
+test('C1 residual: a deleted reading, a stale-copy pass and a later reading leave the web-typed weight alone', async () => {
+  const { reads, health, w, sync, pull, editOnWeb } = await webEditSetup()
+  reads.push({ samples: [scale('X', 185, atHour(7))], deleted: [], anchor: 'a1' })
+  await health.run()
+  await sync()
+  expect(w.server.bodyweight).toEqual([expect.objectContaining({ d: DAY, w: 185, hk: 'X' })])
+  editOnWeb()
+  w.clock = atHour(10)
+  reads.push({ samples: [], deleted: ['X'], anchor: 'a2' })
+  await health.run() // plans on the copy from before the web edit
+  await sync()
+  await pull() // the copy catches up
+  w.clock = atHour(12)
+  reads.push({ samples: [scale('Y', 186, atHour(11))], deleted: [], anchor: 'a3' })
+  await health.run()
+  await sync()
+  expect(w.server.bodyweight).toEqual([expect.objectContaining({ d: DAY, w: 182 })])
+})
+
+test('C1 residual: the deletion and the next reading in one stale pass, then a third reading', async () => {
+  const { reads, health, w, sync, pull, editOnWeb } = await webEditSetup()
+  reads.push({ samples: [scale('X', 185, atHour(7))], deleted: [], anchor: 'a1' })
+  await health.run()
+  await sync()
+  editOnWeb()
+  w.clock = atHour(12)
+  reads.push({ samples: [scale('Y', 186, atHour(11))], deleted: ['X'], anchor: 'a2' })
+  await health.run() // plans on the copy from before the web edit
+  await sync()
+  await pull()
+  w.clock = atHour(14)
+  reads.push({ samples: [scale('Z', 187, atHour(13))], deleted: [], anchor: 'a3' })
+  await health.run()
+  await sync()
+  expect(w.server.bodyweight).toEqual([expect.objectContaining({ d: DAY, w: 182 })])
 })

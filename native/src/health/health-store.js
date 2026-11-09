@@ -1,7 +1,9 @@
 // Health links, the on/off flag and the weigh-in readings cache, in opengym.db. A link says which
 // Health object a finished workout was written as, at what sync version, and whether the write
 // finished. A reading is an external body-mass sample the import has seen, by uuid, with its
-// local day, so a day can fall back to its next reading when one is deleted. The handle is
+// local day, so a day can fall back to its next reading when one is deleted. Each reading's
+// weight is also kept after the reading is deleted, so the import can still tell what a Health
+// entry on the server once said. The handle is
 // injected; this file does not import expo-sqlite and never touches Health.
 
 export const HEALTH_SCHEMA = `
@@ -25,6 +27,10 @@ CREATE TABLE IF NOT EXISTS health_readings (
   d TEXT NOT NULL,
   lb REAL NOT NULL,
   at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS health_reading_weights (
+  uuid TEXT PRIMARY KEY,
+  lb REAL NOT NULL
 );
 `.trim()
 
@@ -55,6 +61,7 @@ export function createMemoryHealthStore() {
   const links = new Map()
   const values = new Map()
   const readings = new Map()
+  const seen = new Map() // uuid -> lb, never cleared
   const id = (kind, key) => JSON.stringify([kind, key])
   return {
     links: {
@@ -91,6 +98,11 @@ export function createMemoryHealthStore() {
     readings: {
       async put(reading) {
         readings.set(reading.uuid, toReading(reading))
+        seen.set(reading.uuid, reading.lb)
+      },
+      // The weight of a reading ever put, even after its removal; null for an unknown uuid.
+      async seenLb(uuid) {
+        return seen.has(uuid) ? seen.get(uuid) : null
       },
       async get(uuid) {
         return readings.has(uuid) ? toReading(readings.get(uuid)) : null
@@ -177,11 +189,21 @@ export function createSqliteHealthStore(db) {
     readings: {
       async put(reading) {
         await ready()
+        // The remembered weight first, so a reading in the cache always has one.
+        await db.run(
+          'INSERT INTO health_reading_weights (uuid, lb) VALUES (?, ?) ON CONFLICT(uuid) DO UPDATE SET lb = excluded.lb',
+          [reading.uuid, reading.lb],
+        )
         await db.run(
           `INSERT INTO health_readings (uuid, d, lb, at) VALUES (?, ?, ?, ?)
            ON CONFLICT(uuid) DO UPDATE SET d = excluded.d, lb = excluded.lb, at = excluded.at`,
           [reading.uuid, reading.d, reading.lb, reading.at],
         )
+      },
+      async seenLb(uuid) {
+        await ready()
+        const rows = await db.getAll('SELECT lb FROM health_reading_weights WHERE uuid = ?', [uuid])
+        return rows.length ? rows[0].lb : null
       },
       async get(uuid) {
         await ready()

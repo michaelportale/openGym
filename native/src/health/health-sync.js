@@ -271,12 +271,12 @@ export function createHealthSync({ adapter, store, workouts, now, weighIns, read
       if (row.op === 'remove' && row.src == null && row.d >= firstDay && !entryByDay[row.d]) days.add(row.d)
     }
     const readingsByDay = {}
-    const lbByHk = {} // the readings the days' Health entries name, read before deleted ones leave the cache
+    const lbByHk = {} // the weights the days' Health entries name, remembered even for deleted readings
     for (const d of days) {
       readingsByDay[d] = (await readings.listDay(d)).filter((r) => !gone.has(r.uuid))
       const hk = entryByDay[d]?.src === 'health' ? entryByDay[d].hk : null
-      const cached = hk != null ? await readings.get(hk) : null
-      if (cached) lbByHk[hk] = cached.lb
+      const lb = hk != null ? await readings.seenLb(hk) : null
+      if (lb != null) lbByHk[hk] = lb
     }
     const ops = dayOpsFromReadings({ days: [...days], readingsByDay, entryByDay, copyByDay, lbByHk, localOpByDay, deleted, now: now() })
 
