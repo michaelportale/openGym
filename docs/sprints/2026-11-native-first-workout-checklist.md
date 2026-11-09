@@ -2,7 +2,7 @@
 
 Run this on the iPhone before the first real gym session. Tick each line. Record pass or fail per line in the PR, not here.
 
-Read this first: the dev build and the Release build share one bundle id, so they share one database. Everything you log while testing is written to the same place as real sessions. That is why step 9 wipes the app once. After the wipe, any later test on that phone writes into the real record.
+Read this first: the dev build and the Release build share one bundle id, so they share one database. Everything you log while testing is written to the same place as real sessions. That is why step 10 wipes the app once. After the wipe, any later test on that phone writes into the real record.
 
 ## Before you build
 
@@ -60,17 +60,30 @@ Start Push A again for these, and discard it when they are done (Finish, then Di
 - [ ] On the Workout start screen, tap Export workouts. The share sheet opens.
 - [ ] AirDrop the JSON to the Mac. It arrives and opens as JSON.
 
-## 7. Airplane Mode off
+## 7. Rest alerts, haptics and motion
+
+Phase 3. Start Push A for these, and discard it when they are done. The first rest of a session asks for notification permission: allow it for the first checks, then turn it off in the notifications check below.
+
+- [ ] Locked alert. Complete a set, then lock the phone during the rest. The alert arrives when the rest ends.
+- [ ] Tap the alert. It opens the app on the Workout tab. (The simulator could not test this.)
+- [ ] Pause, then lock. Complete a set, tap Pause on the rest, then lock the phone. No alert arrives while paused. Unlock, tap Resume, lock again: the alert arrives when the time left runs out.
+- [ ] Old alert. Complete a set, lock the phone, then finish and save the workout during the rest. Tap the alert that arrives (or one left in Notification Centre). No workout comes back.
+- [ ] Deny notifications. In Settings, turn notifications off for openGym. Complete a set. The workout still works and "Rest alerts are off" shows once, not on every set.
+- [ ] Reduce Motion. In Settings, Accessibility, Motion, turn Reduce Motion on. Complete a set and move to the next exercise: no pops or fades. Turn it back off.
+- [ ] System haptics off. In Settings, Sounds & Haptics, turn System Haptics off. Complete a set: no buzz, and everything still works. Turn it back on.
+- [ ] Long absence. Open the keypad and type a number without saving. Leave the app in the background for 5 minutes or more, then return. The keypad is closed and the typed numbers show in the row as a draft.
+
+## 8. Airplane Mode off
 
 - [ ] Turn Airplane Mode off when the checks above are done.
 
-## 8. Before the wipe
+## 9. Before the wipe
 
 - [ ] Every line above has a recorded pass or fail in the PR. Fix any failure before wiping.
 - [ ] From the repository root, `git status` does not list `native/local/`.
 - [ ] The privacy search covers every tracked file in the repository, not only `native/` and `docs/sprints/`: `git grep -n -I -e '<your user id>' -e '<one of your routine ids>' -e '<one of your custom exercise ids>'` prints nothing. Your user id is the part of your data file's name between `state-` and `.json`. Type the real values only in the terminal, never into a tracked file, this one included.
 
-## 9. The wipe
+## 10. The wipe
 
 This removes the test workouts so your first real session starts clean.
 
