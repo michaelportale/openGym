@@ -5,6 +5,7 @@ import { color, radius, space, touch } from '../theme/tokens'
 import AppText from '../ui/AppText'
 import PairSheet from '../sync/PairSheet'
 import ServerSection from '../sync/ServerSection'
+import { MEDIA_CREDIT } from '../exercises/detail-view'
 import { useSync } from '../sync/use-sync'
 import HealthSection from '../health/HealthSection'
 import { readVerdict } from '../health/gates'
@@ -128,6 +129,7 @@ export default function Diagnostics() {
             <AppText key={i} variant="body">{l}</AppText>
           ))}
         </View>
+        <AppText variant="label" color={color.textMuted} style={styles.credit}>{MEDIA_CREDIT}</AppText>
       </ScrollView>
     <PairSheet visible={pairing} onPair={sync.pair} onClose={() => setPairing(false)} />
     </>
@@ -146,5 +148,6 @@ const styles = StyleSheet.create({
     backgroundColor: color.accent
   },
   buttonDisabled: { opacity: 0.4 },
+  credit: { alignSelf: 'stretch', paddingHorizontal: space.lg },
   output: { alignSelf: 'stretch', padding: space.lg }
 })
