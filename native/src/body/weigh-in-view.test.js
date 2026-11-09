@@ -34,4 +34,7 @@ test('canRemove only for this phone\'s own typed set', () => {
   expect(canRemove(entry, { ...row, t: 9 })).toBe(false) // the row is older than the entry
   expect(canRemove(entry, { ...row, op: 'remove' })).toBe(false)
   expect(canRemove(null, row)).toBe(false)
+  // an acked row (the shape weighIns.get returns) whose entry is on the server copy stays removable
+  expect(canRemove({ d: '2026-01-02', w: 182.4, t: 10 }, { d: '2026-01-02', op: 'set', w: 182.4, t: 10 })).toBe(true)
+  expect(canRemove({ d: '2026-01-02', w: 180, t: 12 }, row)).toBe(false) // the server copy moved on
 })

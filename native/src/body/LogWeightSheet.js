@@ -49,7 +49,7 @@ export default function LogWeightSheet({ visible, canRemove, onSave, onRemove, o
       setText('')
       onClose()
     } else {
-      setError("Couldn't save. Try again.")
+      setError(result?.error ?? "Couldn't save. Try again.")
     }
   }
 

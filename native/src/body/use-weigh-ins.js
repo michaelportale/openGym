@@ -9,6 +9,8 @@ import { healthAfterFinish } from '../health/use-health'
 import { syncAfterFinish } from '../sync/use-sync'
 import { canRemove, todayLine } from './weigh-in-view'
 
+const CHANGED = "That weight changed. Check today's weight and try again."
+
 const today = () => localDate(Date.now(), Intl.DateTimeFormat().resolvedOptions().timeZone)
 
 // Today's effective entry (the server copy with this phone's pending ops laid over it) and
@@ -17,13 +19,15 @@ async function readToday(db) {
   const d = today()
   const copy = await readCopy(createSqliteServerCopy(db))
   const deleted = copy?.state?.deleted?.bodyweight ?? {}
-  const pending = await createSqliteWeighIns(db).listPending()
+  const weighIns = createSqliteWeighIns(db)
+  const pending = await weighIns.listPending()
   const { next } = applyDayOps(copy?.state?.bodyweight ?? [], pending, deleted)
   return {
     d,
     deleted,
     entry: next.find(e => e.d === d) ?? null,
-    row: pending.find(r => r.d === d) ?? null,
+    // The day's row whether or not the server has acked it: a synced typed weight stays removable.
+    row: await weighIns.get(d),
   }
 }
 
@@ -49,8 +53,9 @@ export function useWeighIns() {
   const write = async build => {
     try {
       const db = await openAppDatabase()
-      const now = await readToday(db)
-      await createSqliteWeighIns(db).put(build(now))
+      const op = build(await readToday(db))
+      if (!op) return { ok: false, error: CHANGED }
+      await createSqliteWeighIns(db).put(op)
     } catch {
       return { ok: false }
     }
@@ -67,7 +72,7 @@ export function useWeighIns() {
   })
 
   const remove = () => write(({ d, entry, row }) => {
-    if (!canRemove(entry, row)) throw new Error('nothing of this phone to remove')
+    if (!canRemove(entry, row)) return null
     return { d, op: 'remove', t: Date.now(), baseT: entry.t }
   })
 
