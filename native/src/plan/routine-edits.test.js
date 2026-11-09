@@ -58,17 +58,30 @@ describe.each(Object.entries(makers))('%s routine edits', (_, make) => {
     expect(await s.listPending()).toEqual([])
   })
 
-  test('markSent only while t matches; rebase clears sent and sets baseTs', async () => {
+  test('markSent records what was sent on a pending row whatever its t; rebase only while t matches, and clears sent and sets baseTs', async () => {
     const s = make()
     await s.put({ rid: 'r1', baseTs: 1, routine: r1, t: 5 })
-    await s.markSent([{ rid: 'r1', t: 4, routine: { name: 'stale' } }])
-    expect((await s.get('r1')).sent).toBeNull()
+    // a newer edit was saved after the push read the row: what went out is still recorded
+    await s.markSent([{ rid: 'r1', t: 4, routine: { name: 'in flight' } }])
+    expect(await s.get('r1')).toEqual({ rid: 'r1', baseTs: 1, routine: r1, sent: { name: 'in flight' }, t: 5 })
     await s.markSent([{ rid: 'r1', t: 5, routine: r1 }])
     expect((await s.get('r1')).sent).toEqual(r1)
     await s.rebase([{ rid: 'r1', t: 4, baseTs: 9 }])
     expect(await s.get('r1')).toMatchObject({ baseTs: 1, sent: r1 })
     await s.rebase([{ rid: 'r1', t: 5, baseTs: 9 }])
     expect(await s.get('r1')).toMatchObject({ baseTs: 9, sent: null })
+  })
+
+  test('markSent leaves an acked or superseded row, and an unknown rid, alone', async () => {
+    const s = make()
+    await s.put({ rid: 'a', baseTs: 1, routine: { name: 'A' }, t: 1 })
+    await s.put({ rid: 'b', baseTs: 1, routine: { name: 'B' }, t: 2 })
+    await s.markAcked([{ rid: 'a', t: 1 }], 'x')
+    await s.markSuperseded([{ rid: 'b', t: 2, kind: 'changed' }], 'y')
+    await s.markSent([{ rid: 'a', t: 1, routine: { name: 'A' } }, { rid: 'b', t: 2, routine: { name: 'B' } }, { rid: 'zzz', t: 1, routine: {} }])
+    expect((await s.get('a')).sent).toBeNull()
+    expect((await s.get('b')).sent).toBeNull()
+    expect((await s.list()).map(e => e.rid)).toEqual(['a', 'b'])
   })
 
   test('markSuperseded leaves listPending and shows in listNotices until dismissed', async () => {

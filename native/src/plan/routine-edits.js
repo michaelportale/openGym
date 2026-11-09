@@ -67,10 +67,12 @@ export function createMemoryRoutineEdits() {
     async listPending() {
       return [...rows.values()].filter(isPending).sort(byT).map(publicEdit)
     },
+    // By rid on any pending row, whatever its t: what went out is what went out, even when a
+    // newer edit was saved after the push read the row.
     async markSent(items) {
-      for (const { rid, t, routine } of items) {
-        const row = live(rid, t)
-        if (row) row.sent = JSON.parse(JSON.stringify(routine))
+      for (const { rid, routine } of items) {
+        const row = rows.get(rid)
+        if (row && isPending(row)) row.sent = JSON.parse(JSON.stringify(routine))
       }
       return { ok: true }
     },
@@ -174,7 +176,9 @@ export function createSqliteRoutineEdits(db) {
     },
     async markSent(items) {
       await ready()
-      for (const { rid, t, routine } of items) await db.run('UPDATE routine_edits SET sent = ? WHERE rid = ? AND t = ?', [JSON.stringify(routine), rid, t])
+      for (const { rid, routine } of items) {
+        await db.run('UPDATE routine_edits SET sent = ? WHERE rid = ? AND acked_at IS NULL AND superseded_at IS NULL', [JSON.stringify(routine), rid])
+      }
       return { ok: true }
     },
     async markAcked(items, at) {

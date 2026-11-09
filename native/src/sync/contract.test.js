@@ -460,6 +460,33 @@ describe.skipIf(!HAS_API_DEPS)(TITLE, { timeout: 30_000 }, () => {
     expect(server.file().routines.find(r => r.id === 'r1')).toEqual(stored)
   })
 
+  test('a routine holding the same exercise twice: a sets-only edit round-trips exactly; a move is never sent', async () => {
+    const twins = {
+      id: 'r3', name: 'Bench day', _ts: 1730000000000,
+      ex: [
+        { id: '0025', sets: 3, reps: 5, mode: 'reps', weight: 60, pyramid: [{ w: 60, r: 8 }, { w: 70, r: 5 }], stationId: 'rack-2' },
+        { id: '0025', sets: 3, reps: 10, mode: 'reps', weight: 45 },
+      ],
+    }
+    const server = await startServer({ state: { ...fixture(), routines: [...fixture().routines, twins] } })
+    const app = await paired(server)
+    const base = (await app.copy.get()).state.routines.find(r => r.id === 'r3')
+    const setsOnly = { ...base, ex: [base.ex[0], { ...base.ex[1], sets: 4 }] }
+    await app.routineEdits.put({ rid: 'r3', baseTs: base._ts, routine: setsOnly, t: T0 })
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+    let stored = server.file().routines.find(r => r.id === 'r3')
+    expect(stored.ex).toEqual(setsOnly.ex) // each twin keeps its own keys
+    expect(stored._ts).toBeGreaterThan(twins._ts)
+    expect(await app.routineEdits.listNotices()).toEqual([])
+
+    const now = (await app.copy.get()).state.routines.find(r => r.id === 'r3')
+    await app.routineEdits.put({ rid: 'r3', baseTs: now._ts, routine: { ...now, ex: [now.ex[1], now.ex[0]] }, t: T0 + 1 })
+    const before = server.file()
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+    expect(server.file()).toEqual(before)
+    expect(await app.routineEdits.listNotices()).toEqual([{ rid: 'r3', name: 'Bench day', kind: 'unsafe', at: new Date(T0).toISOString() }])
+  })
+
   test('a new profile with no document yet: pairing pulls an empty one and the first push starts it', async () => {
     const server = await startServer({ state: null })
     const app = await paired(server)

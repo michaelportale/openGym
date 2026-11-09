@@ -314,10 +314,11 @@ export function createSync({ client, credentials, copy, workouts, weighIns, rout
         await credentials.clear()
         await copy.clear()
         await meta.clear()
-        // Every workout on this phone goes to this server; it keeps one copy per id.
+        // Every workout on this phone goes to this server; it keeps one copy per id. A routine
+        // edit's ack stays: it belongs to the server that took it, and sending it again here
+        // would only meet that routine as changed or deleted since.
         await workouts.resetAcked()
         await weighIns.resetAcked()
-        await routineEdits.resetAcked()
         await meta.set('server', address.base)
         await meta.set('profile', typeof r.user?.name === 'string' ? r.user.name : '')
         await credentials.set({ token: r.token })
@@ -332,6 +333,7 @@ export function createSync({ client, credentials, copy, workouts, weighIns, rout
   }
 
   // Unpair. Every workout stays, and all of them are to be sent to whichever server comes next.
+  // Routine edits keep their acks (see pair); one still pending goes when the routine still matches.
   async function forget() {
     try {
       await exclusive(async () => {
@@ -340,7 +342,6 @@ export function createSync({ client, credentials, copy, workouts, weighIns, rout
         await meta.clear()
         await workouts.resetAcked()
         await weighIns.resetAcked()
-        await routineEdits.resetAcked()
         outcome = null
       })
     } catch {
@@ -351,8 +352,9 @@ export function createSync({ client, credentials, copy, workouts, weighIns, rout
   }
 
   // After 'server-older': take the server's document as it is now, and send it every workout of
-  // this phone's that it lacks. Acks are cleared before the copy moves, so a kill in between
-  // leaves the problem in place rather than workouts marked sent that the server lost.
+  // this phone's that it lacks, and every routine edit whose routine is still as it was edited
+  // on. Acks are cleared before the copy moves, so a kill in between leaves the problem in place
+  // rather than workouts marked sent that the server lost.
   async function resendAll() {
     let taken = false
     try {

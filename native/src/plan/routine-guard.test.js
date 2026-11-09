@@ -117,3 +117,77 @@ test('a non-array routines reads as empty; nothing applying returns the input ar
   expect(applyRoutineEdits(list, []).next).toBe(list)
   expect(applyRoutineEdits(list, undefined).next).toBe(list)
 })
+
+// Routines as the web keeps them: slots in `ex`, each with its exercise id. The server pairs the
+// slots of a routine that holds the same exercise twice by position (sync-stamps.js pairItems), so
+// a move or swap there could put one twin's keys on the other.
+const heavy = { id: 'bench', sets: 3, reps: 5, pyramid: [{ w: 60, r: 8 }], stationId: 'rack-2' }
+const backoff = { id: 'bench', sets: 3, reps: 10 }
+const row = { id: 'row', sets: 3, reps: 8 }
+const withEx = (ex, extra = {}) => ({ id: 'a', name: 'Push', ex, ...extra })
+
+test('a move in a routine holding the same exercise twice is unsafe, and is not in next', () => {
+  const list = [withEx([heavy, backoff, row], { _ts: 3 })]
+  const r = applyRoutineEdits(list, [edit('a', withEx([backoff, heavy, row]), { baseTs: 3, t: 4 })])
+  expect(r.superseded).toEqual([{ rid: 'a', t: 4, kind: 'unsafe' }])
+  expect(r.applied).toEqual([])
+  expect(r.next).toBe(list)
+  const twinsApart = applyRoutineEdits([withEx([heavy, row, backoff], { _ts: 3 })], [edit('a', withEx([row, heavy, backoff]), { baseTs: 3 })])
+  expect(twinsApart.superseded).toEqual([{ rid: 'a', t: 1, kind: 'unsafe' }])
+})
+
+test('a sets-only edit in a routine holding the same exercise twice applies', () => {
+  const list = [withEx([heavy, backoff, row], { _ts: 3 })]
+  const mine = withEx([heavy, { ...backoff, sets: 4 }, row])
+  const r = applyRoutineEdits(list, [edit('a', mine, { baseTs: 3, t: 4 })])
+  expect(r.applied).toEqual([{ rid: 'a', t: 4 }])
+  expect(r.next).toEqual([mine])
+})
+
+test('a swap that makes the same exercise appear twice is unsafe', () => {
+  const list = [withEx([heavy, row], { _ts: 3 })]
+  const r = applyRoutineEdits(list, [edit('a', withEx([heavy, { ...row, id: 'bench' }]), { baseTs: 3, t: 4 })])
+  expect(r.superseded).toEqual([{ rid: 'a', t: 4, kind: 'unsafe' }])
+  expect(r.next).toBe(list)
+})
+
+test('a swap that takes one twin away is unsafe too: the copy repeats an id', () => {
+  const list = [withEx([heavy, backoff], { _ts: 3 })]
+  const r = applyRoutineEdits(list, [edit('a', withEx([heavy, { ...backoff, id: 'row' }]), { baseTs: 3 })])
+  expect(r.superseded).toEqual([{ rid: 'a', t: 1, kind: 'unsafe' }])
+})
+
+test('in a routine holding the same exercise twice, every field an edit changes goes, prog and repsMin removed included', () => {
+  const list = [withEx([{ ...heavy, prog: 'linear' }, { ...backoff, repsMin: 8 }, row], { _ts: 3 })]
+  const mine = withEx([{ ...heavy, sets: 5, reps: 6 }, { ...backoff, sec: 30, min: 2 }, row])
+  expect(applyRoutineEdits(list, [edit('a', mine, { baseTs: 3 })]).applied).toHaveLength(1)
+  // twins told apart only by those fields: a move looks like a field edit, and the API stores it as sent
+  const a = { id: 'bench', sets: 3, reps: 5 }
+  const b = { id: 'bench', sets: 4, reps: 10 }
+  expect(applyRoutineEdits([withEx([a, b], { _ts: 3 })], [edit('a', withEx([b, a]), { baseTs: 3 })]).applied).toHaveLength(1)
+})
+
+test('a move or a swap in a routine without a repeated exercise applies', () => {
+  const list = [withEx([heavy, row], { _ts: 3 })]
+  const moved = withEx([row, heavy])
+  expect(applyRoutineEdits(list, [edit('a', moved, { baseTs: 3 })]).applied).toHaveLength(1)
+  const swapped = withEx([heavy, { ...row, id: 'pullup' }])
+  expect(applyRoutineEdits(list, [edit('a', swapped, { baseTs: 3 })]).next).toEqual([swapped])
+})
+
+test('an unsafe move already on the server is still done; a rebased one is unsafe against the copy it would go on', () => {
+  const moved = withEx([backoff, heavy, row])
+  const done = applyRoutineEdits([{ ...moved, _ts: 9 }], [edit('a', moved, { baseTs: 3 })])
+  expect(done.done).toEqual([{ rid: 'a', t: 1 }])
+  expect(done.superseded).toEqual([])
+  const sent = withEx([heavy, { ...backoff, sets: 4 }, row])
+  const rebasing = applyRoutineEdits([{ ...sent, _ts: 9 }], [edit('a', withEx([backoff, heavy, row]), { baseTs: 3, sent, t: 6 })])
+  expect(rebasing.superseded).toEqual([{ rid: 'a', t: 6, kind: 'unsafe' }])
+  expect(rebasing.rebased).toEqual([])
+})
+
+test('an edit that could not go anyway keeps its own kind: changed or deleted, not unsafe', () => {
+  const moved = withEx([backoff, heavy, row])
+  expect(applyRoutineEdits([withEx([heavy, backoff, row], { _ts: 8 })], [edit('a', moved, { baseTs: 3 })]).superseded[0].kind).toBe('changed')
+  expect(applyRoutineEdits([], [edit('a', moved, { baseTs: 3 })]).superseded[0].kind).toBe('deleted')
+})

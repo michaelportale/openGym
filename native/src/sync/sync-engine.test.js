@@ -1131,8 +1131,8 @@ const setsOn = n => r => ({ ...r, ex: r.ex.map((s, i) => (i === 0 ? { ...s, sets
 const swapped = r => ({ ...r, ex: [r.ex[1], r.ex[0]] })
 const content = r => { const { _ts, _f, _u, ...rest } = r; return rest }
 
-async function planSetup() {
-  const t = await setup({ server: fakeServer(planDoc()) })
+async function planSetup(doc = planDoc()) {
+  const t = await setup({ server: fakeServer(doc) })
   await t.sync.syncNow()
   t.fresh()
   const edit = async (rid, change, at = T0 + 1) => {
@@ -1283,22 +1283,29 @@ describe('routine edits', () => {
     expect(await t.sync.status()).toEqual({ paired: false, state: 'unpaired', pending: 0, pendingWeighIns: 0, pendingRoutineEdits: 2 })
   })
 
-  test('forget makes every acked edit pending again, and pair and resendAll send one the server lost', async () => {
+  test('an acked edit stays acked across forget and pair: a later web change brings no notice and nothing is sent', async () => {
+    const t = await planSetup()
+    await t.edit('r1', setsOn(4))
+    await t.sync.syncNow()
+    expect(await t.routineEdits.listPending()).toEqual([])
+    t.server.webEditsRoutine('r1', r => ({ ...r, name: 'Push (web, later)' }))
+    expect(await t.sync.forget()).toMatchObject({ pendingRoutineEdits: 0 })
+    expect(await t.routineEdits.listPending()).toEqual([])
+    t.server.pushes.length = 0
+    expect((await t.sync.pair(BASE, 'GOODCODE')).ok).toBe(true)
+    expect(t.server.pushes).toEqual([])
+    expect(t.server.routine('r1').name).toBe('Push (web, later)')
+    expect(await t.routineEdits.listPending()).toEqual([])
+    expect(await t.routineEdits.listNotices()).toEqual([])
+    expect(await t.db.getAll('SELECT rid, acked_at, superseded_at FROM routine_edits')).toEqual([{ rid: 'r1', acked_at: iso(T0), superseded_at: null }])
+    expect(await t.sync.status()).toMatchObject({ pendingRoutineEdits: 0 })
+  })
+
+  test('resendAll after the server went back to a backup from before the edit puts it back', async () => {
     const t = await planSetup()
     const mine = await t.edit('r1', setsOn(4))
     await t.sync.syncNow()
     expect(await t.routineEdits.listPending()).toEqual([])
-    expect(await t.sync.forget()).toMatchObject({ pendingRoutineEdits: 1 })
-    expect((await t.routineEdits.listPending()).map(e => e.rid)).toEqual(['r1'])
-
-    // pair: the server is back to the routine the edit was made on, so it goes again
-    await t.routineEdits.markAcked([{ rid: 'r1', t: mine.t }], iso(T0))
-    t.server.doc = clone(planDoc())
-    expect((await t.sync.pair(BASE, 'GOODCODE')).ok).toBe(true)
-    expect(content(t.server.routine('r1'))).toEqual(content(mine.routine))
-    expect(await t.routineEdits.listPending()).toEqual([])
-
-    // resendAll: the server went back to a backup from before the edit
     t.server.doc = clone(planDoc())
     t.server.doc._wids = ['other']
     t.server.webAdds(web('web-9'))
@@ -1307,6 +1314,49 @@ describe('routine edits', () => {
     expect(content(t.server.routine('r1'))).toEqual(content(mine.routine))
     expect(await t.routineEdits.listPending()).toEqual([])
     expect(await t.routineEdits.listNotices()).toEqual([])
+  })
+
+  test('a save landing between the push reading the edits and markSent: the pull rebases it, no notice, and the next sync sends it', async () => {
+    const t = await planSetup()
+    const first = await t.edit('r1', setsOn(4))
+    const markSent = t.routineEdits.markSent
+    let second
+    t.routineEdits.markSent = async items => {
+      if (!second) second = await t.edit('r1', setsOn(5), T0 + 2)
+      return markSent(items)
+    }
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 1 })
+    expect(t.server.pushes[0].state.routines[0]).toEqual(first.routine)
+    const landed = t.server.routine('r1')._ts
+    expect(await t.routineEdits.listPending()).toEqual([{ rid: 'r1', baseTs: landed, routine: second.routine, sent: null, t: T0 + 2 }])
+    expect(await t.routineEdits.listNotices()).toEqual([])
+
+    t.fresh()
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+    expect(t.server.calls).toEqual(['rev', 'push', 'pull'])
+    expect(content(t.server.routine('r1'))).toEqual(content(second.routine))
+    expect(await t.routineEdits.listPending()).toEqual([])
+    expect(await t.routineEdits.listNotices()).toEqual([])
+  })
+
+  test('a move in a routine holding the same exercise twice is never sent: superseded as unsafe, the server untouched', async () => {
+    const twins = { id: 'r3', name: 'Bench day', ex: [{ id: 'bench', sets: 3, reps: 5, pyramid: [{ w: 60, r: 8 }], stationId: 'rack-2' }, { id: 'bench', sets: 3, reps: 10 }], _ts: 1000 }
+    const t = await planSetup({ ...planDoc(), routines: [...planDoc().routines, twins] })
+    await t.edit('r3', r => ({ ...r, ex: [r.ex[1], r.ex[0]] }))
+    const r = await t.sync.syncNow()
+    expect(t.server.calls).toEqual(['rev'])
+    expect(t.server.pushes).toEqual([])
+    expect(t.server.routine('r3')).toEqual(twins)
+    expect(await t.routineEdits.listPending()).toEqual([])
+    expect(await t.routineEdits.listNotices()).toEqual([{ rid: 'r3', name: 'Bench day', kind: 'unsafe', at: iso(T0) }])
+    expect(r).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+
+    // a sets-only edit of the same routine goes
+    await t.edit('r3', setsOn(4), T0 + 5)
+    await t.sync.syncNow()
+    expect(t.server.pushes).toHaveLength(1)
+    expect(t.server.routine('r3').ex).toEqual([{ ...twins.ex[0], sets: 4 }, twins.ex[1]])
+    expect(await t.routineEdits.listPending()).toEqual([])
   })
 
   test('createSync refuses to be built without a routine edits store', () => {

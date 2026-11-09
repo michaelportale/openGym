@@ -1,7 +1,8 @@
 // Pure guard for routine edits waiting to sync. For each pending edit it decides, against the
 // server's copy of the routine, whether the edit is already there (done), is the phone's own
 // landed push with newer edits on top (rebased), can go (applied), or was overtaken by a
-// change on the web (superseded). No I/O.
+// change on the web (superseded). An edit that would go but moves or swaps exercises in a
+// routine holding the same exercise twice is superseded as unsafe, never sent. No I/O.
 
 const META = new Set(['_ts', '_f', '_u'])
 
@@ -29,6 +30,23 @@ export function sameRoutine(a, b) {
   return deepEqual(routineContent(a), routineContent(b))
 }
 
+// The API pairs the slots of a routine holding the same exercise twice by position, not by
+// which slot is which (api/sync-stamps.js pairItems, for a writer that does not stamp, as this
+// phone is): after a move or swap there it could put one twin's keys (a pyramid, a station) on
+// the other. Moving one twin past the other keeps the id sequence, so the ids alone cannot tell.
+// What goes in such a routine is a field edit only: every slot keeps its exercise id and every
+// key but the ones an edit changes, which are also ones the API never puts back (V139_DROPS).
+const FIELDS = new Set(['sets', 'reps', 'repsMin', 'sec', 'min', 'prog'])
+const slotsOf = r => (Array.isArray(r?.ex) ? r.ex : [])
+const repeats = slots => new Set(slots.map((s) => s?.id)).size !== slots.length
+const fixedPart = s => (s && typeof s === 'object' ? Object.fromEntries(Object.entries(s).filter(([k]) => !FIELDS.has(k))) : s)
+function movesTwins(copy, routine) {
+  const a = slotsOf(copy)
+  const b = slotsOf(routine)
+  if (!repeats(a) && !repeats(b)) return false
+  return a.length !== b.length || a.some((s, i) => !deepEqual(fixedPart(s), fixedPart(b[i])))
+}
+
 // routines: the server's list (a non-array reads as empty). edits: from listPending().
 // Matched by id, first routine wins. Returns { next, done, rebased, applied, superseded };
 // next is a new array only when something applies or rebases, and untouched routines keep
@@ -48,11 +66,14 @@ export function applyRoutineEdits(routines, edits) {
     const index = list.findIndex((r) => r && typeof r === 'object' && r.id === edit.rid)
     const copy = index < 0 ? null : list[index]
     const ref = { rid: edit.rid, t: edit.t }
+    const rebase = !!copy && !!edit.sent && sameRoutine(copy, edit.sent)
+    const apply = !!copy && (copy._ts ?? null) === edit.baseTs
     if (copy && sameRoutine(copy, edit.routine)) done.push(ref)
-    else if (copy && edit.sent && sameRoutine(copy, edit.sent)) {
+    else if ((rebase || apply) && movesTwins(copy, edit.routine)) superseded.push({ ...ref, kind: 'unsafe' })
+    else if (rebase) {
       rebased.push({ ...ref, baseTs: copy._ts ?? null })
       swap(index, edit.routine)
-    } else if (copy && (copy._ts ?? null) === edit.baseTs) {
+    } else if (apply) {
       applied.push(ref)
       swap(index, edit.routine)
     } else superseded.push({ ...ref, kind: copy ? 'changed' : 'deleted' })
