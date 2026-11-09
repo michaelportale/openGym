@@ -76,7 +76,8 @@ export function screenSource({ copy, bundled, pending, routineEdits }) {
 // and `serverCopy`. Paired: the server copy, plus the workouts it has not acked. Not paired: the
 // bundled snapshot plus every workout on the phone. `workouts` is every workout on the phone;
 // `copy` is the copy as read (null when there is none or it is corrupt), so nothing reads it twice.
-// A copy the screen still cannot build from reads as no copy, as a corrupt one does.
+// A copy the screen still cannot build from reads as no copy, as a corrupt one does: `copy` is null
+// then too, since the screens show the snapshot and an edit made there is on the snapshot's base.
 // Routine edits not yet sent show over the routines (routineEdits may be left out: none).
 // The unsent workouts and routine edits are read before the copy: the sync engine stores a copy before it acks the
 // workouts that copy holds, so a sync landing between the two reads leaves each workout in one.
@@ -92,5 +93,5 @@ export async function readScreenSource({ finished, serverCopy, bundled, routineE
       // falls through to the bundled snapshot
     }
   }
-  return { ...screenSource({ copy: null, bundled, pending: workouts, routineEdits: edits }), workouts, copy }
+  return { ...screenSource({ copy: null, bundled, pending: workouts, routineEdits: edits }), workouts, copy: null }
 }

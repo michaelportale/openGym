@@ -8,7 +8,8 @@ import { createSqliteRoutineEdits } from '../plan/routine-edits.js'
 import { createCredentials } from './credentials.js'
 import { buildPush } from './outbox.js'
 import { createSqliteServerCopy, createSqliteSyncMeta } from './server-copy.js'
-import { screenSource } from './source.js'
+import { readScreenSource, screenSource } from './source.js'
+import { baseRoutine, findRoutine } from '../plan/plan-view.js'
 import { SERVER_WID_KEEP, createSync } from './sync-engine.js'
 
 const BASE = 'https://gym.example.com'
@@ -1390,5 +1391,39 @@ describe('routine edits', () => {
 
   test('createSync refuses to be built without a routine edits store', () => {
     expect(() => createSync({ client: {}, credentials: {}, copy: {}, workouts: {}, weighIns: {}, meta: {}, now: Date.now })).toThrow(/routineEdits/)
+  })
+})
+
+// The screens show the bundled snapshot while no copy is held (unpaired), and when the copy cannot
+// be built. Built before the web changed r1's reps from 8 to 6.
+const SNAP_R1 = { id: 'r1', name: 'Push', ex: [{ id: 'bench', sets: 3, reps: 8, mode: 'reps', weight: 60 }], _ts: 1000 }
+const snapshotDoc = () => ({ version: 1, example: false, names: {}, state: { unit: 'lb', routines: [clone(SNAP_R1)], workouts: [] } })
+const webChangedR1 = (extra = {}) => ({ ...initialDoc(), routines: [{ ...clone(SNAP_R1), ex: [{ ...SNAP_R1.ex[0], reps: 6 }], _ts: 1500, _f: { ex: 1500 } }], ...extra })
+
+// What the routine screen saves: the routine it shows, edited, on the base its source gives.
+async function screenEdit(t, change, at) {
+  const bundled = snapshotDoc()
+  const src = await readScreenSource({ finished: t.workouts, serverCopy: t.copy, bundled, routineEdits: t.routineEdits })
+  const shown = findRoutine(src.state, 'r1')
+  const base = baseRoutine({ copy: src.copy, bundled }, 'r1')
+  await t.routineEdits.put({ rid: 'r1', baseTs: base?._ts ?? null, routine: change(clone(shown)), t: at })
+  return { shown }
+}
+
+describe('routine edits made on the bundled snapshot', () => {
+  test('paired with a copy the screens cannot build from: an edit on the snapshot is measured against the snapshot, superseded, and the server untouched', async () => {
+    // a custom exercise whose name is not text, used by a workout: screenSource throws on it
+    const doc = webChangedR1({ customEx: [{ id: 'cust', n: 5 }], workouts: [{ id: 'w1', d: '2026-11-01', entries: [{ id: 'cust', sets: [] }] }] })
+    doc.routines[0].ex[0].note = 'pause 1s'
+    const t = await setup({ server: fakeServer(doc) })
+    await t.sync.syncNow()
+    const before = clone(t.server.routine('r1'))
+    const { shown } = await screenEdit(t, setsOn(4), T0 + 1)
+    expect(shown.ex[0].reps).toBe(8) // the screen showed the snapshot
+    t.fresh()
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+    expect(t.server.pushes).toEqual([])
+    expect(t.server.routine('r1')).toEqual(before)
+    expect(await t.routineEdits.listNotices()).toEqual([{ rid: 'r1', name: 'Push', kind: 'changed', at: iso(T0) }])
   })
 })

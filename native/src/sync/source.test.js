@@ -152,6 +152,10 @@ test('readScreenSource: a copy the screen still cannot read reads as no copy, as
   expect(out.state).toEqual(sessionState(bundled, all))
   expect(out.names).toEqual(bundled.names)
   expect(out.workouts).toBe(all)
+  // The screens then show the snapshot, so an edit made there is on the snapshot's routine, and
+  // its base must be the snapshot's too, never the copy's (that would put the snapshot over the
+  // server's routine on the next push).
+  expect(out.copy).toBeNull()
 })
 
 test('the example banner is the bundle\'s own: shown over example data, never over the server copy', async () => {
