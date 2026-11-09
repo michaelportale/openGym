@@ -7,7 +7,7 @@ import { createSqliteFinishedWorkouts } from '../session/finished-workouts'
 import { createSqliteServerCopy } from '../sync/server-copy'
 import { keyed, readSourceKey } from '../sync/source-key'
 import { useFocusReload } from '../sync/use-focus-reload'
-import { loadProgress } from './progress-source'
+import { progressLoader } from './progress-source'
 
 const LOADING = { status: 'loading', state: null, bodyweight: [], error: null }
 
@@ -20,6 +20,7 @@ export function useProgress() {
   const [source, setSource] = useState(LOADING)
 
   const [reload] = useState(() => {
+    const loadProgress = progressLoader()
     const load = keyed(readSourceKey, async stores => ({ status: 'ready', ...(await loadProgress(stores)), error: null }))
     return coalesced(async () => {
       try {
