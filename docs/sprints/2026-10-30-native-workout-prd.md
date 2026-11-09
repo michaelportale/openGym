@@ -302,7 +302,7 @@ Phase 9's device acceptance and the real gym sessions are the owner's to run. Th
 
 Unit tests cover pure logic, using a fake clock for timers, time-zone changes, expired rest and
 overnight sessions. The owner runs manual device checks against the scenario table. UI automation is
-not in scope. GitHub Actions runs five jobs (frontend, api, api-image, mcp, native) on pull requests
+not in scope. GitHub Actions runs five jobs (test (frontend), api, api-image, mcp, native) on pull requests
 that touch those folders. The suites still run locally before merging.
 
 ## Licence and media guardrails
