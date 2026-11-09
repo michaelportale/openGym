@@ -7,7 +7,7 @@ export const TABS = [
   {
     name: 'workout',
     label: 'Workout',
-    availability: 'preview',
+    availability: 'ready',
     sf: { default: 'dumbbell', selected: 'dumbbell.fill' },
     // The dock is pinned, so this screen applies its own safe-area insets.
     disableAutomaticContentInsets: true

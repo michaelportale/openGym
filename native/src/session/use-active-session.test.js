@@ -40,6 +40,8 @@ function controllerFor(db, extra = {}) {
 test('useActiveSession is a react hook over the session controller', () => {
   expect(typeof useActiveSession).toBe('function')
   expect(useActiveSession.toString()).toContain('sessionOptionsFrom')
+  // The screen reads the committed row's time through this after an action resolves.
+  expect(useActiveSession.toString()).toContain('getState = () => controller.getState()')
 })
 
 test.each(SQLITE_DRIVERS)('%s: a database handle wires the sqlite journal and the finished-workout store', async (_driver, createDb) => {

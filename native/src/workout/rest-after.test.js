@@ -122,3 +122,8 @@ test('restMsFor prefers the exercise and falls back to the profile', () => {
   expect(restMsFor({ target: {} }, 90)).toBe(90_000)
   expect(restMsFor({}, 90)).toBe(90_000)
 })
+
+test('restMsFor reads an exercise rest of 0 as the default, as the web does', () => {
+  // The web's exercise settings write restSec: 0 for "Default" (routines.js setupOf).
+  expect(restMsFor({ target: { restSec: 0 } }, 90)).toBe(90_000)
+})

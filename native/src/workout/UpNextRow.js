@@ -3,8 +3,13 @@ import { color, radius, size, space, touch } from '../theme/tokens'
 import NativeSymbol from '../ui/NativeSymbol'
 import AppText from '../ui/AppText'
 import Card from '../ui/Card'
-import { upNextAccessibilityLabel } from './preview-actions'
 
+export function upNextAccessibilityLabel(name) {
+  if (typeof name !== 'string' || name.trim() === '') throw new Error('Up next needs a name')
+  return `Up next, ${name}.`
+}
+
+// The exercise after the one on screen. Moving there is the header's › button.
 export default function UpNextRow({ name }) {
   return (
     <Card>

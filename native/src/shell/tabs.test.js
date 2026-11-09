@@ -64,12 +64,12 @@ test('only the workout tab opts out of automatic content insets', () => {
   expect(TABS.filter(tab => tab.disableAutomaticContentInsets).map(tab => tab.name)).toEqual(['workout'])
 })
 
-test('workout is a preview and the other four tabs are unbuilt', () => {
-  expect(TABS.find(tab => tab.name === 'workout').availability).toBe('preview')
+test('workout logs real sessions and the other four tabs are unbuilt', () => {
+  expect(TABS.find(tab => tab.name === 'workout').availability).toBe('ready')
   expect(TABS.filter(tab => tab.availability === 'unbuilt').map(tab => tab.label)).toEqual([
     'Home', 'Plan', 'Progress', 'Exercises'
   ])
-  expect(TABS.some(tab => tab.availability === 'ready')).toBe(false)
+  expect(TABS.some(tab => tab.availability === 'preview')).toBe(false)
 })
 
 test('iOS pins both appearances to the same colour and other platforms keep the hex', () => {

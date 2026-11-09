@@ -1,81 +1,75 @@
-import { useState } from 'react'
-import { Platform, ScrollView, StyleSheet, View } from 'react-native'
+import { Platform, StyleSheet, View } from 'react-native'
 import { SafeAreaView } from 'react-native-screens/experimental'
 import { screenFrame } from '../../shell/tabs'
 import { color, space } from '../../theme/tokens'
 import AppText from '../../ui/AppText'
 import Card from '../../ui/Card'
 import PrimaryButton from '../../ui/PrimaryButton'
-import ProgressBar from '../../ui/ProgressBar'
 import ScreenHeader from '../../ui/ScreenHeader'
-import { dockFits } from '../../workout/dock-layout'
-import ExerciseCard from '../../workout/ExerciseCard'
-import { PREVIEW_HINT, PREVIEW_NOTICE, previewActionResult } from '../../workout/preview-actions'
-import { previewWorkout as preview } from '../../workout/preview-data'
-import RestPanel from '../../workout/RestPanel'
-import UpNextRow from '../../workout/UpNextRow'
-import WorkoutDock from '../../workout/WorkoutDock'
+import StartScreen from '../../workout/StartScreen'
+import { useWorkoutHome } from '../../workout/use-workout-home'
+import WorkoutSession from '../../workout/WorkoutSession'
 
-export default function Workout() {
-  const [notice, setNotice] = useState(PREVIEW_NOTICE)
-  const [measured, setMeasured] = useState({ screen: 0, head: 0, dock: 0 })
-  const pressPreview = id => () => setNotice(previewActionResult(id).message)
-  const measure = part => event => {
-    const { height } = event.nativeEvent.layout
-    setMeasured(current => (current[part] === height ? current : { ...current, [part]: height }))
-  }
-  const pinned = dockFits(measured)
-  const dockHeight = pinned ? measured.dock : 0
+// The tab never passes for the owner's data while it runs on the example snapshot.
+const EXAMPLE_NOTICE = 'Example data. Your routines are not loaded on this build.'
 
-  const head = (
-    <View onLayout={measure('head')}>
-      <ScreenHeader
-        title={preview.routine}
-        subtitle={`Exercise ${preview.exerciseNumber} of ${preview.exerciseCount}`}
+function Body({ home }) {
+  if (home.status === 'session') {
+    return (
+      <WorkoutSession
+        key={home.sessionId}
+        db={home.db}
+        base={home.base}
+        openBase={home.openBase}
+        state={home.state}
+        names={home.snapshot.names ?? {}}
+        onExit={home.reload}
       />
-      <ProgressBar value={preview.exerciseNumber / preview.exerciseCount} style={styles.progress} />
-      <Card accessibilityLiveRegion="polite" style={styles.banner}>
-        <AppText variant="body" color={color.textSecondary}>{notice}</AppText>
-      </Card>
+    )
+  }
+  if (home.status === 'start') {
+    return (
+      <StartScreen
+        db={home.db}
+        routines={home.state.routines ?? []}
+        nextId={home.nextId}
+        workoutCount={home.workouts.length}
+        onStart={home.begin}
+      />
+    )
+  }
+  return (
+    <View style={styles.fill}>
+      <ScreenHeader title="Workout" />
+      {home.status === 'error' ? (
+        <View style={styles.body}>
+          <Card accessibilityLiveRegion="polite" style={styles.card}>
+            <AppText variant="body">{`Could not open the workout store: ${home.error?.message ?? 'unknown error'}`}</AppText>
+          </Card>
+          <PrimaryButton label="Retry" accessibilityHint="Tries to open the workout store again." onPress={home.reload} />
+        </View>
+      ) : null}
     </View>
   )
-  const dock = (
-    <WorkoutDock onLayout={measure('dock')} inline={!pinned}>
-      <RestPanel
-        remainingText={preview.rest.remainingText}
-        progress={preview.rest.progress}
-        onAddTime={pressPreview('addRest')}
-        onPause={pressPreview('pauseRest')}
-        addTimeHint={PREVIEW_HINT}
-        pauseHint={PREVIEW_HINT}
-      />
-      <PrimaryButton label="Complete set" accessibilityHint={PREVIEW_HINT} onPress={pressPreview('completeSet')} />
-    </WorkoutDock>
-  )
+}
 
+export default function Workout() {
+  const home = useWorkoutHome()
   return (
-    <SafeAreaView edges={{ top: true, bottom: true }} onLayout={measure('screen')} style={screenFrame(Platform.OS)}>
-      {pinned ? head : null}
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={{ paddingBottom: dockHeight }}
-        scrollIndicatorInsets={{ bottom: dockHeight }}
-      >
-        {pinned ? null : head}
-        <View style={styles.body}>
-          <ExerciseCard {...preview.exercise} onAddSet={pressPreview('addSet')} addSetHint={PREVIEW_HINT} />
-          <UpNextRow name={preview.upNext} />
-        </View>
-        {pinned ? null : dock}
-      </ScrollView>
-      {pinned ? dock : null}
+    <SafeAreaView edges={{ top: true, bottom: true }} style={screenFrame(Platform.OS)}>
+      {home.snapshot.example ? (
+        <Card accessibilityRole="alert" style={styles.example}>
+          <AppText variant="body" color={color.text}>{EXAMPLE_NOTICE}</AppText>
+        </Card>
+      ) : null}
+      <Body home={home} />
     </SafeAreaView>
   )
 }
 
 const styles = StyleSheet.create({
-  progress: { marginHorizontal: space.lg },
-  banner: { margin: space.lg, marginBottom: space.md, padding: space.md },
-  scroll: { flex: 1 },
-  body: { gap: space.md, paddingHorizontal: space.lg, paddingBottom: space.lg }
+  fill: { flex: 1 },
+  body: { gap: space.lg, paddingHorizontal: space.lg },
+  card: { padding: space.md },
+  example: { marginHorizontal: space.lg, marginTop: space.sm, marginBottom: space.sm, padding: space.md, backgroundColor: color.surfaceActive }
 })

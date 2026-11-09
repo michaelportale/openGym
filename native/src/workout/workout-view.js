@@ -6,7 +6,7 @@ const DASH = '–'
 
 // The engine marks a per-side set completed as soon as one side is done (for totals).
 // This screen treats it as done only when both sides are.
-function isDone(slot) {
+export function isDone(slot) {
   const row = slot.row
   if (isSideSet(row)) return row.sides.L?.done === true && row.sides.R?.done === true
   return slot.completed === true
@@ -28,7 +28,7 @@ function num(value) {
 }
 
 // m:ss, or h:mm:ss from an hour up.
-function clock(ms) {
+export function clock(ms) {
   const total = Math.max(0, Math.floor((Number(ms) || 0) / 1000))
   const h = Math.floor(total / 3600)
   const m = Math.floor((total % 3600) / 60)

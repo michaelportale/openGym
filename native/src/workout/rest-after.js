@@ -50,8 +50,9 @@ export function completeFields(row, side, values) {
   return fields
 }
 
-// Rest length in ms: the exercise's own, else the profile's.
+// Rest length in ms: the exercise's own, else the profile's. An own rest of 0 means "Default"
+// on the web (supersetFlow.restSecFor), not a rest of no length.
 export function restMsFor(entry, profileRestSec) {
   const own = entry?.target?.restSec
-  return (Number.isFinite(own) ? own : profileRestSec) * 1000
+  return (Number.isFinite(own) && own > 0 ? own : profileRestSec) * 1000
 }

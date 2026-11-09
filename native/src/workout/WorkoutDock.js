@@ -9,7 +9,8 @@ const OPENS_KEYPAD = ['ready', 'enter-weight']
 
 // Renders `workoutScreen(...).dock`. `inline` drops the pin so the dock can sit at the end of
 // the scroll at large text sizes. The lead figure opens the keypad while a set is up.
-export default function WorkoutDock({ dock, onLayout, inline, onPrimary, onPressLead, onAddTime, onSkip, busy }) {
+// `children` sit under the primary button (the overnight prompt's other two choices).
+export default function WorkoutDock({ dock, onLayout, inline, onPrimary, onPressLead, onAddTime, onSkip, busy, children }) {
   const tappable = OPENS_KEYPAD.includes(dock.mode)
   const lead = <AppText variant="lead" color={color.text}>{dock.lead}</AppText>
   return (
@@ -30,6 +31,7 @@ export default function WorkoutDock({ dock, onLayout, inline, onPrimary, onPress
               </Pressable>
             ) : lead}
             <PrimaryButton label={dock.primaryLabel} disabled={busy} onPress={onPrimary} />
+            {children}
           </>
         )}
       </GlassPanel>

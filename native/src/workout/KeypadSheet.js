@@ -52,8 +52,10 @@ function Field({ title, text, active, onPress }) {
 // `initial` is { w, r } or, per side, { w, sides: { L: { r }, R: { r } } }. Save and Complete
 // hand over keypadValues (numbers or null). Closing by swipe, back or Close calls
 // onClose(values, changed) where `changed` is sheetCloseAction(...) === 'save'; the caller decides
-// whether to store a draft. `initialField` is 'w' or 'r' (a tapped reps box opens on reps). `weightTitle` is 'Lb each' for a per-hand exercise.
-export default function KeypadSheet({ visible, title, initial, perSide, initialField = 'w', weightTitle = 'Lb', onSave, onComplete, onClose }) {
+// whether to store a draft. `initialField` is 'w', 'r', or per side 'L.r'/'R.r' (a tapped reps box
+// opens on reps). `weightTitle` is 'Lb each' for a per-hand exercise. A done set passes
+// saveLabel 'Update', onUndo, and no onComplete. `notice` shows a write that was refused.
+export default function KeypadSheet({ visible, title, initial, perSide, initialField = 'w', weightTitle = 'Lb', saveLabel = 'Save', completeLabel = 'Complete', notice, onSave, onComplete, onUndo, onClose }) {
   const [state, setState] = useState(() => keypadState(initial, initialField))
   useEffect(() => {
     if (visible) setState(keypadState(initial, initialField))
@@ -69,6 +71,9 @@ export default function KeypadSheet({ visible, title, initial, perSide, initialF
           <AppText variant="screenTitle" accessibilityRole="header" style={styles.title}>{title}</AppText>
           <IconButton label="Close" accessibilityLabel="Close" accessibilityHint="Closes the keypad." onPress={close} />
         </View>
+        {notice ? (
+          <AppText variant="body" color={color.text} accessibilityLiveRegion="polite" accessibilityRole="alert">{notice}</AppText>
+        ) : null}
         <View style={styles.fields}>
           <Field title={weightTitle} text={fieldText(state, 'w')} active={state.field === 'w'} onPress={press('field:w')} />
           {fields.map(([id, name]) => (
@@ -87,14 +92,27 @@ export default function KeypadSheet({ visible, title, initial, perSide, initialF
         </View>
         <View style={styles.actions}>
           <View style={styles.action}>
-            <Pressable accessibilityRole="button" accessibilityLabel="Save" accessibilityHint="Keeps these numbers without completing the set." onPress={() => onSave(values)} style={styles.save}>
-              <AppText variant="button">Save</AppText>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={saveLabel}
+              accessibilityHint={onComplete ? 'Keeps these numbers without completing the set.' : 'Changes this set to these numbers.'}
+              onPress={() => onSave(values)}
+              style={styles.save}
+            >
+              <AppText variant="button">{saveLabel}</AppText>
             </Pressable>
           </View>
-          <View style={styles.action}>
-            <PrimaryButton label="Complete" disabled={values.w === null} accessibilityHint={values.w === null ? 'Enter a weight first.' : 'Logs this set.'} onPress={() => onComplete(values)} />
-          </View>
+          {onComplete ? (
+            <View style={styles.action}>
+              <PrimaryButton label={completeLabel} disabled={values.w === null} accessibilityHint={values.w === null ? 'Enter a weight first.' : 'Logs this set.'} onPress={() => onComplete(values)} />
+            </View>
+          ) : null}
         </View>
+        {onUndo ? (
+          <Pressable accessibilityRole="button" accessibilityLabel="Undo set" accessibilityHint="Marks this set as not done." onPress={onUndo} style={styles.undo}>
+            <AppText variant="button" color={color.textSecondary}>Undo set</AppText>
+          </Pressable>
+        ) : null}
       </View>
     </Modal>
   )
@@ -114,5 +132,6 @@ const styles = StyleSheet.create({
   keyFace: { alignItems: 'center', justifyContent: 'center', backgroundColor: color.control, borderColor: color.stroke, borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.md },
   actions: { flexDirection: 'row', gap: space.sm },
   action: { flex: 1 },
-  save: { minHeight: touch.primary, alignItems: 'center', justifyContent: 'center', backgroundColor: color.control, borderColor: color.stroke, borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.md }
+  save: { minHeight: touch.primary, alignItems: 'center', justifyContent: 'center', backgroundColor: color.control, borderColor: color.stroke, borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.md },
+  undo: { minHeight: touch.min, alignItems: 'center', justifyContent: 'center' }
 })
