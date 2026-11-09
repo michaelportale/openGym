@@ -2,7 +2,7 @@ import { expect, test, vi } from 'vitest'
 import { createNodeSqliteDb } from '../../scripts/node-sqlite.mjs'
 import { createSqliteWeighIns } from '../body/weigh-ins.js'
 import { createSqliteFinishedWorkouts } from '../session/finished-workouts.js'
-import { createSqliteRoutineEdits } from '../plan/routine-edits.js'
+import { createSqliteRoutineEdits } from './pending-edits.js'
 import { createSqliteServerCopy } from './server-copy.js'
 import { keyed, readSourceKey, sourceKey } from './source-key.js'
 

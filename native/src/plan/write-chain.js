@@ -16,7 +16,7 @@
 // run, the chain's pair goes when a render shows a stored routine that holds it, or one read from
 // the store after the chain settled (the store moved on: a sync took the web's version); at once
 // when the last write failed (the store never took it). Pure apart from the injected save.
-import { sameRoutine } from './routine-guard.js'
+import { sameRoutine } from '../sync/edit-guard.js'
 
 const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v)
 

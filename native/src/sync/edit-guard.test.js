@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { applyRoutineEdits, routineContent, sameRoutine } from './routine-guard.js'
+import { applyRoutineEdits, routineContent, sameRoutine } from './edit-guard.js'
 
 const routine = (id, name, extra = {}) => ({ id, name, slots: [{ ex: 'bench', sets: 3 }], ...extra })
 const edit = (rid, routineValue, extra = {}) => ({ rid, baseTs: null, routine: routineValue, sent: null, t: 1, ...extra })

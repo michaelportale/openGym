@@ -5,7 +5,7 @@
 // way in (server-put-back.js: a move or swap whose slots it pairs differently) is superseded as
 // unsafe, never sent. No I/O.
 
-import { putBackChanges } from './server-put-back.js'
+import { putBackChanges } from '../plan/server-put-back.js'
 
 const META = new Set(['_ts', '_f', '_u'])
 

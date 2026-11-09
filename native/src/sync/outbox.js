@@ -1,9 +1,9 @@
 import { applyDayOps } from '../body/day-ops.js'
-import { applyRoutineEdits } from '../plan/routine-guard.js'
+import { applyRoutineEdits } from './edit-guard.js'
 
 // What to send: the server's document, untouched, plus the workouts it does not have yet, this
 // phone's weigh-in changes by day (day-ops.js) and its routine edits that can go
-// (routine-guard.js), each replacing its own routine whole.
+// (edit-guard.js), each replacing its own routine whole.
 // Nothing else is changed, so keys this app does not know survive. The one addition: a document
 // with no unit is sent as pounds, which this app logs in (the web, the carry-over and the MCP
 // read a missing unit as kilograms).
@@ -37,7 +37,7 @@ export function buildPush(copy, pending, pendingWeighIns = [], pendingRoutineEdi
     },
     baseRev: copy.rev,
     baseWid: copy.wid,
-    // as it goes: the edit's content on the copy's stamps (routine-guard.js), and the listed row's
+    // as it goes: the edit's content on the copy's stamps (edit-guard.js), and the listed row's
     // baseTs, so markSent passes over a row a fresh put started over since
     routineEdits: carried.map(({ rid, t }) => ({
       rid, t, baseTs: pendingRoutineEdits.find(e => e.rid === rid && e.t === t).baseTs, routine: plan.next.find(r => r?.id === rid),

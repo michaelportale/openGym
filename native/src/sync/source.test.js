@@ -6,7 +6,7 @@ import { nextRoutineId } from '../workout/next-up.js'
 import { createNodeSqliteDb } from '../../scripts/node-sqlite.mjs'
 import { createSqliteServerCopy } from './server-copy.js'
 import { exercises } from '../shared/training.js'
-import { createMemoryRoutineEdits } from '../plan/routine-edits.js'
+import { createMemoryRoutineEdits } from './pending-edits.js'
 
 const builtIn = exercises.EXDB[0]
 const cap = s => s[0].toUpperCase() + s.slice(1)

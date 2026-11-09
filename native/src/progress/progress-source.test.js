@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
 import { createMemoryWeighIns } from '../body/weigh-ins.js'
-import { createMemoryRoutineEdits } from '../plan/routine-edits.js'
+import { createMemoryRoutineEdits } from '../sync/pending-edits.js'
 import { createMemoryFinishedWorkouts } from '../session/finished-workouts.js'
 import { progressLoader } from './progress-source.js'
 

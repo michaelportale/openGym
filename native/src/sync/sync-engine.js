@@ -6,11 +6,11 @@
 //
 // Everything is injected: `client` (api-client.js), `credentials` (the Keychain token),
 // `copy` and `meta` (server-copy.js), `workouts` (the finished-workout store), `weighIns` (the
-// weigh-in day operations), `routineEdits` (plan/routine-edits.js) and `now` (ms since epoch). It
+// weigh-in day operations), `routineEdits` (pending-edits.js) and `now` (ms since epoch). It
 // never touches the session journal and logs nothing.
 
 import { applyDayOps } from '../body/day-ops.js'
-import { applyRoutineEdits } from '../plan/routine-guard.js'
+import { applyRoutineEdits } from './edit-guard.js'
 import { buildPush } from './outbox.js'
 import { readCopy } from './server-copy.js'
 import { normalizeServer } from './server-address.js'
@@ -354,7 +354,7 @@ export function createSync({ client, credentials, copy, workouts, weighIns, rout
   // After 'server-older': take the server's document as it is now, and send it every workout of
   // this phone's that it lacks, and every routine edit whose routine is still as it was edited
   // on; an acked edit that no longer fits went out long ago and is settled with no notice
-  // (routine-edits.js, resent). Acks are cleared before the copy moves, so a kill in between
+  // (pending-edits.js, resent). Acks are cleared before the copy moves, so a kill in between
   // leaves the problem in place rather than workouts marked sent that the server lost.
   async function resendAll() {
     let taken = false

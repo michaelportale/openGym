@@ -3,7 +3,7 @@
 import { readCopy } from './server-copy.js'
 import { exercises } from '../shared/training.js'
 import { sessionState } from '../workout/history-state.js'
-import { applyRoutineEdits } from '../plan/routine-guard.js'
+import { applyRoutineEdits } from './edit-guard.js'
 
 export const cap = s => (s ? s[0].toUpperCase() + s.slice(1) : '')
 

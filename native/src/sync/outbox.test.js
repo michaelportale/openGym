@@ -130,7 +130,7 @@ test('a removal on record in the document supersedes a set made before it', () =
   expect(buildPush(copy, [], [typedSet('2026-11-08', 180, 950)]).state.bodyweight).toEqual([{ d: '2026-11-08', w: 180, t: 950 }])
 })
 
-// Routine edits (plan/routine-edits.js rows): the copy's routine as the Plan screen saved it, on
+// Routine edits (pending-edits.js rows): the copy's routine as the Plan screen saved it, on
 // the copy routine's _ts.
 const slotA = () => ({ id: '0025', sets: 3, reps: 5, mode: 'reps', weight: 60, prog: 'linear', pyramid: [{ w: 60, r: 8 }, { w: 70, r: 5 }], dbLoad: 'pair', stationId: 'rack-2', intensifier: 'drop', note: 'pause at the bottom', sgName: 'A' })
 const slotB = () => ({ id: '0027', sets: 3, reps: 8, mode: 'reps', stationId: 'cable-1', futureSlotKey: { nested: [1] } })

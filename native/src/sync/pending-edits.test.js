@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { createNodeSqliteDb, createNodeSqliteFileDb } from '../../scripts/node-sqlite.mjs'
-import { createMemoryRoutineEdits, createSqliteRoutineEdits } from './routine-edits.js'
+import { createMemoryRoutineEdits, createSqliteRoutineEdits } from './pending-edits.js'
 
 const makers = {
   memory: () => createMemoryRoutineEdits(),

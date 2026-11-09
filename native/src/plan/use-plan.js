@@ -9,7 +9,7 @@ import { keyed, readSourceKey } from '../sync/source-key'
 import { syncAfterFinish } from '../sync/use-sync'
 import { useFocusReload } from '../sync/use-focus-reload'
 import { editBase } from './plan-view'
-import { createSqliteRoutineEdits } from './routine-edits'
+import { createSqliteRoutineEdits } from '../sync/pending-edits'
 
 const LOADING = { status: 'loading', state: null, names: null, copy: null, notices: [], error: null }
 
