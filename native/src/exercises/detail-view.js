@@ -8,8 +8,8 @@ export const MEDIA_CREDIT = 'Exercise media © Aliaksandr Makatserchyk, Gym visu
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 export function findExercise(state, id) {
-  const custom = (state?.customEx || []).find(e => e && e.id === id)
-  if (custom) return custom
+  const stored = (state?.customEx || []).find(e => e && e.id === id)
+  if (stored) return stored
   const ex = exercises.EXIDX[exercises.canonicalExId(id)]
   // EXIDX also holds registered customs; one no longer in state.customEx is gone.
   return ex && !exercises.isCustomEx(ex) ? ex : null
@@ -27,7 +27,8 @@ export function exerciseDetail({ state, id, server }) {
   const ex = findExercise(state, id)
   if (!ex) return null
   const S = state || {}
-  const custom = exercises.isCustomEx(ex)
+  // Stored customs can lose their flag, so where it was found counts first.
+  const custom = (S.customEx || []).includes(ex) || exercises.isCustomEx(ex)
   const withWorkouts = {
     ...S,
     workouts: (S.workouts || []).map(w => ({ ...w, entries: w.entries || [] })),

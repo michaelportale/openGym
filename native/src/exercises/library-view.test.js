@@ -7,6 +7,11 @@ const state = { customEx: [custom] }
 const names = v => v.rows.map(r => r.name.toLowerCase())
 
 describe('libraryView', () => {
+  test('a custom exercise without the custom flag is still yours', () => {
+    const flagless = { id: 'c2', n: 'flagless lift', bp: 'chest', tg: 'chest', eq: 'barbell' }
+    const v = libraryView({ state: { customEx: [flagless] } })
+    expect(v.rows.find(r => r.id === 'c2').yours).toBe(true)
+  })
   test('empty query: the whole catalogue plus customs, customs first', () => {
     const v = libraryView({ state })
     expect(v.rows).toHaveLength(exercises.allExercises(state).length)

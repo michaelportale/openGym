@@ -12,11 +12,12 @@ export function libraryView({ state, q = '', bp = '', cat = '', eq = '', showAll
   const sorted = searching
     ? favourites.sortYoursFirst(list, S, favourites.usageOf(S))
     : favourites.sortFavouritesFirst(list, S)
+  const storedCustom = ex => (S.customEx || []).some(c => c && c.id === ex.id)
   const row = ex => ({
     id: ex.id,
     name: cap(ex.n),
     sub: `${ex.tg} · ${ex.eq}`,
-    yours: exercises.isCustomEx(ex),
+    yours: storedCustom(ex) || exercises.isCustomEx(ex),
     fav: favourites.isFav(S, ex.id),
   })
   const profileActive = !!equipment.activeProfile(S)

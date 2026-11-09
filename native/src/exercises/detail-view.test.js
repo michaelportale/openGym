@@ -64,6 +64,12 @@ describe('exerciseDetail', () => {
     expect(c.custom).toBe(true)
     expect(c.media).toBeNull()
   })
+  it('treats a stored custom without the custom flag as custom, with no media', () => {
+    const flagless = { id: 'c2', n: 'flagless lift', bp: 'chest', tg: 'chest', eq: 'barbell', sm: [] }
+    const d = exerciseDetail({ state: { customEx: [flagless] }, id: 'c2', server })
+    expect(d.custom).toBe(true)
+    expect(d.media).toBeNull()
+  })
   it('is null when the exercise is gone', () => {
     expect(exerciseDetail({ state: {}, id: 'nope-zzz', server })).toBeNull()
     expect(exerciseDetail({ state: { customEx: [] }, id: 'c1', server })).toBeNull()
