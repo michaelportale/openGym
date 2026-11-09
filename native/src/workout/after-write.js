@@ -29,8 +29,9 @@ export async function afterGatedWrite(result, { afterWrite, before, after, now, 
   let restStarted = false
   try {
     restStarted = !quiet && restBegan(before, after(), now)
-    // Only a started rest waits for the answer (it may ask for permission); any other write does
-    // not hold its result for the reconcile.
+    // Only a started rest awaits the answer, and the reconcile gives it at once unless this write
+    // may ask for permission (restStartWaits): only that one holds its result. Any other write
+    // fires the reconcile and goes on.
     if (restStarted) answer = await afterWrite?.({ restStarted })
     else Promise.resolve(afterWrite?.({ restStarted })).catch(warn)
   } catch (error) {

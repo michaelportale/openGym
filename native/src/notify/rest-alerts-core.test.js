@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { ASK_WAIT_MS, JOB_WAIT_MS, createRestAlerts } from './rest-alerts-core.js'
+import { ASK_WAIT_MS, JOB_WAIT_MS, createRestAlerts, restStartWaits } from './rest-alerts-core.js'
 
 const NOW = Date.parse('2026-11-07T15:00:00.000Z')
 const DEADLINE = NOW + 90_000
@@ -25,6 +25,14 @@ function fakeAdapter({ permissions = async () => granted, request = async () => 
 }
 const make = adapter => createRestAlerts({ adapter, now: () => NOW + 1000 })
 const ids = adapter => adapter.state.scheduled.map(r => r.identifier)
+// Hangs the adapter call `name` the first time it is made from here on; later calls work.
+const hangOnce = (adapter, name) => {
+  const real = adapter[name]
+  let calls = 0
+  adapter[name] = (...args) => (++calls === 1 ? new Promise(() => {}) : real(...args))
+}
+const denied = { status: 'denied', granted: false, ios: { status: 1 } }
+const paused = { ...running, status: 'paused', remainingMs: 40_000 }
 
 afterEach(() => {
   vi.useRealTimers()
@@ -158,13 +166,6 @@ describe('asking when a rest starts', () => {
 })
 
 describe('a native call that never settles', () => {
-  // Hangs the adapter call `name` the first time only; later calls work.
-  const hangOnce = (adapter, name) => {
-    const real = adapter[name]
-    let calls = 0
-    adapter[name] = (...args) => (++calls === 1 ? new Promise(() => {}) : real(...args))
-  }
-
   test('the job times out after JOB_WAIT_MS and warns, and the queue moves on', async () => {
     vi.useFakeTimers()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -203,5 +204,84 @@ describe('a native call that never settles', () => {
     vi.useFakeTimers()
     await make(fakeAdapter()).reconcile(journal('active'))
     expect(vi.getTimerCount()).toBe(0)
+  })
+})
+
+describe('only the rest start that may ask waits for its reconcile', () => {
+  test.each([
+    [null, false, true],
+    [null, true, true],
+    ['ask', false, true],
+    ['ask', true, false],
+    ['granted', false, false],
+    ['granted', true, false],
+    ['off', false, false],
+    ['off', true, false],
+  ])('step %s, asked %s: waits %s', (known, asked, waits) => {
+    expect(restStartWaits(known, asked)).toBe(waits)
+  })
+
+  test('once the prompt was answered, a rest start is answered at once, even while its reconcile hangs', async () => {
+    vi.useFakeTimers()
+    let current = ask
+    const adapter = fakeAdapter({ permissions: async () => current, request: async () => { current = granted; return granted } })
+    const alerts = make(adapter)
+    expect(await alerts.reconcile(journal('active'), { restStarted: true })).toEqual({ step: 'granted', asked: true })
+    hangOnce(adapter, 'listScheduled')
+    let answer
+    alerts.reconcile(journal('active'), { restStarted: true }).then(r => { answer = r })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(answer).toEqual({ step: 'granted', asked: false })
+  })
+
+  test('alerts read as off on open: a rest start is answered off at once, and the reconcile still runs', async () => {
+    vi.useFakeTimers()
+    const adapter = fakeAdapter({ permissions: async () => denied })
+    const alerts = make(adapter)
+    await alerts.reconcile(journal('active', paused), { fresh: true })
+    expect(adapter.state.reads).toBe(1)
+    hangOnce(adapter, 'listScheduled')
+    let answer
+    alerts.reconcile(journal('active'), { restStarted: true }).then(r => { answer = r })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(answer).toEqual({ step: 'off', asked: false })
+    expect(adapter.state.reads).toBe(2)
+  })
+
+  test('a return to the app reads again, so a change made in Settings answers the next rest start', async () => {
+    let current = granted
+    const adapter = fakeAdapter({ permissions: async () => current })
+    const alerts = make(adapter)
+    expect(await alerts.reconcile(journal('active'), { restStarted: true })).toEqual({ step: 'granted', asked: false })
+    current = denied
+    await alerts.reconcile(journal('active', paused), { fresh: true })
+    expect(await alerts.reconcile(journal('active'), { restStarted: true })).toEqual({ step: 'off', asked: false })
+  })
+
+  test('no step known yet (or a fresh read not landed): the rest start waits for its run', async () => {
+    vi.useFakeTimers()
+    let release
+    let current = granted
+    const adapter = fakeAdapter({ permissions: () => new Promise(resolve => { release = () => resolve(current) }) })
+    const alerts = make(adapter)
+    let answer
+    alerts.reconcile(journal('active'), { restStarted: true }).then(r => { answer = r })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(answer).toBeUndefined()
+    release()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(answer).toEqual({ step: 'granted', asked: false })
+    // Back from Settings: the step read before is forgotten until the fresh read lands.
+    current = denied
+    alerts.reconcile(journal('active', paused), { fresh: true })
+    let next
+    alerts.reconcile(journal('active'), { restStarted: true }).then(r => { next = r })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(next).toBeUndefined()
+    release()
+    await vi.advanceTimersByTimeAsync(0)
+    release()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(next).toEqual({ step: 'off', asked: false })
   })
 })

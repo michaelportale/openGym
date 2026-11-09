@@ -66,8 +66,9 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
   // overnight reloads the view (writing nothing), so the overnight dock shows without another tap.
   // Once the gate is free, the rest alert is brought in line with the journal: after every write,
   // not only those that touch rest, so none is missed. It is not awaited and never rejects, so it
-  // changes neither the result nor its notice (afterGatedWrite). Only a write that started a rest
-  // waits for it, to learn whether alerts are off. A dropped tap wrote nothing and reconciles nothing.
+  // changes neither the result nor its notice (afterGatedWrite). A write that started a rest learns
+  // whether alerts are off from the step last read; only one that may ask for permission waits for
+  // the answer (restStartWaits). A dropped tap wrote nothing and reconciles nothing.
   // The journal's rest, read as the write begins (inside the gate) and again once it has settled:
   // a rest that began in between is what may ask for notification permission (afterGatedWrite).
   const restOf = () => session.getState().view?.rest ?? null

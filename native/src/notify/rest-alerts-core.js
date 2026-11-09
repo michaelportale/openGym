@@ -16,6 +16,11 @@ export const JOB_WAIT_MS = 10_000
 
 const NO_SESSION = () => ({ sessionId: null, status: 'none', view: null, nextLabel: null })
 
+// Whether a rest-starting write waits for its reconcile's answer. Only one that may ask for
+// permission does: no step known yet, or 'ask' with the prompt not yet shown this launch. Every
+// other rest start is answered at once from the step last read, and its reconcile runs on its own.
+export const restStartWaits = (known, asked) => known == null || (known === 'ask' && !asked)
+
 export function createRestAlerts({ adapter, now = Date.now, waitMs = ASK_WAIT_MS, jobWaitMs = JOB_WAIT_MS }) {
   // One reconcile at a time, each reading the journal when it runs rather than when it was asked
   // for. Every failure, a timeout included, is logged and swallowed, so the promise never rejects
@@ -42,6 +47,11 @@ export function createRestAlerts({ adapter, now = Date.now, waitMs = ASK_WAIT_MS
 
   // The system prompt is requested at most once per launch; this is set before it is awaited.
   let asked = false
+  // The permission step last read or answered; null before any. Notification permission only
+  // changes in Settings, away from the app, so it is read again on open and on each return
+  // (`fresh`), and forgotten until that read lands.
+  let known = null
+  const readKnown = async () => (known = await readStep(adapter.permissions))
 
   const apply = (read, permission) => reconcileRestAlerts({ ...read(), now: now(), adapter, permission })
 
@@ -54,7 +64,7 @@ export function createRestAlerts({ adapter, now = Date.now, waitMs = ASK_WAIT_MS
       await apply(read, 'off')
       return null
     }
-    const step = await readStep(adapter.permissions)
+    const step = await readKnown()
     if (!restStarted || step !== 'ask' || asked) {
       await apply(read, step)
       return { step, asked: false }
@@ -66,16 +76,25 @@ export function createRestAlerts({ adapter, now = Date.now, waitMs = ASK_WAIT_MS
         console.warn('Notification permission not requested:', error?.message ?? error)
         return 'off'
       })
+      .then(answer => (known = answer))
     await apply(read, 'off')
     return { pending }
   }
 
   // After every write, on open and on return: `{ restStarted: true }` (a Complete that started a
   // rest, a Start rest retry) is the only call that may ask. It answers { step, asked } when
-  // permission was consulted, else null. An answer that arrives after the wait still reconciles.
-  function reconcile(read, { restStarted = false } = {}) {
+  // permission was consulted, else null. Only a rest start that may ask (restStartWaits) waits for
+  // its run, and for the prompt's answer as long as `waitMs`; any other is answered at once from the
+  // step last read. An answer that arrives after the wait still reconciles. `{ fresh: true }` (on
+  // open and on each return to the app) reads the permission again first.
+  function reconcile(read, { restStarted = false, fresh = false } = {}) {
+    if (fresh) {
+      known = null
+      enqueue(readKnown)
+    }
     const queued = enqueue(() => run(read, restStarted))
     if (!restStarted) return queued
+    if (!restStartWaits(known, asked)) return Promise.resolve({ step: known, asked: false })
     return queued.then(async out => {
       if (!out?.pending) return out
       out.pending.then(step => enqueue(() => apply(read, step)))

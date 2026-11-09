@@ -52,7 +52,8 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
   const shownEntry = view?.entries?.[index] ?? null
   const cardEntering = useFadeIn(screen ? index : undefined)
   // The rest alert follows the journal: reconciled when the session opens or ends (saved,
-  // discarded), on each return to the app, and after every write.
+  // discarded), on each return to the app, and after every write. Opening and each return read the
+  // notification permission again (Settings may have changed it while the app was away).
   const alerts = useRestAlerts({ session, sessionId: base?.id, names })
   const actions = useSessionActions({ session, base, restSec: state.restSec ?? 90, view, screen, shownEntry, setShownIndex, afterWrite: alerts })
 
@@ -68,7 +69,7 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
 
   const restored = useRef(false)
   useEffect(() => {
-    if (session.status !== 'loading') alerts()
+    if (session.status !== 'loading') alerts({ fresh: session.status === 'ready' })
     if (session.status !== 'ready' || restored.current) return
     restored.current = true
     if (view?.status === 'active') actions.restoreRest()
@@ -86,7 +87,7 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
       lastRest.current = null
       if (next === 'active') {
         setNow(Date.now())
-        alerts()
+        alerts({ fresh: true })
       }
       const zone = read.current.view?.timeZone ?? deviceTimeZone()
       if (next === 'active' && read.current.view && localDate(Date.now(), zone) !== localDate(read.current.at, zone)) onExit()

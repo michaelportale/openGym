@@ -12,13 +12,13 @@ export const clearRestAlerts = () => alerts.clear()
 // The reconcile for one session: call it when the session opens or changes state, on each return to
 // the app, and after every write. `session` is the useActiveSession value, `sessionId` the base id,
 // `names` the exercise names for the alert's "Next:" line. `{ restStarted: true }` is the only call
-// that may ask for permission.
+// that may ask for permission; `{ fresh: true }` (on open and on each return) reads it again.
 export function useRestAlerts({ session, sessionId, names }) {
   const latest = useRef(null)
   latest.current = { session, sessionId, names }
-  return useCallback(({ restStarted = false } = {}) => alerts.reconcile(() => {
+  return useCallback(({ restStarted = false, fresh = false } = {}) => alerts.reconcile(() => {
     const { session, sessionId, names } = latest.current
     const { status, view } = session.getState()
     return { sessionId, status: alertStatus(status, view), view, nextLabel: nextSetLabel(view, names) }
-  }, { restStarted }), [])
+  }, { restStarted, fresh }), [])
 }
