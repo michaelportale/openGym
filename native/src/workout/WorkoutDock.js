@@ -5,7 +5,7 @@ import GlassPanel from '../ui/GlassPanel'
 import PrimaryButton from '../ui/PrimaryButton'
 import ScaleButton from '../ui/ScaleButton'
 import RestPanel from './RestPanel'
-import { spokenLead } from './spoken'
+import { spokenLead, spokenPrimaryHint } from './spoken'
 
 const OPENS_KEYPAD = ['ready', 'enter-weight', 'enter-reps']
 
@@ -35,7 +35,7 @@ export default function WorkoutDock({ dock, perHand, onLayout, inline, onPrimary
             ) : (
               <AppText variant="lead" color={color.text} accessibilityLabel={spoken}>{dock.lead}</AppText>
             )}
-            <PrimaryButton label={dock.primaryLabel} disabled={busy} onPress={onPrimary} />
+            <PrimaryButton label={dock.primaryLabel} disabled={busy} accessibilityHint={spokenPrimaryHint(dock.mode, { side: dock.side })} onPress={onPrimary} />
             {children}
           </>
         )}

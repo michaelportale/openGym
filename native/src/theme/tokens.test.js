@@ -71,6 +71,11 @@ test('at every text size the resting timer stays the largest figure', () => {
     }
   }
 })
+// The countdown replaces the lead in the same dock, whose height is set by the lead's cap, so the
+// two dock figures stop growing at the same text size: an uncapped timer would reach 157 pt.
+test('the resting timer stops growing no later than the lead', () => {
+  expect(fontScale.timer ?? LARGEST).toBeLessThanOrEqual(fontScale.lead)
+})
 test('every style still grows with the text size', () => {
   for (const style of Object.keys(type)) {
     expect(fontScale[style] ?? LARGEST, style).toBeGreaterThan(1)

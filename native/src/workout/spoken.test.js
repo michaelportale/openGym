@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest'
-import { spokenDuration, spokenField, spokenLead, spokenUpNext } from './spoken.js'
+import { primaryAction } from './set-calls.js'
+import { spokenDuration, spokenField, spokenLead, spokenPrimaryHint, spokenUpNext } from './spoken.js'
 import { workoutScreen } from './workout-view.js'
 
 describe('spokenField', () => {
@@ -82,6 +83,37 @@ describe('spokenLead', () => {
     expect(spokenLead(dockOf([entry({}, [row('a', null, 12, false)])]))).toBe('Set 1, weight not set, 12 reps')
     expect(spokenLead(dockOf([entry({}, [row('a', 75, 10, true)])], { status: 'running', remainingMs: 64_000 })))
       .toBe('Rest, 1 minute 4 seconds left')
+  })
+})
+
+// The dock's main button writes at once on Complete, so its hint says what a tap will do.
+describe('spokenPrimaryHint', () => {
+  test('says what the main button does in each mode', () => {
+    expect(spokenPrimaryHint('ready')).toBe('Logs this set and starts the rest.')
+    expect(spokenPrimaryHint('enter-weight')).toBe('Opens the keypad.')
+    expect(spokenPrimaryHint('enter-reps')).toBe('Opens the keypad.')
+    expect(spokenPrimaryHint('exercise-done')).toBe('Shows the next exercise with sets left.')
+    expect(spokenPrimaryHint('all-done')).toBe('Shows the summary before saving.')
+  })
+  test("the screen's overnight and unsaved docks say theirs", () => {
+    expect(spokenPrimaryHint('overnight')).toBe('Shows the summary, ending the workout at its last set.')
+    expect(spokenPrimaryHint('finished')).toBe('Shows the summary before saving.')
+  })
+  // Rest starts only when both sides of a per-side set are done (rest-after.js).
+  test('one side of a per-side set promises no rest of its own', () => {
+    expect(spokenPrimaryHint('ready', { side: 'L' })).toBe('Logs this side. Rest starts once both sides are done.')
+    expect(spokenPrimaryHint('ready', { side: 'R' })).toBe('Logs this side. Rest starts once both sides are done.')
+    expect(spokenPrimaryHint('enter-reps', { side: 'R' })).toBe('Opens the keypad.')
+  })
+  test('every mode whose button set-calls routes has a hint', () => {
+    for (const mode of ['ready', 'enter-weight', 'enter-reps', 'exercise-done', 'all-done']) {
+      expect(primaryAction(mode), mode).not.toBe('none')
+      expect(spokenPrimaryHint(mode), mode).toMatch(/\.$/)
+    }
+  })
+  test('a mode with no main button has no hint', () => {
+    expect(spokenPrimaryHint('resting')).toBeUndefined()
+    expect(spokenPrimaryHint('constructor')).toBeUndefined()
   })
 })
 

@@ -1,3 +1,5 @@
+import { primaryAction } from './set-calls.js'
+
 // What VoiceOver says for the workout screen's dock, keypad fields and rows: numbers in words,
 // never a dash or a symbol. Components pass these through and build no words of their own.
 
@@ -72,6 +74,28 @@ export function spokenLead(dock, { perHand = false } = {}) {
   }
   if (SET_MODES.includes(dock.mode) && dock.figures) return `Set ${setWords(dock, perHand)}`
   return dock.lead
+}
+
+// Keyed to what set-calls routes the dock's main button to, so the hint cannot drift from it.
+const PRIMARY_HINTS = {
+  complete: 'Logs this set and starts the rest.',
+  keypad: 'Opens the keypad.',
+  follow: 'Shows the next exercise with sets left.',
+  finish: 'Shows the summary before saving.'
+}
+// The screen's own docks, whose buttons set-calls does not route.
+const SCREEN_HINTS = {
+  overnight: 'Shows the summary, ending the workout at its last set.',
+  finished: 'Shows the summary before saving.'
+}
+
+// The dock's main button hint for `mode`; undefined for a mode with no main button (resting).
+// One side of a per-side set starts no rest: rest waits for both sides (rest-after.js).
+export function spokenPrimaryHint(mode, { side = null } = {}) {
+  if (Object.hasOwn(SCREEN_HINTS, mode)) return SCREEN_HINTS[mode]
+  const action = primaryAction(mode)
+  if (action === 'complete' && Object.hasOwn(SIDES, side ?? '')) return 'Logs this side. Rest starts once both sides are done.'
+  return Object.hasOwn(PRIMARY_HINTS, action) ? PRIMARY_HINTS[action] : undefined
 }
 
 export function spokenUpNext(name) {
