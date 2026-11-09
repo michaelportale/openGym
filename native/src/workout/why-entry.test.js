@@ -8,7 +8,6 @@ const KINDS = {
   'warmup-loads': 'warmup-loads',
   'warmup-prompt': 'warmup-prompt',
   progression: 'double-progression',
-  'rep-range': 'rep-ranges',
   effort: 'effort-proximity',
   deload: 'deload-after-misses'
 }
@@ -27,4 +26,8 @@ test('an unknown kind has no entry', () => {
   expect(whyEntry('nope')).toBeNull()
   expect(whyEntry(undefined)).toBeNull()
   expect(whyEntry('toString')).toBeNull()
+})
+
+test('the load-steps sheet is titled like the button that opens it', () => {
+  expect(whyEntry('increments').title).toBe('About load steps')
 })
