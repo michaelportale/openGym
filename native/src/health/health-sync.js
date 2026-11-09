@@ -174,10 +174,15 @@ export function createHealthSync({ adapter, store, workouts, now, weighIns, read
       days.add(d)
     }
     const gone = new Set()
+    let blind = false
     if (full) {
-      // A full read reports no deletions: a cached reading it did not return is gone.
+      // A full read reports no deletions: a cached reading it did not return is gone. Unless it
+      // returned no external reading at all over a non-empty cache: HealthKit hides revoked read
+      // access as no data, so that read cannot see. It reconciles nothing and moves no anchor.
+      const cache = await readings.list()
+      blind = cache.length > 0 && !read.samples.some((s) => isExternal(s, ownBundle))
       const returned = new Set(read.samples.map((s) => s.uuid))
-      for (const cached of await readings.list()) {
+      for (const cached of blind ? [] : cache) {
         if (returned.has(cached.uuid)) continue
         gone.add(cached.uuid)
         days.add(cached.d)
@@ -213,7 +218,7 @@ export function createHealthSync({ adapter, store, workouts, now, weighIns, read
     try {
       for (const op of ops) if ((await weighIns.putFromHealth(op)).written) written++
       for (const uuid of gone) await readings.remove(uuid)
-      if (read.anchor) await state.set(BW_ANCHOR, read.anchor)
+      if (read.anchor && !blind) await state.set(BW_ANCHOR, read.anchor)
     } finally {
       if (written > 0) notifyWeighIns()
     }

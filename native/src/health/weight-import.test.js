@@ -363,7 +363,7 @@ test('two failures in one pass read no more and keep the stored anchor for the n
   expect(await store.state.get('bwAnchor')).toBe('anchor-3')
 })
 
-test('a reading deleted while the anchored read failed: the full re-read falls back, then removes the day', async () => {
+test('a reading deleted while the anchored read failed: the full re-read falls back to the reading it still sees', async () => {
   const { adapter, store, weighIns, health, world } = await setup()
   adapter.reads.push(changes([scale('P', 181, hour(7)), scale('Q', 180, hour(9))]))
   await health.run()
@@ -377,12 +377,54 @@ test('a reading deleted while the anchored read failed: the full re-read falls b
   expect(await weighIns.get(DAY)).toEqual({ d: DAY, op: 'set', w: 181, t: NOW + 1000, src: 'health', hk: 'P' })
   expect((await store.readings.listDay(DAY)).map(x => x.uuid)).toEqual(['P'])
   await pushed(weighIns, world)
-  // P goes the same way: the day is removed, not fallen back to the stale Q.
+  // A full read that sees no external reading at all cannot tell a deletion from hidden data:
+  // P stays. An anchored read that reports P's deletion then removes the day, not falls back to Q.
   world.clock += 1000
   adapter.reads.push(new Error('transient'), changes([]))
   await health.run()
+  expect(await weighIns.get(DAY)).toEqual({ d: DAY, op: 'set', w: 181, t: NOW + 1000, src: 'health', hk: 'P' })
+  expect(await store.state.get('bwAnchor')).toBe('anchor-3')
+  adapter.reads.push(changes([], ['P']))
+  await health.run()
+  expect(adapter.calls.at(-1).anchor).toBe('anchor-3')
   expect(await weighIns.get(DAY)).toEqual({ d: DAY, op: 'remove', t: NOW + 2000, src: 'health' })
   expect(await store.readings.listDay(DAY)).toEqual([])
+})
+
+test('a full read that sees no external reading over a non-empty cache cannot see: no day removed, cache and anchor kept', async () => {
+  const { adapter, store, weighIns, health, world } = await setup()
+  adapter.reads.push(changes([scale('P', 181, hour(7)), scale('Q', 180, hour(9)), scale('R', 182, hour(8, '2026-11-08'))]))
+  await health.run()
+  await pushed(weighIns, world)
+  const before = { ops: await weighIns.list(), p: await store.readings.listDay(DAY), r: await store.readings.listDay('2026-11-08') }
+  world.clock += 1000
+  // Read access revoked: the anchored read fails, and the read without an anchor returns only the app's own samples.
+  adapter.reads.push(new Error('transient'), changes([scale('own', 179, hour(10), { bundleId: OWN })]))
+  await health.run()
+  // And with no stored anchor at all, a full read that returns nothing.
+  await store.state.set('bwAnchor', '')
+  adapter.reads.push(changes([]))
+  await health.run()
+  expect(adapter.calls.slice(1).map(c => c.anchor)).toEqual(['anchor-1', null, null])
+  expect(await weighIns.list()).toEqual(before.ops)
+  expect(await weighIns.listPending()).toEqual([])
+  expect(await store.readings.listDay(DAY)).toEqual(before.p)
+  expect(await store.readings.listDay('2026-11-08')).toEqual(before.r)
+  expect(await store.state.get('bwAnchor')).toBe('')
+  expect(world.pokes).toBe(1)
+})
+
+test('a full read that returns one external reading still reconciles the rest', async () => {
+  const { adapter, store, weighIns, health, world } = await setup()
+  adapter.reads.push(changes([scale('P', 181, hour(7)), scale('Q', 180, hour(9)), scale('R', 182, hour(8, '2026-11-08'))]))
+  await health.run()
+  await pushed(weighIns, world)
+  world.clock += 1000
+  adapter.reads.push(new Error('transient'), changes([scale('P', 181, hour(7))]))
+  await health.run()
+  expect((await weighIns.list()).map(o => [o.d, o.op, o.hk ?? null])).toEqual([['2026-11-08', 'remove', null], [DAY, 'set', 'P']])
+  expect((await store.readings.list()).map(x => x.uuid)).toEqual(['P'])
+  expect(await store.state.get('bwAnchor')).toBe('anchor-3')
 })
 
 test('every read without an anchor is a full snapshot: a cached reading it does not return is gone', async () => {
