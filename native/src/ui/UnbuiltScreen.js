@@ -5,7 +5,7 @@ import AppText from './AppText'
 import ScreenHeader from './ScreenHeader'
 
 // Native tabs only inset the first ScrollView in a screen, so the body must be one.
-export default function UnbuiltScreen({ title, phaseLabel, summary, status }) {
+export default function UnbuiltScreen({ title, phaseLabel, summary, status, children }) {
   return (
     <ScrollView
       style={styles.scroll}
@@ -13,6 +13,7 @@ export default function UnbuiltScreen({ title, phaseLabel, summary, status }) {
       contentContainerStyle={[styles.content, { paddingTop: screenTopInset(Platform.OS) }]}
     >
       <ScreenHeader title={title} />
+      {children}
       <View style={styles.card}>
         <AppText variant="label" color={color.textMuted}>{status}</AppText>
         {phaseLabel ? (
