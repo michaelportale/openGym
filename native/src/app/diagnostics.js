@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { deleteDatabaseAsync, openDatabaseAsync } from 'expo-sqlite'
 import { color, radius, space, touch } from '../theme/tokens'
 import AppText from '../ui/AppText'
+import ServerSection from '../sync/ServerSection'
 import { readVerdict } from '../health/gates'
 import { toSessionDbHandle } from '../storage/db-handle'
 import { runStorageCheck } from '../storage/probe'
@@ -102,7 +103,8 @@ export default function Diagnostics() {
     }))
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content} alwaysBounceVertical={false}>
+      <ServerSection />
       <AppText variant="value">e1RM {e1rm}</AppText>
       <AppText variant="body" color={color.textSecondary}>{catalogueSize} exercises</AppText>
       <AppText variant="body" color={color.textSecondary}>training.js load: {loadMs} ms</AppText>
@@ -114,23 +116,18 @@ export default function Diagnostics() {
         <ActionButton title="Remove test workouts" disabled={busy} onPress={removeTests} />
         <ActionButton title="Storage check" disabled={busy} onPress={storageCheck} />
       </View>
-      <ScrollView style={styles.output}>
+      <View style={styles.output}>
         {lines.map((l, i) => (
           <AppText key={i} variant="body">{l}</AppText>
         ))}
-      </ScrollView>
-    </View>
+      </View>
+    </ScrollView>
   )
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: color.bg,
-    alignItems: 'center',
-    paddingTop: space.xl,
-    gap: space.xs
-  },
+  container: { flex: 1, backgroundColor: color.bg },
+  content: { alignItems: 'center', paddingTop: space.xl, paddingBottom: space.xl, gap: space.xs },
   buttons: { marginTop: space.lg, alignSelf: 'stretch', paddingHorizontal: space.lg, gap: space.sm },
   button: {
     minHeight: touch.min,
@@ -140,5 +137,5 @@ const styles = StyleSheet.create({
     backgroundColor: color.accent
   },
   buttonDisabled: { opacity: 0.4 },
-  output: { flex: 1, alignSelf: 'stretch', padding: space.lg }
+  output: { alignSelf: 'stretch', padding: space.lg }
 })

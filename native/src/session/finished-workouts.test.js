@@ -171,3 +171,114 @@ test('a confirmed finish writes one row and then clears the journal', async () =
   expect(again).toMatchObject({ duplicate: true })
   expect(await finished.list()).toHaveLength(1)
 })
+
+test.each(['memory', 'fake sqlite', 'node sqlite'])('%s store: every written workout is pending until acked, and acking is by id', async (kind) => {
+  const store = STORES[kind]()
+  await store.put(workout('a', '2026-11-05'))
+  await store.put(workout('b', '2026-11-06'))
+  await store.put(workout('c', '2026-11-07'))
+  expect((await store.listPending()).map(w => w.id)).toEqual(['a', 'b', 'c'])
+
+  await store.markAcked(['a', 'c', 'missing'], '2026-11-08T10:00:00.000Z')
+  expect((await store.listPending()).map(w => w.id)).toEqual(['b'])
+  expect((await store.list()).map(w => w.id)).toEqual(['a', 'b', 'c'])
+  await store.markAcked([], '2026-11-08T10:00:00.000Z')
+  expect((await store.listPending()).map(w => w.id)).toEqual(['b'])
+})
+
+test.each(SQLITE_DRIVERS)('%s: pending and acked survive a kill', async (_driver, createDb) => {
+  let db = createDb()
+  const first = createSqliteFinishedWorkouts(db)
+  await first.put(workout('a', '2026-11-05'))
+  await first.put(workout('b', '2026-11-06'))
+  db = db.reopen()
+  expect((await createSqliteFinishedWorkouts(db).listPending()).map(w => w.id)).toEqual(['a', 'b'])
+  await createSqliteFinishedWorkouts(db).markAcked(['a'], '2026-11-08T10:00:00.000Z')
+  db = db.reopen()
+  expect((await createSqliteFinishedWorkouts(db).listPending()).map(w => w.id)).toEqual(['b'])
+})
+
+test('a table from before Phase 5 gains acked_at once, and every old row stays pending', async () => {
+  let db = createNodeSqliteDb()
+  await db.exec(`CREATE TABLE finished_workouts (id TEXT PRIMARY KEY, d TEXT NOT NULL, body TEXT NOT NULL);`)
+  await db.run('INSERT INTO finished_workouts (id, d, body) VALUES (?, ?, ?)', ['old-1', '2026-10-01', JSON.stringify(workout('old-1', '2026-10-01'))])
+  await db.run('INSERT INTO finished_workouts (id, d, body) VALUES (?, ?, ?)', ['old-2', '2026-10-02', JSON.stringify(workout('old-2', '2026-10-02'))])
+
+  const store = createSqliteFinishedWorkouts(db)
+  expect((await store.listPending()).map(w => w.id)).toEqual(['old-1', 'old-2'])
+  expect(db.executed.filter(sql => /ALTER TABLE finished_workouts ADD COLUMN acked_at/i.test(sql))).toHaveLength(1)
+
+  // a second open on the same database neither fails nor alters again
+  const again = createSqliteFinishedWorkouts(db)
+  expect((await again.listPending()).map(w => w.id)).toEqual(['old-1', 'old-2'])
+  expect(db.executed.filter(sql => /ALTER TABLE/i.test(sql))).toHaveLength(1)
+})
+
+test('a fresh table has acked_at from the schema and needs no ALTER', async () => {
+  const db = createNodeSqliteDb()
+  expect(FINISHED_WORKOUTS_SCHEMA).toMatch(/acked_at TEXT/)
+  await createSqliteFinishedWorkouts(db).listPending()
+  expect(db.executed.some(sql => /ALTER TABLE/i.test(sql))).toBe(false)
+})
+
+test.each(SQLITE_DRIVERS.filter(([name]) => name !== 'fake sqlite'))('%s: two stores opened at once on a pre-Phase-5 table both work, and a reopen is fine', async (_n, createDb) => {
+  let db = createDb()
+  await db.exec('CREATE TABLE finished_workouts (id TEXT PRIMARY KEY, d TEXT NOT NULL, body TEXT NOT NULL);')
+  for (const id of ['o1', 'o2']) {
+    await db.run('INSERT INTO finished_workouts (id, d, body) VALUES (?, ?, ?)', [id, '2026-10-01', JSON.stringify(workout(id, '2026-10-01'))])
+  }
+  const a = createSqliteFinishedWorkouts(db)
+  const b = createSqliteFinishedWorkouts(db)
+  const [la, lb] = await Promise.all([a.list(), b.listPending()])
+  expect(la.map(w => w.id)).toEqual(['o1', 'o2'])
+  expect(lb.map(w => w.id)).toEqual(['o1', 'o2'])
+
+  db = db.reopen()
+  expect((await createSqliteFinishedWorkouts(db).listPending()).map(w => w.id)).toEqual(['o1', 'o2'])
+})
+
+test('a duplicate-column error from the ALTER is treated as done', async () => {
+  const db = createNodeSqliteDb()
+  await db.exec('CREATE TABLE finished_workouts (id TEXT PRIMARY KEY, d TEXT NOT NULL, body TEXT NOT NULL);')
+  // another connection added the column between the check and the ALTER
+  const realRun = db.run
+  db.run = async (sql, params) => {
+    if (/ALTER TABLE/i.test(sql)) await realRun('ALTER TABLE finished_workouts ADD COLUMN acked_at TEXT')
+    return realRun(sql, params)
+  }
+  expect(await createSqliteFinishedWorkouts(db).listPending()).toEqual([])
+})
+
+test('a second ack keeps the first time', async () => {
+  const db = createNodeSqliteDb()
+  const store = createSqliteFinishedWorkouts(db)
+  await store.put(workout('a', '2026-11-05'))
+  await store.markAcked(['a'], 'FIRST')
+  await store.markAcked(['a'], 'SECOND')
+  expect(await db.getAll('SELECT acked_at FROM finished_workouts WHERE id = ?', ['a'])).toEqual([{ acked_at: 'FIRST' }])
+})
+
+test.each(['memory', 'fake sqlite', 'node sqlite'])('%s store: resetAcked makes every workout pending again and keeps them all', async (kind) => {
+  const store = STORES[kind]()
+  await store.put(workout('a', '2026-11-05'))
+  await store.put(workout('b', '2026-11-06'))
+  await store.markAcked(['a', 'b'], '2026-11-08T10:00:00.000Z')
+  expect(await store.listPending()).toEqual([])
+
+  await store.resetAcked()
+  expect((await store.listPending()).map(w => w.id)).toEqual(['a', 'b'])
+  expect((await store.list()).map(w => w.id)).toEqual(['a', 'b'])
+  // acking again after a reset takes the new time
+  await store.markAcked(['a'], 'LATER')
+  expect((await store.listPending()).map(w => w.id)).toEqual(['b'])
+})
+
+test.each(SQLITE_DRIVERS)('%s: a reset survives a kill', async (_driver, createDb) => {
+  let db = createDb()
+  const store = createSqliteFinishedWorkouts(db)
+  await store.put(workout('a', '2026-11-05'))
+  await store.markAcked(['a'], '2026-11-08T10:00:00.000Z')
+  await store.resetAcked()
+  db = db.reopen()
+  expect((await createSqliteFinishedWorkouts(db).listPending()).map(w => w.id)).toEqual(['a'])
+})

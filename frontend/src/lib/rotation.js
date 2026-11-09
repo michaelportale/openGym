@@ -220,17 +220,34 @@ export function refillAfter(s, w, today = todayISO(), now = Date.now()) {
 }
 
 /**
- * A complete pass this app manages, refilled as the finish that completed it would have
- * (refillAfter), taking the latest workout that credited it as that finish. For a copy that
- * reached this state without a finish on this device: a sync merge that took both devices'
- * sessions of the pass, or kept the other copy's queue over this one's refill. Returns true when
- * it refilled; anything else (no managed pass, an incomplete one) is left alone.
+ * A complete pass this app manages, refilled as the finishes that completed it would have been
+ * (refillAfter). For a copy that reached this state without those finishes on this device: a sync
+ * merge that took both devices' sessions of the pass, or kept the other copy's queue over this
+ * one's refill. Several sessions can arrive at once (a whole pass and part of the next), so the
+ * workouts are replayed in date-then-start order, each landing and then running refillAfter, as
+ * they would have live. The latest workout that credited the pass gets `today`/`now`; earlier ones
+ * their own day and end. `s.workouts` is left as it was. Returns true when it refilled; anything
+ * else (no managed pass, an incomplete one) is left alone.
  */
 export function refillIfComplete(s, today = todayISO(), now = Date.now()) {
   const q = queueOf(s)
   if (!q?.rotationId || !s.rotation?.id || q.rotationId !== s.rotation.id) return false
   if (!queueView(s, today)?.complete) return false
-  const last = creditWindow(s, q)
-    .sort((x, y) => (x.d === y.d ? (x.start || 0) - (y.start || 0) : x.d < y.d ? -1 : 1)).at(-1)
-  return last ? refillAfter(s, last, today, now) : false
+  const order = (x, y) => (x.d === y.d ? (x.start || 0) - (y.start || 0) : x.d < y.d ? -1 : 1)
+  const last = creditWindow(s, q).sort(order).at(-1)
+  if (!last) return false
+  const original = s.workouts
+  const startsOn = q.startsOn
+  let refilled = false
+  try {
+    s.workouts = []
+    for (const w of [...original].sort(order)) {
+      s.workouts.push(w)
+      if (w.historicalImport === true || String(w.d || '') < startsOn) continue
+      refilled = (w === last ? refillAfter(s, w, today, now) : refillAfter(s, w, w.d, w.end ?? w.start ?? now)) || refilled
+    }
+  } finally {
+    s.workouts = original
+  }
+  return refilled
 }

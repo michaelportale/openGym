@@ -1,3 +1,4 @@
+// Its statement matching is loose; the real-driver (node:sqlite) tests are authoritative for the schema.
 // A tiny database double for the session adapter and the finished-workout store.
 // It understands only the statements those files send, including a single transaction
 // so clear() can roll back.
@@ -12,11 +13,13 @@ function cloneTables(tables) {
     session_drafts: tables.session_drafts.map(row => ({ ...row })),
     session_base: tables.session_base.map(row => ({ ...row })),
     finished_workouts: tables.finished_workouts.map(row => ({ ...row })),
+    server_copy: tables.server_copy.map(row => ({ ...row })),
+    sync_meta: tables.sync_meta.map(row => ({ ...row })),
   }
 }
 
 export function createFakeSqliteDb() {
-  const tables = { session_events: [], session_drafts: [], session_base: [], finished_workouts: [] }
+  const tables = { session_events: [], session_drafts: [], session_base: [], finished_workouts: [], server_copy: [], sync_meta: [] }
   let snapshot = null
   const failures = []
   const executed = []
@@ -29,6 +32,8 @@ export function createFakeSqliteDb() {
     tables.session_drafts = saved.session_drafts
     tables.session_base = saved.session_base
     tables.finished_workouts = saved.finished_workouts
+    tables.server_copy = saved.server_copy
+    tables.sync_meta = saved.sync_meta
   }
 
   async function waitIfHeld(text) {
@@ -75,9 +80,42 @@ export function createFakeSqliteDb() {
         existing.d = d
         existing.body = body
       } else {
-        tables.finished_workouts.push({ id, d, body })
+        tables.finished_workouts.push({ id, d, body, acked_at: null })
       }
       return { changes: 1 }
+    }
+    if (/^ALTER TABLE finished_workouts ADD COLUMN acked_at TEXT$/i.test(text)) return { changes: 0 }
+    if (/^UPDATE finished_workouts SET acked_at = \? WHERE id = \? AND acked_at IS NULL$/i.test(text)) {
+      const row = tables.finished_workouts.find(item => item.id === params[1])
+      if (!row || row.acked_at != null) return { changes: 0 }
+      row.acked_at = params[0]
+      return { changes: 1 }
+    }
+    if (/^UPDATE finished_workouts SET acked_at = NULL$/i.test(text)) {
+      for (const row of tables.finished_workouts) row.acked_at = null
+      return { changes: tables.finished_workouts.length }
+    }
+    if (/^INSERT INTO server_copy /i.test(text)) {
+      const [rev, wid, body] = params
+      tables.server_copy = [{ id: 1, rev, wid, body }]
+      return { changes: 1 }
+    }
+    if (/^DELETE FROM server_copy$/i.test(text)) {
+      const changes = tables.server_copy.length
+      tables.server_copy = []
+      return { changes }
+    }
+    if (/^INSERT INTO sync_meta /i.test(text)) {
+      const [key, value] = params
+      const existing = tables.sync_meta.find(row => row.key === key)
+      if (existing) existing.value = value
+      else tables.sync_meta.push({ key, value })
+      return { changes: 1 }
+    }
+    if (/^DELETE FROM sync_meta$/i.test(text)) {
+      const changes = tables.sync_meta.length
+      tables.sync_meta = []
+      return { changes }
     }
     if (/^INSERT OR IGNORE INTO session_events /i.test(text)) {
       const [id, at, type, body] = params
@@ -167,8 +205,18 @@ export function createFakeSqliteDb() {
       const matched = /WHERE set_id = \?/i.test(text) ? rows.filter(row => row.set_id === params[0]) : rows
       return matched.map(row => ({ set_id: row.set_id, body: row.body }))
     }
+    if (/^PRAGMA table_info\(finished_workouts\)$/i.test(text)) {
+      return ['id', 'd', 'body', 'acked_at'].map(name => ({ name }))
+    }
+    if (/^SELECT rev, wid FROM server_copy/i.test(text)) return tables.server_copy.map(row => ({ rev: row.rev, wid: row.wid }))
+    if (/FROM server_copy/i.test(text)) return tables.server_copy.map(row => ({ ...row }))
+    if (/FROM sync_meta/i.test(text)) {
+      const rows = /WHERE key = \?/i.test(text) ? tables.sync_meta.filter(row => row.key === params[0]) : tables.sync_meta
+      return rows.map(row => ({ ...row }))
+    }
     if (/FROM finished_workouts/i.test(text)) {
       let rows = [...tables.finished_workouts]
+      if (/acked_at IS NULL/i.test(text)) rows = rows.filter(row => row.acked_at == null)
       if (/WHERE id = \?/i.test(text)) rows = rows.filter(row => row.id === params[0])
       if (/ORDER BY d/i.test(text)) {
         rows.sort((a, b) => (a.d === b.d ? (a.id < b.id ? -1 : a.id > b.id ? 1 : 0) : a.d < b.d ? -1 : 1))

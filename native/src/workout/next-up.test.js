@@ -89,3 +89,14 @@ test('without a queue it gives the first routine, or null with none', () => {
   expect(nextRoutineId({ routines: [{ id: 'x' }], workouts: [] }, now)).toBe('x')
   expect(nextRoutineId({ routines: [], workouts: [] }, now)).toBeNull()
 })
+
+test('several passes merged into the web at once leave the web on the routine next-up names', () => {
+  for (const picks of [[...six, 'push-a', 'pull-a'], [...six, ...six], [...six, ...six, 'push-a']]) {
+    const finishes = picks.map((id, n) => lifted(id, n))
+    const web = sixState()
+    web.workouts.push(...[...finishes].reverse()) // a sync merge: every session lands together
+    const last = finishes.at(-1)
+    expect(rotation.refillIfComplete(web, last.d, last.end)).toBe(true)
+    expect(queue.queueRemaining(web)[0], picks.length + ' finishes').toBe(phoneNext(web, picks.length))
+  }
+})
