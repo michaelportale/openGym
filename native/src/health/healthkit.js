@@ -127,7 +127,7 @@ export async function readBodyMass({ start, end }) {
 }
 
 // Body-mass changes since the anchor (every sample from `since` when there is none), in lb.
-// A malformed anchor throws; the caller clears it and reads again without one.
+// A malformed anchor throws; the caller reads again without one.
 export async function readBodyMassChanges({ anchor, since }) {
   const options = { limit: 0, unit: 'lb', filter: { date: { startDate: since } } }
   const result = await queryQuantitySamplesWithAnchor(BODY_MASS, anchor ? { ...options, anchor } : options)

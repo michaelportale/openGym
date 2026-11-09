@@ -661,10 +661,12 @@ async function webEditSetup() {
   await store.state.set('on', '1')
   await store.state.set('bwSince', String(atHour(0)))
   const weighIns = createMemoryWeighIns()
-  const w = { clock: atHour(8), copy: { state: { bodyweight: [] } }, server: { bodyweight: [] } }
+  const w = { clock: atHour(8), copy: { state: { bodyweight: [] } }, server: { bodyweight: [] }, copyReads: 0, onCopyRead: null }
   const health = createHealthSync({
     adapter, store, workouts: createMemoryFinishedWorkouts(), now: () => w.clock, weighIns,
-    readCopy: async () => w.copy, ownBundleId: async () => OWN, timeZone: () => 'UTC', onWeighIns: () => {},
+    // onCopyRead(n): a hook run after the copy was read (the nth read of the test), so a sync can land between two reads.
+    readCopy: async () => { const old = w.copy; await w.onCopyRead?.(++w.copyReads); return old },
+    ownBundleId: async () => OWN, timeZone: () => 'UTC', onWeighIns: () => {},
   })
   // the sync engine, reduced: pull, reconcile, push, pull, reconcile
   const reconcile = async () => {
@@ -688,7 +690,7 @@ async function webEditSetup() {
     entry.w = 182
     entry.t = atHour(9)
   }
-  return { reads, health, w, sync, pull, editOnWeb, weighIns }
+  return { reads, health, w, sync, pull, editOnWeb, weighIns, adapter }
 }
 
 test('C1 residual: a deleted reading, a stale-copy pass and a later reading leave the web-typed weight alone', async () => {
@@ -746,4 +748,34 @@ test('after a typed remove, the Health pass before the push leaves the Health re
   w.clock = atHour(9) + 120
   await sync()
   expect(w.server.bodyweight).toEqual([expect.objectContaining({ d: DAY, w: 184, hk: 'Y' })])
+})
+
+// The sync engine stores the new server copy, then acks the rows. A reader that takes the rows first
+// and the copy second sees at worst a row the copy already holds; the other order can see neither.
+test('read order: a sync landing between the import\'s reads does not hide the typed weight from the import', async () => {
+  const { reads, health, w, sync, weighIns } = await webEditSetup()
+  await weighIns.put({ d: DAY, op: 'set', w: 182, t: atHour(8) })
+  reads.push({ samples: [scale('Y', 185, atHour(7))], deleted: [], anchor: 'a1' })
+  w.copyReads = 0
+  w.onCopyRead = async n => { if (n === 2) { w.onCopyRead = null; await sync() } } // the import's copy read
+  await health.run()
+  expect(await weighIns.get(DAY)).toMatchObject({ op: 'set', w: 182, t: atHour(8) })
+  await sync()
+  w.clock = atHour(12)
+  await health.run()
+  expect(w.server.bodyweight).toEqual([expect.objectContaining({ d: DAY, w: 182 })])
+})
+
+test('read order: a sync landing between the export\'s reads does not delete the changed weight\'s Health sample', async () => {
+  const { health, w, sync, weighIns, adapter } = await webEditSetup()
+  w.clock = atHour(9)
+  await weighIns.put({ d: DAY, op: 'set', w: 182, t: atHour(8) })
+  await health.run()
+  await sync()
+  adapter.calls.length = 0
+  await weighIns.put({ d: DAY, op: 'set', w: 183, t: atHour(9) }) // the owner corrects today's weight
+  w.onCopyRead = async () => { w.onCopyRead = null; await sync() } // the export's copy read
+  await health.run()
+  expect(adapter.calls.filter(c => c[0] === 'deleteBW')).toEqual([])
+  expect(adapter.calls.filter(c => c[0] === 'saveBW').map(c => c[1].lb)).toEqual([183])
 })

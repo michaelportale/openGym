@@ -120,12 +120,14 @@ export function createHealthSync({ adapter, store, workouts, now, weighIns, read
   // The day -> entry the server copy plus this phone's pending ops give (no copy: the ops alone).
   // known is false when the copy is unreadable.
   async function effectiveEntries() {
+    // This phone's rows before the copy: the sync engine stores the copy, then acks the rows, so a sync
+    // landing between the two reads leaves a pending op the new copy already holds (applying it twice is harmless).
+    const pending = await weighIns.listPending()
     const copy = await readCopy()
     const doc = copy?.state ?? {}
     const removals = doc.deleted?.bodyweight
     const deleted = removals && typeof removals === 'object' && !Array.isArray(removals) ? removals : {}
     const byDay = {}
-    const pending = await weighIns.listPending()
     for (const entry of applyDayOps(doc.bodyweight, pending, deleted).next) byDay[entry.d] = entry
     return { byDay, known: !!copy, pendingDays: new Set(pending.map((o) => o.d)) }
   }
@@ -250,12 +252,13 @@ export function createHealthSync({ adapter, store, workouts, now, weighIns, read
       days.add(cached.d)
     }
 
+    // Rows before the copy (see effectiveEntries).
+    const rows = await weighIns.list()
+    const pending = await weighIns.listPending()
     const copy = await readCopy()
     const doc = copy?.state ?? {}
     const removals = doc.deleted?.bodyweight
     const deleted = removals && typeof removals === 'object' && !Array.isArray(removals) ? removals : {}
-    const rows = await weighIns.list()
-    const pending = await weighIns.listPending()
     const copyByDay = {}
     for (const entry of applyDayOps(doc.bodyweight, [], deleted).next) copyByDay[entry.d] = entry
     // Unknown is not deleted: with no readable copy, this phone's acked ops count too, so a synced

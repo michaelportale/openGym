@@ -18,10 +18,11 @@ const today = () => localDate(Date.now(), Intl.DateTimeFormat().resolvedOptions(
 // this phone's row for today. Today is resolved at the moment of the read.
 async function readToday(db) {
   const d = today()
+  const weighIns = createSqliteWeighIns(db)
+  // This phone's rows before the copy: a sync lands as store the copy, then ack the rows.
+  const pending = await weighIns.listPending()
   const copy = await readCopy(createSqliteServerCopy(db))
   const deleted = copy?.state?.deleted?.bodyweight ?? {}
-  const weighIns = createSqliteWeighIns(db)
-  const pending = await weighIns.listPending()
   const { next } = applyDayOps(copy?.state?.bodyweight ?? [], pending, deleted)
   return {
     d,
