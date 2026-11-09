@@ -6,7 +6,7 @@ import { createActionGate } from './action-gate'
 import { pendingRest, restMsFor } from './rest-after'
 import { shownAfterComplete, withTargets } from './session-screen'
 import { carriedWeight, shownValues } from './workout-view'
-import { NO_NOTICES, addSetCall, addWarmupCall, completeCall, completeResult, dockKeypadField, draftCall, editCall, findSet, finishRetarget, keypadField, noticeAnnouncement, noticesAfter, overnightNotice, overnightRefusal, primaryAction, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, undoCall } from './set-calls'
+import { NO_NOTICES, addSetCall, addWarmupCall, completeCall, completeResult, dockKeypadField, draftCall, editCall, findSet, finishRetarget, keypadField, noticeAnnouncement, noticesAfter, overnightNotice, overnightRefusal, primaryAction, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, undoWrite } from './set-calls'
 
 const sideLabel = { L: 'Complete left', R: 'Complete right' }
 const failed = error => ({ ok: false, saved: false, error: { code: 'storage', message: error?.message || String(error) } })
@@ -176,10 +176,8 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
       settle(done ? await edit(sheet.setId, values) : await draft(sheet.setId, values), sheet.key, done ? 'edit' : 'draft')
     },
     onComplete: async values => settle(await complete({ setId: sheet.setId, side: sheet.side, values }), sheet.key, 'complete'),
-    onUndo: async () => settle(await write(async (view, now) => {
-      const call = undoCall(view, { setId: sheet.setId, eventId: createEventId(), now })
-      return call ? session.undoSet(call) : null
-    }), sheet.key, 'undo'),
+    // Undo also clears a draft a failed clear left on the set, first, in the same gated write.
+    onUndo: async () => settle(await write((view, now) => undoWrite(session, view, { setId: sheet.setId, eventId: createEventId(), now })), sheet.key, 'undo'),
     // Swiping the sheet away (or Close) after typing keeps a draft for any set not done yet; on a
     // done set it cancels. The sheet is gone, so a refusal shows on the screen.
     onClose: async (values, changed) => {

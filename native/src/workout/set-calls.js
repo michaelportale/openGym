@@ -125,6 +125,21 @@ export function undoCall(view, { setId, eventId, now }) {
   return { eventId, exerciseId: found.entry.id, setId }
 }
 
+// The sheet's Undo, run inside the gate on the engine's latest view with the hook's `session`
+// (putDraft, undoSet). A draft on a done set is one a failed clear left after its commit (a done
+// set takes none): undone, the set would show it and one-tap Complete would log it. So it is
+// cleared first, in the same gated write, and a clear that fails undoes nothing: that refusal is
+// the result, and the set stays done, showing what was logged. Null when there is nothing to undo.
+export async function undoWrite(session, view, { setId, eventId, now }) {
+  const call = undoCall(view, { setId, eventId, now })
+  if (!call) return null
+  if (findSet(view, setId).slot.draft != null) {
+    const cleared = await session.putDraft(setId, null)
+    if (cleared?.saved !== true) return cleared
+  }
+  return session.undoSet(call)
+}
+
 // A draft (Save, or typed numbers kept on close) is for a set not done yet; a done set changes
 // only through editCall.
 export function draftCall(view, { setId, values, now }) {

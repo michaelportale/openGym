@@ -356,6 +356,17 @@ describe('a draft left on a done set', () => {
     const right = set('s', sided(10, { r: 12, done: false }, { r: 11, done: true }), { completed: true, draft: { r: 9 } })
     expect(shownValues(right, 'L')).toEqual({ w: 10, sides: { L: { r: 9 }, R: { r: 11 } } })
   })
+  // The weight is shared by both sides: a leftover draft's would overwrite the done side's logged
+  // weight through the second side's Complete. Only a weight typed in the sheet now changes it.
+  test('per side, one side done: the weight is the one that side was logged at, not the draft\'s', () => {
+    const slot = set('s', sided(7.5, { r: 10, done: true }, { r: 10, done: false }), { completed: true, draft: { w: 10, sides: { L: { r: 10 }, R: { r: 9 } } } })
+    expect(shownValues(slot, 'R')).toEqual({ w: 7.5, sides: { L: { r: 10 }, R: { r: 9 } } })
+    const right = set('s', { w: 7.5, done: false, sides: { L: { w: 7.5, r: 10, done: false }, R: { w: 7.5, r: 8, done: true } } }, { completed: true, draft: { w: 12.5 } })
+    expect(shownValues(right, 'L').w).toBe(7.5)
+    const s = screen(view([{ id: '0300', target: {}, sets: [slot] }]))
+    expect(s.dock).toMatchObject({ side: 'R', figures: { w: 7.5, r: 9 }, lead: 'Set 1 · 7.5 lb × 9' })
+    expect(s.card.rows[0].weightText).toBe('7.5')
+  })
   test('a set not done keeps its draft', () => {
     expect(shownValues(set('a', todo(75, 8), { draft: { w: 80, r: 5 } }), null)).toEqual({ w: 80, r: 5 })
   })

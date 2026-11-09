@@ -84,14 +84,19 @@ function nextSide(row) {
 // carriedWeight, then the row's. In the keypad's shape: { w, r }, or per side
 // { w, sides: { L: { r }, R: { r } } } with the weight of the side being worked.
 // A done set never takes a draft (draftCall refuses one), so a draft on it is one a failed clear
-// left behind after the commit: it shows what was logged. So does a half-done set's done side.
+// left behind after the commit: it shows what was logged. So does a half-done set's done side,
+// and its weight, which both sides share: it is the one the first side was logged at, since a
+// draft's (one the first side's commit failed to clear) would overwrite it through the second
+// side's Complete. Only a weight typed in the sheet then changes it.
 export function shownValues(slot, side, carry) {
   const { row } = slot
   const d = isDone(slot) ? {} : slot.draft || {}
   if (!isSideSet(row)) return { w: d.w ?? carry ?? row.w ?? null, r: d.r ?? row.r ?? null }
   const own = row.sides[side === 'R' ? 'R' : 'L']
+  const first = sideDoneOf(row)
   const reps = s => (row.sides[s].done === true ? row.sides[s].r : d.sides?.[s]?.r ?? d.r ?? row.sides[s].r) ?? null
-  return { w: d.w ?? carry ?? own.w ?? row.w ?? null, sides: { L: { r: reps('L') }, R: { r: reps('R') } } }
+  const w = first ? row.sides[first].w ?? row.w : d.w ?? carry ?? own.w ?? row.w
+  return { w: w ?? null, sides: { L: { r: reps('L') }, R: { r: reps('R') } } }
 }
 
 // One weight and one reps figure: per side, the reps of the side being worked.

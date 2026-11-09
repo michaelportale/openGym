@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'vitest'
-import { NO_NOTICES, OVERNIGHT_NOTICE, PAST_MIDNIGHT, addSetCall, addWarmupCall, completeCall, completeResult, dockKeypadField, draftCall, editCall, finishRetarget, keypadField, noticeAnnouncement, noticesAfter, overnightNotice, overnightNow, overnightRefusal, primaryAction, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, undoCall, writeOutcome } from './set-calls.js'
+import { NO_NOTICES, OVERNIGHT_NOTICE, PAST_MIDNIGHT, addSetCall, addWarmupCall, completeCall, completeResult, dockKeypadField, draftCall, editCall, finishRetarget, keypadField, noticeAnnouncement, noticesAfter, overnightNotice, overnightNow, overnightRefusal, primaryAction, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, undoCall, undoWrite, writeOutcome } from './set-calls.js'
 import { shownValues, workoutScreen } from './workout-view.js'
 import { pendingRest, restEventId, restMsFor } from './rest-after.js'
 import { withTargets } from './session-screen.js'
 import { SQLITE_DRIVERS } from '../../scripts/node-sqlite.mjs'
 import { createSessionController } from '../session/session-controller.js'
-import { sessionOptionsFrom } from '../session/use-active-session.js'
+import { sessionActions, sessionOptionsFrom } from '../session/use-active-session.js'
 import { plannedSetId } from '../session/ids.js'
 import { createSqliteSessionStorage } from '../session/sqlite-storage.js'
 
@@ -904,6 +904,88 @@ describe.each(SQLITE_DRIVERS)('%s: the calls drive the engine', (_name, createDb
     logged(current(first))
     db = db.reopen()
     logged(current(await open(db, false)))
+  })
+
+  // A draft of 10 kept by a swipe, then the sheet reopened at 7.5 and Complete left; the clear of
+  // the 10 fails. The dock's Complete right logs 7.5 on both sides, not the leftover's 10.
+  test('per side: a draft left after the first side never changes the weight the second side logs', async () => {
+    clock = T0 + 1000
+    let db = createDb()
+    const first = await open(db)
+    await first.call('putDraft', latSet, { w: 10, sides: { L: { r: 10 }, R: { r: 10 } } })
+    db.failNext(/DELETE FROM session_drafts/, new Error('disk full'))
+    const left = await first.call('commitSet', completeCall(current(first), { setId: latSet, side: 'L', values: { w: 7.5, sides: { L: { r: 10 }, R: { r: 10 } } }, eventId: 'l1', now: clock }))
+    expect(left).toMatchObject({ ok: true, saved: true, draftError: { code: 'storage' } })
+    expect(current(first).entries[1].sets[0].draft).toMatchObject({ w: 10 })
+    const dock = workoutScreen(current(first), { names: {}, lastTimes: {}, exerciseIndex: 1 }).dock
+    expect(dock).toMatchObject({ mode: 'ready', side: 'R', figures: { w: 7.5, r: 10 } })
+
+    clock = T0 + 20_000
+    const right = completeCall(current(first), { setId: dock.setId, side: dock.side, eventId: 'r1', now: clock })
+    expect(right.fields.w).toBe(7.5)
+    expect((await first.call('commitSet', right)).saved).toBe(true)
+    const logged = view => {
+      const row = view.entries[1].sets[0].row
+      expect(row).toMatchObject({ w: 7.5, done: true })
+      expect(row.sides).toEqual({ L: { w: 7.5, r: 10, done: true }, R: { w: 7.5, r: 10, done: true } })
+    }
+    logged(current(first))
+    db = db.reopen()
+    logged(current(await open(db, false)))
+  })
+
+  // The same leftover (a draft of 80 x 5 whose clear failed when 80 x 6 was logged), then Undo
+  // through the hook's actions as the sheet's Undo runs it: the leftover goes with the tick, so
+  // the undone set shows, and one-tap Complete logs, 80 x 6, after a kill too.
+  test('Undo clears a draft a failed clear left on the set, so it cannot come back', async () => {
+    let db = createDb()
+    const first = await open(db)
+    await first.call('putDraft', benchSet, { w: 80, r: 5 })
+    db.failNext(/DELETE FROM session_drafts/, new Error('disk full'))
+    await first.call('commitSet', completeCall(current(first), { setId: benchSet, side: null, values: { w: 80, r: 6 }, eventId: 'c1', now: clock }))
+    expect(current(first).entries[0].sets[0].draft).toEqual({ w: 80, r: 5 })
+
+    const undone = await undoWrite(sessionActions(first, () => {}), current(first), { setId: benchSet, eventId: 'u1', now: clock })
+    expect(undone).toMatchObject({ ok: true, saved: true })
+    const reopened = async view => {
+      const set0 = view.entries[0].sets[0]
+      expect(set0.row).toMatchObject({ w: 80, r: 6, done: false })
+      expect(set0.draft).toBeNull()
+      expect(workoutScreen(view, { names: {}, lastTimes: {} }).dock).toMatchObject({ lead: 'Set 1 · 80 lb × 6', setId: benchSet })
+      expect(completeCall(view, { setId: benchSet, side: null, eventId: 'c2', now: clock }).fields).toEqual({ w: 80, r: 6 })
+    }
+    await reopened(current(first))
+    expect((await createSqliteSessionStorage(db).readDrafts())).toEqual({})
+    db = db.reopen()
+    await reopened(current(await open(db, false)))
+  })
+
+  test('Undo whose clear of that draft fails undoes nothing and says so', async () => {
+    const db = createDb()
+    const session = await open(db)
+    await session.call('putDraft', benchSet, { w: 80, r: 5 })
+    db.failNext(/DELETE FROM session_drafts/, new Error('disk full'))
+    await session.call('commitSet', completeCall(current(session), { setId: benchSet, side: null, values: { w: 80, r: 6 }, eventId: 'c1', now: clock }))
+    db.failNext(/DELETE FROM session_drafts/, new Error('disk full'))
+    const undone = await undoWrite(sessionActions(session, () => {}), current(session), { setId: benchSet, eventId: 'u1', now: clock })
+    expect(resultNotice(undone, 'undo')).toBe("Set not undone. The phone couldn't write it. Try again.")
+    const set0 = current(session).entries[0].sets[0]
+    expect(set0.row).toMatchObject({ w: 80, r: 6, done: true })
+    // Still done, so the leftover stays hidden behind what was logged.
+    expect(shownValues(set0, null)).toEqual({ w: 80, r: 6 })
+    expect((await createSqliteSessionStorage(db).readAll()).map(event => event.type)).not.toContain('set.undo')
+  })
+
+  test('Undo of a set with no draft is the undo alone', async () => {
+    const db = createDb()
+    const session = await open(db)
+    await session.call('commitSet', completeCall(current(session), { setId: benchSet, side: null, eventId: 'c1', now: clock }))
+    const executed = db.executed.length
+    expect(await undoWrite(sessionActions(session, () => {}), current(session), { setId: benchSet, eventId: 'u1', now: clock })).toMatchObject({ ok: true, saved: true })
+    expect(db.executed.slice(executed).some(sql => /session_drafts/.test(sql))).toBe(false)
+    expect(current(session).entries[0].sets[0].row.done).toBe(false)
+    // Nothing to undo writes nothing.
+    expect(await undoWrite(sessionActions(session, () => {}), current(session), { setId: benchSet, eventId: 'u2', now: clock })).toBeNull()
   })
 
   test('Start rest after that rest has run out starts nothing and says so', async () => {
