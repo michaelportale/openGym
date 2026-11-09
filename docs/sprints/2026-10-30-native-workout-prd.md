@@ -229,6 +229,18 @@ more reviewable branches and PRs, split at implementation time.
 | 9 | Device acceptance | Scenario table and a real gym session pass on an internal TestFlight release build. |
 | 10 | Web retirement | Web UI removed; shared logic moved to `packages/core`, because `mcp/` still imports it; docs updated. |
 
+### Status
+
+| Phase | State | Where |
+| --- | --- | --- |
+| 0 | Done | PR #41 |
+| 1 | Done | PR #110 ("Promote native phase 1 foundation to main") |
+| 2 | Done | Engine hardening PRs #101-#109 and #111 (real-SQLite kill tests); real workout stage 1 in PR #112 (merged 2026-11-09); stage 2 in this branch |
+| 3-10 | Not started | |
+
+Phase 9's device acceptance and the real gym sessions are the owner's to run. The checklist is
+[`2026-11-native-first-workout-checklist.md`](2026-11-native-first-workout-checklist.md).
+
 **HealthKit gates (Phase 0).** `@kingstinct/react-native-healthkit` is the first candidate. On the
 iPhone it must: save a workout, retry without a duplicate, replace after an edit, delete it, and read
 body weight from another app. If any gate fails, build a small custom Expo module instead.
@@ -290,7 +302,8 @@ proxies the API and serves exercise media, so its replacement is planned before 
 
 Unit tests cover pure logic, using a fake clock for timers, time-zone changes, expired rest and
 overnight sessions. The owner runs manual device checks against the scenario table. UI automation is
-not in scope. GitHub Actions is disabled on this fork, so suites run locally before merging.
+not in scope. GitHub Actions runs five jobs (frontend, api, api-image, mcp, native) on pull requests
+that touch those folders. The suites still run locally before merging.
 
 ## Licence and media guardrails
 
