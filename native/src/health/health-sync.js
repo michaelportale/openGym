@@ -118,21 +118,32 @@ export function createHealthSync({ adapter, store, workouts, now, weighIns, read
   }
 
   // The day -> entry the server copy plus this phone's pending ops give (no copy: the ops alone).
+  // known is false when the copy is unreadable.
   async function effectiveEntries() {
-    const doc = (await readCopy())?.state ?? {}
+    const copy = await readCopy()
+    const doc = copy?.state ?? {}
     const removals = doc.deleted?.bodyweight
     const deleted = removals && typeof removals === 'object' && !Array.isArray(removals) ? removals : {}
     const byDay = {}
-    for (const entry of applyDayOps(doc.bodyweight, await weighIns.listPending(), deleted).next) byDay[entry.d] = entry
-    return byDay
+    const pending = await weighIns.listPending()
+    for (const entry of applyDayOps(doc.bodyweight, pending, deleted).next) byDay[entry.d] = entry
+    return { byDay, known: !!copy, pendingDays: new Set(pending.map((o) => o.d)) }
   }
 
   // Typed weigh-ins out: a day is in Health only while this phone's typed entry is the day's entry.
   async function exportWeighIns(mine) {
     const rows = await weighIns.list()
     const current = await links.list('bw')
-    const plan = planWeightExport({ rows, effectiveByDay: await effectiveEntries(), links: current, now: now() })
+    const { byDay, known, pendingDays } = await effectiveEntries()
+    const plan = planWeightExport({ rows, effectiveByDay: byDay, links: current, now: now(), copyKnown: known, pendingDays })
     const linkOf = new Map(current.map((l) => [l.key, l]))
+    const removing = new Set(plan.remove.map((r) => r.key))
+    // A failed remove leaves its error on the link; once the day qualifies again nothing else clears it.
+    for (const l of current) {
+      if (l.error && l.state === 'exported' && !removing.has(l.key) && !plan.save.some((x) => x.key === l.key)) {
+        await links.put({ ...l, error: null, updatedAt: now() })
+      }
+    }
 
     for (const { key, syncId } of plan.remove) {
       if (generation !== mine) return
@@ -338,8 +349,10 @@ export function createHealthSync({ adapter, store, workouts, now, weighIns, read
           // Links first: if the delete then fails or the app dies, nothing claims a workout is in Health that is not.
           await links.clear('w')
           await links.clear('bw')
-          await adapter.deleteAllOwnWorkouts()
-          await adapter.deleteAllOwnBodyMass()
+          // Both deletes are tried; the first failure is the one reported.
+          const results = await Promise.allSettled([adapter.deleteAllOwnWorkouts(), adapter.deleteAllOwnBodyMass()])
+          const failure = results.find((r) => r.status === 'rejected')
+          if (failure) throw failure.reason
         }
         heldError = null
         await state.set('error', '')
@@ -368,7 +381,8 @@ export function createHealthSync({ adapter, store, workouts, now, weighIns, read
       let failed = null
       const current = await links.list('w')
       result.exported = current.filter((l) => l.state === 'exported').length
-      result.weighInsInHealth = (await links.list('bw')).filter((l) => l.state === 'exported').length
+      const bwLinks = await links.list('bw')
+      result.weighInsInHealth = bwLinks.filter((l) => l.state === 'exported').length
       if (result.on) {
         const rows = await workouts.list()
         result.skipped = rows.filter((d) => !exportable(d)).length
@@ -376,12 +390,9 @@ export function createHealthSync({ adapter, store, workouts, now, weighIns, read
         const plan = planWorkoutExport({ rows, links: current, now: now() })
         result.waiting = plan.save.length
         const removing = new Set(plan.remove.map((r) => r.key))
-        const bwLinks = await links.list('bw')
-        const bwPlan = planWeightExport({ rows: await weighIns.list(), effectiveByDay: await effectiveEntries(), links: bwLinks, now: now() })
-        const bwRemoving = new Set(bwPlan.remove.map((r) => r.key))
         failed = [
           ...current.filter((l) => l.error && (l.state === 'pending' || removing.has(l.key))),
-          ...bwLinks.filter((l) => l.error && (l.state === 'pending' || bwRemoving.has(l.key))),
+          ...bwLinks.filter((l) => l.error),
         ].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))[0]
       }
       result.error = failed ? failed.error : lastError || (await state.get('error')) || heldError || null

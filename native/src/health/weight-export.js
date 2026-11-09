@@ -12,13 +12,16 @@ function qualifies(row, entry) {
 }
 
 // rows: weighIns.list(); effectiveByDay: day -> the entry the server copy plus pending ops give.
-export function planWeightExport({ rows, effectiveByDay, links, now }) {
+// copyKnown false (the copy is unreadable): unknown is not deleted, so only rows still pending
+// (pendingDays) are decided, by their pending ops; every other row and link is left alone.
+export function planWeightExport({ rows, effectiveByDay, links, now, copyKnown = true, pendingDays = new Set() }) {
   const linkOf = new Map(links.filter((l) => l.kind === 'bw').map((l) => [l.key, l]))
   const save = []
   const remove = []
   for (const row of rows) {
     const link = linkOf.get(row.d)
     linkOf.delete(row.d)
+    if (!copyKnown && !pendingDays.has(row.d)) continue
     if (!qualifies(row, effectiveByDay[row.d])) {
       if (link) remove.push({ key: row.d, syncId: link.syncId })
       continue

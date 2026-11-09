@@ -79,3 +79,12 @@ test('only bw links count', () => {
   const r = row()
   expect(planWeightExport({ rows: [], effectiveByDay: {}, links: [{ ...link(r), kind: 'w' }], now: 1 }).remove).toEqual([])
 })
+
+test('an unknown copy removes and saves nothing for rows that are not pending, but pending rows still decide', () => {
+  const r = row()
+  const other = row({ d: '2026-11-08' })
+  const base = { rows: [r, other], effectiveByDay: {}, links: [link(r), link(other)], now: 1, copyKnown: false }
+  expect(planWeightExport({ ...base, pendingDays: new Set() })).toEqual({ save: [], remove: [] })
+  const plan = planWeightExport({ ...base, pendingDays: new Set([other.d]) })
+  expect(plan.remove).toEqual([{ key: other.d, syncId: weightSyncId(other.d) }])
+})

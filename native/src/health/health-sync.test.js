@@ -58,6 +58,7 @@ function fakeAdapter() {
     },
     async deleteAllOwnBodyMass() {
       calls.push(['deleteAllBW'])
+      if (adapter.failDeleteBW) throw adapter.failDeleteBW
       return 1
     },
     async readBodyMassChanges(args) {
@@ -577,4 +578,68 @@ test('a typed weigh-in written to Health and read back makes no day op', async (
   })
   await health.run()
   expect(await weighIns.list()).toEqual([typed('2026-11-09', 180, 5000)])
+})
+
+test('an unreadable copy removes nothing for an acked typed row and saves nothing new', async () => {
+  let copy = { state: { bodyweight: [{ d: '2026-11-09', w: 180, t: 5000 }] } }
+  const { adapter, weighIns, health } = await bwSetup({ readCopy: async () => copy })
+  await weighIns.put(typed('2026-11-09', 180, 5000))
+  await health.run()
+  await weighIns.markAcked([{ d: '2026-11-09', t: 5000 }], 'x')
+  copy = null
+  adapter.calls.length = 0
+  await health.run()
+  expect(adapter.calls.filter(c => c[0] === 'deleteBW' || c[0] === 'saveBW')).toEqual([])
+})
+
+test('status reads no copy and no weigh-in list while Health is on', async () => {
+  let copyReads = 0
+  const weighIns = createMemoryWeighIns()
+  const { health } = await setup([], { ...importDeps(), weighIns, readCopy: async () => { copyReads++; return null } })
+  await weighIns.put(typed('2026-11-09', 180, 5000))
+  const list = weighIns.list
+  let lists = 0
+  weighIns.list = async () => { lists++; return list() }
+  await health.enable()
+  copyReads = 0
+  lists = 0
+  await health.status()
+  expect([copyReads, lists]).toEqual([0, 0])
+})
+
+test('a bw link error shows in status, newest first, from the links alone', async () => {
+  const { adapter, weighIns, health } = await bwSetup()
+  await weighIns.put(typed('2026-11-09', 180, 5000))
+  adapter.failSaveBW = new Error('denied')
+  await health.run()
+  expect((await health.status()).error).toBe('denied')
+})
+
+test('a failed remove leaves no stale error once the day qualifies again', async () => {
+  let copy = null
+  const { adapter, store, weighIns, health } = await bwSetup({ readCopy: async () => copy })
+  await weighIns.put(typed('2026-11-09', 180, 5000))
+  await health.run()
+  copy = { state: { bodyweight: [{ d: '2026-11-09', w: 175, t: 9000 }] } }
+  const original = adapter.deleteBodyMassBySyncId
+  adapter.deleteBodyMassBySyncId = async () => { throw new Error('locked') }
+  await health.run()
+  expect((await store.links.list('bw'))[0].error).toBe('locked')
+  adapter.deleteBodyMassBySyncId = original
+  copy = null
+  await health.run()
+  expect((await store.links.list('bw'))[0].error).toBeNull()
+  expect((await health.status()).error).toBeNull()
+})
+
+test('disable with remove tries both deletes even when the first throws, and reports the first error', async () => {
+  const { adapter, store, health } = await bwSetup()
+  const original = adapter.deleteAllOwnWorkouts
+  adapter.deleteAllOwnWorkouts = async () => { adapter.calls.push(['deleteAll']); throw new Error('first') }
+  adapter.failDeleteBW = new Error('second')
+  await health.disable({ remove: true })
+  expect(adapter.calls.filter(c => c[0] === 'deleteAll' || c[0] === 'deleteAllBW').length).toBe(2)
+  expect((await health.status()).error).toBe('first')
+  expect(await store.links.list('bw')).toEqual([])
+  adapter.deleteAllOwnWorkouts = original
 })
