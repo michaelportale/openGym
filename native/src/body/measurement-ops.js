@@ -1,8 +1,9 @@
 // Pure day rules for body measurements: the weigh-in typed path (day-ops.js typedCanApply and
 // runDayOps), with the whole entry as an op's content. A measurement op is one day's change: set
 // the day's entry ({ d, op: 'set', entry, t }, the entry carrying the same d and t), or remove the
-// day ({ d, op: 'remove', t, baseT }, baseT the t of the entry the removal takes out). There is no
-// Health path and no rounding: values are the entry's own cm. No I/O.
+// day ({ d, op: 'remove', t, baseT, ownTs }: baseT the t of the copy's entry the owner deleted,
+// ownTs the t of every set this phone wrote for the day since its row was last acked, which the
+// store keeps). There is no Health path and no rounding: values are the entry's own cm. No I/O.
 import { compareDays, runDayOps, typedCanApply } from './day-ops.js'
 
 const isObj = v => !!v && typeof v === 'object'
@@ -17,15 +18,24 @@ export function sameValue(a, b) {
   return keys.length === Object.keys(b).length && keys.every(k => Object.prototype.hasOwnProperty.call(b, k) && sameValue(a[k], b[k]))
 }
 
+// A remove also takes out an entry this phone set itself (ownTs): a set whose push landed but whose
+// pull failed is on the server before the copy, and so the t the owner deleted, knows it. Any other
+// entry (a later web edit) is not the one deleted, and stays. Sets are the typed path as they are.
+function canApply(op, entry, removed) {
+  if (entry && op.op === 'remove' && Array.isArray(op.ownTs) && op.ownTs.includes(entry.t)) return true
+  return typedCanApply(op, entry, removed)
+}
+
 const MEASUREMENTS = {
   holds: (op, entry) => sameValue(entry, op.entry),
-  canApply: typedCanApply,
+  canApply,
   entryOf: op => op.entry,
 }
 
 // The phone's pending ops laid over the document's `measurements` list under the typed guard:
 // a set applies unless the day holds a later entry, or (a day with no entry) a removal on record
-// at or after it; a remove applies only to the entry it names (entry.t === baseT); a set is done
+// at or after it; a remove applies only to the entry it names (entry.t === baseT) or one this
+// phone set itself (ownTs includes entry.t); a set is done
 // when the day holds an equal entry, a remove when the day has none. If two entries share a day,
 // the one with the larger t (the first on equal t) is the one the guard reads.
 //

@@ -445,6 +445,38 @@ describe.skipIf(!HAS_API_DEPS)(TITLE, { timeout: 30_000 }, () => {
     expect((await app.copy.get()).state.measurements).toEqual([])
   })
 
+  // Fix round 1: the delete names the copy's entry for the day, here none; the store adds the
+  // phone's own set times, so the set that landed while its pull failed is taken out.
+  test('push ok, pull failed, then the owner deletes the day: the next sync removes it from the server file for good', async () => {
+    const server = await startServer()
+    const plain = createApiClient({ fetch: globalThis.fetch, timeoutMs: 10_000 })
+    let failPull = false
+    const client = {
+      ...plain,
+      async pull(...args) {
+        if (failPull) {
+          failPull = false
+          return { ok: false, kind: 'offline' }
+        }
+        return plain.pull(...args)
+      },
+    }
+    const app = await paired(server, undefined, { client })
+    const mine = measured('2026-11-08', T0)
+    await app.measurements.put({ d: mine.d, op: 'set', entry: mine, t: T0 })
+    failPull = true
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'waiting', pendingMeasurements: 1 })
+    expect(server.file().measurements).toEqual([mine])
+    expect((await app.copy.get()).state).not.toHaveProperty('measurements')
+    await app.measurements.put({ d: mine.d, op: 'remove', t: T0 + 1000 })
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingMeasurements: 0 })
+    const file = server.file()
+    expect(file.measurements).toEqual([])
+    expect(Number(file.deleted.measurements[mine.d])).toBeGreaterThan(T0)
+    expect((await app.copy.get()).state.measurements).toEqual([])
+    expect(await app.measurements.listPending()).toEqual([])
+  })
+
   // A routine whose first slot carries keys this app does not know, as the web leaves them.
   const planned = () => ({
     ...fixture(),

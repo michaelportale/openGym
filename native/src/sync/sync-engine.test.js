@@ -1967,6 +1967,58 @@ describe('measurements', () => {
     expect(await t.measurements.listPending()).toEqual([])
   })
 
+  // Fix round 1. The delete names the copy's entry for the day (Task 6), or none; the store adds
+  // the phone's own set times (ownTs).
+  test('push ok, pull failed, then the owner deletes the day: the next sync removes it, on the server and the copy', async () => {
+    for (const before of [[], [mEntry('2026-11-08', 5)]]) {
+      const t = await setup({ server: measuredServer(before) })
+      await t.sync.syncNow()
+      await t.measurements.put(mSet(mEntry('2026-11-08', 10)))
+      t.server.once.pull = [OFFLINE]
+      expect((await t.sync.syncNow()).state).toBe('waiting')
+      expect(t.server.doc.measurements).toEqual([mEntry('2026-11-08', 10)])
+      const held = (await t.copy.get()).state.measurements.find(e => e.d === '2026-11-08')
+      await t.measurements.put({ d: '2026-11-08', op: 'remove', t: 20, ...(held ? { baseT: held.t } : {}) })
+      expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingMeasurements: 0 })
+      expect(t.server.doc.measurements).toEqual([])
+      expect(t.server.doc.deleted.measurements['2026-11-08']).toBeGreaterThan(10)
+      expect((await t.copy.get()).state.measurements).toEqual([])
+      expect(await t.measurements.listPending()).toEqual([])
+      // and it stays gone: forget and pair again send nothing
+      await t.sync.forget()
+      t.server.pushes.length = 0
+      expect((await t.sync.pair(BASE, 'GOODCODE')).ok).toBe(true)
+      expect(t.server.pushes).toEqual([])
+      expect(t.server.doc.measurements).toEqual([])
+    }
+  })
+
+  test('an unsent set over a web entry, then a delete naming that entry: the push takes the day out', async () => {
+    const t = await setup({ server: measuredServer([mEntry('2026-11-08', 5)]) })
+    await t.sync.syncNow()
+    await t.measurements.put(mSet(mEntry('2026-11-08', 10)))
+    await t.measurements.put({ d: '2026-11-08', op: 'remove', t: 20, baseT: 5 })
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingMeasurements: 0 })
+    expect(t.server.pushes).toHaveLength(1)
+    expect(t.server.pushes[0].state.measurements).toEqual([])
+    expect(t.server.doc.measurements).toEqual([])
+  })
+
+  test('push ok, pull failed, the web edits the day, then the owner deletes it: the web\'s later edit stands', async () => {
+    const t = await setup({ server: measuredServer([]) })
+    await t.sync.syncNow()
+    await t.measurements.put(mSet(mEntry('2026-11-08', 10)))
+    t.server.once.pull = [OFFLINE]
+    await t.sync.syncNow()
+    const webs = mEntry('2026-11-08', 15, { waist: 79 })
+    t.server.webWritesMeasurement(webs)
+    await t.measurements.put({ d: '2026-11-08', op: 'remove', t: 20 })
+    t.server.pushes.length = 0
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingMeasurements: 0 })
+    expect(t.server.pushes).toEqual([])
+    expect(t.server.doc.measurements).toEqual([webs])
+  })
+
   test('pair and forget make every measurement pending again, as weigh-ins', async () => {
     const t = await setup()
     const mine = mEntry('2026-11-08', 5)

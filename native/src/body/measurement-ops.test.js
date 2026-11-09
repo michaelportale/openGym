@@ -141,3 +141,36 @@ test('a missing or malformed list is tolerated; elements on no day are left out,
   const good = entry('2026-11-01', 1)
   expect(applyMeasurementOps([null, 5, 'x', [], { waist: 1 }, good], [set(mine)]).next).toEqual([good, mine])
 })
+
+// Fix round 1: a remove also takes out an entry this phone set for the day since its row was last
+// acked (ownTs, kept by the store). A set whose push landed but whose pull failed is on the server
+// before the copy knows it, so the t the copy shows cannot name it.
+test('a remove takes out an entry the phone set itself (ownTs) as well as the one it saw (baseT)', () => {
+  const own = entry(D, 10)
+  // push ok, pull failed: the server holds the phone's set; the copy held nothing, or the web's t=5
+  for (const baseT of [undefined, 5]) {
+    expect(applyMeasurementOps([own], [{ ...remove(D, 20, baseT), ownTs: [10] }])).toMatchObject({ next: [], applied: [{ d: D, t: 20 }], superseded: [] })
+  }
+  // an earlier set of the phone's that the server still holds
+  expect(outcome([entry(D, 7)], { ...remove(D, 20, 5), ownTs: [7, 10] })).toBe('applied')
+  // the day already gone is done, as before
+  expect(outcome([], { ...remove(D, 20, 5), ownTs: [10] })).toBe('done')
+})
+
+test('an unsent set over a web entry, then a remove naming that entry: the day goes', () => {
+  expect(applyMeasurementOps([entry(D, 5)], [{ ...remove(D, 20, 5), ownTs: [10] }])).toMatchObject({ next: [], applied: [{ d: D, t: 20 }] })
+})
+
+test('a remove over a later web edit, whose t is neither baseT nor the phone\'s own, is superseded: the web wins', () => {
+  const later = entry(D, 15, { waist: 79 })
+  for (const op of [{ ...remove(D, 20, 5), ownTs: [10] }, { ...remove(D, 20), ownTs: [10, 12] }, { ...remove(D, 20, 5), ownTs: [] }, remove(D, 20, 5)]) {
+    const r = applyMeasurementOps([later], [op])
+    expect(r.next[0]).toBe(later)
+    expect(r.superseded).toEqual([{ d: D, t: 20 }])
+  }
+  expect(outcome([{ ...later, t: '10' }], { ...remove(D, 20), ownTs: [10] })).toBe('superseded') // strict, as baseT is
+})
+
+test('ownTs never moves a set: a later entry still beats it', () => {
+  expect(outcome([entry(D, 15)], { ...set(entry(D, 10)), ownTs: [15] })).toBe('superseded')
+})

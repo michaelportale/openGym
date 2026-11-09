@@ -1,9 +1,12 @@
 // Local body-measurement operations, the weigh-in store's pattern (weigh-ins.js) with no Health
 // path. One row per day holding what this phone last set or removed for that day: a set keeps the
-// whole entry (JSON, so every value goes back byte for byte), a remove the t of the entry it takes
-// out (base_t). acked_at is NULL until the push has settled the row (the outbox is the rows still
-// NULL). The handle is injected. This file does not import expo-sqlite and does not send anything.
-// Ops are { d, op, entry (set only), t, baseT (when present) }.
+// whole entry (JSON, so every value goes back byte for byte), a remove the t of the copy's entry it
+// takes out (base_t). own_ts (ownTs) is the store's own: the t of every set this phone wrote for the
+// day since the row was last acked, so a remove also takes out a set of the phone's that reached the
+// server before the copy knew it (measurement-ops.js). acked_at is NULL until the push has settled
+// the row (the outbox is the rows still NULL); resetAcked keeps own_ts. The handle is injected. This
+// file does not import expo-sqlite and does not send anything.
+// Ops are { d, op, entry (set only), t, baseT (when present), ownTs (when not empty) }.
 import { sameValue } from './measurement-ops.js'
 
 export const MEASUREMENT_OPS_SCHEMA = `
@@ -13,6 +16,7 @@ CREATE TABLE IF NOT EXISTS measurement_ops (
   entry TEXT,
   t INTEGER NOT NULL,
   base_t INTEGER,
+  own_ts TEXT,
   acked_at TEXT
 );
 `.trim()
@@ -32,25 +36,40 @@ function requireOp(op) {
   }
 }
 
-// Op object from the fields; a remove has no entry, a null baseT is left out. The entry is a copy,
-// as it would come back from SQLite.
-function toOp(d, op, entry, t, baseT) {
+// Op object from the fields; a remove has no entry, a null baseT and an empty ownTs are left out.
+// The entry and ownTs are copies, as they would come back from SQLite.
+function toOp(d, op, entry, t, baseT, ownTs) {
   const out = { d, op }
   if (op === 'set') out.entry = JSON.parse(typeof entry === 'string' ? entry : JSON.stringify(entry))
   out.t = t
   if (baseT != null) out.baseT = baseT
+  const own = typeof ownTs === 'string' ? JSON.parse(ownTs) : ownTs
+  if (Array.isArray(own) && own.length) out.ownTs = [...own]
   return out
 }
 
+// What the caller gave, without any ownTs: that is the store's to keep.
 function normalized(op) {
   requireOp(op)
-  return toOp(op.d, op.op, op.entry, op.t, op.baseT ?? null)
+  return toOp(op.d, op.op, op.entry, op.t, op.baseT ?? null, null)
 }
 
 function fromRow(row) {
-  return toOp(row.d, row.op, row.entry, row.t, row.base_t)
+  return toOp(row.d, row.op, row.entry, row.t, row.base_t, row.own_ts)
 }
 
+// The ownTs a put starts with: an unacked row it replaces hands on its own, plus its t when it is
+// a set; an acked row, or none, hands on nothing.
+function carried(previous, wasAcked) {
+  if (!previous || wasAcked) return []
+  return [...new Set([...(previous.ownTs ?? []), ...(previous.op === 'set' ? [previous.t] : [])])]
+}
+
+function withOwn(stored, own) {
+  return own.length ? { ...stored, ownTs: own } : stored
+}
+
+// ownTs is not content: it is what the phone wrote before, not what this op sends.
 function sameContent(a, b) {
   return a.op === b.op && (a.baseT ?? null) === (b.baseT ?? null) && sameValue(a.entry ?? null, b.entry ?? null)
 }
@@ -67,14 +86,15 @@ function byDay(a, b) {
   return a.d < b.d ? -1 : a.d > b.d ? 1 : 0
 }
 
-const copyOf = row => toOp(row.d, row.op, row.entry, row.t, row.baseT ?? null)
+const copyOf = row => toOp(row.d, row.op, row.entry, row.t, row.baseT ?? null, row.ownTs ?? null)
 
 export function createMemoryMeasurements() {
   const rows = new Map()
   const acked = new Map()
   return {
     async put(op) {
-      const stored = bumped(normalized(op), rows.get(op?.d))
+      const previous = rows.get(op?.d)
+      const stored = withOwn(bumped(normalized(op), previous), carried(previous, acked.has(op?.d)))
       rows.set(stored.d, stored)
       acked.delete(stored.d)
       return { ok: true, d: stored.d, t: stored.t }
@@ -133,12 +153,13 @@ export function createSqliteMeasurements(db) {
       await ready()
       let s = normalized(op)
       const found = await db.getAll('SELECT * FROM measurement_ops WHERE d = ?', [s.d])
-      s = bumped(s, found.length ? fromRow(found[0]) : null)
+      const previous = found.length ? fromRow(found[0]) : null
+      s = withOwn(bumped(s, previous), carried(previous, found.length > 0 && found[0].acked_at != null))
       await db.run(
-        `INSERT INTO measurement_ops (d, op, entry, t, base_t, acked_at) VALUES (?, ?, ?, ?, ?, NULL)
+        `INSERT INTO measurement_ops (d, op, entry, t, base_t, own_ts, acked_at) VALUES (?, ?, ?, ?, ?, ?, NULL)
          ON CONFLICT(d) DO UPDATE SET op = excluded.op, entry = excluded.entry, t = excluded.t,
-           base_t = excluded.base_t, acked_at = NULL`,
-        [s.d, s.op, s.entry ? JSON.stringify(s.entry) : null, s.t, s.baseT ?? null],
+           base_t = excluded.base_t, own_ts = excluded.own_ts, acked_at = NULL`,
+        [s.d, s.op, s.entry ? JSON.stringify(s.entry) : null, s.t, s.baseT ?? null, s.ownTs ? JSON.stringify(s.ownTs) : null],
       )
       return { ok: true, d: s.d, t: s.t }
     },

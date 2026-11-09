@@ -34,9 +34,9 @@ async function roundTrip(store) {
   await store.put(newer)
   expect((await store.list()).filter(o => o.d === typed.d)).toEqual([newer])
   expect((await store.listPending()).map(o => o.d)).toContain(typed.d)
-  // a remove replaces a set, and keeps no entry
+  // a remove replaces a set, and keeps no entry; the unacked set's t goes on in ownTs
   await store.put({ d: earlier.d, op: 'remove', t: 6, baseT: 5 })
-  expect(await store.get(earlier.d)).toEqual({ d: earlier.d, op: 'remove', t: 6, baseT: 5 })
+  expect(await store.get(earlier.d)).toEqual({ d: earlier.d, op: 'remove', t: 6, baseT: 5, ownTs: [5] })
 
   // a stale ack does not settle a newer op
   await store.markAcked([{ d: typed.d, t: typed.t }], 'at2')
@@ -78,7 +78,7 @@ async function sameTime(store) {
   // the same entry with its keys in another order is the same content
   expect(await store.put({ ...typed, entry: Object.fromEntries(Object.entries(logged).reverse()) })).toMatchObject({ t: 10 })
   expect(await store.put({ ...typed, entry: { ...logged, waist: 79.5 } })).toEqual({ ok: true, d: typed.d, t: 11 })
-  expect(await store.get(typed.d)).toEqual({ ...typed, entry: { ...logged, waist: 79.5, t: 11 }, t: 11 })
+  expect(await store.get(typed.d)).toEqual({ ...typed, entry: { ...logged, waist: 79.5, t: 11 }, t: 11, ownTs: [10] })
   await store.markAcked([{ d: typed.d, t: 10 }], 'at')
   expect((await store.listPending()).map(o => o.d)).toEqual([typed.d])
   // a remove over a set of the same t moves up too
@@ -91,7 +91,50 @@ async function sameTime(store) {
   expect(applyMeasurementOps([], [op]).next).toEqual([{ ...logged, t: 13 }])
 }
 
+// Fix round 1: ownTs, the t of every set this phone wrote for the day since its row was last acked.
+// The store keeps it; a caller never passes it.
+async function ownTimes(store) {
+  const day = '2026-02-01'
+  const s = (t, fields = {}) => ({ d: day, op: 'set', entry: { d: day, t, waist: 80, ...fields }, t })
+  await store.put({ ...s(10), ownTs: [99] }) // the caller's is never taken
+  expect(await store.get(day)).toEqual(s(10))
+  // set -> set -> remove while unacked: each set's t accumulates
+  await store.put(s(20, { waist: 79 }))
+  expect(await store.get(day)).toEqual({ ...s(20, { waist: 79 }), ownTs: [10] })
+  await store.put({ d: day, op: 'remove', t: 30, baseT: 5 })
+  expect(await store.get(day)).toEqual({ d: day, op: 'remove', t: 30, baseT: 5, ownTs: [10, 20] })
+  expect(await store.listPending()).toEqual([{ d: day, op: 'remove', t: 30, baseT: 5, ownTs: [10, 20] }])
+  // a set over the unacked remove carries them on (the remove itself set nothing)
+  await store.put(s(40))
+  expect((await store.get(day)).ownTs).toEqual([10, 20])
+  await store.put({ d: day, op: 'remove', t: 50 })
+  expect(await store.get(day)).toEqual({ d: day, op: 'remove', t: 50, ownTs: [10, 20, 40] })
+  // a same-t rewrite of new content records the old t once
+  await store.put(s(60))
+  await store.put(s(60, { waist: 70 }))
+  expect(await store.get(day)).toEqual({ d: day, op: 'set', entry: { d: day, t: 61, waist: 70 }, t: 61, ownTs: [10, 20, 40, 60] })
+  // after an ack, the next put starts with none
+  await store.markAcked([{ d: day, t: 61 }], 'at')
+  await store.put({ d: day, op: 'remove', t: 70, baseT: 61 })
+  expect(await store.get(day)).toEqual({ d: day, op: 'remove', t: 70, baseT: 61 })
+  await store.markAcked([{ d: day, t: 70 }], 'at')
+  await store.put(s(80))
+  expect(await store.get(day)).toEqual(s(80))
+
+  // pair, forget and resendAll (resetAcked) keep it; a row pending again is replaced as unacked
+  const other = '2026-02-02'
+  const o = (t, fields = {}) => ({ d: other, op: 'set', entry: { d: other, t, waist: 81, ...fields }, t })
+  await store.put(o(10))
+  await store.put(o(20, { waist: 82 }))
+  await store.markAcked([{ d: other, t: 20 }], 'at')
+  await store.resetAcked()
+  expect(await store.get(other)).toEqual({ ...o(20, { waist: 82 }), ownTs: [10] })
+  await store.put({ d: other, op: 'remove', t: 30 })
+  expect(await store.get(other)).toEqual({ d: other, op: 'remove', t: 30, ownTs: [10, 20] })
+}
+
 for (const [name, make] of both) {
+  test(`${name}: ownTs gathers the phone's own set times until an ack, and resetAcked keeps it`, async () => { await ownTimes(make()) })
   test(`${name}: round trips, replaces per day and ignores a stale ack`, async () => { await roundTrip(make()) })
   test(`${name}: rejects bad ops`, async () => { await validation(make()) })
   test(`${name}: a same-t put of new content moves t up in the op and its entry`, async () => { await sameTime(make()) })
@@ -115,6 +158,7 @@ test('real sqlite: survives a reopen, with the entry byte for byte', async () =>
   db = db.reopen()
   const again = createSqliteMeasurements(db)
   expect(await again.get('2026-01-03')).toEqual(removal)
+  expect(await again.get('2026-01-01')).toEqual({ d: '2026-01-01', op: 'remove', t: 6, baseT: 5, ownTs: [5] })
   expect(JSON.stringify((await again.get(typed.d)).entry)).toBe(JSON.stringify({ ...logged, waist: 80.01, t: 11 }))
 })
 
