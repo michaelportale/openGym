@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { validateRir } from '../science/effort.js'
-import { RIR_CHOICES, effortFailure, effortRefusal, effortShown, isRirSelected, rirChipLabel, rirChipText, rirFields, toggleRir, withRir } from './effort-choice.js'
+import { RIR_CHOICES, rirChipHint, effortFailure, effortRefusal, effortShown, isRirSelected, rirChipLabel, rirChipText, rirFields, toggleRir, withRir } from './effort-choice.js'
 
 describe('the choices', () => {
   test('0 to 5, with 5 shown as 5+', () => {
@@ -89,5 +89,17 @@ describe('what reaches the gate', () => {
   test('a bad value is a failed result with its own code and sentence; a good one is null', () => {
     expect(effortFailure({ rir: 12 })).toEqual({ ok: false, saved: false, error: { code: 'bad-rir', message: validateRir(12).error } })
     expect(effortFailure({ rir: 2 })).toBeNull()
+  })
+})
+
+describe('the chip hints', () => {
+  test('a plain chip is optional; the selected one clears', () => {
+    expect(rirChipHint(2, 3)).toBe('Optional. Saved with this set.')
+    expect(rirChipHint(3, 3)).toBe('Tap again to clear.')
+  })
+  test('5+ over a logged 8 says so and that tapping clears it', () => {
+    expect(rirChipHint(8, 5)).toBe('Logged as 8. Tap to clear.')
+    expect(rirChipHint(5, 5)).toBe('Tap again to clear.')
+    expect(rirChipHint(8, 4)).toBe('Optional. Saved with this set.')
   })
 })

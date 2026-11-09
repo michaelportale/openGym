@@ -1,7 +1,7 @@
 import { workoutModel } from '../shared/training.js'
 import { isOvernight, projectRest } from '../session/timing.js'
 import { OVERNIGHT_NOTICE, failureText } from './failure-text.js'
-import { rirFields } from './effort-choice.js'
+import { rirFields, sidesWithRir } from './effort-choice.js'
 import { completeFields, restEventId } from './rest-after.js'
 import { carriedWeight, isDone, isWarmup, lockedWeight, shownValues } from './workout-view.js'
 
@@ -78,7 +78,11 @@ export function completeCall(view, { setId, side, values, eventId, now }) {
   // side), never a warm-up's; blank writes nothing. A bad value writes nothing at all.
   const effort = rirFields(slot.row, values?.rir)
   if (!effort.ok) return null
-  const call = (fields, withEffort = true) => ({ eventId, exerciseId: entry.id, setId, fields: withEffort ? { ...fields, ...effort.fields } : fields })
+  const call = (fields, withEffort = true) => {
+    const out = withEffort ? { ...fields, ...effort.fields } : fields
+    if (withEffort && out.sides && 'rir' in effort.fields) out.sides = sidesWithRir(out.sides, effort.fields.rir)
+    return { eventId, exerciseId: entry.id, setId, fields: out }
+  }
   if (!isSideSet(slot.row)) {
     return shown.r == null ? null : call(completeFields(slot.row, null, { w, r: shown.r }))
   }
@@ -142,6 +146,7 @@ export function editCall(view, { setId, values, eventId, now }) {
   const effort = rirFields(row, values.rir, { clear: true })
   if (!effort.ok) return null
   Object.assign(fields, effort.fields)
+  if (fields.sides && 'rir' in effort.fields) fields.sides = sidesWithRir(fields.sides, effort.fields.rir)
   return { eventId, exerciseId: entry.id, setId, fields }
 }
 

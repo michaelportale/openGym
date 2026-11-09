@@ -7,7 +7,7 @@ import PrimaryButton from '../ui/PrimaryButton'
 import ScaleButton from '../ui/ScaleButton'
 import WhySheet from './WhySheet'
 import { whyEntry } from './why-entry'
-import { RIR_CHOICES, isRirSelected, rirChipLabel, rirChipText, toggleRir } from './effort-choice'
+import { RIR_CHOICES, isRirSelected, rirChipHint, rirChipLabel, rirChipText, toggleRir } from './effort-choice'
 import { actionsStacked, applyKey, completeBlocker, fieldLocked, fieldText, keypadState, keypadValues, sheetCloseAction, sideLockHint, sideLockNote } from './keypad'
 import { spokenField } from './spoken'
 
@@ -156,7 +156,7 @@ export default function KeypadSheet({ visible, title, initial, perSide, side = n
                     <ScaleButton
                       key={n}
                       accessibilityLabel={rirChipLabel(n)}
-                      accessibilityHint={selected ? 'Tap again to clear.' : 'Optional. Saved with this set.'}
+                      accessibilityHint={rirChipHint(reps.rir, n)}
                       accessibilityState={{ selected }}
                       onPress={() => setReps(current => ({ rir: toggleRir(current.rir, n), touched: true }))}
                       style={styles.effortChip}

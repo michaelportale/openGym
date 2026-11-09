@@ -31,6 +31,26 @@ export function effortRefusal(values) {
   return v.ok ? null : v.error
 }
 
+// Whether the row holds a reps-left value, on the row or (per side, as the web writes it) a side.
+export const rirLogged = row => row?.rir != null || row?.sides?.L?.rir != null || row?.sides?.R?.rir != null
+
+// A per-side set carries its effort on both sides (the web derives the row's from the sides, as
+// min(L, R), and drops a row-level one): the same number on each, so the derived value is the
+// logged one. A number sets it; null removes it. Nothing else in the sides changes.
+export function sidesWithRir(sides, rir) {
+  const side = s => {
+    const { rir: _old, ...rest } = s ?? {}
+    return rir == null ? rest : { ...rest, rir }
+  }
+  return { L: side(sides.L), R: side(sides.R) }
+}
+
+// The hint under a chip: the selected one clears; 5+ over a value above 5 says what is logged.
+export function rirChipHint(current, choice) {
+  if (!isRirSelected(current, choice)) return 'Optional. Saved with this set.'
+  return choice === 5 && current > 5 ? `Logged as ${current}. Tap to clear.` : 'Tap again to clear.'
+}
+
 // The `rir` field a call carries. `rir`: undefined = untouched (nothing written), null = cleared,
 // else the chosen number. A clear removes a logged value (a null field deletes it from the row),
 // and only on an Update (`clear`): a Complete never writes over an earlier value. A warm-up row
@@ -39,7 +59,7 @@ export function rirFields(row, rir, { clear = false } = {}) {
   if (workoutModel.isWarmupRow(row) || rir === undefined) return { ok: true, fields: {} }
   const v = validateRir(rir)
   if (!v.ok) return { ok: false, error: v.error }
-  if (v.rir == null) return { ok: true, fields: clear && row?.rir != null ? { rir: null } : {} }
+  if (v.rir == null) return { ok: true, fields: clear && rirLogged(row) ? { rir: null } : {} }
   return { ok: true, fields: { rir: v.rir } }
 }
 

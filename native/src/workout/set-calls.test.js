@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { NO_NOTICES, OVERNIGHT_NOTICE, PAST_MIDNIGHT, addSetCall, addWarmupCall, addWarmupsCall, addWarmupsInOrder, completeAfterCommit, completeCall, completeResult, dockKeypadField, draftCall, editCall, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightNow, overnightRefusal, pauseRestCall, resumeRestCall, primaryAction, removeWarmupCall, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, sheetSide, thrown, undoCall, undoWrite, writeOutcome, findSet } from './set-calls.js'
+import { workoutModel } from '../shared/training.js'
 import { effortRefusal } from './effort-choice.js'
 import { shownValues, workoutScreen } from './workout-view.js'
 import { pendingRest, restEventId, restMsFor } from './rest-after.js'
@@ -1088,7 +1089,16 @@ describe.each(SQLITE_DRIVERS)('%s: the calls drive the engine', (_name, createDb
     db = db.reopen()
     const row = (await open(db, false)).getState().view.entries[1].sets[0].row
     expect(row).toMatchObject({ rir: 1, done: true })
-    expect(row.sides).toEqual({ L: { w: 10, r: 12, done: true }, R: { w: 10, r: 11, done: true } })
+    expect(row.sides).toEqual({ L: { w: 10, r: 12, done: true, rir: 1 }, R: { w: 10, r: 11, done: true, rir: 1 } })
+    expect(workoutModel.syncSideAggregate(row).rir).toBe(1)
+    // Update clears all three, and a kill keeps that too.
+    const third = await open(db, false)
+    await third.call('editSet', editCall(current(third), { setId: latSet, values: { w: 10, sides: { L: { r: 12 }, R: { r: 11 } }, rir: null }, eventId: 'e9', now: clock }))
+    db = db.reopen()
+    const cleared = (await open(db, false)).getState().view.entries[1].sets[0].row
+    expect(cleared).not.toHaveProperty('rir')
+    expect(cleared.sides.L).not.toHaveProperty('rir')
+    expect(cleared.sides.R).not.toHaveProperty('rir')
   })
 
   test('Add set on a per-side exercise adds a per-side set that survives a kill', async () => {
@@ -1646,7 +1656,9 @@ describe('reps left in the calls', () => {
     const half = view([lateral([slot('s', sided(10, { r: 12, done: true }, { r: 10, done: false }))])])
     const fields = completeCall(half, { setId: 's', side: 'R', values, eventId: 'e', now: 0 }).fields
     expect(fields.rir).toBe(3)
-    expect(fields.sides.L).not.toHaveProperty('rir')
+    expect(fields.sides.L.rir).toBe(3)
+    expect(fields.sides.R.rir).toBe(3)
+    expect(workoutModel.syncSideAggregate({ ...half.entries[0].sets[0].row, ...fields }).rir).toBe(3)
   })
   test('Update: untouched keeps, a number sets, null removes only a logged value; per side too', () => {
     const logged = bench1({ ...done(75, 8), rir: 2 })
@@ -1657,7 +1669,41 @@ describe('reps left in the calls', () => {
     const side = view([lateral([slot('s', sided(10, { r: 12, done: true }, { r: 11, done: true }, { at: 5, rir: 1 }))])])
     const f = editCall(side, { setId: 's', values: { w: 10, sides: { L: { r: 12 }, R: { r: 11 } }, rir: 3 }, eventId: 'e', now: 0 }).fields
     expect(f.rir).toBe(3)
+    expect(f.sides.L.rir).toBe(3)
+    expect(f.sides.R.rir).toBe(3)
+  })
+  test('(a) per side: rir 3 lands on L, R and the row, and the web\'s sync leaves it at 3', () => {
+    const half = view([lateral([slot('s', sided(10, { r: 12, done: true }, { r: 10, done: false }))])])
+    const fields = completeCall(half, { setId: 's', side: 'R', values: { w: 10, sides: { L: { r: 12 }, R: { r: 11 } }, rir: 3 }, eventId: 'e', now: 0 }).fields
+    expect(fields.sides).toEqual({ L: { w: 10, r: 12, done: true, rir: 3 }, R: { w: 10, r: 11, done: true, rir: 3 } })
+    const row = { ...half.entries[0].sets[0].row, ...fields }
+    const synced = workoutModel.syncSideAggregate(row)
+    expect(synced.rir).toBe(3)
+    expect(synced.sides).toEqual(fields.sides)
+  })
+  test('(b) per side: an Update that clears removes all three; clearing nothing writes nothing', () => {
+    const row = sided(10, { r: 12, done: true }, { r: 11, done: true }, { at: 5, rir: 2 })
+    row.sides.L.rir = 2; row.sides.R.rir = 2
+    const f = editCall(view([lateral([slot('s', row)])]), { setId: 's', values: { w: 10, sides: { L: { r: 12 }, R: { r: 11 } }, rir: null }, eventId: 'e', now: 0 }).fields
+    expect(f.rir).toBeNull()
     expect(f.sides.L).not.toHaveProperty('rir')
+    expect(f.sides.R).not.toHaveProperty('rir')
+    const plain = sided(10, { r: 12, done: true }, { r: 11, done: true }, { at: 5 })
+    const g = editCall(view([lateral([slot('s', plain)])]), { setId: 's', values: { w: 10, sides: { L: { r: 12 }, R: { r: 11 } }, rir: null }, eventId: 'e', now: 0 }).fields
+    expect(g).not.toHaveProperty('rir')
+    expect(g.sides.L).not.toHaveProperty('rir')
+  })
+  test('(b) a web-written side rir (row has none) is still cleared by Update', () => {
+    const row = sided(10, { r: 12, done: true }, { r: 11, done: true }, { at: 5 })
+    row.sides.L.rir = 2
+    const f = editCall(view([lateral([slot('s', row)])]), { setId: 's', values: { w: 10, sides: { L: { r: 12 }, R: { r: 11 } }, rir: null }, eventId: 'e', now: 0 }).fields
+    expect(f.sides.L).not.toHaveProperty('rir')
+  })
+  test('(d) a non-side set: row only', () => {
+    const v = bench1(todo(75, 8))
+    const f = completeCall(v, { setId: 's1', values: { w: 75, r: 8, rir: 3 }, eventId: 'e', now: 0 }).fields
+    expect(f).toEqual({ w: 75, r: 8, rir: 3 })
+    expect(editCall(bench1(done(75, 8)), { setId: 's1', values: { w: 75, r: 8, rir: 1 }, eventId: 'e', now: 0 }).fields).toEqual({ w: 75, r: 8, rir: 1 })
   })
   test('the weight and reps are the same with or without rir', () => {
     const v = bench1(todo(75, 8))
