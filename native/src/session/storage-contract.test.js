@@ -351,6 +351,6 @@ test('node sqlite file: a clear that SQLite stops partway is rolled back, and la
   expect(await reopened.readBase()).toEqual({ id: 'w1' })
 })
 
-test('sqlite storage requires an injected db handle', () => {
-  expect(() => createSqliteSessionStorage()).toThrow(/expo-sqlite/)
+test('sqlite storage requires an injected db handle, and says so', () => {
+  expect(() => createSqliteSessionStorage()).toThrow('SQLite session storage needs a db handle with exec, run, and getAll (see storage/db-handle.js)')
 })

@@ -46,6 +46,10 @@ test('the finished-workout table indexes id and date', () => {
   expect(FINISHED_WORKOUTS_SCHEMA).not.toMatch(/expo-sqlite/)
 })
 
+test('sqlite finished workouts require an injected db handle, and say so', () => {
+  expect(() => createSqliteFinishedWorkouts()).toThrow('SQLite finished workouts need a db handle with exec, run, and getAll (see storage/db-handle.js)')
+})
+
 test.each(Object.keys(STORES))('%s store starts empty and keeps unknown keys', async (kind) => {
   const store = STORES[kind]()
   expect(await store.list()).toEqual([])

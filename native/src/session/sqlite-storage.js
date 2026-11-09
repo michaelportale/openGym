@@ -1,16 +1,11 @@
 import { SESSION_LAST_SEEN_KEY, SESSION_SEEN_TRAIL_KEY, SESSION_TIME_ZONE_KEY, SQLITE_SESSION_SCHEMA, baseWithoutTimeZone, lastSeenFromBase, seenTrailFromBase, timeZoneFromBase } from './storage.js'
 
-// SQLite adapter for the session journal. The handle is injected so this file does not import
-// expo-sqlite. native/package.json does not depend on it yet. When the app adds it, open the
-// database and pass:
-//   exec: sql => db.execAsync(sql)
-//   run: (sql, params) => db.runAsync(sql, params)
-//   getAll: (sql, params) => db.getAllAsync(sql, params)
-// runAsync's { changes } is how a duplicate id (INSERT OR IGNORE) is told apart from a new row.
+// SQLite adapter for the session journal. The handle is injected (storage/db-handle.js maps the
+// expo-sqlite database onto it), so this file does not import expo-sqlite.
 
 function requireDb(db) {
   if (!db || typeof db.exec !== 'function' || typeof db.run !== 'function' || typeof db.getAll !== 'function') {
-    throw new Error('SQLite session storage needs a db handle with exec, run, and getAll. expo-sqlite is not installed yet; pass the app database in once it is.')
+    throw new Error('SQLite session storage needs a db handle with exec, run, and getAll (see storage/db-handle.js)')
   }
 }
 
