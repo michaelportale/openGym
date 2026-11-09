@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { scheduleModeOf, queueRecovery, rotationIds, startPass, saveRotation, startNewPass, stopPass, refillAfter, refillIfComplete, chooseRotation, chooseFixedWeek } from './rotation.js'
-import { queueNext, queueRemaining, queueView } from './queue.js'
+import { queueNext, queueRemaining, queueView, queueOf } from './queue.js'
+import { isoOf } from './format.js'
 import { effectiveRoutineIds } from './history.js'
 
 const routines = [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }, { id: 'c', name: 'C' }, { id: 'own', name: 'Core' }]
@@ -412,4 +413,100 @@ it('does not use historical imports as the closing workout or boundary when rest
   expect(refillIfComplete(s,TODAY,NOW)).toBe(true)
   expect(s.queue.startsOn).toBe('2026-09-13')
   expect(s.queue.since).toBe(NOW)
+})
+
+// Several finishes arriving in one sync merge. Live, the web runs refillAfter as each finish lands
+// (sheets.jsx), and the phone's nextRoutineId replays those finishes the same way. refillIfComplete
+// is the merge-time stand-in for that, so on the same base state it has to leave the same queue.
+describe('refillIfComplete over several finishes merged at once', () => {
+  const HOUR = 3600000
+  const DAY = 86400000
+  const D0 = Date.parse('2026-09-12T10:00:00')
+  const day = n => isoOf(new Date(D0 + n * DAY))
+  // A finish of routine `id` on day `n`, `hour` hours into that day's 10:00 start.
+  const fin = (id, n, hour = 0) => ({ ...w(id, day(n), D0 + n * DAY + hour * HOUR), end: D0 + n * DAY + hour * HOUR + HOUR })
+  const base = () => S({
+    rotation: { id: 'r1', sequence: ['a', 'b', 'c'], label: 'My split' },
+    queue: pass(['a', 'b', 'c'], { rotationId: 'r1', since: D0 - DAY, startsOn: day(-2) }),
+  })
+  const live = finishes => {
+    const s = base()
+    for (const f of finishes) {
+      s.workouts.push(f)
+      refillAfter(s, f, f.d, f.end)
+    }
+    return s
+  }
+  const merged = (finishes, refill = refillIfComplete) => {
+    const s = base()
+    s.workouts = [...finishes].reverse() // arrival order is not date order
+    const last = finishes.at(-1)
+    const refilled = refill(s, last.d, last.end)
+    return { s, refilled }
+  }
+  const cases = {
+    'exactly one pass': [fin('a', 0), fin('b', 1), fin('c', 2)],
+    'a pass and two sessions of the next': [fin('a', 0), fin('b', 1), fin('c', 2), fin('a', 3), fin('b', 4)],
+    'two full passes': [fin('a', 0), fin('b', 1), fin('c', 2), fin('a', 3), fin('b', 4), fin('c', 5)],
+    'a pass, then two sessions on one day': [fin('a', 0), fin('b', 1), fin('c', 2), fin('a', 3, 0), fin('b', 3, 3)],
+  }
+
+  for (const [name, finishes] of Object.entries(cases)) {
+    it(`leaves the queue as finishing them one at a time does: ${name}`, () => {
+      const one = live(finishes)
+      const { s, refilled } = merged(finishes)
+      expect(refilled).toBe(true)
+      expect(s.queue).toEqual(one.queue)
+      expect(queueRemaining(s)[0]).toBe(queueRemaining(one)[0])
+    })
+  }
+
+  it('leaves s.workouts exactly as it was', () => {
+    const finishes = cases['two full passes']
+    const s = base()
+    s.workouts = [...finishes].reverse()
+    const before = JSON.stringify(s.workouts)
+    refillIfComplete(s, finishes.at(-1).d, finishes.at(-1).end)
+    expect(JSON.stringify(s.workouts)).toBe(before)
+  })
+
+  it('does not refill an incomplete pass, an unmanaged queue or a mismatched rotation', () => {
+    const open = base(); open.workouts = [fin('a', 0), fin('b', 1)]
+    const before = JSON.stringify(open.queue)
+    expect(refillIfComplete(open, day(1), D0)).toBe(false)
+    expect(JSON.stringify(open.queue)).toBe(before)
+    const planner = base(); planner.queue = pass(['a', 'b', 'c'], { since: D0 - DAY, startsOn: day(-2) })
+    planner.workouts = cases['exactly one pass']
+    expect(refillIfComplete(planner, day(2), D0)).toBe(false)
+    const other = base(); other.rotation = { ...other.rotation, id: 'other' }
+    other.workouts = cases['exactly one pass']
+    expect(refillIfComplete(other, day(2), D0)).toBe(false)
+  })
+
+  // The function as it was before it replayed finishes, kept to pin the one-finish behaviour.
+  const oldRefillIfComplete = (s, today, now) => {
+    const q = queueOf(s)
+    if (!q?.rotationId || !s.rotation?.id || q.rotationId !== s.rotation.id) return false
+    if (!queueView(s, today)?.complete) return false
+    const last = (s.workouts || [])
+      .filter(x => x.historicalImport !== true && String(x.d || '') >= q.startsOn && (Array.isArray(x?.routineIds) ? x.routineIds : (x?.routineId ? [x.routineId] : [])).some(id => q.ids.includes(id)))
+      .sort((x, y) => (x.d === y.d ? (x.start || 0) - (y.start || 0) : x.d < y.d ? -1 : 1)).at(-1)
+    return last ? refillAfter(s, last, today, now) : false
+  }
+
+  it('is byte-identical to the old function when one finish closes the pass', () => {
+    const histories = [
+      [w('a', '2026-09-10'), w('c', '2026-09-11'), w('b', TODAY)],
+      [w('a', '2026-09-10'), w('b', '2026-09-11'), w('c', TODAY), w('a', '2026-08-01')],
+      [fin('a', 0), fin('b', 1), { ...fin('c', 2), historicalImport: true }, fin('c', 3)],
+    ]
+    for (const ws of histories) {
+      const mk = () => { const s = base(); s.workouts = JSON.parse(JSON.stringify(ws)); s.queue.startsOn = '2026-09-10'; return s }
+      const a = mk(), b = mk()
+      const ra = oldRefillIfComplete(a, TODAY, NOW)
+      const rb = refillIfComplete(b, TODAY, NOW)
+      expect(rb).toBe(ra)
+      expect(JSON.stringify(b)).toBe(JSON.stringify(a))
+    }
+  })
 })
