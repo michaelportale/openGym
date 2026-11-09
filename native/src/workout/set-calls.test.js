@@ -1076,7 +1076,7 @@ describe.each(SQLITE_DRIVERS)('%s: the calls drive the engine', (_name, createDb
     expect(row).toMatchObject({ w: 75, r: 8, done: true })
   })
 
-  test('per side: one row-level rir, saved with the side that finishes the set, kept through a kill', async () => {
+  test('per side: row-level, L and R rir, saved with the side that finishes the set, kept through a kill', async () => {
     clock = T0 + 1000
     let db = createDb()
     const first = await open(db)
@@ -1632,9 +1632,15 @@ describe('reps left in the calls', () => {
       expect(Object.hasOwn(fields, 'rir')).toBe(false)
     }
   })
-  test('Complete never writes rir over an earlier value when blank', () => {
+  test('Complete: untouched rir (undefined) keeps a logged value, an explicit null clears it', () => {
     const v = bench1({ ...todo(75, 8), rir: 3 })
-    expect(completeCall(v, { setId: 's1', values: { w: 75, r: 8, rir: null }, eventId: 'e', now: 0 }).fields).toEqual({ w: 75, r: 8 })
+    expect(completeCall(v, { setId: 's1', values: { w: 75, r: 8 }, eventId: 'e', now: 0 }).fields).toEqual({ w: 75, r: 8 })
+    expect(completeCall(v, { setId: 's1', values: { w: 75, r: 8, rir: undefined }, eventId: 'e', now: 0 }).fields).toEqual({ w: 75, r: 8 })
+    // The dock's Complete passes no values at all, so it never clears.
+    expect(completeCall(v, { setId: 's1', eventId: 'e', now: 0 }).fields).toEqual({ w: 75, r: 8 })
+    expect(completeCall(v, { setId: 's1', values: { w: 75, r: 8, rir: null }, eventId: 'e', now: 0 }).fields).toEqual({ w: 75, r: 8, rir: null })
+    // Nothing logged: a clear writes nothing.
+    expect(completeCall(bench1(todo(75, 8)), { setId: 's1', values: { w: 75, r: 8, rir: null }, eventId: 'e', now: 0 }).fields).toEqual({ w: 75, r: 8 })
   })
   test('a warm-up never carries rir', () => {
     const v = view([bench([warm('w1', todo(45, 5))])])
@@ -1649,7 +1655,7 @@ describe('reps left in the calls', () => {
     expect(editCall(bench1(done(75, 8)), { setId: 's1', values: { w: 75, r: 8, rir: 2.5 }, eventId: 'e', now: 0 })).toBeNull()
     expect(effortRefusal({ rir: 11 })).toBe('Reps left must be a whole number from 0 to 10.')
   })
-  test('per side: the first side writes none, the finishing side writes one row-level rir', () => {
+  test('per side: the first side writes none, the finishing side writes row, L and R rir', () => {
     const values = { w: 10, sides: { L: { r: 12 }, R: { r: 11 } }, rir: 3 }
     const fresh = view([lateral([slot('s', sided(10, { r: 10, done: false }, { r: 10, done: false }))])])
     expect(completeCall(fresh, { setId: 's', side: 'L', values, eventId: 'e', now: 0 }).fields).not.toHaveProperty('rir')
