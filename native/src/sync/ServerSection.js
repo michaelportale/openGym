@@ -70,7 +70,7 @@ export default function ServerSection() {
           <PrimaryButton
             label={syncing ? 'Syncing…' : 'Sync now'}
             accessibilityLabel={syncing ? 'Syncing' : 'Sync now'}
-            accessibilityHint="Sends your workouts to the server and reads its changes."
+            accessibilityHint="Sends your workouts and weigh-ins to the server and reads its changes."
             disabled={syncing}
             onPress={() => { syncNow().catch(() => {}) }}
           />

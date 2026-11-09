@@ -117,3 +117,15 @@ test('a typed remove takes out the entry it saw and leaves an unseen one', () =>
   const copy = withBody([{ d: '2026-11-08', w: 180, t: 50 }])
   expect(buildPush(copy, [], [{ d: '2026-11-08', op: 'remove', t: 60, baseT: 50 }]).state.bodyweight).toEqual([])
 })
+
+test('a weigh-in alone turns a non-list workouts into a list, as the workout path does', () => {
+  const copy = { state: { ...fixture(), workouts: 'junk' }, rev: 1, wid: 'w' }
+  expect(buildPush(copy, [], [typedSet('2026-11-08', 180, 5)]).state.workouts).toEqual([])
+  expect(buildPush(copy, [pend('p1')]).state.workouts).toEqual([pend('p1')])
+})
+
+test('a removal on record in the document supersedes a set made before it', () => {
+  const copy = { state: { ...fixture(), deleted: { workouts: [], bodyweight: { '2026-11-08': 900 } } }, rev: 1, wid: 'w' }
+  expect(buildPush(copy, [], [typedSet('2026-11-08', 180, 500)])).toBeNull()
+  expect(buildPush(copy, [], [typedSet('2026-11-08', 180, 950)]).state.bodyweight).toEqual([{ d: '2026-11-08', w: 180, t: 950 }])
+})

@@ -170,3 +170,19 @@ test('mixed-type days sort consistently by String(d)', () => {
   const next = applyDayOps(entries, []).next.map(e => String(e.d))
   expect(next).toEqual(['2026-01-01', '2026-01-02', '2026-01-03', '20260101'])
 })
+
+test('a removal on record beats a set made before it, only when the day has no entry', () => {
+  const set = { d: '2026-11-08', op: 'set', w: 180, t: 100 }
+  expect(applyDayOps([], [set], { '2026-11-08': 150 })).toMatchObject({ applied: [], superseded: [{ d: '2026-11-08', t: 100 }] })
+  expect(applyDayOps([], [set], { '2026-11-08': 100 }).superseded).toHaveLength(1) // equal counts
+  expect(applyDayOps([], [{ ...set, src: 'health', hk: 'u' }], { '2026-11-08': 150 }).superseded).toHaveLength(1)
+  expect(applyDayOps([], [set], { '2026-11-08': 50 }).applied).toHaveLength(1) // deleted before the op
+  expect(applyDayOps([], [set], { '2026-11-08': -150 }).applied).toHaveLength(1) // negative = re-added
+  expect(applyDayOps([], [set], { '2026-11-09': 150 }).applied).toHaveLength(1) // another day
+  expect(applyDayOps([], [set], undefined).applied).toHaveLength(1)
+  expect(applyDayOps([], [set], 'junk').applied).toHaveLength(1)
+  // an entry on the day decides by the entry guards, not the record
+  expect(applyDayOps([{ d: '2026-11-08', w: 1, t: 10 }], [set], { '2026-11-08': 150 }).applied).toHaveLength(1)
+  // removes are unchanged: absent is done
+  expect(applyDayOps([], [{ d: '2026-11-08', op: 'remove', t: 100 }], { '2026-11-08': 150 }).done).toHaveLength(1)
+})

@@ -982,3 +982,86 @@ describe('weigh-ins', () => {
     expect(await t.sync.status()).toEqual({ paired: false, state: 'unpaired', pending: 1, pendingWeighIns: 2 })
   })
 })
+
+const delOnWeb = (t, d, at, keep = []) => {
+  const s = clone(t.server.doc)
+  s.bodyweight = keep
+  s.deleted = { ...s.deleted, bodyweight: { [d]: at } }
+  t.server.write(s)
+}
+
+describe('weigh-ins and the server record', () => {
+  test('forget then pair after a web deletion: the day is not pushed back, the op is acked', async () => {
+    const t = await setup()
+    await t.weighIns.put(typed('2026-11-08', 181.2, T0 - 5))
+    await t.sync.syncNow()
+    delOnWeb(t, '2026-11-08', T0 + 1000)
+    await t.sync.forget()
+    expect((await t.sync.pair(BASE, 'GOODCODE')).ok).toBe(true)
+    expect(t.server.doc.bodyweight).toEqual([])
+    expect(t.server.doc.deleted.bodyweight).toEqual({ '2026-11-08': T0 + 1000 })
+    expect(await t.weighIns.listPending()).toEqual([])
+  })
+
+  test('push ok but the pull fails, the web deletes the day: the next sync does not re-add it', async () => {
+    const t = await setup()
+    await t.sync.syncNow()
+    await t.weighIns.put(typed('2026-11-08', 181.2, T0 - 5))
+    t.server.once.pull = [OFFLINE]
+    expect((await t.sync.syncNow()).state).toBe('waiting')
+    expect(t.server.doc.bodyweight).toHaveLength(1)
+    delOnWeb(t, '2026-11-08', T0 + 1000)
+    t.server.pushes.length = 0
+    await t.sync.syncNow()
+    expect(t.server.pushes).toEqual([])
+    expect(t.server.doc.bodyweight).toEqual([])
+    expect(await t.weighIns.listPending()).toEqual([])
+  })
+
+  test('a typed set re-sent after re-pairing loses to a newer web typed edit', async () => {
+    const t = await setup()
+    await t.weighIns.put(typed('2026-11-08', 181.2, T0 - 5))
+    await t.sync.syncNow()
+    delOnWeb(t, '2026-11-08', 0, [{ d: '2026-11-08', w: 179, t: T0 + 50 }])
+    await t.sync.forget()
+    t.server.pushes.length = 0
+    expect((await t.sync.pair(BASE, 'GOODCODE')).ok).toBe(true)
+    expect(t.server.pushes).toEqual([])
+    expect(t.server.doc.bodyweight).toEqual([{ d: '2026-11-08', w: 179, t: T0 + 50 }])
+    expect(await t.weighIns.listPending()).toEqual([])
+  })
+
+  test('resendAll after the server went back to a backup puts an acked weigh-in on it again', async () => {
+    const t = await setup()
+    const backup = clone(t.server.doc)
+    await t.weighIns.put(typed('2026-11-08', 181.2, T0 - 5))
+    await t.sync.syncNow()
+    expect(await t.weighIns.listPending()).toEqual([])
+    t.server.doc = clone(backup)
+    t.server.webAdds(web('web-9'))
+    t.server.doc._wids = ['other']
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'problem', problem: 'server-older' })
+    await t.sync.resendAll()
+    expect(t.server.doc.bodyweight).toEqual([{ d: '2026-11-08', w: 181.2, t: T0 - 5 }])
+    expect(await t.weighIns.listPending()).toEqual([])
+  })
+
+  test('the web edits a day after the phone decided to remove it, arriving in a 409: the removal is dropped', async () => {
+    const t = await setup()
+    await t.weighIns.put(typed('2026-11-08', 181.2, 5))
+    await t.sync.syncNow()
+    await t.weighIns.put({ d: '2026-11-08', op: 'remove', t: T0 - 1, baseT: 5 })
+    t.server.once.push = [async () => {
+      const s = clone(t.server.doc)
+      s.bodyweight = [{ d: '2026-11-08', w: 178, t: T0 - 2 }]
+      t.server.write(s)
+      return undefined
+    }]
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingWeighIns: 0 })
+    expect(t.server.doc.bodyweight).toEqual([{ d: '2026-11-08', w: 178, t: T0 - 2 }])
+  })
+
+  test('createSync refuses to be built without a weigh-in store', () => {
+    expect(() => createSync({ client: {}, credentials: {}, copy: {}, workouts: {}, meta: {}, now: Date.now })).toThrow(/weighIns/)
+  })
+})

@@ -313,6 +313,26 @@ describe.skipIf(!HAS_API_DEPS)(TITLE, { timeout: 30_000 }, () => {
     expect(byDay['2026-11-09']).toMatchObject({ w: 181, t: T0 })
   })
 
+  test('a day deleted on the web stays deleted after the phone forgets and pairs again', async () => {
+    const server = await startServer()
+    const app = await paired(server)
+    await app.weighIns.put({ d: '2026-11-08', op: 'set', w: 181.2, t: T0 })
+    await app.sync.syncNow()
+    expect(server.file().bodyweight).toHaveLength(1)
+    const cookie = webCookie()
+    const got = await (await fetch(`${server.api}/api/data`, { headers: cookie })).json()
+    const del = Math.max(Date.now(), T0 + 60_000)
+    const state = { ...got.state, bodyweight: [], deleted: { ...got.state.deleted, bodyweight: { '2026-11-08': del } } }
+    const res = await fetch(`${server.api}/api/data`, { method: 'PUT', headers: { ...cookie, 'Content-Type': 'application/json' }, body: JSON.stringify({ state, baseRev: got.rev, baseWid: got.state._wid, stamped: true }) })
+    expect(res.status).toBe(200)
+    await app.sync.forget()
+    expect(await app.sync.pair(server.api, await server.pairCode())).toEqual({ ok: true })
+    const file = server.file()
+    expect(file.bodyweight ?? []).toEqual([])
+    expect(Number(file.deleted.bodyweight['2026-11-08'])).toBeGreaterThan(0)
+    expect(await app.weighIns.listPending()).toEqual([])
+  })
+
   test('a new profile with no document yet: pairing pulls an empty one and the first push starts it', async () => {
     const server = await startServer({ state: null })
     const app = await paired(server)

@@ -26,9 +26,13 @@ function reflected(op, entry) {
   return entry.w === op.w && entry.t === op.t && (entry.src ?? null) === (op.src ?? null) && (entry.hk ?? null) === (op.hk ?? null)
 }
 
-function canApply(op, entry) {
+// removed: the stamp the document records for the day's removal (deleted.bodyweight[d]), or 0.
+function canApply(op, entry, removed) {
   const health = isHealth(op)
   if (op.op === 'set') {
+    // A removal on record beats a set made before it (the web's merge rule); a day with an
+    // entry is decided by the entry guards below.
+    if (!entry && removed > 0 && removed >= op.t) return false
     // Between typed entries the later edit wins (as the web's merge does); equal t applies.
     if (!health) return !entry || isHealth(entry) || !(Number(entry.t) > op.t)
     return !entry || isHealth(entry) || (op.baseT != null && entry.t === op.baseT)
@@ -45,7 +49,10 @@ function canApply(op, entry) {
 // web does. Every other entry is passed through as the same
 // object, so fields this code does not know survive. Inputs are never mutated.
 // Returns { next, applied, done, superseded }; each of the last three lists { d, t } of the ops.
-export function applyDayOps(bodyweight, ops) {
+// deleted: the document's `deleted.bodyweight` (day -> stamp, positive while removed); anything
+// but a map counts as empty.
+export function applyDayOps(bodyweight, ops, deleted) {
+  const gone = deleted && typeof deleted === 'object' && !Array.isArray(deleted) ? deleted : {}
   const byDay = new Map()
   for (const entry of Array.isArray(bodyweight) ? bodyweight : []) {
     if (!entry || typeof entry !== 'object' || entry.d == null) continue
@@ -59,7 +66,7 @@ export function applyDayOps(bodyweight, ops) {
     const entry = byDay.get(op.d)
     const ref = { d: op.d, t: op.t }
     if (reflected(op, entry)) done.push(ref)
-    else if (!canApply(op, entry)) superseded.push(ref)
+    else if (!canApply(op, entry, Number(gone[op.d]) || 0)) superseded.push(ref)
     else {
       if (op.op === 'remove') byDay.delete(op.d)
       else byDay.set(op.d, entryFromOp(op))

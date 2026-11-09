@@ -1,14 +1,14 @@
 // The one piece that talks to the server on the phone's behalf: pairs, pulls, pushes and reacts
 // to what comes back. One thing runs at a time. It never overwrites the server: a push is always
-// the last document the phone pulled plus the phone's own unsent workouts, made against that
-// document's rev and wid, and anything unexpected stops it with every workout kept on the phone.
+// the last document the phone pulled plus the phone's own unsent workouts and weigh-ins, made
+// against that document's rev and wid, and anything unexpected stops it with everything kept on
+// the phone.
 //
 // Everything is injected: `client` (api-client.js), `credentials` (the Keychain token),
-// `copy` and `meta` (server-copy.js), `workouts` (the finished-workout store), `weighIns` (the weigh-in day operations) and `now`
-// (ms since epoch). It never touches the session journal and logs nothing.
+// `copy` and `meta` (server-copy.js), `workouts` (the finished-workout store), `weighIns` (the
+// weigh-in day operations) and `now` (ms since epoch). It never touches the session journal and logs nothing.
 
 import { applyDayOps } from '../body/day-ops.js'
-import { createMemoryWeighIns } from '../body/weigh-ins.js'
 import { buildPush } from './outbox.js'
 import { readCopy } from './server-copy.js'
 import { normalizeServer } from './server-address.js'
@@ -58,7 +58,8 @@ function pairError(result, base) {
   return `${host} answered, but not like an openGym server. Check the address.`
 }
 
-export function createSync({ client, credentials, copy, workouts, weighIns = createMemoryWeighIns(), meta, now }) {
+export function createSync({ client, credentials, copy, workouts, weighIns, meta, now }) {
+  if (!weighIns) throw new Error('createSync needs a weighIns store')
   const iso = () => new Date(now()).toISOString()
 
   // pair, forget, resendAll and a sync never interleave.
@@ -101,7 +102,7 @@ export function createSync({ client, credentials, copy, workouts, weighIns = cre
     if (ids.length) await workouts.markAcked(ids, iso())
     // A weigh-in is settled once the stored copy already has it (done) or its day guard says it
     // can never apply (superseded). One that would still apply stays pending.
-    const days = applyDayOps(state.bodyweight, await weighIns.listPending())
+    const days = applyDayOps(state.bodyweight, await weighIns.listPending(), state.deleted?.bodyweight)
     const settled = [...days.done, ...days.superseded]
     if (settled.length) await weighIns.markAcked(settled, iso())
   }

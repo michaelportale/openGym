@@ -16,13 +16,14 @@ export function buildPush(copy, pending, pendingWeighIns = []) {
   }
   // Weigh-ins go in by day under the guards; nothing is pushed for ones that cannot apply, nor
   // for tidying the list alone, so `bodyweight` stays the copy's own unless one applies.
-  const days = applyDayOps(copy.state.bodyweight, pendingWeighIns)
+  const days = applyDayOps(copy.state.bodyweight, pendingWeighIns, copy.state.deleted?.bodyweight)
   if (!add.length && !days.applied.length) return null
   return {
     state: {
       ...copy.state,
       unit: copy.state.unit ?? 'lb',
-      workouts: add.length ? [...held, ...add] : copy.state.workouts,
+      // a list as sent for workouts, even when only weigh-ins go (a non-list reads as empty)
+      workouts: add.length || !Array.isArray(copy.state.workouts) ? [...held, ...add] : copy.state.workouts,
       ...(days.applied.length ? { bodyweight: days.next } : {}),
     },
     baseRev: copy.rev,
