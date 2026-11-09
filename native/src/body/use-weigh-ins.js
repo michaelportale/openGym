@@ -4,6 +4,7 @@ import { createSqliteWeighIns } from './weigh-ins'
 import { applyDayOps } from './day-ops'
 import { coalesced } from './coalesce'
 import { readCopy, createSqliteServerCopy } from '../sync/server-copy'
+import { keyed, readSourceKey } from '../sync/source-key'
 import { localDate } from '../session/timing'
 import { healthAfterFinish } from '../health/use-health'
 import { syncAfterFinish } from '../sync/use-sync'
@@ -36,19 +37,26 @@ async function readToday(db) {
 // { entry, line, removable, save(w), remove() }. save and remove resolve { ok } and never throw;
 // the Health pass, then the server sync, run after the write and are never awaited. While the tab is
 // focused, a Health pass or a server sync that changes something reloads the line. Reloads are
-// coalesced (one at a time, at most one waiting), so back-to-back changes read the copy once.
+// coalesced (one at a time, at most one waiting), so back-to-back changes read the copy once, and
+// one whose source key (sync/source-key.js: the copy's rev and wid, the pending weigh-ins, the
+// day) is unchanged reads nothing more. A write reads afresh.
 export function useWeighIns() {
   const [view, setView] = useState({ entry: null, row: null })
 
-  const [reload] = useState(() => coalesced(async () => {
-    try {
-      const db = await openAppDatabase()
+  const [reload] = useState(() => {
+    const load = keyed(readSourceKey, async ({ db }) => {
       const { entry, row } = await readToday(db)
-      setView({ entry, row })
-    } catch {
-      // Keep what the screen shows.
-    }
-  }))
+      return { entry, row }
+    })
+    return coalesced(async () => {
+      try {
+        const db = await openAppDatabase()
+        setView(await load({ db, serverCopy: createSqliteServerCopy(db), weighIns: createSqliteWeighIns(db), now: Date.now() }))
+      } catch {
+        // Keep what the screen shows.
+      }
+    })
+  })
 
   useFocusReload(reload)
 

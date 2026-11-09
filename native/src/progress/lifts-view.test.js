@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { exercises } from '../shared/training.js'
-import { liftsView } from './lifts-view.js'
+import { liftRows, liftsCard, liftsView, strengthRows } from './lifts-view.js'
 
 const NOW = Date.UTC(2026, 10, 9, 12)
 const day = n => new Date(NOW - n * 86400000).toISOString().slice(0, 10)
@@ -63,5 +63,20 @@ describe('liftsView', () => {
   it('signs a falling estimate with the true minus', () => {
     const state = { workouts: [wk(14, [{ id: A.id, sets: sets(120, 5) }]), wk(1, [{ id: A.id, sets: sets(100, 5) }])] }
     expect(liftsView(state, { now: NOW }).trend[0].line).toMatch(/\(−\d+(\.\d)? lb\)$/)
+  })
+})
+
+describe('liftsCard', () => {
+  it('reads as loading until the rows are worked out, when there is history', () => {
+    const state = { workouts: [wk(3, [{ id: A.id, sets: sets(100) }])] }
+    expect(liftsCard(state, null)).toEqual({ rows: [], loading: true })
+    expect(liftsCard({ workouts: [] }, null)).toEqual({ rows: [], loading: false })
+    expect(liftsCard(null, null).loading).toBe(false)
+    const rows = liftRows(state)
+    expect(liftsCard(state, rows)).toEqual({ rows, loading: false })
+  })
+  it('splits liftsView into its two halves', () => {
+    const state = { workouts: [wk(14, [{ id: A.id, sets: sets(100, 5) }]), wk(1, [{ id: A.id, sets: sets(120, 5) }])] }
+    expect(liftsView(state, { now: NOW })).toEqual({ trend: strengthRows(state, { now: NOW }), lifts: liftRows(state) })
   })
 })

@@ -135,6 +135,13 @@ test('readScreenSource: paired, the copy with the workouts it has not acked', as
   expect(out.workouts).toBe(all)
 })
 
+test('readScreenSource hands back the copy it read, so a caller need not read it again', async () => {
+  const copy = { state: { routines: [], workouts: [] }, rev: 2, wid: 'x' }
+  const s = stores({ copy, all: [], pending: [] })
+  expect((await readScreenSource({ ...s, bundled })).copy).toBe(copy)
+  expect((await readScreenSource({ ...stores({ copy: null, all: [], pending: [] }), bundled })).copy).toBeNull()
+})
+
 test('readScreenSource: a copy the screen still cannot read reads as no copy, as a corrupt one does', async () => {
   // a custom exercise whose name is not text: well-formed lists, but naming it throws
   const copy = { state: { routines: [{ id: 'rc', name: 'C', ex: [{ id: 'cust' }] }], customEx: [{ id: 'cust', n: 5 }], workouts: [] }, rev: 1, wid: 'x' }

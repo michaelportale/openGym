@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { color, radius, space, touch } from '../theme/tokens'
@@ -6,12 +6,13 @@ import AppText from '../ui/AppText'
 import Card from '../ui/Card'
 import LineChart from '../ui/LineChart'
 import ScaleButton from '../ui/ScaleButton'
+import { afterPaint } from '../ui/after-paint'
 import { usePushLock } from '../ui/use-push-lock'
 import WhySheet from '../workout/WhySheet'
 import { whyEntry } from '../workout/why-entry'
 import { bodyweightCard } from './bodyweight-card'
 import { chartLabel, RANGES } from './chart-label'
-import { liftsView } from './lifts-view'
+import { liftRows, liftsCard, strengthRows } from './lifts-view'
 import { useProgress } from './use-progress'
 
 const BW_WHY = whyEntry('bodyweight-trend')
@@ -33,9 +34,15 @@ export default function ProgressBody({ children }) {
   const { status, state, bodyweight, error } = useProgress()
   const [range, setRange] = useState(90)
   const [why, setWhy] = useState(null)
-  // Heavy models run on their inputs only, not on every render. `now` is read when they recompute.
+  // Models run on their inputs only, not on every render. `now` is read when they recompute.
   const card = useMemo(() => bodyweightCard({ bodyweight, range, now: Date.now(), targetW: state?.targetW ?? null }), [bodyweight, range, state])
-  const lifts = useMemo(() => liftsView(state, { now: Date.now() }), [state])
+  const trend = useMemo(() => strengthRows(state, { now: Date.now() }), [state])
+  // Your lifts is the heavy one (a history pass per exercise): worked out once per state, after the
+  // cards above it have painted. Until the first rows are ready it says Loading…; after that the
+  // last rows show while new ones are worked out.
+  const [rows, setRows] = useState(null)
+  useEffect(() => (state ? afterPaint(() => setRows(liftRows(state))) : undefined), [state])
+  const lifts = liftsCard(state, rows)
 
   return (
     <>
@@ -91,13 +98,13 @@ export default function ProgressBody({ children }) {
         )}
       </Card>
 
-      {status === 'ready' && lifts.trend.length ? (
+      {status === 'ready' && trend.length ? (
         <Card style={styles.card}>
           <View style={styles.row}>
             <AppText variant="heading" accessibilityRole="header" style={styles.grow}>Strength trend</AppText>
             <WhyLink label="Why this? e1RM" hint="Shows how e1RM is worked out." onPress={() => setWhy('e1rm')} />
           </View>
-          {lifts.trend.map(t => (
+          {trend.map(t => (
             <View key={t.id} style={styles.row}>
               <AppText variant="body" style={styles.grow}>{t.name}</AppText>
               <AppText variant="value">{t.line}</AppText>
@@ -106,10 +113,11 @@ export default function ProgressBody({ children }) {
         </Card>
       ) : null}
 
-      {status === 'ready' && lifts.lifts.length ? (
+      {status === 'ready' && (lifts.loading || lifts.rows.length) ? (
         <Card style={styles.card}>
           <AppText variant="heading" accessibilityRole="header">Your lifts</AppText>
-          {lifts.lifts.map(l => (
+          {lifts.loading ? <AppText variant="body" color={color.textSecondary}>Loading…</AppText> : null}
+          {lifts.rows.map(l => (
             <Pressable
               key={l.id}
               accessibilityRole="button"
