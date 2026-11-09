@@ -33,6 +33,8 @@ export function hostOf(base) {
 
 export function statusText(status, { now, server, formatTime = defaultTime, formatDay = defaultDay } = {}) {
   const s = status || {}
+  // Same calendar day on this device: the time alone. Otherwise the day as well.
+  const syncedLine = (host, at) => `Synced to ${host}${now != null && formatDay(at) !== formatDay(now) ? ` on ${formatDay(at)}` : ''} at ${formatTime(at)}`
   const host = hostOf(server ?? s.server) || 'Your server'
   if (!s.paired || s.state === 'unpaired') {
     return s.problem === 'unpaired' ? PROBLEMS.unpaired(host) : 'Not paired. Saved on this phone.'
@@ -42,10 +44,11 @@ export function statusText(status, { now, server, formatTime = defaultTime, form
     const words = PROBLEMS[s.problem]
     return words ? words(host, s) : 'Saved on this phone. Syncing stopped on a problem; it will try again.'
   }
-  if (s.state === 'waiting' || s.pending > 0) return `Saved on this phone. It will sync when ${host} is reachable.`
+  if (s.pending > 0) return `Saved on this phone. It will sync when ${host} is reachable.`
   const at = Date.parse(s.lastSyncedAt ?? '')
-  if (!Number.isFinite(at)) return `Paired with ${host}. Not synced yet.`
-  // Same calendar day on this device: the time alone. Otherwise the day as well.
-  const day = now != null && formatDay(at) !== formatDay(now) ? ` on ${formatDay(at)}` : ''
-  return `Synced to ${host}${day} at ${formatTime(at)}`
+  const synced = Number.isFinite(at)
+  // Nothing to send: say what is true, not that something is waiting.
+  if (s.state === 'waiting') return synced ? `${syncedLine(host, at)}. ${host} isn't reachable right now.` : `Paired with ${host}. Not reachable right now.`
+  if (!synced) return `Paired with ${host}. Not synced yet.`
+  return syncedLine(host, at)
 }

@@ -754,3 +754,36 @@ describe('status', () => {
     expect(await t.sync.status()).toEqual({ paired: true, state: 'waiting', pending: 1, server: BASE, profile: 'Mo' })
   })
 })
+
+describe('subscribe', () => {
+  test('tells a listener on every state change, and stops after unsubscribe', async () => {
+    const t = await setup({ local: [phone('p1')] })
+    let calls = 0
+    const off = t.sync.subscribe(() => { calls++ })
+    const seen = []
+    const off2 = t.sync.subscribe(async () => { seen.push((await t.sync.status()).state) })
+    await t.sync.syncNow()
+    expect(calls).toBeGreaterThanOrEqual(2) // started, finished
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(seen).toContain('idle')
+    const before = calls
+    off(); off2()
+    await t.sync.forget()
+    expect(calls).toBe(before)
+  })
+
+  test('forget, pair and resendAll notify; a throwing listener breaks nothing', async () => {
+    const t = await setup({ paired: false })
+    let calls = 0
+    t.sync.subscribe(() => { throw new Error('listener bug') })
+    t.sync.subscribe(() => { calls++ })
+    expect(await t.sync.pair(BASE, 'GOODCODE')).toEqual({ ok: true })
+    const afterPair = calls
+    expect(afterPair).toBeGreaterThan(0)
+    await t.sync.resendAll()
+    expect(calls).toBeGreaterThan(afterPair)
+    const afterResend = calls
+    await t.sync.forget()
+    expect(calls).toBeGreaterThan(afterResend)
+  })
+})

@@ -60,6 +60,18 @@ export function createSync({ client, credentials, copy, workouts, meta, now }) {
 
   let waiting = null // a sync queued but not yet started: later callers join it
   let running = false
+  const listeners = new Set()
+  // Told on every state change; a listener reads status() itself. A throwing one breaks nothing.
+  const emit = () => {
+    for (const fn of [...listeners]) {
+      try { fn() } catch { /* a screen's bug never stops a sync */ }
+    }
+  }
+  function subscribe(listener) {
+    listeners.add(listener)
+    return () => { listeners.delete(listener) }
+  }
+
   let outcome = null // in memory only: 'waiting' (server not reached) or 'error' (local failure)
 
   async function paired() {
@@ -238,12 +250,14 @@ export function createSync({ client, credentials, copy, workouts, meta, now }) {
       waiting = exclusive(async () => {
         waiting = null // started: from here on a call schedules the next run
         running = true
+        emit()
         try {
           await runSync()
         } catch {
           outcome = 'error'
         } finally {
           running = false
+          emit()
         }
       }).then(safeStatus)
     }
@@ -274,6 +288,7 @@ export function createSync({ client, credentials, copy, workouts, meta, now }) {
     } catch {
       return { ok: false, error: "Couldn't save the pairing on this phone. Make a new code and try again." }
     }
+    emit()
     await syncNow()
     return { ok: true }
   }
@@ -291,6 +306,7 @@ export function createSync({ client, credentials, copy, workouts, meta, now }) {
     } catch {
       outcome = 'error'
     }
+    emit()
     return safeStatus()
   }
 
@@ -304,6 +320,7 @@ export function createSync({ client, credentials, copy, workouts, meta, now }) {
         const ctx = await paired()
         if (!ctx) return
         running = true
+        emit()
         try {
           const p = await client.pull(ctx.base, ctx.token)
           if (!p.ok) return failed(p)
@@ -314,6 +331,7 @@ export function createSync({ client, credentials, copy, workouts, meta, now }) {
           taken = true
         } finally {
           running = false
+          emit()
         }
       })
     } catch {
@@ -322,5 +340,5 @@ export function createSync({ client, credentials, copy, workouts, meta, now }) {
     return taken ? syncNow() : safeStatus()
   }
 
-  return { pair, syncNow, forget, resendAll, status }
+  return { pair, syncNow, forget, resendAll, status, subscribe }
 }

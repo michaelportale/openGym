@@ -38,8 +38,16 @@ describe('statusText', () => {
   test('waiting, or idle with workouts still to send', () => {
     const words = 'Saved on this phone. It will sync when gym.example.com is reachable.'
     expect(statusText(paired({ state: 'waiting', pending: 1, lastSyncedAt: AT }), opts)).toBe(words)
-    expect(statusText(paired({ state: 'waiting', pending: 0 }), opts)).toBe(words)
     expect(statusText(paired({ state: 'idle', pending: 2, lastSyncedAt: AT }), opts)).toBe(words)
+  })
+
+  test('waiting with nothing pending does not claim anything is waiting', () => {
+    expect(statusText(paired({ state: 'waiting', pending: 0, lastSyncedAt: AT }), opts))
+      .toBe("Synced to gym.example.com at 9:14. gym.example.com isn't reachable right now.")
+    expect(statusText(paired({ state: 'waiting', pending: 0, lastSyncedAt: '2026-11-07T21:05:00.000Z' }), opts))
+      .toBe("Synced to gym.example.com on 2026-11-07 at 21:05. gym.example.com isn't reachable right now.")
+    expect(statusText(paired({ state: 'waiting', pending: 0 }), opts))
+      .toBe('Paired with gym.example.com. Not reachable right now.')
   })
 
   test('paired but never synced, with nothing to send', () => {
@@ -95,7 +103,7 @@ describe('statusText', () => {
 
   test('the server can be passed in place of the one in the status', () => {
     expect(statusText(paired({ server: undefined, state: 'waiting' }), { ...opts, server: 'https://other.example.org' }))
-      .toBe('Saved on this phone. It will sync when other.example.org is reachable.')
+      .toBe('Paired with other.example.org. Not reachable right now.')
   })
 
   test('the default time is the device locale form of h:mm', () => {
