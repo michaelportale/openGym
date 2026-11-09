@@ -24,13 +24,6 @@ export function effortShown({ mode, warmup, perSide, side }) {
   return mode === 'current' && (!perSide || side === 'R')
 }
 
-// The validator's sentence for a refused value in `values.rir`, else null. Only a bad number is
-// refused: untouched (undefined) and cleared (null) are fine.
-export function effortRefusal(values) {
-  const v = validateRir(values?.rir)
-  return v.ok ? null : v.error
-}
-
 // Whether the row holds a reps-left value, on the row or (per side, as the web writes it) a side.
 export const rirLogged = row => row?.rir != null || row?.sides?.L?.rir != null || row?.sides?.R?.rir != null
 
@@ -61,12 +54,6 @@ export function rirFields(row, rir, { clear = false } = {}) {
   if (!v.ok) return { ok: false, error: v.error }
   if (v.rir == null) return { ok: true, fields: clear && rirLogged(row) ? { rir: null } : {} }
   return { ok: true, fields: { rir: v.rir } }
-}
-
-// The refusal a write returns for such a value, in the shape the screen reads; null when fine.
-export function effortFailure(values) {
-  const message = effortRefusal(values)
-  return message ? { ok: false, saved: false, error: { code: 'bad-rir', message } } : null
 }
 
 // The keypad's numbers with the sheet's reps-left choice: `rir` undefined (untouched) adds nothing.

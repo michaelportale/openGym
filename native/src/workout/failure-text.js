@@ -53,8 +53,6 @@ const WHY = {
   payload: "The workout couldn't be put together for saving.",
   send: "It didn't reach your history. Try again.",
   'not-saved': "The save wasn't confirmed. Try again.",
-  // The hook's own, for a reps-left value the chips cannot produce (effort-choice's effortRefusal).
-  'bad-rir': 'Reps left must be a whole number from 0 to 10.',
 }
 
 // Opening reads the journal, so storage failing there could not read it, not write it.

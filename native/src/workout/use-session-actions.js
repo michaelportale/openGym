@@ -11,7 +11,7 @@ import { completeLabels } from './keypad'
 import { pendingRest, restMsFor } from './rest-after'
 import { shownAfterComplete, withTargets } from './session-screen'
 import { carriedWeight, lockedWeight, shownValues } from './workout-view'
-import { effortFailure, effortShown, withRir } from './effort-choice'
+import { effortShown, withRir } from './effort-choice'
 import { NO_NOTICES, addSetCall, addWarmupCall, addWarmupsCall, addWarmupsInOrder, completeAfterCommit, completeCall, dockKeypadField, draftCall, editCall, findSet, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightRefusal, pauseRestCall, primaryAction, removeWarmupCall, restAfterComplete, resultNotice, resumeRestCall, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, sheetSide, thrown, undoWrite } from './set-calls'
 
 // The sessions already told that rest alerts are off. In memory: a relaunch tells again.
@@ -132,8 +132,6 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
   // it is checked again: a midnight between the commit and it refuses it (and reloads the view)
   // like any other.
   const complete = ({ setId, side, values }) => write(async (view, now) => {
-    const bad = effortFailure(values)
-    if (bad) return bad
     const call = completeCall(view, { setId, side, values, eventId: createEventId(), now })
     if (!call) return null
     return completeAfterCommit(await session.commitSet(call), async () => {
@@ -180,8 +178,6 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
     return overnightRefusal(view, now) ?? putDraft(setId, values)(view, now)
   }).catch(thrown)
   const edit = (setId, values) => write(async (view, now) => {
-    const bad = effortFailure(values)
-    if (bad) return bad
     const call = editCall(view, { setId, values, eventId: createEventId(), now })
     return call ? session.editSet(call) : null
   })

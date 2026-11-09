@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { validateRir } from '../science/effort.js'
-import { RIR_CHOICES, rirChipHint, effortFailure, effortRefusal, effortShown, isRirSelected, rirChipLabel, rirChipText, rirFields, toggleRir, withRir } from './effort-choice.js'
+import { RIR_CHOICES, rirChipHint, effortShown, isRirSelected, rirChipLabel, rirChipText, rirFields, toggleRir, withRir } from './effort-choice.js'
 
 describe('the choices', () => {
   test('0 to 5, with 5 shown as 5+', () => {
@@ -70,11 +70,7 @@ describe('rirFields', () => {
     const sentence = validateRir(11).error
     for (const bad of [11, -1, 2.5, 'x']) {
       expect(rirFields(row, bad)).toEqual({ ok: false, error: sentence })
-      expect(effortRefusal({ rir: bad })).toBe(sentence)
     }
-    expect(effortRefusal({ rir: 3 })).toBeNull()
-    expect(effortRefusal({})).toBeNull()
-    expect(effortRefusal({ rir: null })).toBeNull()
   })
 })
 
@@ -85,10 +81,6 @@ describe('what reaches the gate', () => {
     expect(withRir(values, 3)).toEqual({ w: 75, r: 8, rir: 3 })
     expect(withRir(values, null)).toEqual({ w: 75, r: 8, rir: null })
     expect(values).toEqual({ w: 75, r: 8 })
-  })
-  test('a bad value is a failed result with its own code and sentence; a good one is null', () => {
-    expect(effortFailure({ rir: 12 })).toEqual({ ok: false, saved: false, error: { code: 'bad-rir', message: validateRir(12).error } })
-    expect(effortFailure({ rir: 2 })).toBeNull()
   })
 })
 

@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { NO_NOTICES, OVERNIGHT_NOTICE, PAST_MIDNIGHT, addSetCall, addWarmupCall, addWarmupsCall, addWarmupsInOrder, completeAfterCommit, completeCall, completeResult, dockKeypadField, draftCall, editCall, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightNow, overnightRefusal, pauseRestCall, resumeRestCall, primaryAction, removeWarmupCall, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, sheetSide, thrown, undoCall, undoWrite, writeOutcome, findSet } from './set-calls.js'
 import { workoutModel } from '../shared/training.js'
-import { effortRefusal } from './effort-choice.js'
 import { shownValues, workoutScreen } from './workout-view.js'
 import { pendingRest, restEventId, restMsFor } from './rest-after.js'
 import { withTargets } from './session-screen.js'
@@ -1661,11 +1660,10 @@ describe('reps left in the calls', () => {
     const doneV = view([bench([warm('w1', done(45, 5, 5))])])
     expect(editCall(doneV, { setId: 'w1', values: { w: 45, r: 5, rir: 3 }, eventId: 'e', now: 0 }).fields).toEqual({ w: 45, r: 5 })
   })
-  test('an invalid rir is refused: no write, and the validator\'s sentence', () => {
+  test('an invalid rir is refused: no write (rirFields carries the validator\'s sentence)', () => {
     const v = bench1(todo(75, 8))
     expect(completeCall(v, { setId: 's1', values: { w: 75, r: 8, rir: 11 }, eventId: 'e', now: 0 })).toBeNull()
     expect(editCall(bench1(done(75, 8)), { setId: 's1', values: { w: 75, r: 8, rir: 2.5 }, eventId: 'e', now: 0 })).toBeNull()
-    expect(effortRefusal({ rir: 11 })).toBe('Reps left must be a whole number from 0 to 10.')
   })
   test('per side: the first side writes none, the finishing side writes row, L and R rir', () => {
     const values = { w: 10, sides: { L: { r: 12 }, R: { r: 11 } }, rir: 3 }
