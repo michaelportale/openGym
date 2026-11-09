@@ -141,14 +141,21 @@ Phase 6, Stages A (workouts) and B (weigh-ins). Do it before the wipe, on test w
 - [ ] Turn it off and remove. Turn the "Apple Health" switch off. The alert "Turn off Apple Health?" shows three buttons: "Keep what's there", "Also remove openGym's workouts and weights" and "Cancel". Tap "Also remove openGym's workouts and weights". The section goes back to "Off. Your workouts are not sent to Apple Health." In the Health app, Browse, Activity, Workouts, none of openGym's workouts are left, and Weight → Show All Data lists none from openGym (the weights you added in the Health app yourself stay). The workouts are still in the app: Export workouts lists them.
 - [ ] Discard any test session still open: tap Finish, then Discard workout, then Discard. A finished test workout needs no discard; it stays in the app until the wipe.
 
-## 12. Exercises
+## 12. Exercises and Progress
 
-Phase 7A, text side. Do it before the wipe, with the Release build. This adds a native dependency (expo-video), so the phone needs a fresh Release build first: `npx expo run:ios --configuration Release …`, the command from step 1. The phone is unpaired here, so exercise screens show text only; the animation checks come after the cutover, in step 14. Open the Exercises tab.
+Phases 7A (text side) and 7B. Do it before the wipe, with the Release build. This adds native dependencies (expo-video, react-native-svg), so the phone needs a fresh Release build first: `npx expo run:ios --configuration Release …`, the command from step 1. The phone is unpaired here, so exercise screens show text only and Progress shows only what is logged on this phone (the bundled snapshot has no weigh-ins); the animation checks and the real-data Progress check come after the cutover, in step 14. Open the Exercises tab.
 
 - [ ] Search. Tap the "Search exercises" field and type `db press`. Dumbbell presses are listed, each row showing the name and "target · equipment". A search with no match (try `zzzz`) says `No exercise matches “zzzz”.`, then "Close matches".
 - [ ] Tap with the keyboard up. With the keyboard still showing, tap a row. The exercise screen opens at once, without a first tap that only closes the keyboard.
 - [ ] Text. Clear the search and open Barbell Bench Press. The screen shows Back, the name, tags, the description, and "How to" with numbered steps, plus "Best: …" and "Last time: …" lines if you have logged it.
 - [ ] Diagnostics ends with the media credit line.
+- [ ] Body weight. Open the Progress tab. The Body weight card shows the "Today: …" line and "Log weight". Tap "Log weight", type a weight and Save. Below 3 weigh-ins it says "Log <n> more weigh-ins to see a trend." ("Log 1 more weigh-in" when one is missing), and the chart shows dots only, with no line. It counts weigh-ins in the selected range, including any from sections 10 and 11.
+- [ ] Trend. After you have logged weigh-ins on 3 different days (or the Health import brought them in), "7-day average <x> lb" and "<±n> lb over 30 days" appear. The "this week" line needs a weigh-in 7 to 14 days before the latest one, so it will most likely show only in step 14's real-data check. Tap "Why this?": the sheet is titled "Why a 7-day average" and says Definition. If you cannot log on 3 days before the wipe, skip this row; the real-data check in step 14 covers it.
+- [ ] Range chips. Tap 1M, 3M, 1Y and All. The selected chip changes and the chart stays drawn; 3M is selected by default. The ranges differ only once you have older weigh-ins.
+- [ ] Your lifts. Finish a workout first if you have none on this phone. "Your lifts" lists the exercises you have logged, heaviest best first. Tap one: its exercise screen opens.
+- [ ] Speed. On Progress, open a lift from Your lifts, go Back, and repeat with a few lifts: no Back shows a visible pause. Tap All: the chart draws without a pause. The first time the tab opens, Your lifts may say "Loading…" for a moment.
+- [ ] Your history. Use a weighted lift, such as Barbell Bench Press. On that screen "Your history" lists the last sessions: each shows its date and its sets, like 185 × 5, with "PR" on the record session. From 2 sessions on it also shows a chart. Tap Est. 1RM to see the e1RM chart, then tap "Why this?" (the toggle and "Why this?" show only when the lift has e1RM points from at least 2 sessions: a timed or bodyweight exercise has none, and a lift logged once has no chart to switch): the sheet says Convention until audited.
+- [ ] The last card reads "Measurements and nutrition arrive in Phase 7D. WHOOP follows in Phase 8."
 
 ## 13. Before the wipe
 
@@ -179,6 +186,8 @@ Exercise animations, now that the phone is paired with your real server (read-on
 - [ ] Offline, new exercise. Turn Airplane Mode on. Open an exercise whose animation you have not watched. It shows text only, with no spinner and no error.
 - [ ] Offline, watched exercise. Still in Airplane Mode, open an exercise whose animation you watched earlier. It plays again, from the cache. Turn Airplane Mode off.
 - [ ] Reduce Motion. Turn on Settings, Accessibility, Motion, Reduce Motion. Open an exercise with an animation: the still shows, and a tap plays the clip. Turn it back off.
+- [ ] Progress, real data. Open the Progress tab. Your lifts lists your real lifts, and Body weight shows your real trend; "this week" shows when your log has weigh-ins a week apart. The Strength trend card shows only if a lift's e1RM moved over the last 8 weeks across at least 2 sessions.
+- [ ] Progress speed, real data. Open a lift from Your lifts, go Back, and repeat a few times: no Back shows a visible pause. Tap All: the chart draws without a pause.
 - [ ] A custom exercise. Do not create one on the web: the phone is the only writer now. If you already have a custom exercise, find it in the list: its row says "Yours" and its screen shows its own description and no animation. Skip this row if you have none.
 
 From here on, do not install a dev build over the Release app. Any test on this phone now writes into the real record.

@@ -15,7 +15,7 @@
 import { workoutVolume, workoutVolumeIsPartial, workoutDay, doneUnits } from './history.js'
 import { isWarmupRow } from './workout-model.js'
 import { streakLoop, rotationStreak } from './rotation-streak.js'
-import { bwTrend, bwWeekChange } from './bw-trend.js'
+import { bodyweightView } from './bw-view.js'
 import { EXIDX, betterWeight, beatsWeight, isAssisted } from './exercises.js'
 import { entryDbLoad, meaningFactor } from './dumbbells.js'
 import { MUSCLES, MUSCLE_NAME, levelsOf, loadOfWorkouts } from './muscles.js'
@@ -129,9 +129,7 @@ export function weekRecapModel(workouts, { today, ws = MONDAY, unit, nameOf, S =
         : tn('{0} session in a row', '{0} sessions in a row', streak.count))
     }
     if (bw && (S.bodyweight || []).length) {
-      const trend = bwTrend(S.bodyweight.map(b => ({ t: b.t || new Date(b.d).getTime(), y: b.w })))
-      const now = trend.at(-1)
-      const ch = bwWeekChange(trend)
+      const { trendNow: now, week: ch } = bodyweightView(S.bodyweight, { range: 0 })
       if (now) lines.push(t('7-day average {0}', fmtNum(now.y) + ' ' + unit)
         + (ch ? ' · ' + (ch > 0 ? '+' : '−') + fmtNum(Math.abs(ch)) : ''))
     }

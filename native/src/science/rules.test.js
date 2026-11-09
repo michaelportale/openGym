@@ -18,7 +18,8 @@ const PRD_RULE_IDS = [
   'deload-after-misses',
   'e1rm-formula',
   'rest-defaults',
-  'load-increments'
+  'load-increments',
+  'bodyweight-trend'
 ]
 
 const DOCS = join(import.meta.dirname, '../../../docs/science')
@@ -110,6 +111,14 @@ test('cited rules keep the PRD source, and uncited rules stay labeled convention
     expect(RULES[id].population).toBe('Not a study')
     expect(RULES[id].sourceUrl).toBe('')
   }
+})
+
+test('the body-weight 7-day average is a registered definition', () => {
+  const why = whyThis('bodyweight-trend')
+  expect(why.source).toBe('Definition')
+  expect(RULES['bodyweight-trend'].title).toBe('Body-weight 7-day average')
+  expect(RULES['bodyweight-trend'].sourceUrl).toBe('')
+  expect(registryProblems()).toEqual([])
 })
 
 const PRD_URLS = [

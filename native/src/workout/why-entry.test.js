@@ -9,7 +9,9 @@ const KINDS = {
   'warmup-prompt': 'warmup-prompt',
   progression: 'double-progression',
   effort: 'effort-proximity',
-  deload: 'deload-after-misses'
+  deload: 'deload-after-misses',
+  'bodyweight-trend': 'bodyweight-trend',
+  'e1rm-formula': 'e1rm-formula'
 }
 
 test('every kind maps to a register id that whyThis resolves', () => {

@@ -229,6 +229,18 @@ describe('bestSetFor', () => {
   })
 })
 
+describe('exerciseHistory on an assistance machine', () => {
+  it('counts the least help as the best and puts the PR on that session', () => {
+    const id = EXDB.find(e => e.eq === 'leverage machine' && /assist/i.test(e.n)).id
+    const S = { workouts: [80, 60, 40].map((w, i) => ({ id: 'a' + i, d: iso(i), start: T0 + i * DAY,
+      entries: [{ id, target: { mode: 'reps' }, sets: [work(w, 8)] }] })) }
+    const h = exerciseHistory(S, id)
+    expect(h.best).toBe(40)
+    expect(h.prId).toBe('a2')
+    expect(h.sessions.map(s => s.pr)).toEqual([true, false, false])
+  })
+})
+
 it('qualifies only the affected exercise subtotal, including excluded machine rows and unknown reps',()=>{
   const known={done:true,w:5,r:10,sourceLoad:{physical:true}}
   const missing={done:true,w:5,r:null,sourceLoad:{physical:true}}

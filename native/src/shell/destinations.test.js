@@ -31,7 +31,7 @@ test('plan and progress name phase 7, and progress names WHOOP later', () => {
   expect(() => destinationCopy('exercises')).toThrow(/Unknown destination/)
   const progress = destinationCopy('progress')
   expect(progress.phaseLabel).toBe('Arrives in Phase 7')
-  expect(progress.summary).toMatch(/Phase 8/)
+  expect(progress.summary).toBe('Measurements and nutrition arrive in Phase 7D. WHOOP follows in Phase 8.')
 })
 
 test('an unknown destination throws', () => {

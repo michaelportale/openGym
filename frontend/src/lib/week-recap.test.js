@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { weekRecapModel, weekWorkouts, topMuscle } from './week-recap.js'
-import { MONDAY, SUNDAY } from './format.js'
+import { MONDAY, SUNDAY, fmtNum, isoOf } from './format.js'
+import { bodyweightView } from './bw-view.js'
 
 const sets = (n, w = 50, r = 10) => Array.from({ length: n }, () => ({ w, r, done: true }))
 const wk = (d, entries, prs = []) => ({ id: d, d, start: new Date(d + 'T10:00:00').getTime(), entries, prs })
@@ -105,6 +106,16 @@ describe('weekRecapModel v2: sessions, record values, streak and body weight', (
     expect(off.lines.some(l => l.includes('7-day average'))).toBe(false)
     const on = weekRecapModel(all, { ...opts, S: S2, bw: true })
     expect(on.lines.some(l => l.startsWith('7-day average'))).toBe(true)
+  })
+
+  it('averages weigh-ins that share one write time by their days, as Stats does', () => {
+    const t = Date.parse('2026-10-23T09:00:00')
+    const bw = Array.from({ length: 14 }, (_, i) => ({ d: isoOf(new Date(2026, 9, 10 + i)), t, w: 190 - i }))
+    const m = weekRecapModel(all, { ...opts, S: { ...opts.S, bodyweight: bw }, bw: true })
+    const view = bodyweightView(bw, { range: 0 })
+    expect(view.week).not.toBeNull()
+    expect(view.trendNow.y).not.toBe(183.5)
+    expect(m.lines).toContain('7-day average ' + fmtNum(view.trendNow.y) + ' kg · −' + fmtNum(Math.abs(view.week)))
   })
 
   it('leaves the v1 card alone without the state', () => {

@@ -87,8 +87,9 @@ test('only the workout WhySheet host mounts the sheet, and Gus has the handoff',
   expect(decisions).toContain('WhyThisSheet')
   expect(decisions).toContain('mounted only by `native/src/workout/WhySheet.js`')
   const nativeRoot = fileURLToPath(new URL('../../', import.meta.url))
-  for (const lane of ['app', 'workout', 'ui', 'session']) {
-    const hits = filesUnder(join(nativeRoot, lane)).filter(path => readFileSync(path, 'utf8').includes('WhyThisSheet'))
-    expect(hits.map(path => path.slice(nativeRoot.length))).toEqual(lane === 'workout' ? ['workout/WhySheet.js'] : [])
-  }
+  // Every lane but science/ itself, so a new lane that hosts a Why sheet is held to it too.
+  const lanes = readdirSync(nativeRoot, { withFileTypes: true }).filter(entry => entry.isDirectory() && entry.name !== 'science').map(entry => entry.name)
+  expect(lanes).toEqual(expect.arrayContaining(['app', 'workout', 'ui', 'session', 'progress', 'exercises']))
+  const hits = lanes.flatMap(lane => filesUnder(join(nativeRoot, lane))).filter(path => readFileSync(path, 'utf8').includes('WhyThisSheet'))
+  expect(hits.map(path => path.slice(nativeRoot.length))).toEqual(['workout/WhySheet.js'])
 })

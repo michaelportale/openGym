@@ -80,9 +80,11 @@ describe('exerciseDetail', () => {
       { d: '2026-11-02', entries: [{ id, sets: [{ done: true, w: 100, r: 5 }] }] },
       { d: '2026-11-09', entries: [{ id, sets: [{ done: true, w: 95, r: 8 }, { done: true, w: 95, r: 7 }] }] },
     ] }
-    const d = exerciseDetail({ state, id, server })
+    const d = exerciseDetail({ state, id, server, now: Date.UTC(2026, 10, 9, 12) })
     expect(d.best).toBe('Best: 100 lb')
-    expect(d.last).toBe('Last time: Nov 9, 2026 · 95 lb × 8')
+    expect(d.last).toBe('Last time: Nov 9 · 95 lb × 8')
+    // another year keeps its year
+    expect(exerciseDetail({ state, id, server, now: Date.UTC(2027, 0, 9, 12) }).last).toBe('Last time: Nov 9, 2026 · 95 lb × 8')
   })
   it('is null for best and last with no history', () => {
     expect(exerciseDetail({ state: { workouts: [] }, id: single.id, server })).toMatchObject({ best: null, last: null })
@@ -92,7 +94,7 @@ describe('exerciseDetail', () => {
   it('gives only the date when the first set has no load', () => {
     const id = single.id
     const state = { workouts: [{ d: '2026-01-05', entries: [{ id, sets: [{ done: true, w: 0, r: 12 }] }] }] }
-    expect(exerciseDetail({ state, id, server }).last).toBe('Last time: Jan 5, 2026')
+    expect(exerciseDetail({ state, id, server, now: Date.UTC(2026, 10, 9, 12) }).last).toBe('Last time: Jan 5')
   })
 })
 
