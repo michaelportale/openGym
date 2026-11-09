@@ -1598,6 +1598,30 @@ describe('nutrition days and settings', () => {
     expect(t.server.pushes).toHaveLength(1)
   })
 
+  // Clearing a day writes what stays of it, never a delete: {} with no ticks, { supps } with them.
+  // The server stamps it as { _ts } or { supps, _ts }, and the pull must read that as the phone's
+  // own value: done, not changed on the web.
+  test.each([
+    ['with no ticks, as {}', {}],
+    ['with its ticks kept, as { supps }', { supps: ['s1'] }],
+  ])('a day cleared %s is pushed, stamped by the server, and acked with no notice and no second push', async (_name, cleared) => {
+    const t = await nutritionSetup()
+    await t.day('2026-11-07', cleared)
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    expect(t.server.calls).toEqual(['rev', 'push', 'pull'])
+    expect(t.server.pushes[0].state.nutritionDays['2026-11-07']).toEqual({ ...cleared, _ts: 1000 })
+    expect(t.server.doc.nutritionDays['2026-11-07']).toEqual({ ...cleared, _ts: expect.any(Number) })
+    expect(t.server.doc.nutritionDays['2026-11-07']._ts).toBeGreaterThan(5000)
+    expect((await t.copy.get()).state).toEqual(t.server.doc)
+    expect(await t.rows()).toEqual([{ kind: 'nutritionDay', key: '2026-11-07', acked_at: iso(T0), superseded_at: null }])
+    expect(await t.routineEdits.listNotices()).toEqual([])
+
+    t.fresh()
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    expect(t.server.calls).toEqual(['rev'])
+    expect(t.server.pushes).toHaveLength(1)
+  })
+
   test('a day edited again while its push is in flight is rebased on the landed one, not superseded, and the next sync sends it', async () => {
     const t = await nutritionSetup()
     const first = await t.day('2026-11-08', DAY)
@@ -1725,7 +1749,7 @@ describe('nutrition days and settings', () => {
     await t.day('2026-11-08', DAY, T0 + 2)
     await t.setting('nutritionTargets', TARGETS, T0 + 3)
     await t.setting('supplements', [], T0 + 4)
-    await t.day('2026-11-07', { supps: ['s1'] }, T0 + 5) // cleared: the ticks stay, never a delete
+    await t.day('2026-11-07', { supps: ['s1'] }, T0 + 5) // a cleared day the web changes below: superseded in the same pull that settles the rest
     t.server.webEditsDay('2026-11-07', d => ({ ...d, note: 'web' }))
     const markSent = t.routineEdits.markSent
     t.routineEdits.markSent = async items => {

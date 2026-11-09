@@ -109,9 +109,9 @@ export function createSync({ client, credentials, copy, workouts, weighIns, rout
     const settled = [...days.done, ...days.superseded]
     if (settled.length) await weighIns.markAcked(settled, iso())
     // A pending edit of any kind is acked once the stored copy holds it (done), and superseded when
-    // the web changed (or deleted) that routine, day or setting first (the Plan and Nutrition
-    // screens say so). Rebased: the copy holds what this phone sent while a newer edit waited, so
-    // the newer one now stands on the copy's stamp.
+    // the web changed (or deleted) that routine, day or setting first: the store lists its notice by
+    // kind (the Plan tab shows the routine ones). Rebased: the copy holds what this phone sent while
+    // a newer edit waited, so the newer one now stands on the copy's stamp.
     const edits = applyEdits(state, await routineEdits.listPending())
     const at = iso()
     if (edits.done.length) await routineEdits.markAcked(edits.done, at)
