@@ -5,6 +5,7 @@ import AppText from '../ui/AppText'
 import Card from '../ui/Card'
 import PrimaryButton from '../ui/PrimaryButton'
 import PairSheet from './PairSheet'
+import { defaultDay, defaultTime } from './sync-status'
 import { serverLines } from './sync-triggers'
 import { useSync } from './use-sync'
 
@@ -27,10 +28,9 @@ function SecondaryButton({ label, accessibilityHint, disabled, onPress }) {
 function lastSyncedLine(status) {
   const at = Date.parse(status?.lastSyncedAt ?? '')
   if (!Number.isFinite(at)) return 'Not synced yet.'
-  const day = new Date(at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-  const time = new Date(at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
-  const today = day === new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-  return `Last synced ${today ? '' : `${day}, `}${time}`
+  const day = defaultDay(at)
+  const today = day === defaultDay(Date.now())
+  return `Last synced ${today ? '' : `${day}, `}${defaultTime(at)}`
 }
 
 // "Your server": pair, see how syncing stands, sync now, forget. The token is never shown.

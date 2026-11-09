@@ -8,6 +8,7 @@
 // (ms since epoch). It never touches the session journal and logs nothing.
 
 import { buildPush } from './outbox.js'
+import { readCopy } from './server-copy.js'
 import { normalizeServer } from './server-address.js'
 import { hostOf } from './sync-status.js'
 
@@ -88,14 +89,6 @@ export function createSync({ client, credentials, copy, workouts, meta, now }) {
     return auth && base ? { base, token: auth.token } : null
   }
 
-  async function readCopy() {
-    try {
-      return await copy.get()
-    } catch {
-      return null // a corrupt copy is re-pulled, as if there were none
-    }
-  }
-
   // The only place a workout is acked: once a stored copy of the server's document holds it, the
   // workout is the server's (so the Workout tab still shows it from the copy). One the server
   // records as deleted or wiped by a reset is the server's too, and is not sent back.
@@ -107,7 +100,7 @@ export function createSync({ client, credentials, copy, workouts, meta, now }) {
   }
 
   async function store(state, rev) {
-    const next = { state, rev, wid: typeof state._wid === 'string' ? state._wid : null, pulledAt: iso() }
+    const next = { state, rev, wid: typeof state._wid === 'string' ? state._wid : null }
     await copy.put(next)
     await reconcile(state)
     return next
@@ -177,7 +170,7 @@ export function createSync({ client, credentials, copy, workouts, meta, now }) {
     }
     if (!(await renew(ctx))) return
 
-    let held = await readCopy()
+    let held = await readCopy(copy) // a corrupt copy reads as none and is re-pulled
     const r = await client.rev(ctx.base, ctx.token)
     if (!r.ok) return failed(r)
     // The same document only when the rev and the write id both match; no wid on one side and a

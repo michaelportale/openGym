@@ -15,7 +15,7 @@ test.each(SQLITE_DRIVERS)('%s: the server copy is empty, round-trips verbatim an
   const copy = createSqliteServerCopy(db)
   expect(await copy.get()).toBeNull()
 
-  const value = { state, rev: 7, wid: 'wid-9', pulledAt: '2026-11-09T10:00:00.000Z' }
+  const value = { state, rev: 7, wid: 'wid-9' }
   await copy.put(value)
   expect(await copy.get()).toEqual(value)
   const raw = await db.getAll('SELECT body FROM server_copy')
@@ -55,7 +55,7 @@ test.each(SQLITE_DRIVERS)('%s: put, get, then buildPush keeps everything but wor
     _wids: ['wid-9', 'wid-8'],
   }
   const copy = createSqliteServerCopy(createDb())
-  await copy.put({ state: doc, rev: 7, wid: 'wid-9', pulledAt: 't' })
+  await copy.put({ state: doc, rev: 7, wid: 'wid-9' })
   const got = await copy.get()
   const push = buildPush(got, [{ id: 'new', d: '2026-11-09' }])
   const { workouts, ...rest } = push.state
@@ -70,9 +70,9 @@ test.each(SQLITE_DRIVERS)('%s: key() is the rev and wid alone, read without the 
   const db = createDb()
   const copy = createSqliteServerCopy(db)
   expect(await copy.key()).toBeNull()
-  await copy.put({ state, rev: 7, wid: 'wid-9', pulledAt: 't' })
+  await copy.put({ state, rev: 7, wid: 'wid-9' })
   expect(await copy.key()).toEqual({ rev: 7, wid: 'wid-9' })
-  await copy.put({ state, rev: 8, wid: null, pulledAt: 't' })
+  await copy.put({ state, rev: 8, wid: null })
   expect(await copy.key()).toEqual({ rev: 8, wid: null })
   await copy.clear()
   expect(await copy.key()).toBeNull()
@@ -81,7 +81,7 @@ test.each(SQLITE_DRIVERS)('%s: key() is the rev and wid alone, read without the 
 test('key() never parses the body: a corrupt one still has its key', async () => {
   const db = createNodeSqliteDb()
   const copy = createSqliteServerCopy(db)
-  await copy.put({ state, rev: 7, wid: 'wid-9', pulledAt: 't' })
+  await copy.put({ state, rev: 7, wid: 'wid-9' })
   await db.run('UPDATE server_copy SET body = ?', ['{not json'])
   expect(await copy.key()).toEqual({ rev: 7, wid: 'wid-9' })
   await expect(copy.get()).rejects.toThrow()

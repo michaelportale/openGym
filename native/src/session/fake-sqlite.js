@@ -96,8 +96,8 @@ export function createFakeSqliteDb() {
       return { changes: tables.finished_workouts.length }
     }
     if (/^INSERT INTO server_copy /i.test(text)) {
-      const [rev, wid, body, pulled_at] = params
-      tables.server_copy = [{ id: 1, rev, wid, body, pulled_at }]
+      const [rev, wid, body] = params
+      tables.server_copy = [{ id: 1, rev, wid, body }]
       return { changes: 1 }
     }
     if (/^DELETE FROM server_copy$/i.test(text)) {

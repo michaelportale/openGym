@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest'
-import { readCopy, readScreenSource, screenSource } from './source.js'
+import { readCopy } from './server-copy.js'
+import { readScreenSource, screenSource } from './source.js'
 import { sessionState } from '../workout/history-state.js'
 import { nextRoutineId } from '../workout/next-up.js'
 import { createNodeSqliteDb } from '../../scripts/node-sqlite.mjs'
@@ -33,7 +34,7 @@ test('paired: the copy wins, pending are appended, a shared id keeps the copy', 
       customEx: [{ id: 'cust', n: 'my curl', tg: 'biceps', eq: 'cable' }],
       workouts: [w('c1', '2026-10-05', { vol: 1 }), w('c0', '2026-09-01')],
     },
-    rev: 3, wid: 'x', pulledAt: 't',
+    rev: 3, wid: 'x',
   }
   const pending = [w('c1', '2026-10-05', { vol: 999 }), w('p1', '2026-11-01')]
   const out = screenSource({ copy, bundled, pending })
@@ -49,7 +50,7 @@ test('paired: the copy wins, pending are appended, a shared id keeps the copy', 
 test('paired: history ids get a name where one is known, unknown ids none', () => {
   const copy = {
     state: { routines: [], workouts: [w('c1', '2026-10-05', { entries: [{ id: builtIn.id }, { id: 'ghost' }] })] },
-    rev: 0, wid: 'x', pulledAt: 't',
+    rev: 0, wid: 'x',
   }
   const out = screenSource({ copy, bundled, pending: [] })
   expect(out.names[builtIn.id].name).toBe(cap(builtIn.n))
@@ -62,7 +63,7 @@ test('readCopy gives the copy, and null when the read throws or the body is corr
   expect(await readCopy({ get: async () => { throw new SyntaxError('bad json') } })).toBeNull()
   const db = createNodeSqliteDb()
   const store = createSqliteServerCopy(db)
-  await store.put({ state: {}, rev: 1, wid: 'w', pulledAt: 't' })
+  await store.put({ state: {}, rev: 1, wid: 'w' })
   await db.run('UPDATE server_copy SET body = ?', ['{not json'])
   expect(await readCopy(store)).toBeNull()
 })
@@ -84,7 +85,7 @@ const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v)
 const allObjects = list => Array.isArray(list) && list.every(isObj)
 
 test.each(probes)('paired, %s: the screen is built from the objects only, and the copy stays as stored', (_n, doc) => {
-  const copy = { state: doc, rev: 1, wid: 'x', pulledAt: 't' }
+  const copy = { state: doc, rev: 1, wid: 'x' }
   const stored = JSON.parse(JSON.stringify(copy))
   const pending = [w('p1', '2026-11-08')]
   const out = screenSource({ copy, bundled, pending })
@@ -127,7 +128,7 @@ test('readScreenSource: not paired, the bundled snapshot with every workout on t
 })
 
 test('readScreenSource: paired, the copy with the workouts it has not acked', async () => {
-  const copy = { state: { routines: [], workouts: [w('c1', '2026-10-05')] }, rev: 2, wid: 'x', pulledAt: 't' }
+  const copy = { state: { routines: [], workouts: [w('c1', '2026-10-05')] }, rev: 2, wid: 'x' }
   const all = [w('a1', '2026-10-20'), w('p1', '2026-11-01')]
   const out = await readScreenSource({ ...stores({ copy, all, pending: [all[1]] }), bundled })
   expect(out.state.workouts.map(x => x.id)).toEqual(['c1', 'p1'])
@@ -136,7 +137,7 @@ test('readScreenSource: paired, the copy with the workouts it has not acked', as
 
 test('readScreenSource: a copy the screen still cannot read reads as no copy, as a corrupt one does', async () => {
   // a custom exercise whose name is not text: well-formed lists, but naming it throws
-  const copy = { state: { routines: [{ id: 'rc', name: 'C', ex: [{ id: 'cust' }] }], customEx: [{ id: 'cust', n: 5 }], workouts: [] }, rev: 1, wid: 'x', pulledAt: 't' }
+  const copy = { state: { routines: [{ id: 'rc', name: 'C', ex: [{ id: 'cust' }] }], customEx: [{ id: 'cust', n: 5 }], workouts: [] }, rev: 1, wid: 'x' }
   expect(() => screenSource({ copy, bundled, pending: [] })).toThrow()
   const all = [w('a1', '2026-10-20'), w('p1', '2026-11-01')]
   const out = await readScreenSource({ ...stores({ copy, all, pending: [all[1]] }), bundled })
@@ -147,7 +148,7 @@ test('readScreenSource: a copy the screen still cannot read reads as no copy, as
 
 test('the example banner is the bundle\'s own: shown over example data, never over the server copy', async () => {
   const example = { ...bundled, example: true }
-  const copy = { state: { routines: [{ id: 'rs', name: 'Server', ex: [] }], workouts: [] }, rev: 1, wid: 'x', pulledAt: 't' }
+  const copy = { state: { routines: [{ id: 'rs', name: 'Server', ex: [] }], workouts: [] }, rev: 1, wid: 'x' }
   expect(screenSource({ copy: null, bundled: example, pending: [] }).example).toBe(true)
   expect(screenSource({ copy, bundled: example, pending: [] }).example).toBe(false)
   expect(screenSource({ copy: null, bundled, pending: [] }).example).toBe(false)
@@ -157,8 +158,8 @@ test('the example banner is the bundle\'s own: shown over example data, never ov
 
 test('readScreenSource reads the unsent workouts before the copy: a sync landing between the two reads never hides one', async () => {
   const p1 = w('p1', '2026-11-08')
-  const before = { state: { routines: [], workouts: [w('c1', '2026-10-05')] }, rev: 1, wid: 'a', pulledAt: 't' }
-  const after = { state: { routines: [], workouts: [w('c1', '2026-10-05'), { ...p1, _ts: 9 }] }, rev: 2, wid: 'b', pulledAt: 't' }
+  const before = { state: { routines: [], workouts: [w('c1', '2026-10-05')] }, rev: 1, wid: 'a' }
+  const after = { state: { routines: [], workouts: [w('c1', '2026-10-05'), { ...p1, _ts: 9 }] }, rev: 2, wid: 'b' }
   // The engine stores the copy that holds p1, then acks p1. Here that lands right after whichever
   // of the two reads comes first.
   let copy = before

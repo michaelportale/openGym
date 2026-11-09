@@ -264,6 +264,7 @@ describe.skipIf(!HAS_API_DEPS)(TITLE, { timeout: 30_000 }, () => {
     const file = server.file()
     expect(file.workouts.map(stripStamps)).toEqual([p1])
     expect(file._rev).toBe(1)
+    expect(file.unit).toBe('lb')
     expect((await app.copy.get()).state).toEqual(without(file, HIDDEN))
   })
 

@@ -2,8 +2,8 @@
 // server by its host only (never the scheme, port or path), and the time in the device's own
 // h:mm form. Formatters can be passed in so tests do not depend on the machine's zone or locale.
 
-const defaultTime = ms => new Date(ms).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
-const defaultDay = ms => new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+export const defaultTime = ms => new Date(ms).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+export const defaultDay = ms => new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 
 const SAFE = 'Your workouts are safe on this phone'
 

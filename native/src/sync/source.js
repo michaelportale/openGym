@@ -1,5 +1,6 @@
 // The Workout tab's data: the server copy once paired, else the bundled snapshot. Both give
 // { state, names, example }, so nothing downstream knows which it got.
+import { readCopy } from './server-copy.js'
 import { exercises } from '../shared/training.js'
 import { sessionState } from '../workout/history-state.js'
 
@@ -56,16 +57,6 @@ export function screenSource({ copy, bundled, pending }) {
   const held = new Set((doc.workouts ?? []).map(w => w.id))
   const state = sessionState({ state: doc }, (pending ?? []).filter(w => !held.has(w.id)))
   return { state, names: namesFor(state), example: false }
-}
-
-// The stored copy, or null if reading it fails (a corrupt body): the screen then shows the
-// phone's own workouts and the sync engine re-pulls to repair.
-export async function readCopy(serverCopy) {
-  try {
-    return await serverCopy.get()
-  } catch {
-    return null
-  }
 }
 
 // What the Workout tab opens on, read from the stores: `finished` (the finished-workout store)

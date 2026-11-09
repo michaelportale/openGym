@@ -18,21 +18,14 @@ export function homeKey(status) {
   return `${status.paired ? 1 : 0}|${status.server ?? ''}|${status.copyKey ?? ''}`
 }
 
-// Reload the start screen when the key moved. Never while a session is open (or loading or failed):
-// leaving then reads the new copy anyway.
-export function shouldReloadHome({ prev, next, homeStatus }) {
-  if (homeStatus !== 'start') return false
-  if (prev === undefined || prev === null || next === null) return false
-  return prev !== next
-}
-
-// One status seen by the Workout tab: the key it now counts as shown, and whether to reload. The
-// key is held while the screen loads, since the load may have read the copy before it changed: a
-// copy that lands during a load reloads the screen once the load is done. During a session it
-// moves on, as leaving the session reloads anyway.
+// One status seen by the Workout tab: the key it now counts as shown, and whether to reload the
+// start screen (the key moved, and nothing was seen before is not a move). The key is held while
+// the screen loads, since the load may have read the copy before it changed: a copy that lands
+// during a load reloads the screen once the load is done. Never a reload while a session is open
+// (or failed): the key moves on, as leaving the session reads the new copy anyway.
 export function homeKeyStep({ seen, next, homeStatus }) {
   if (next === null || homeStatus === 'loading') return { seen, reload: false }
-  return { seen: next, reload: shouldReloadHome({ prev: seen, next, homeStatus }) }
+  return { seen: next, reload: homeStatus === 'start' && seen != null && seen !== next }
 }
 
 export function canPair({ address, code, busy }) {

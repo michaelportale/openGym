@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { FOREGROUND_GAP_MS, canPair, homeKey, homeKeyStep, serverLines, shouldReloadHome, shouldSyncOnForeground } from './sync-triggers.js'
+import { FOREGROUND_GAP_MS, canPair, homeKey, homeKeyStep, serverLines, shouldSyncOnForeground } from './sync-triggers.js'
 
 describe('shouldSyncOnForeground', () => {
   const T = 1_000_000
@@ -14,27 +14,27 @@ describe('shouldSyncOnForeground', () => {
   })
 })
 
-describe('homeKey / shouldReloadHome', () => {
+describe('homeKey / reload', () => {
   const st = (over = {}) => ({ paired: true, server: 'https://g.example.com', copyKey: '4|w4', lastSyncedAt: 'a', ...over })
   const k = over => homeKey(st(over))
   test('the first status only records the key', () => {
-    expect(shouldReloadHome({ prev: undefined, next: k(), homeStatus: 'start' })).toBe(false)
+    expect(homeKeyStep({ seen: undefined, next: k(), homeStatus: 'start' }).reload).toBe(false)
   })
   test('a new server copy, pairing or forgetting reloads the start screen', () => {
-    expect(shouldReloadHome({ prev: k(), next: k({ copyKey: '5|w5' }), homeStatus: 'start' })).toBe(true)
-    expect(shouldReloadHome({ prev: k(), next: homeKey({ paired: false }), homeStatus: 'start' })).toBe(true)
-    expect(shouldReloadHome({ prev: homeKey({ paired: false }), next: k(), homeStatus: 'start' })).toBe(true)
+    expect(homeKeyStep({ seen: k(), next: k({ copyKey: '5|w5' }), homeStatus: 'start' }).reload).toBe(true)
+    expect(homeKeyStep({ seen: k(), next: homeKey({ paired: false }), homeStatus: 'start' }).reload).toBe(true)
+    expect(homeKeyStep({ seen: homeKey({ paired: false }), next: k(), homeStatus: 'start' }).reload).toBe(true)
   })
   test('a no-op sync (same rev and wid, new lastSyncedAt) does not reload', () => {
-    expect(shouldReloadHome({ prev: k(), next: k({ lastSyncedAt: 'b' }), homeStatus: 'start' })).toBe(false)
+    expect(homeKeyStep({ seen: k(), next: k({ lastSyncedAt: 'b' }), homeStatus: 'start' }).reload).toBe(false)
   })
   test('never while a session is open, loading or failed', () => {
     for (const homeStatus of ['session', 'loading', 'error']) {
-      expect(shouldReloadHome({ prev: k(), next: k({ copyKey: '5|w5' }), homeStatus })).toBe(false)
+      expect(homeKeyStep({ seen: k(), next: k({ copyKey: '5|w5' }), homeStatus }).reload).toBe(false)
     }
   })
   test('no status yet: no reload', () => {
-    expect(shouldReloadHome({ prev: k(), next: null, homeStatus: 'start' })).toBe(false)
+    expect(homeKeyStep({ seen: k(), next: null, homeStatus: 'start' }).reload).toBe(false)
   })
 })
 
