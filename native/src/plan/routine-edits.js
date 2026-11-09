@@ -37,7 +37,8 @@ const noticeOf = row => ({ rid: row.rid, name: typeof row.routine.name === 'stri
 const byT = (a, b) => a.t - b.t
 const byAt = (a, b) => (a.supersededAt < b.supersededAt ? -1 : a.supersededAt > b.supersededAt ? 1 : 0)
 
-// The row a put leaves. A pending row keeps its baseTs and sent. An acked one takes the caller's
+// The row a put leaves (the memory store; the SQLite store's put states the same rules in SQL, and
+// both run the same tests). A pending row keeps its baseTs and sent. An acked one takes the caller's
 // baseTs, and its routine, known to be on the server, as sent: a save made on a copy read before
 // that ack is then rebased onto it, not taken for a change on the web. A superseded one starts
 // fresh, and so does any row on a `fresh` put (an edit made with no server copy held, on the
@@ -167,19 +168,28 @@ export function createSqliteRoutineEdits(db) {
   const rowsOf = async (sql, args) => (await db.getAll(sql, args)).map(fromRow)
 
   return {
+    // merged's rules in one statement, which reads the row and writes it with nothing in between:
+    // a markSent landing while the put is on its way in is kept. (A BEGIN/COMMIT around a read and
+    // a write would not do: every other query on this connection joins an open transaction.) Each
+    // SET expression sees the row as it was before the update.
     async put(edit) {
       const s = normalized(edit)
       await ready()
-      const found = await rowsOf('SELECT * FROM routine_edits WHERE rid = ?', [s.rid])
-      const next = merged(s, found[0])
-      await db.run(
+      const fresh = s.fresh ? 1 : 0
+      const keep = 'NOT ? AND acked_at IS NULL AND superseded_at IS NULL'
+      const base = `CASE WHEN ${keep} THEN base_ts ELSE excluded.base_ts END`
+      const rows = await db.getAll(
         `INSERT INTO routine_edits (rid, base_ts, routine, sent, t, acked_at, superseded_at, superseded_kind, dismissed, resent)
-         VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, 0, 0)
-         ON CONFLICT(rid) DO UPDATE SET base_ts = excluded.base_ts, routine = excluded.routine, sent = excluded.sent,
-           t = excluded.t, acked_at = NULL, superseded_at = NULL, superseded_kind = NULL, dismissed = 0, resent = 0`,
-        [next.rid, next.baseTs, JSON.stringify(next.routine), next.sent == null ? null : JSON.stringify(next.sent), next.t],
+         VALUES (?, ?, ?, NULL, ?, NULL, NULL, NULL, 0, 0)
+         ON CONFLICT(rid) DO UPDATE SET
+           base_ts = ${base},
+           sent = CASE WHEN ${keep} THEN sent WHEN NOT ? AND acked_at IS NOT NULL AND superseded_at IS NULL THEN routine ELSE NULL END,
+           t = CASE WHEN t = excluded.t AND (routine IS NOT excluded.routine OR base_ts IS NOT ${base}) THEN excluded.t + 1 ELSE excluded.t END,
+           routine = excluded.routine, acked_at = NULL, superseded_at = NULL, superseded_kind = NULL, dismissed = 0, resent = 0
+         RETURNING t`,
+        [s.rid, s.baseTs, JSON.stringify(s.routine), s.t, fresh, fresh, fresh, fresh],
       )
-      return { ok: true, rid: next.rid, t: next.t }
+      return { ok: true, rid: s.rid, t: rows[0].t }
     },
     async get(rid) {
       await ready()

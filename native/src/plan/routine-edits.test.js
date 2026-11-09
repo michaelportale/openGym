@@ -224,6 +224,19 @@ test('real sqlite: survives a reopen with routine and sent as objects', async ()
   expect(await createSqliteRoutineEdits(db).get('r1')).toEqual({ rid: 'r1', baseTs: null, routine: r1, sent: r1, t: 5 })
 })
 
+test('real sqlite: a markSent landing while a put is on its way in is kept, since one statement reads and writes the row', async () => {
+  const db = createNodeSqliteDb()
+  const s = createSqliteRoutineEdits(db)
+  await s.put({ rid: 'r1', baseTs: 1, routine: r1, t: 5 })
+  db.holdNext(/^INSERT INTO routine_edits/)
+  const put = s.put({ rid: 'r1', baseTs: 1, routine: { ...r1, name: 'Pull' }, t: 6 })
+  await db.held()
+  await s.markSent([{ rid: 'r1', routine: r1 }])
+  db.release()
+  expect(await put).toEqual({ ok: true, rid: 'r1', t: 6 })
+  expect(await s.get('r1')).toEqual({ rid: 'r1', baseTs: 1, routine: { ...r1, name: 'Pull' }, sent: r1, t: 6 })
+})
+
 test('a table from before the resent flag gains it once, its rows not resent', async () => {
   const db = createNodeSqliteDb()
   await db.exec(`CREATE TABLE routine_edits (
