@@ -133,6 +133,16 @@ describe.each(Object.entries(makers))('%s routine edits', (_, make) => {
     expect((await s.listNotices()).map(n => n.rid)).toEqual(['r2'])
   })
 
+  test('dismiss acts on a superseded row only: a stale Dismiss on a row edited again never hides its next notice', async () => {
+    const s = make()
+    await s.put({ rid: 'r1', baseTs: 1, routine: r1, t: 5 })
+    await s.dismiss('r1')
+    await s.markSuperseded([{ rid: 'r1', t: 5, kind: 'changed' }], 'x')
+    expect((await s.listNotices()).map(n => n.rid)).toEqual(['r1'])
+    await s.dismiss('r1')
+    expect(await s.listNotices()).toEqual([])
+  })
+
   test('a put after superseded starts a fresh pending row', async () => {
     const s = make()
     await s.put({ rid: 'r1', baseTs: 1, routine: r1, t: 5 })

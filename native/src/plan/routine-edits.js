@@ -108,9 +108,10 @@ export function createMemoryRoutineEdits() {
     async listNotices() {
       return [...rows.values()].filter(row => row.supersededAt != null && !row.dismissed).sort(byAt).map(noticeOf)
     },
+    // A notice's Dismiss: superseded rows only, so a stale tap never hides a later notice.
     async dismiss(rid) {
       const row = rows.get(rid)
-      if (row) row.dismissed = 1
+      if (row && row.supersededAt != null) row.dismissed = 1
       return { ok: true }
     },
     async resetAcked() {
@@ -230,7 +231,7 @@ export function createSqliteRoutineEdits(db) {
     },
     async dismiss(rid) {
       await ready()
-      await db.run('UPDATE routine_edits SET dismissed = 1 WHERE rid = ?', [rid])
+      await db.run('UPDATE routine_edits SET dismissed = 1 WHERE rid = ? AND superseded_at IS NOT NULL', [rid])
       return { ok: true }
     },
     async resetAcked() {
