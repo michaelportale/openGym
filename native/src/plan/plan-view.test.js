@@ -68,11 +68,11 @@ describe('notices', () => {
     { rid: 'b', name: 'Pull B', kind: 'deleted', at: '2' },
     { rid: 'c', name: 'Legs', kind: 'unsafe', at: '3' },
   ]
-  test('the exact text for changed, deleted and unsafe', () => {
+  test('the exact text for changed, deleted and unsafe, and a Dismiss label that names the routine', () => {
     expect(noticeLines(notices)).toEqual([
-      { rid: 'a', text: "Your change to Push A wasn't sent: it was changed on the web first. This shows the web's version." },
-      { rid: 'b', text: "Your change to Pull B wasn't sent: it was deleted on the web." },
-      { rid: 'c', text: "Your change to Legs wasn't sent: this move or swap has to be made on the web." },
+      { rid: 'a', text: "Your change to Push A wasn't sent: it was changed on the web first. This shows the web's version.", dismissLabel: 'Dismiss notice about Push A' },
+      { rid: 'b', text: "Your change to Pull B wasn't sent: it was deleted on the web.", dismissLabel: 'Dismiss notice about Pull B' },
+      { rid: 'c', text: "Your change to Legs wasn't sent: this move or swap has to be made on the web.", dismissLabel: 'Dismiss notice about Legs' },
     ])
   })
   test('planView carries them in order; none reads as none', () => {
@@ -81,9 +81,9 @@ describe('notices', () => {
   })
   test('an empty or blank name reads as this routine', () => {
     expect(noticeLines([{ rid: 'a', name: '', kind: 'changed' }, { rid: 'b', name: '  ', kind: 'deleted' }, { rid: 'c', name: null, kind: 'unsafe' }])).toEqual([
-      { rid: 'a', text: "Your change to this routine wasn't sent: it was changed on the web first. This shows the web's version." },
-      { rid: 'b', text: "Your change to this routine wasn't sent: it was deleted on the web." },
-      { rid: 'c', text: "Your change to this routine wasn't sent: this move or swap has to be made on the web." },
+      { rid: 'a', text: "Your change to this routine wasn't sent: it was changed on the web first. This shows the web's version.", dismissLabel: 'Dismiss notice about this routine' },
+      { rid: 'b', text: "Your change to this routine wasn't sent: it was deleted on the web.", dismissLabel: 'Dismiss notice about this routine' },
+      { rid: 'c', text: "Your change to this routine wasn't sent: this move or swap has to be made on the web.", dismissLabel: 'Dismiss notice about this routine' },
     ])
   })
   test('the sheet and screen sentences', () => {

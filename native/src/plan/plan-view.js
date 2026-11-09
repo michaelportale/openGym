@@ -53,9 +53,13 @@ const NOTICE = {
 
 const noticeName = name => (typeof name === 'string' && name.trim() ? name : 'this routine')
 
-// routineEdits.listNotices() rows as the lines the screens show.
+// routineEdits.listNotices() rows as the lines the screens show, each with its Dismiss button's
+// VoiceOver label.
 export function noticeLines(notices) {
-  return (notices ?? []).map(n => ({ rid: n.rid, text: (NOTICE[n.kind] ?? NOTICE.changed)(noticeName(n.name)) }))
+  return (notices ?? []).map(n => {
+    const name = noticeName(n.name)
+    return { rid: n.rid, text: (NOTICE[n.kind] ?? NOTICE.changed)(name), dismissLabel: `Dismiss notice about ${name}` }
+  })
 }
 
 export function planView(state, { nextId = null, notices = [] } = {}) {

@@ -15,13 +15,13 @@ import { usePlan } from './use-plan'
 
 const exercises = n => (n === 1 ? '1 exercise' : `${n} exercises`)
 
-// The edits that were not sent, each with Dismiss. `lines` from noticeLines.
+// The edits that were not sent, each with Dismiss (labelled with the routine). `lines` from noticeLines.
 export function Notices({ lines, onDismiss }) {
   return lines.map(n => (
     <Card key={n.rid} style={styles.notice}>
       <AppText variant="body">{n.text}</AppText>
       <ScaleButton
-        accessibilityLabel="Dismiss"
+        accessibilityLabel={n.dismissLabel}
         accessibilityHint="Hides this notice."
         onPress={() => onDismiss(n.rid)}
         style={styles.dismiss}
