@@ -2,6 +2,14 @@
 // failure is one of a few kinds the sync layer can act on. The token goes out in one place, the
 // Authorization header; it is never in a URL, a log line or a returned error.
 
+const isDoc = v => !!v && typeof v === 'object' && !Array.isArray(v)
+// A profile with no document yet is sent as `state: null`: an empty document at rev 0, so the
+// first push can start it.
+const docOf = v => (v === null ? {} : isDoc(v) ? v : undefined)
+// Request Timeout and Too Many Requests pass by themselves; any other 4xx is the server (or a
+// proxy in front of it) refusing, and saying the same thing every time it is asked again.
+const PASSING = new Set([408, 429])
+
 export function createApiClient({ fetch, timeoutMs = 15000 }) {
   async function call(base, path, { method = 'GET', token, body } = {}, onStatus) {
     const headers = { Accept: 'application/json' }
@@ -20,6 +28,7 @@ export function createApiClient({ fetch, timeoutMs = 15000 }) {
       const special = onStatus?.(status, json)
       if (special) return special
       if (status >= 200 && status < 300 && json !== undefined && json !== null) return { ok: true, json }
+      if (status >= 400 && status < 500 && !PASSING.has(status)) return { ok: false, kind: 'refused', status }
       return { ok: false, kind: 'server', status }
     } catch {
       return { ok: false, kind: 'offline' }
@@ -52,12 +61,18 @@ export function createApiClient({ fetch, timeoutMs = 15000 }) {
     },
     async pull(base, token) {
       const r = await call(base, '/api/data', { token })
-      return shaped(r, j => (j.state && typeof j.state === 'object' && typeof j.rev === 'number' ? { ok: true, state: j.state, rev: j.rev } : null))
+      return shaped(r, j => {
+        const state = docOf(j.state)
+        return state && typeof j.rev === 'number' ? { ok: true, state, rev: j.rev } : null
+      })
     },
     async push(base, token, { state, baseRev, baseWid }) {
       const r = await call(base, '/api/data', { method: 'PUT', token, body: { state, baseRev, baseWid, stamped: false } },
         (status, j) => {
-          if (status === 409) return j && j.state && typeof j.rev === 'number' ? { ok: false, kind: 'conflict', rev: j.rev, state: j.state } : server(409)
+          if (status === 409) {
+            const theirs = docOf(j?.state)
+            return theirs && typeof j.rev === 'number' ? { ok: false, kind: 'conflict', rev: j.rev, state: theirs } : server(409)
+          }
           if (status === 413) return { ok: false, kind: 'too-large' }
           return null
         })

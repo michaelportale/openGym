@@ -25,9 +25,9 @@ describe('redeem', () => {
     const { client } = make(() => res(400, { error: 'x', code: 'pair-invalid' }))
     expect(await client.redeem(BASE, 'X')).toEqual({ ok: false, kind: 'invalid-code' })
   })
-  test('other 400 is a server error with its status', async () => {
+  test('other 400 is refused, with its status', async () => {
     const { client } = make(() => res(400, { error: 'x' }))
-    expect(await client.redeem(BASE, 'X')).toEqual({ ok: false, kind: 'server', status: 400 })
+    expect(await client.redeem(BASE, 'X')).toEqual({ ok: false, kind: 'refused', status: 400 })
   })
   test('200 without a token is a server error', async () => {
     const { client } = make(() => res(200, { user: {} }))
@@ -76,6 +76,28 @@ describe('rev and pull', () => {
     const { client } = make(() => res(401, {}))
     expect((await client.rev(BASE, TOKEN)).kind).toBe('unauthorized')
   })
+  test('a profile with no document yet pulls as an empty document at rev 0', async () => {
+    const { client } = make(() => res(200, { state: null, rev: 0 }))
+    expect(await client.pull(BASE, TOKEN)).toEqual({ ok: true, state: {}, rev: 0 })
+  })
+  test('a state that is neither an object nor null is still a server error', async () => {
+    expect((await make(() => res(200, { state: 'x', rev: 0 })).client.pull(BASE, TOKEN)).kind).toBe('server')
+    expect((await make(() => res(200, { state: [], rev: 0 })).client.pull(BASE, TOKEN)).kind).toBe('server')
+  })
+})
+
+describe('a 4xx the server means', () => {
+  test.each([400, 403, 404, 405, 410, 422])('%i is refused with its status, on every call', async status => {
+    const { client } = make(() => res(status, { error: 'no' }))
+    expect(await client.rev(BASE, TOKEN)).toEqual({ ok: false, kind: 'refused', status })
+    expect(await client.pull(BASE, TOKEN)).toEqual({ ok: false, kind: 'refused', status })
+    expect(await client.me(BASE, TOKEN)).toEqual({ ok: false, kind: 'refused', status })
+    expect(await client.push(BASE, TOKEN, { state: {} })).toEqual({ ok: false, kind: 'refused', status })
+  })
+  test.each([408, 429])('%i is a passing server condition, not refused', async status => {
+    const { client } = make(() => res(status, {}))
+    expect(await client.pull(BASE, TOKEN)).toEqual({ ok: false, kind: 'server', status })
+  })
 })
 
 describe('push', () => {
@@ -93,6 +115,10 @@ describe('push', () => {
     const theirs = { workouts: [{ id: 1 }] }
     const { client } = make(() => res(409, { error: 'conflict', rev: 9, state: theirs }))
     expect(await client.push(BASE, TOKEN, { state, baseRev: 7 })).toEqual({ ok: false, kind: 'conflict', rev: 9, state: theirs })
+  })
+  test('a 409 from a profile with no document carries an empty one', async () => {
+    const { client } = make(() => res(409, { error: 'conflict', rev: 0, state: null }))
+    expect(await client.push(BASE, TOKEN, { state, baseRev: 7 })).toEqual({ ok: false, kind: 'conflict', rev: 0, state: {} })
   })
   test('413 is too-large', async () => {
     const { client } = make(() => res(413, { error: 'too big' }))
