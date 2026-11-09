@@ -1,5 +1,5 @@
 // How the swap picker hands the exercise it picked back to the routine screen under it. The
-// routine screen registers a callback before pushing /routine/pick?token=…; the picker delivers
+// routine screen registers a callback before pushing /routine-pick?token=…; the picker delivers
 // the id through the token and gets the callback's answer back (so an unsafe swap can be said on
 // the picker before it closes). A module-level slot rather than route params: expo-router would
 // have to navigate back *to* the routine with new params, and a callback keeps the routine

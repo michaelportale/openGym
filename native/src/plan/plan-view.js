@@ -2,8 +2,10 @@
 // render what these return. Read-only over the state the screens are given (the screen source,
 // with this phone's pending routine edits already laid over it).
 import { history, progression, queue, repRange, rotation } from '../shared/training.js'
+import { findExercise } from '../exercises/detail-view.js'
+import { cap } from '../sync/source.js'
 import { sameRoutine } from './routine-guard.js'
-import { applySlotForm, formRanged, policyChoices } from './slot-edit.js'
+import { applySlotForm, formRanged, moveSlot, policyChoices } from './slot-edit.js'
 
 export const UNSAFE_EDIT = 'This move or swap has to be made on the web.'
 export const MISSING_ROUTINE = "This routine isn't in your plan any more."
@@ -47,9 +49,11 @@ const NOTICE = {
   unsafe: name => `Your change to ${name} wasn't sent: this move or swap has to be made on the web.`,
 }
 
+const noticeName = name => (typeof name === 'string' && name.trim() ? name : 'this routine')
+
 // routineEdits.listNotices() rows as the lines the screens show.
 export function noticeLines(notices) {
-  return (notices ?? []).map(n => ({ rid: n.rid, text: (NOTICE[n.kind] ?? NOTICE.changed)(n.name) }))
+  return (notices ?? []).map(n => ({ rid: n.rid, text: (NOTICE[n.kind] ?? NOTICE.changed)(noticeName(n.name)) }))
 }
 
 export function planView(state, { nextId = null, notices = [] } = {}) {
@@ -63,13 +67,26 @@ export function planView(state, { nextId = null, notices = [] } = {}) {
 // The web's speedUnitOf for a pounds profile: mph unless the profile chose km/h.
 const speedUnitOf = state => (state?.speedUnit === 'kmh' ? 'kmh' : 'mph')
 
-// One routine's screen, or null when it is missing. Names as the Workout tab gives them; `index`
-// is the slot's place in routine.ex (a non-object slot shows no row but keeps its place).
-export function routineView(state, id, { unit = 'lb', names = {} } = {}) {
-  const routine = findRoutine(state, id)
-  if (!routine) return null
+// The Workout tab's name, else the catalogue's (an exercise a swap brought in before the source
+// that names it is read back), else what the Workout tab says for an unknown one.
+function exerciseName(state, names, id) {
+  if (names?.[id]?.name) return names[id].name
+  const ex = findExercise(state, id)
+  return ex?.n ? cap(ex.n) : `Unknown exercise (${id})`
+}
+
+// One routine's screen, or null when it is missing. `routine`, when given, is shown in place of
+// the state's (this screen's own writes, before they are read back). `index` is the slot's place
+// in routine.ex (a non-object slot shows no row but keeps its place). `up` / `down`: whether
+// Move up / Move down would move the row (moveSlot is not null); none when a slot is not an
+// object, since the shared move reads every slot.
+export function routineView(state, id, { unit = 'lb', names = {}, routine: given = null } = {}) {
+  const found = findRoutine(state, id)
+  if (!found) return null
+  const routine = given ?? found
   const ex = exOf(routine)
   const linked = new Set(history.supersetUnits(ex.map(s => (isObj(s) ? s : {}))).filter(u => u.length > 1).flat())
+  const movable = ex.every(isObj)
   const speed = speedUnitOf(state)
   const rows = []
   ex.forEach((slot, index) => {
@@ -77,9 +94,11 @@ export function routineView(state, id, { unit = 'lb', names = {} } = {}) {
     rows.push({
       index,
       id: slot.id,
-      name: names?.[slot.id]?.name ?? `Unknown exercise (${slot.id})`,
+      name: exerciseName(state, names, slot.id),
       line: history.exLine(slot, unit, speed),
       superset: linked.has(index),
+      up: movable && moveSlot(routine, index, -1, null) !== null,
+      down: movable && moveSlot(routine, index, 1, null) !== null,
     })
   })
   const rule = progression.policyFor({}, routine, 'reps')

@@ -56,12 +56,11 @@ function Stepper({ field, disabled, onStep }) {
 }
 
 // One exercise of a routine. Mounted per open (the caller keys it), so the draft starts from the
-// slot each time. Save hands the draft (slotForm) to onSave; Cancel writes nothing. Move up / Move
-// down and Swap act at once through the caller: `moves.up` / `moves.down` are moveSlot results
-// (null disables the button). While the draft has changes, Move and Swap wait for Save or Cancel,
-// so typed numbers are never dropped. `message` is a refusal (the unsafe sentence) or a failed save.
-// `onDismiss` runs once the sheet has gone (the caller pushes the swap picker then).
-export default function SlotSheet({ visible, title, slot, routine, moves, message, busy, onSave, onMove, onSwap, onClose, onDismiss }) {
+// slot each time. Save hands the draft (slotForm) to onSave; Cancel writes nothing. Swap acts at
+// once through the caller; while the draft has changes it waits for Save or Cancel, so typed
+// numbers are never dropped. (Move up and Move down are on the routine screen's rows.) `message`
+// is a failed save. `onDismiss` runs once the sheet has gone (the caller pushes the picker then).
+export default function SlotSheet({ visible, title, slot, routine, message, busy, onSave, onSwap, onClose, onDismiss }) {
   const [initial] = useState(() => slotForm(slot, routine))
   const [form, setForm] = useState(initial)
   const view = sheetView(form, slot, routine)
@@ -79,17 +78,9 @@ export default function SlotSheet({ visible, title, slot, routine, moves, messag
           <AppText variant="body" accessibilityRole="alert" accessibilityLiveRegion="polite" style={styles.inset}>{message}</AppText>
         ) : null}
         <ScrollView style={styles.body} contentContainerStyle={styles.content} alwaysBounceVertical={false}>
-          <View style={styles.pair}>
-            <View style={styles.half}>
-              <SecondaryButton label="Move up" accessibilityHint="Moves this exercise up one place and saves." disabled={busy || dirty || !moves.up} onPress={() => onMove(-1)} />
-            </View>
-            <View style={styles.half}>
-              <SecondaryButton label="Move down" accessibilityHint="Moves this exercise down one place and saves." disabled={busy || dirty || !moves.down} onPress={() => onMove(1)} />
-            </View>
-          </View>
           <SecondaryButton label="Swap exercise" accessibilityHint="Opens the exercise list to pick a replacement." disabled={busy || dirty} onPress={onSwap} />
           {dirty ? (
-            <AppText variant="label" color={color.textSecondary}>Save or cancel your changes to move or swap.</AppText>
+            <AppText variant="label" color={color.textSecondary}>Save or cancel your changes to swap.</AppText>
           ) : null}
 
           {view.pyramid ? (
@@ -141,9 +132,6 @@ const styles = StyleSheet.create({
   inset: { paddingHorizontal: space.lg },
   body: { flex: 1 },
   content: { gap: space.lg, paddingHorizontal: space.lg, paddingBottom: space.xl },
-  // Side by side, and one above the other once large text needs the width.
-  pair: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
-  half: { flexGrow: 1, flexBasis: 140 },
   group: { gap: space.sm },
   grow: { flexShrink: 1, flexGrow: 1 },
   stepper: {

@@ -79,6 +79,13 @@ describe('notices', () => {
     expect(planView({ routines: [] }, { notices }).notices.map(n => n.rid)).toEqual(['a', 'b', 'c'])
     expect(planView({ routines: [] }, {}).notices).toEqual([])
   })
+  test('an empty or blank name reads as this routine', () => {
+    expect(noticeLines([{ rid: 'a', name: '', kind: 'changed' }, { rid: 'b', name: '  ', kind: 'deleted' }, { rid: 'c', name: null, kind: 'unsafe' }])).toEqual([
+      { rid: 'a', text: "Your change to this routine wasn't sent: it was changed on the web first. This shows the web's version." },
+      { rid: 'b', text: "Your change to this routine wasn't sent: it was deleted on the web." },
+      { rid: 'c', text: "Your change to this routine wasn't sent: this move or swap has to be made on the web." },
+    ])
+  })
   test('the sheet and screen sentences', () => {
     expect(UNSAFE_EDIT).toBe('This move or swap has to be made on the web.')
     expect(MISSING_ROUTINE).toBe("This routine isn't in your plan any more.")
@@ -102,7 +109,32 @@ describe('routineView', () => {
     expect(view.id).toBe('a')
     expect(view.name).toBe('Push A')
     expect(view.progLabel).toBe('Progression: Double progression')
-    expect(view.rows[0]).toEqual({ index: 0, id: 'bench', name: 'Barbell bench press', line: '3 × 10 · 135 lb', superset: false })
+    expect(view.rows[0]).toEqual({ index: 0, id: 'bench', name: 'Barbell bench press', line: '3 × 10 · 135 lb', superset: false, up: false, down: true })
+  })
+  test("each row's Move up and Move down are offered exactly when moveSlot would move it", () => {
+    const view = routineView({ routines: [routine] }, 'a', { unit: 'lb', names })
+    expect(view.rows.map(r => [r.up, r.down])).toEqual([
+      [false, true], // first: nothing above
+      [true, true], // superset member: past its partner below, or out of the superset above
+      [true, true],
+      [true, true],
+      [true, false], // last
+    ])
+    const single = { id: 's', name: 'One', ex: [{ id: 'bench', sets: 3, reps: 10 }] }
+    expect(routineView({ routines: [single] }, 's', { unit: 'lb', names }).rows[0]).toMatchObject({ up: false, down: false })
+  })
+  test('a routine with a non-object slot offers no moves (the shared move reads every slot)', () => {
+    const holed = { id: 'h', name: 'Holes', ex: [null, { id: 'bench', sets: 3, reps: 10 }, { id: 'ohp', sets: 3, reps: 8 }] }
+    expect(routineView({ routines: [holed] }, 'h', { unit: 'lb', names }).rows.map(r => [r.up, r.down])).toEqual([[false, false], [false, false]])
+  })
+  test('the routine to show can be given: this screen\'s writes before they are read back', () => {
+    const moved = { ...routine, ex: [routine.ex[4], ...routine.ex.slice(0, 4)] }
+    const view = routineView({ routines: [routine] }, 'a', { unit: 'lb', names, routine: moved })
+    expect(view.rows.map(r => r.id)).toEqual(['mystery', 'bench', 'ohp', 'fly', 'dip'])
+  })
+  test('an exercise the names map lacks takes its catalogue name (a swap not yet read back)', () => {
+    const swapped = { id: 'w', name: 'W', ex: [{ id: '0025', sets: 3, reps: 8 }] }
+    expect(routineView({ routines: [swapped] }, 'w', { unit: 'lb', names: {} }).rows[0].name).toBe('Barbell bench press')
   })
   test('linked rows are tagged Superset; a lone leftover sg is not', () => {
     const view = routineView({ routines: [routine] }, 'a', { unit: 'lb', names })
