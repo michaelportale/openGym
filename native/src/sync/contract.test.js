@@ -15,6 +15,7 @@ import { describe, expect, onTestFinished, test } from 'vitest'
 import { boundPort } from '../../../api/test/helpers.mjs'
 import { SQLITE_DRIVERS } from '../../scripts/node-sqlite.mjs'
 import { createSqliteWeighIns } from '../body/weigh-ins.js'
+import { createSqliteRoutineEdits } from '../plan/routine-edits.js'
 import { createSqliteFinishedWorkouts } from '../session/finished-workouts.js'
 import { createApiClient } from './api-client.js'
 import { createCredentials } from './credentials.js'
@@ -148,8 +149,9 @@ function phoneApp(db, { keychain = fakeKeychain(), client = createApiClient({ fe
   const copy = createSqliteServerCopy(db)
   const meta = createSqliteSyncMeta(db)
   const weighIns = createSqliteWeighIns(db)
-  const sync = createSync({ client, credentials: createCredentials(keychain), copy, workouts, weighIns, meta, now: () => T0 })
-  return { sync, workouts, weighIns, copy, meta, keychain, client }
+  const routineEdits = createSqliteRoutineEdits(db)
+  const sync = createSync({ client, credentials: createCredentials(keychain), copy, workouts, weighIns, routineEdits, meta, now: () => T0 })
+  return { sync, workouts, weighIns, routineEdits, copy, meta, keychain, client }
 }
 
 async function paired(server, db = createRealDb(), options) {
@@ -210,7 +212,7 @@ describe.skipIf(!HAS_API_DEPS)(TITLE, { timeout: 30_000 }, () => {
     expect(stored.rev).toBe(12)
     expect(stored.wid).toBe(fixture()._wid)
     expect(await app.sync.status()).toEqual({
-      paired: true, state: 'idle', lastSyncedAt: new Date(T0).toISOString(), pending: 0, pendingWeighIns: 0, copyKey: `${stored.rev}|${stored.wid}`, server: server.api, profile: 'Owner',
+      paired: true, state: 'idle', lastSyncedAt: new Date(T0).toISOString(), pending: 0, pendingWeighIns: 0, pendingRoutineEdits: 0, copyKey: `${stored.rev}|${stored.wid}`, server: server.api, profile: 'Owner',
     })
     // the token is in the Keychain and nowhere in SQLite
     const token = app.keychain.m.get('opengym.token')
@@ -370,6 +372,178 @@ describe.skipIf(!HAS_API_DEPS)(TITLE, { timeout: 30_000 }, () => {
     expect(file.bodyweight ?? []).toEqual([])
     expect(Number(file.deleted.bodyweight['2026-11-08'])).toBeGreaterThan(0)
     expect(await app.weighIns.listPending()).toEqual([])
+  })
+
+  // A routine whose first slot carries keys this app does not know, as the web leaves them.
+  const planned = () => ({
+    ...fixture(),
+    routines: [
+      {
+        id: 'r1', name: 'Push', _ts: 1730000000000,
+        ex: [
+          { id: '0025', sets: 3, reps: 5, mode: 'reps', weight: 60, prog: 'linear', pyramid: [{ w: 60, r: 8 }, { w: 70, r: 5 }], futureSlotKey: { nested: [1, { x: 'y' }] } },
+          { id: '0027', sets: 3, reps: 8, mode: 'reps' },
+        ],
+      },
+      fixture().routines[1],
+    ],
+  })
+  // What the Plan screen saves: the copy's routine with its slots swapped and one edited.
+  const swappedEdit = base => ({
+    rid: base.id, baseTs: base._ts, t: T0,
+    routine: { ...base, ex: [{ ...base.ex[1], sets: 4 }, base.ex[0]] },
+  })
+  const content = r => without(r, ['_ts', '_f', '_u'])
+
+  test('a routine edit with its slots swapped reaches the server file with each key on its own slot and a new _ts; the pull acks it', async () => {
+    const server = await startServer({ state: planned() })
+    const app = await paired(server)
+    const base = (await app.copy.get()).state.routines[0]
+    const mine = swappedEdit(base)
+    await app.routineEdits.put(mine)
+    expect(await app.sync.status()).toMatchObject({ pendingRoutineEdits: 1 })
+
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+    const file = server.file()
+    const stored = file.routines.find(r => r.id === 'r1')
+    expect(content(stored)).toEqual(content(mine.routine))
+    expect(stored.ex[1]).toEqual(planned().routines[0].ex[0]) // the unknown key moved with its slot
+    expect(stored.ex[0]).toEqual({ ...planned().routines[0].ex[1], sets: 4 })
+    expect(stored._ts).toBeGreaterThan(planned().routines[0]._ts)
+    expect(file.routines[1]).toEqual(planned().routines[1])
+    expect(file.workouts).toEqual(fixture().workouts)
+    expect(file.queue).toEqual(fixture().queue)
+    expect((await app.copy.get()).state).toEqual(without(file, HIDDEN))
+    expect(await app.routineEdits.listPending()).toEqual([])
+    expect(await app.db.getAll('SELECT rid, acked_at, superseded_at FROM routine_edits')).toEqual([{ rid: 'r1', acked_at: new Date(T0).toISOString(), superseded_at: null }])
+    expect(await app.routineEdits.listNotices()).toEqual([])
+  })
+
+  test('the web edits that routine between the pull and the push: a real 409, the phone\'s edit is superseded and never sent again', async () => {
+    const server = await startServer({ state: planned() })
+    const plain = createApiClient({ fetch: globalThis.fetch, timeoutMs: 10_000 })
+    let race = false
+    const pushes = []
+    const client = {
+      ...plain,
+      async push(...args) {
+        if (race) {
+          race = false
+          const cookie = webCookie()
+          const got = await (await fetch(`${server.api}/api/data`, { headers: cookie })).json()
+          const routines = got.state.routines.map(r => (r.id === 'r1' ? { ...r, name: 'Push A', _ts: T0 + 500 } : r))
+          const res = await fetch(`${server.api}/api/data`, {
+            method: 'PUT',
+            headers: { ...cookie, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ state: { ...got.state, routines }, baseRev: got.rev, baseWid: got.state._wid, stamped: true }),
+          })
+          expect(res.status).toBe(200)
+        }
+        const r = await plain.push(...args)
+        pushes.push(r.ok ? 200 : r.kind)
+        return r
+      },
+    }
+    const app = await paired(server, undefined, { client })
+    await app.routineEdits.put(swappedEdit((await app.copy.get()).state.routines[0]))
+    race = true
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+    expect(pushes).toEqual(['conflict'])
+    const stored = server.file().routines.find(r => r.id === 'r1')
+    expect(content(stored)).toEqual({ ...content(planned().routines[0]), name: 'Push A' })
+    expect(stored._ts).toBe(T0 + 500)
+    expect(await app.routineEdits.listPending()).toEqual([])
+    expect(await app.routineEdits.listNotices()).toEqual([{ rid: 'r1', name: 'Push', kind: 'changed', at: new Date(T0).toISOString() }])
+
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+    expect(pushes).toEqual(['conflict'])
+    expect(server.file().routines.find(r => r.id === 'r1')).toEqual(stored)
+  })
+
+  test('a routine holding the same exercise twice: a sets-only edit round-trips exactly; a move is never sent', async () => {
+    const twins = {
+      id: 'r3', name: 'Bench day', _ts: 1730000000000,
+      ex: [
+        { id: '0025', sets: 3, reps: 5, mode: 'reps', weight: 60, pyramid: [{ w: 60, r: 8 }, { w: 70, r: 5 }], stationId: 'rack-2' },
+        { id: '0025', sets: 3, reps: 10, mode: 'reps', weight: 45 },
+      ],
+    }
+    const server = await startServer({ state: { ...fixture(), routines: [...fixture().routines, twins] } })
+    const app = await paired(server)
+    const base = (await app.copy.get()).state.routines.find(r => r.id === 'r3')
+    const setsOnly = { ...base, ex: [base.ex[0], { ...base.ex[1], sets: 4 }] }
+    await app.routineEdits.put({ rid: 'r3', baseTs: base._ts, routine: setsOnly, t: T0 })
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+    let stored = server.file().routines.find(r => r.id === 'r3')
+    expect(stored.ex).toEqual(setsOnly.ex) // each twin keeps its own keys
+    expect(stored._ts).toBeGreaterThan(twins._ts)
+    expect(await app.routineEdits.listNotices()).toEqual([])
+
+    const now = (await app.copy.get()).state.routines.find(r => r.id === 'r3')
+    await app.routineEdits.put({ rid: 'r3', baseTs: now._ts, routine: { ...now, ex: [now.ex[1], now.ex[0]] }, t: T0 + 1 })
+    const before = server.file()
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+    expect(server.file()).toEqual(before)
+    expect(await app.routineEdits.listNotices()).toEqual([{ rid: 'r3', name: 'Bench day', kind: 'unsafe', at: new Date(T0).toISOString() }])
+  })
+
+  test('a cross-swap the API would put keys back into is never sent: nothing stored, an unsafe notice', async () => {
+    const server = await startServer({ state: planned() })
+    const plain = createApiClient({ fetch: globalThis.fetch, timeoutMs: 10_000 })
+    const pushes = []
+    const client = { ...plain, async push(...args) { const r = await plain.push(...args); pushes.push(r.ok ? 200 : r.kind); return r } }
+    const app = await paired(server, undefined, { client })
+    const base = (await app.copy.get()).state.routines[0]
+    // the second slot becomes the first slot's exercise while the first becomes another: no id twice
+    const { pyramid, futureSlotKey, ...firstRest } = base.ex[0]
+    const cross = { ...base, ex: [{ ...firstRest, id: '0047', weight: 0 }, { ...base.ex[1], id: base.ex[0].id }] }
+    await app.routineEdits.put({ rid: 'r1', baseTs: base._ts, routine: cross, t: T0 })
+    const before = server.file()
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+    expect(pushes).toEqual([])
+    expect(server.file()).toEqual(before)
+    expect(await app.routineEdits.listNotices()).toEqual([{ rid: 'r1', name: 'Push', kind: 'unsafe', at: new Date(T0).toISOString() }])
+  })
+
+  test('an edit during the push, a web settings write, then a revert rebased on the landed push: stored as sent, acked, no loop', async () => {
+    const server = await startServer({ state: planned() })
+    const plain = createApiClient({ fetch: globalThis.fetch, timeoutMs: 10_000 })
+    const pushes = []
+    let during = null
+    const client = {
+      ...plain,
+      async push(...args) {
+        const r = await plain.push(...args)
+        pushes.push(r.ok ? 200 : r.kind)
+        if (during) { const go = during; during = null; await go() }
+        return r
+      },
+    }
+    const app = await paired(server, undefined, { client })
+    const base = (await app.copy.get()).state.routines[0]
+    const setsTo = n => ({ ...base, ex: [{ ...base.ex[0], sets: n }, base.ex[1]] })
+    await app.routineEdits.put({ rid: 'r1', baseTs: base._ts, routine: setsTo(4), t: T0 })
+    during = async () => {
+      // the owner puts it back to 3 on the copy they still see; then a web tab changes a setting
+      await app.routineEdits.put({ rid: 'r1', baseTs: base._ts, routine: setsTo(3), t: T0 + 1 })
+      const cookie = webCookie()
+      const got = await (await fetch(`${server.api}/api/data`, { headers: cookie })).json()
+      const state = { ...got.state, lang: 'de', edited: { ...got.state.edited, lang: T0 + 700 } }
+      const res = await fetch(`${server.api}/api/data`, { method: 'PUT', headers: { ...cookie, 'Content-Type': 'application/json' }, body: JSON.stringify({ state, baseRev: got.rev, baseWid: got.state._wid, stamped: true }) })
+      expect(res.status).toBe(200)
+    }
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 1 })
+    expect(server.file().routines[0].ex[0].sets).toBe(4)
+    expect(server.file().lang).toBe('de')
+
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+    const stored = server.file().routines[0]
+    expect(content(stored)).toEqual(content(setsTo(3)))
+    expect(await app.routineEdits.listNotices()).toEqual([])
+    expect(await app.routineEdits.listPending()).toEqual([])
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+    expect(pushes).toEqual([200, 200])
+    expect(server.file().routines[0]).toEqual(stored)
   })
 
   test('a new profile with no document yet: pairing pulls an empty one and the first push starts it', async () => {

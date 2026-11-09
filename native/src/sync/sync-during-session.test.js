@@ -2,6 +2,7 @@ import { expect, test } from 'vitest'
 import { SQLITE_DRIVERS } from '../../scripts/node-sqlite.mjs'
 import { plannedSetId } from '../session/session.js'
 import { createMemoryWeighIns } from '../body/weigh-ins.js'
+import { createMemoryRoutineEdits } from '../plan/routine-edits.js'
 import { createSqliteFinishedWorkouts } from '../session/finished-workouts.js'
 import { activeSessionController } from '../session/use-active-session.js'
 import { createCredentials } from './credentials.js'
@@ -49,7 +50,7 @@ test.each(SQLITE_DRIVERS)('%s: a sync that runs mid-session leaves the journal a
   }
   const finished = createSqliteFinishedWorkouts(db)
   await finished.put({ id: 'old-1', d: '2026-11-01', start: T0, end: T0 + 1000, name: 'Pull', entries: [], vol: 0 })
-  const sync = createSync({ client, credentials, copy: createSqliteServerCopy(db), workouts: finished, weighIns: createMemoryWeighIns(), meta, now: () => T0 + 120_000 })
+  const sync = createSync({ client, credentials, copy: createSqliteServerCopy(db), workouts: finished, weighIns: createMemoryWeighIns(), routineEdits: createMemoryRoutineEdits(), meta, now: () => T0 + 120_000 })
 
   const status = await sync.syncNow()
   expect(status).toMatchObject({ paired: true, state: 'idle' })

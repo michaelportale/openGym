@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { expect, test } from 'vitest'
 import { destinationCopy } from './destinations.js'
 
-const ids = ['home', 'plan', 'progress']
+const ids = ['home', 'progress']
 
 test('every unbuilt destination says it is not built and records nothing', () => {
   for (const id of ids) {
@@ -26,8 +26,8 @@ test('home does not promise a single phase', () => {
   expect(home.summary).toMatch(/Nothing on this screen is logged, saved, or synced/)
 })
 
-test('plan and progress name phase 7, and progress names WHOOP later', () => {
-  expect(destinationCopy('plan').phaseLabel).toBe('Arrives in Phase 7')
+test('progress names phase 7 and WHOOP later; plan and exercises are built, so not destinations', () => {
+  expect(() => destinationCopy('plan')).toThrow(/Unknown destination/)
   expect(() => destinationCopy('exercises')).toThrow(/Unknown destination/)
   const progress = destinationCopy('progress')
   expect(progress.phaseLabel).toBe('Arrives in Phase 7')
@@ -39,7 +39,7 @@ test('an unknown destination throws', () => {
   expect(() => destinationCopy('constructor')).toThrow('constructor')
 })
 
-test('the four screens render the shared copy', () => {
+test('the unbuilt screens render the shared copy', () => {
   for (const id of ids) {
     const file = `${id}.js`
     const src = readFileSync(new URL(`../app/(tabs)/${file}`, import.meta.url), 'utf8')

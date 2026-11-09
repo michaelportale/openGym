@@ -28,6 +28,22 @@ export function homeKeyStep({ seen, next, homeStatus }) {
   return { seen: next, reload: homeStatus === 'start' && seen != null && seen !== next }
 }
 
+// Whether the Workout tab reads its source again when it comes into view: on the start screen or
+// the error screen only, never while a session is open (leaving it reloads) or over a load already
+// running. Unpaired, a routine edit moves no sync key (homeKey), so focus is when it is read.
+export function reloadsOnFocus(homeStatus) {
+  return homeStatus === 'start' || homeStatus === 'error'
+}
+
+// Once the source key (sync/source-key.js) is read on focus: the start screen reads again only when
+// it moved since the load the screen shows (loadedKey), or either key is missing (null: a key that
+// could not be read, or a load that failed). A pending routine edit is in the key, so an edit made
+// on the Plan tab still shows. The error screen shows no source, so it always reads again.
+export function focusReloads({ homeStatus, loadedKey, key }) {
+  if (!reloadsOnFocus(homeStatus)) return false
+  return homeStatus === 'error' || key == null || key !== loadedKey
+}
+
 export function canPair({ address, code, busy }) {
   return !busy && address.trim() !== '' && code.trim() !== ''
 }
@@ -35,11 +51,13 @@ export function canPair({ address, code, busy }) {
 export function serverLines(status) {
   const n = status?.pending ?? 0
   const days = status?.pendingWeighIns ?? 0
+  const edits = status?.pendingRoutineEdits ?? 0
   return {
     host: hostOf(status?.server) || 'Your server',
     profile: status?.profile ? status.profile : null,
     pending: n > 0 ? `${n} workout${n === 1 ? '' : 's'} waiting` : null,
     weighIns: days > 0 ? (days === 1 ? '1 weigh-in waiting' : `${days} weigh-ins waiting`) : null,
+    routineEdits: edits > 0 ? `${edits} routine edit${edits === 1 ? '' : 's'} waiting` : null,
     canResend: status?.problem === 'server-older',
     // Diagnostics' "Last synced" line, unless the status line already says when.
     lastSynced: !statusText(status).startsWith('Synced to '),

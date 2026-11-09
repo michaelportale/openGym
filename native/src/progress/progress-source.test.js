@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest'
 import { createMemoryWeighIns } from '../body/weigh-ins.js'
+import { createMemoryRoutineEdits } from '../plan/routine-edits.js'
 import { createMemoryFinishedWorkouts } from '../session/finished-workouts.js'
 import { progressLoader } from './progress-source.js'
 
@@ -46,4 +47,16 @@ test('a weigh-in alone keeps the same state object, and changes the weigh-ins', 
   expect(second.bodyweight.at(-1)).toMatchObject({ d: '2026-11-09', w: 180.4 })
   await stores.finished.put({ id: 'p1', d: '2026-11-08', start: 2, entries: [] })
   expect((await load(stores)).state).not.toBe(first.state)
+})
+
+test('a pending routine edit reaches the state, and moves its key', async () => {
+  const doc = { ...copyDoc, state: { ...copyDoc.state, routines: [{ id: 'r', name: 'R', ex: [] }] } }
+  const routineEdits = createMemoryRoutineEdits()
+  const stores = { finished: createMemoryFinishedWorkouts(), serverCopy: counted(doc, []), weighIns: createMemoryWeighIns(), routineEdits, bundled, now: Date.UTC(2026, 10, 9, 12) }
+  const load = progressLoader()
+  const first = await load(stores)
+  await routineEdits.put({ rid: 'r', baseTs: null, routine: { id: 'r', name: 'Mine', ex: [] }, t: 5 })
+  const second = await load(stores)
+  expect(first.state.routines[0].name).toBe('R')
+  expect(second.state.routines[0].name).toBe('Mine')
 })

@@ -5,6 +5,7 @@ import { coalesced } from '../body/coalesce'
 import { createSqliteWeighIns } from '../body/weigh-ins'
 import { createSqliteFinishedWorkouts } from '../session/finished-workouts'
 import { createSqliteServerCopy } from '../sync/server-copy'
+import { createSqliteRoutineEdits } from '../plan/routine-edits'
 import { keyed, readSourceKey } from '../sync/source-key'
 import { useFocusReload } from '../sync/use-focus-reload'
 import { progressLoader } from './progress-source'
@@ -29,6 +30,7 @@ export function useProgress() {
           finished: createSqliteFinishedWorkouts(db),
           serverCopy: createSqliteServerCopy(db),
           weighIns: createSqliteWeighIns(db),
+          routineEdits: createSqliteRoutineEdits(db),
           bundled: snapshot,
           now: Date.now(),
         }))

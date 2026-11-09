@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest'
-import { FOREGROUND_GAP_MS, canPair, homeKey, homeKeyStep, serverLines, shouldSyncOnForeground } from './sync-triggers.js'
+import { FOREGROUND_GAP_MS, canPair, focusReloads, homeKey, homeKeyStep, reloadsOnFocus, serverLines, shouldSyncOnForeground } from './sync-triggers.js'
+import { sourceKey } from './source-key.js'
 
 describe('shouldSyncOnForeground', () => {
   const T = 1_000_000
@@ -61,6 +62,45 @@ describe('homeKeyStep', () => {
   })
 })
 
+// Unpaired, a routine edit moves no sync key, so a Workout tab already mounted read it only on focus.
+describe('reloadsOnFocus', () => {
+  test('the start screen and the error screen read again when the tab comes into view', () => {
+    expect(reloadsOnFocus('start')).toBe(true)
+    expect(reloadsOnFocus('error')).toBe(true)
+  })
+  test('never while a session is open, and not over a load already running', () => {
+    expect(reloadsOnFocus('session')).toBe(false)
+    expect(reloadsOnFocus('loading')).toBe(false)
+  })
+})
+
+// Once the source key is read on focus: the start screen reads again only when it moved since the
+// load it shows, so returning to an unchanged tab keeps what it built.
+describe('focusReloads', () => {
+  const NOW = new Date(2026, 10, 9, 9).getTime()
+  const key = (over = {}) => sourceKey({ copyKey: { rev: 7, wid: 'w7' }, workouts: [], weighIns: [], routineEdits: [], now: NOW, ...over })
+  test('the start screen keeps what it built while the key holds, and reads again once it moved', () => {
+    expect(focusReloads({ homeStatus: 'start', loadedKey: key(), key: key() })).toBe(false)
+    expect(focusReloads({ homeStatus: 'start', loadedKey: key(), key: key({ copyKey: { rev: 8, wid: 'w8' } }) })).toBe(true)
+    expect(focusReloads({ homeStatus: 'start', loadedKey: key(), key: key({ now: NOW + 24 * 3600000 }) })).toBe(true)
+  })
+  test('a routine edit saved on the Plan tab moves the key, paired or not, so the start screen reads it', () => {
+    expect(focusReloads({ homeStatus: 'start', loadedKey: key(), key: key({ routineEdits: [{ rid: 'r1', t: 5 }] }) })).toBe(true)
+    expect(focusReloads({ homeStatus: 'start', loadedKey: key({ copyKey: null }), key: key({ copyKey: null, routineEdits: [{ rid: 'r1', t: 5 }] }) })).toBe(true)
+  })
+  test('a key that could not be read, or no key from the load shown, reads again', () => {
+    expect(focusReloads({ homeStatus: 'start', loadedKey: key(), key: null })).toBe(true)
+    expect(focusReloads({ homeStatus: 'start', loadedKey: null, key: key() })).toBe(true)
+  })
+  test('the error screen shows no source, so it reads again whatever the key', () => {
+    expect(focusReloads({ homeStatus: 'error', loadedKey: key(), key: key() })).toBe(true)
+  })
+  test('never while a session is open or a load is running, whatever the key', () => {
+    expect(focusReloads({ homeStatus: 'session', loadedKey: key(), key: key({ routineEdits: [{ rid: 'r1', t: 5 }] }) })).toBe(false)
+    expect(focusReloads({ homeStatus: 'loading', loadedKey: null, key: null })).toBe(false)
+  })
+})
+
 describe('canPair', () => {
   test('needs both fields and no pairing in progress', () => {
     expect(canPair({ address: '', code: 'ABCD2345', busy: false })).toBe(false)
@@ -73,7 +113,7 @@ describe('canPair', () => {
 describe('serverLines', () => {
   const base = { paired: true, state: 'idle', pending: 0, server: 'https://gym.example.com:8443/x', profile: 'Mo' }
   test('host without scheme or port, profile, pending count', () => {
-    expect(serverLines({ ...base, pending: 1 })).toEqual({ host: 'gym.example.com', profile: 'Mo', pending: '1 workout waiting', weighIns: null, canResend: false, lastSynced: true })
+    expect(serverLines({ ...base, pending: 1 })).toEqual({ host: 'gym.example.com', profile: 'Mo', pending: '1 workout waiting', weighIns: null, routineEdits: null, canResend: false, lastSynced: true })
     expect(serverLines({ ...base, pending: 3 }).pending).toBe('3 workouts waiting')
     expect(serverLines(base).pending).toBeNull()
   })
@@ -82,6 +122,13 @@ describe('serverLines', () => {
     expect(serverLines({ ...base, pendingWeighIns: 3 }).weighIns).toBe('3 weigh-ins waiting')
     expect(serverLines({ ...base, pendingWeighIns: 0 }).weighIns).toBeNull()
     expect(serverLines({ ...base, pendingWeighIns: 2 }).pending).toBeNull()
+  })
+  test('routine edits waiting are their own line (spec 7C rule 7)', () => {
+    expect(serverLines({ ...base, pendingRoutineEdits: 1 }).routineEdits).toBe('1 routine edit waiting')
+    expect(serverLines({ ...base, pendingRoutineEdits: 3 }).routineEdits).toBe('3 routine edits waiting')
+    expect(serverLines({ ...base, pendingRoutineEdits: 0 }).routineEdits).toBeNull()
+    expect(serverLines(base).routineEdits).toBeNull()
+    expect(serverLines({ ...base, pendingRoutineEdits: 2 }).pending).toBeNull()
   })
   test('send again only for server-older', () => {
     expect(serverLines({ ...base, state: 'problem', problem: 'server-older' }).canResend).toBe(true)
