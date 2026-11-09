@@ -11,6 +11,11 @@ export function syncMetadata(id, version, volumeLb, { partial } = {}) {
   return metadata
 }
 
+// A typed weigh-in's sample: the sync keys plus the user-entered flag; no undefined values.
+export function bodyMassMetadata(id, version) {
+  return { HKMetadataKeySyncIdentifier: id, HKMetadataKeySyncVersion: version, HKWasUserEntered: true }
+}
+
 // An empty source list means no filter to the library, which would match every app's objects.
 export function syncIdFilter(syncId, ownSources, equalTo) {
   if (ownSources.length === 0) return null
@@ -35,6 +40,32 @@ export function toOwnWorkout(w) {
 export function toBodyMassReading(s) {
   if (!Number.isFinite(s.quantity)) return null
   return { uuid: s.uuid, lb: s.quantity, at: s.startDate, bundleId: s.sourceRevision?.source?.bundleIdentifier ?? null }
+}
+
+const nonEmpty = v => typeof v === 'string' && v !== ''
+
+// One anchored body-mass sample, or null when it cannot be trusted: without a source the import
+// cannot tell its own samples from a scale's, and without metadata it cannot see a sync id. A
+// weight outside (0, 1000] lb is not one a typed entry could hold either.
+function toAnchoredBodyMass(s) {
+  if (!s || !nonEmpty(s.uuid) || !Number.isFinite(s.quantity) || !(s.quantity > 0 && s.quantity <= 1000)) return null
+  const bundleId = s.sourceRevision?.source?.bundleIdentifier
+  if (!nonEmpty(bundleId) || !s.metadata || typeof s.metadata !== 'object') return null
+  const at = s.startDate instanceof Date ? s.startDate.getTime() : NaN
+  if (!Number.isFinite(at)) return null
+  const syncId = s.metadata.HKMetadataKeySyncIdentifier
+  return { uuid: s.uuid, lb: s.quantity, at, bundleId, syncId: nonEmpty(syncId) ? syncId : null }
+}
+
+// The anchored query's answer as the import reads it: { samples, deleted: [uuid], anchor }.
+export function toBodyMassChanges(result) {
+  const samples = Array.isArray(result?.samples) ? result.samples : []
+  const deleted = Array.isArray(result?.deletedSamples) ? result.deletedSamples : []
+  return {
+    samples: samples.map(toAnchoredBodyMass).filter(Boolean),
+    deleted: deleted.map(s => s?.uuid).filter(nonEmpty),
+    anchor: nonEmpty(result?.newAnchor) ? result.newAnchor : null,
+  }
 }
 
 // HKSyncIdentifier is what builds before the key fix saved under, so their workouts need it to be found.

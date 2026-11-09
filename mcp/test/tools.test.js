@@ -584,6 +584,17 @@ describe('get_bodyweight', () => {
     expect([...dates].sort()).toEqual(dates)
   })
 
+  test('entries written by the phone (src, hk) read like any other: date and weight unchanged', () => {
+    S.bodyweight.push(
+      { d: '2026-11-07', w: 181.2, t: 1762500000000, src: 'health', hk: 'A1B2-C3' },
+      { d: '2026-11-08', w: 180.4, t: 1762600000000 },
+    )
+    _seedStateForTests(S)
+    const r = call('get_bodyweight', { from: '2026-11-07', to: '2026-11-08' })
+    expect(r.entries.map(e => [e.date, e.weight])).toEqual([['2026-11-07', 181.2], ['2026-11-08', 180.4]])
+    expect(r.latest).toMatchObject({ date: '2026-11-08', weight: 180.4 })
+  })
+
   test('closed date range returns a single matching entry on the boundary', () => {
     const all = call('get_bodyweight')
     expect(all.entries.length).toBeGreaterThan(1)

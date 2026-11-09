@@ -1,5 +1,8 @@
 import { expect, test } from 'vitest'
+import { applyDayOps } from '../body/day-ops.js'
+import { createMemoryWeighIns } from '../body/weigh-ins.js'
 import { createMemoryFinishedWorkouts } from '../session/finished-workouts.js'
+import { buildPush } from '../sync/outbox.js'
 import { createMemoryHealthStore } from './health-store.js'
 import { createHealthSync } from './health-sync.js'
 
@@ -46,9 +49,36 @@ function fakeAdapter() {
       if (adapter.failDelete) throw adapter.failDelete
       return 2
     },
+    async saveBodyMass(args) {
+      calls.push(['saveBW', args])
+      if (adapter.failSaveBW) throw adapter.failSaveBW
+      return { uuid: 'u-' + args.id }
+    },
+    async deleteBodyMassBySyncId(syncId) {
+      calls.push(['deleteBW', syncId])
+      return 1
+    },
+    async deleteAllOwnBodyMass() {
+      calls.push(['deleteAllBW'])
+      if (adapter.failDeleteBW) throw adapter.failDeleteBW
+      return 1
+    },
+    async readBodyMassChanges(args) {
+      calls.push(['readBodyMass', args])
+      return { samples: [], deleted: [], anchor: 'a' }
+    },
   }
   return adapter
 }
+
+// The weigh-in import's dependencies, with nothing to import.
+const importDeps = () => ({
+  weighIns: createMemoryWeighIns(),
+  readCopy: async () => null,
+  ownBundleId: async () => 'io.github.michaelportale.opengym',
+  timeZone: () => 'UTC',
+  onWeighIns: () => {},
+})
 
 async function setup(ids = ['w1'], over = {}) {
   const adapter = fakeAdapter()
@@ -56,7 +86,7 @@ async function setup(ids = ['w1'], over = {}) {
   const workouts = createMemoryFinishedWorkouts()
   for (const id of ids) await workouts.put(doc(id))
   let t = 1000
-  const health = createHealthSync({ adapter, store, workouts, now: () => (t += 10), ...over })
+  const health = createHealthSync({ adapter, store, workouts, now: () => (t += 10), ...importDeps(), ...over })
   return { adapter, store, workouts, health }
 }
 const saves = adapter => adapter.calls.filter(c => c[0] === 'save').map(c => c[1])
@@ -333,6 +363,7 @@ test('status never throws and write is unknown when the adapter throws', async (
     store: { links: { list: async () => { throw new Error('db') } }, state: { get: async () => { throw new Error('db') } } },
     workouts: { list: async () => [] },
     now: () => 1,
+    ...importDeps(),
   })
   await expect(broken.status()).resolves.toMatchObject({ on: false, write: 'unknown' })
   await expect(broken.run()).resolves.toBeDefined()
@@ -353,4 +384,398 @@ test('subscribers hear about runs, enable and disable, and can unsubscribe', asy
   const settled = n
   await health.enable()
   expect(n).toBe(settled)
+})
+
+test('the import runs after the workout export, even when a save fails', async () => {
+  const { adapter, store, health } = await setup(['w1'])
+  await store.state.set('on', '1')
+  await health.run()
+  expect(adapter.calls.map(c => c[0])).toEqual(['save', 'readBodyMass'])
+  adapter.calls.length = 0
+  adapter.failSave = new Error('denied')
+  await store.links.clear('w')
+  await health.run()
+  expect(adapter.calls.map(c => c[0])).toEqual(['save', 'readBodyMass'])
+  expect((await health.status()).error).toBe('denied')
+})
+
+test('the engine needs every weigh-in import dependency', () => {
+  const base = { adapter: fakeAdapter(), store: createMemoryHealthStore(), workouts: createMemoryFinishedWorkouts(), now: () => 1, ...importDeps() }
+  expect(() => createHealthSync(base)).not.toThrow()
+  for (const key of ['weighIns', 'readCopy', 'ownBundleId', 'timeZone', 'onWeighIns']) {
+    expect(() => createHealthSync({ ...base, [key]: undefined }), key).toThrow(key)
+  }
+  expect(() => createHealthSync({ ...base, timeZone: 'UTC' })).toThrow('timeZone')
+})
+
+test('a workout export that throws does not stop the import; its error shows', async () => {
+  const { adapter, store, workouts, health } = await setup(['w1'])
+  await store.state.set('on', '1')
+  workouts.list = async () => { throw new Error('db locked') }
+  await health.run()
+  expect(adapter.calls.map(c => c[0])).toEqual(['readBodyMass'])
+  expect((await health.status()).error).toBe('db locked')
+})
+
+// Typed weigh-ins
+const bwSaves = adapter => adapter.calls.filter(c => c[0] === 'saveBW').map(c => c[1])
+const typed = (d, w, t) => ({ d, op: 'set', w, t })
+
+async function bwSetup(over = {}) {
+  const weighIns = createMemoryWeighIns()
+  const env = await setup([], { ...importDeps(), weighIns, ...over })
+  await env.store.state.set('on', '1')
+  return { ...env, weighIns }
+}
+
+test('a typed set is saved once, user entered, at its time; a second pass saves nothing', async () => {
+  const { adapter, store, weighIns, health } = await bwSetup()
+  await weighIns.put(typed('2026-11-09', 180.4, 5000))
+  await health.run()
+  await health.run()
+  expect(bwSaves(adapter)).toEqual([{ id: 'opengym-bw-2026-11-09', version: expect.any(Number), lb: 180.4, at: new Date(5000) }])
+  expect(await store.links.list('bw')).toEqual([expect.objectContaining({ key: '2026-11-09', state: 'exported' })])
+  expect((await health.status()).weighInsInHealth).toBe(1)
+})
+
+test('the pass order is workouts, typed weigh-ins out, then the import', async () => {
+  const { adapter, workouts, weighIns, health } = await bwSetup()
+  await workouts.put(doc('w1'))
+  await weighIns.put(typed('2026-11-09', 180, 5000))
+  await health.run()
+  expect(adapter.calls.map(c => c[0])).toEqual(['save', 'saveBW', 'readBodyMass'])
+})
+
+test('a failed save keeps the pending link and its version for the retry', async () => {
+  const { adapter, store, weighIns, health } = await bwSetup()
+  await weighIns.put(typed('2026-11-09', 180, 5000))
+  adapter.failSaveBW = new Error('denied')
+  await health.run()
+  const [pending] = await store.links.list('bw')
+  expect(pending).toMatchObject({ state: 'pending', error: 'denied' })
+  adapter.failSaveBW = null
+  await health.run()
+  expect(bwSaves(adapter).map(s => s.version)).toEqual([pending.version, pending.version])
+  expect((await store.links.list('bw'))[0].state).toBe('exported')
+})
+
+test('an edit saves a greater version', async () => {
+  const { adapter, weighIns, health } = await bwSetup()
+  await weighIns.put(typed('2026-11-09', 180, 5000))
+  await health.run()
+  await weighIns.put(typed('2026-11-09', 181, 6000))
+  await health.run()
+  const [a, b] = bwSaves(adapter)
+  expect(b.lb).toBe(181)
+  expect(b.version).toBeGreaterThan(a.version)
+})
+
+test('a typed removal deletes by sync id and drops the link', async () => {
+  const { adapter, store, weighIns, health } = await bwSetup()
+  await weighIns.put(typed('2026-11-09', 180, 5000))
+  await health.run()
+  await weighIns.put({ d: '2026-11-09', op: 'remove', t: 6000, baseT: 5000 })
+  await health.run()
+  expect(adapter.calls.filter(c => c[0] === 'deleteBW')).toEqual([['deleteBW', 'opengym-bw-2026-11-09']])
+  expect(await store.links.list('bw')).toEqual([])
+})
+
+test('an imported weigh-in is never saved to Health', async () => {
+  const { adapter, weighIns, health } = await bwSetup()
+  await weighIns.putFromHealth({ d: '2026-11-09', op: 'set', w: 180, t: 5000, src: 'health', hk: 'u1' })
+  await health.run()
+  expect(bwSaves(adapter)).toEqual([])
+})
+
+test('a typed set the server superseded with a newer web edit is not saved; if it was, it is removed', async () => {
+  let copy = null
+  const { adapter, store, weighIns, health } = await bwSetup({ readCopy: async () => copy })
+  await weighIns.put(typed('2026-11-09', 180, 5000))
+  copy = { state: { bodyweight: [{ d: '2026-11-09', w: 175, t: 9000 }] } }
+  await health.run()
+  expect(bwSaves(adapter)).toEqual([])
+  copy = null
+  await health.run()
+  expect(bwSaves(adapter)).toHaveLength(1)
+  copy = { state: { bodyweight: [{ d: '2026-11-09', w: 175, t: 9000 }] } }
+  await health.run()
+  expect(adapter.calls.filter(c => c[0] === 'deleteBW')).toHaveLength(1)
+  expect(await store.links.list('bw')).toEqual([])
+})
+
+test('a day deleted on the server is removed from Health', async () => {
+  let copy = null
+  const { adapter, weighIns, health } = await bwSetup({ readCopy: async () => copy })
+  await weighIns.put(typed('2026-11-09', 180, 5000))
+  await health.run()
+  copy = { state: { bodyweight: [], deleted: { bodyweight: { '2026-11-09': 8000 } } } }
+  await health.run()
+  expect(adapter.calls.filter(c => c[0] === 'deleteBW')).toEqual([['deleteBW', 'opengym-bw-2026-11-09']])
+})
+
+test('a failed weigh-in save stops that list but the import still runs', async () => {
+  const { adapter, weighIns, health } = await bwSetup()
+  await weighIns.put(typed('2026-11-08', 180, 5000))
+  await weighIns.put(typed('2026-11-09', 181, 6000))
+  adapter.failSaveBW = new Error('denied')
+  await health.run()
+  expect(bwSaves(adapter)).toHaveLength(1)
+  expect(adapter.calls.map(c => c[0])).toEqual(['saveBW', 'readBodyMass'])
+  expect((await health.status()).error).toBe('denied')
+})
+
+test('turning Health off mid-export stops further adapter calls', async () => {
+  const { adapter, weighIns, health } = await bwSetup()
+  await weighIns.put(typed('2026-11-08', 180, 5000))
+  await weighIns.put(typed('2026-11-09', 181, 6000))
+  let release
+  const gate = new Promise(resolve => (release = resolve))
+  const original = adapter.saveBodyMass
+  adapter.saveBodyMass = async args => { await gate; return original(args) }
+  const running = health.run()
+  await new Promise(r => setTimeout(r, 5))
+  const off = health.disable({ remove: false })
+  release()
+  await Promise.all([running, off])
+  expect(bwSaves(adapter)).toHaveLength(1)
+  expect(adapter.calls.some(c => c[0] === 'readBodyMass')).toBe(false)
+})
+
+test('disable with remove clears bw links and deletes the app\'s own body mass', async () => {
+  const { adapter, store, weighIns, health } = await bwSetup()
+  await weighIns.put(typed('2026-11-09', 180, 5000))
+  await health.run()
+  await health.disable({ remove: true })
+  expect(await store.links.list('bw')).toEqual([])
+  expect(adapter.calls.filter(c => c[0] === 'deleteAllBW')).toHaveLength(1)
+  expect(adapter.calls.filter(c => c[0] === 'deleteAll')).toHaveLength(1)
+})
+
+test('disable without remove keeps bw links and deletes nothing', async () => {
+  const { adapter, store, weighIns, health } = await bwSetup()
+  await weighIns.put(typed('2026-11-09', 180, 5000))
+  await health.run()
+  await health.disable({ remove: false })
+  expect(await store.links.list('bw')).toHaveLength(1)
+  expect(adapter.calls.some(c => c[0] === 'deleteAllBW')).toBe(false)
+})
+
+test('a typed weigh-in written to Health and read back makes no day op', async () => {
+  const { adapter, weighIns, health } = await bwSetup()
+  await weighIns.put(typed('2026-11-09', 180, 5000))
+  await health.run()
+  const own = 'io.github.michaelportale.opengym'
+  adapter.readBodyMassChanges = async () => ({
+    samples: [{ uuid: 'echo', lb: 180, at: 5000, bundleId: own, syncId: 'opengym-bw-2026-11-09' }],
+    deleted: [],
+    anchor: 'b',
+  })
+  await health.run()
+  expect(await weighIns.list()).toEqual([typed('2026-11-09', 180, 5000)])
+  // The same sample under another bundle id is still not external: the sync id marks it.
+  adapter.readBodyMassChanges = async () => ({
+    samples: [{ uuid: 'echo2', lb: 180, at: 5000, bundleId: 'other', syncId: 'opengym-bw-2026-11-09' }],
+    deleted: [],
+    anchor: 'c',
+  })
+  await health.run()
+  expect(await weighIns.list()).toEqual([typed('2026-11-09', 180, 5000)])
+})
+
+test('an unreadable copy removes nothing for an acked typed row and saves nothing new', async () => {
+  let copy = { state: { bodyweight: [{ d: '2026-11-09', w: 180, t: 5000 }] } }
+  const { adapter, weighIns, health } = await bwSetup({ readCopy: async () => copy })
+  await weighIns.put(typed('2026-11-09', 180, 5000))
+  await health.run()
+  await weighIns.markAcked([{ d: '2026-11-09', t: 5000 }], 'x')
+  copy = null
+  adapter.calls.length = 0
+  await health.run()
+  expect(adapter.calls.filter(c => c[0] === 'deleteBW' || c[0] === 'saveBW')).toEqual([])
+})
+
+test('status reads no copy and no weigh-in list while Health is on', async () => {
+  let copyReads = 0
+  const weighIns = createMemoryWeighIns()
+  const { health } = await setup([], { ...importDeps(), weighIns, readCopy: async () => { copyReads++; return null } })
+  await weighIns.put(typed('2026-11-09', 180, 5000))
+  const list = weighIns.list
+  let lists = 0
+  weighIns.list = async () => { lists++; return list() }
+  await health.enable()
+  copyReads = 0
+  lists = 0
+  await health.status()
+  expect([copyReads, lists]).toEqual([0, 0])
+})
+
+test('a bw link error shows in status, newest first, from the links alone', async () => {
+  const { adapter, weighIns, health } = await bwSetup()
+  await weighIns.put(typed('2026-11-09', 180, 5000))
+  adapter.failSaveBW = new Error('denied')
+  await health.run()
+  expect((await health.status()).error).toBe('denied')
+})
+
+test('a failed remove leaves no stale error once the day qualifies again', async () => {
+  let copy = null
+  const { adapter, store, weighIns, health } = await bwSetup({ readCopy: async () => copy })
+  await weighIns.put(typed('2026-11-09', 180, 5000))
+  await health.run()
+  copy = { state: { bodyweight: [{ d: '2026-11-09', w: 175, t: 9000 }] } }
+  const original = adapter.deleteBodyMassBySyncId
+  adapter.deleteBodyMassBySyncId = async () => { throw new Error('locked') }
+  await health.run()
+  expect((await store.links.list('bw'))[0].error).toBe('locked')
+  adapter.deleteBodyMassBySyncId = original
+  copy = null
+  await health.run()
+  expect((await store.links.list('bw'))[0].error).toBeNull()
+  expect((await health.status()).error).toBeNull()
+})
+
+test('disable with remove tries both deletes even when the first throws, and reports the first error', async () => {
+  const { adapter, store, health } = await bwSetup()
+  const original = adapter.deleteAllOwnWorkouts
+  adapter.deleteAllOwnWorkouts = async () => { adapter.calls.push(['deleteAll']); throw new Error('first') }
+  adapter.failDeleteBW = new Error('second')
+  await health.disable({ remove: true })
+  expect(adapter.calls.filter(c => c[0] === 'deleteAll' || c[0] === 'deleteAllBW').length).toBe(2)
+  expect((await health.status()).error).toBe('first')
+  expect(await store.links.list('bw')).toEqual([])
+  adapter.deleteAllOwnWorkouts = original
+})
+
+// C1 residual: a weight the owner typed on the web over an imported day, then a Health deletion
+// the app-open pass plans on a stale copy.
+const OWN = 'io.github.michaelportale.opengym'
+const DAY = '2026-11-09'
+const atHour = h => Date.parse(`${DAY}T${String(h).padStart(2, '0')}:00:00Z`)
+const scale = (uuid, lb, at) => ({ uuid, lb, at, bundleId: 'com.withings', syncId: null })
+
+async function webEditSetup() {
+  const reads = []
+  const adapter = fakeAdapter()
+  adapter.readBodyMassChanges = async () => reads.shift() ?? { samples: [], deleted: [], anchor: 'a' }
+  const store = createMemoryHealthStore()
+  await store.state.set('on', '1')
+  await store.state.set('bwSince', String(atHour(0)))
+  const weighIns = createMemoryWeighIns()
+  const w = { clock: atHour(8), copy: { state: { bodyweight: [] } }, server: { bodyweight: [] }, copyReads: 0, onCopyRead: null }
+  const health = createHealthSync({
+    adapter, store, workouts: createMemoryFinishedWorkouts(), now: () => w.clock, weighIns,
+    // onCopyRead(n): a hook run after the copy was read (the nth read of the test), so a sync can land between two reads.
+    readCopy: async () => { const old = w.copy; await w.onCopyRead?.(++w.copyReads); return old },
+    ownBundleId: async () => OWN, timeZone: () => 'UTC', onWeighIns: () => {},
+  })
+  // the sync engine, reduced: pull, reconcile, push, pull, reconcile
+  const reconcile = async () => {
+    const r = applyDayOps(w.copy.state.bodyweight, await weighIns.listPending(), w.copy.state.deleted?.bodyweight)
+    await weighIns.markAcked([...r.done, ...r.superseded], 'ack')
+  }
+  const pull = async () => {
+    w.copy = { state: structuredClone(w.server) }
+    await reconcile()
+  }
+  const sync = async () => {
+    await pull()
+    const plan = buildPush(w.copy, [], await weighIns.listPending())
+    if (plan) {
+      w.server = structuredClone(plan.state)
+      await pull()
+    }
+  }
+  const editOnWeb = () => {
+    const entry = w.server.bodyweight.find(b => b.d === DAY)
+    entry.w = 182
+    entry.t = atHour(9)
+  }
+  return { reads, health, w, sync, pull, editOnWeb, weighIns, adapter }
+}
+
+test('C1 residual: a deleted reading, a stale-copy pass and a later reading leave the web-typed weight alone', async () => {
+  const { reads, health, w, sync, pull, editOnWeb } = await webEditSetup()
+  reads.push({ samples: [scale('X', 185, atHour(7))], deleted: [], anchor: 'a1' })
+  await health.run()
+  await sync()
+  expect(w.server.bodyweight).toEqual([expect.objectContaining({ d: DAY, w: 185, hk: 'X' })])
+  editOnWeb()
+  w.clock = atHour(10)
+  reads.push({ samples: [], deleted: ['X'], anchor: 'a2' })
+  await health.run() // plans on the copy from before the web edit
+  await sync()
+  await pull() // the copy catches up
+  w.clock = atHour(12)
+  reads.push({ samples: [scale('Y', 186, atHour(11))], deleted: [], anchor: 'a3' })
+  await health.run()
+  await sync()
+  expect(w.server.bodyweight).toEqual([expect.objectContaining({ d: DAY, w: 182 })])
+})
+
+test('C1 residual: the deletion and the next reading in one stale pass, then a third reading', async () => {
+  const { reads, health, w, sync, pull, editOnWeb } = await webEditSetup()
+  reads.push({ samples: [scale('X', 185, atHour(7))], deleted: [], anchor: 'a1' })
+  await health.run()
+  await sync()
+  editOnWeb()
+  w.clock = atHour(12)
+  reads.push({ samples: [scale('Y', 186, atHour(11))], deleted: ['X'], anchor: 'a2' })
+  await health.run() // plans on the copy from before the web edit
+  await sync()
+  await pull()
+  w.clock = atHour(14)
+  reads.push({ samples: [scale('Z', 187, atHour(13))], deleted: [], anchor: 'a3' })
+  await health.run()
+  await sync()
+  expect(w.server.bodyweight).toEqual([expect.objectContaining({ d: DAY, w: 182 })])
+})
+
+// "Remove today's weight" while paired: the Health pass runs before the push is built (afterWeighIn),
+// so the fallback replaces the unsent remove and the server ends up holding the Health reading. (Pushed
+// side by side, the remove could reach the server first and its deletion stamp would beat the fallback.)
+test('after a typed remove, the Health pass before the push leaves the Health reading on the server', async () => {
+  const { reads, health, w, sync, weighIns } = await webEditSetup()
+  await weighIns.put({ d: DAY, op: 'set', w: 182, t: atHour(8) })
+  await health.run()
+  await sync()
+  w.clock = atHour(8) + 30 * 60000
+  reads.push({ samples: [scale('Y', 184, atHour(8) + 20 * 60000)], deleted: [], anchor: 'a1' })
+  await health.run()
+  await sync()
+  w.clock = atHour(9)
+  await weighIns.put({ d: DAY, op: 'remove', t: atHour(9), baseT: atHour(8) })
+  await health.run() // the pass first: the Health fallback replaces the unsent remove
+  w.clock = atHour(9) + 120
+  await sync()
+  expect(w.server.bodyweight).toEqual([expect.objectContaining({ d: DAY, w: 184, hk: 'Y' })])
+})
+
+// The sync engine stores the new server copy, then acks the rows. A reader that takes the rows first
+// and the copy second sees at worst a row the copy already holds; the other order can see neither.
+test('read order: a sync landing between the import\'s reads does not hide the typed weight from the import', async () => {
+  const { reads, health, w, sync, weighIns } = await webEditSetup()
+  await weighIns.put({ d: DAY, op: 'set', w: 182, t: atHour(8) })
+  reads.push({ samples: [scale('Y', 185, atHour(7))], deleted: [], anchor: 'a1' })
+  w.copyReads = 0
+  w.onCopyRead = async n => { if (n === 2) { w.onCopyRead = null; await sync() } } // the import's copy read
+  await health.run()
+  expect(await weighIns.get(DAY)).toMatchObject({ op: 'set', w: 182, t: atHour(8) })
+  await sync()
+  w.clock = atHour(12)
+  await health.run()
+  expect(w.server.bodyweight).toEqual([expect.objectContaining({ d: DAY, w: 182 })])
+})
+
+test('read order: a sync landing between the export\'s reads does not delete the changed weight\'s Health sample', async () => {
+  const { health, w, sync, weighIns, adapter } = await webEditSetup()
+  w.clock = atHour(9)
+  await weighIns.put({ d: DAY, op: 'set', w: 182, t: atHour(8) })
+  await health.run()
+  await sync()
+  adapter.calls.length = 0
+  await weighIns.put({ d: DAY, op: 'set', w: 183, t: atHour(9) }) // the owner corrects today's weight
+  w.onCopyRead = async () => { w.onCopyRead = null; await sync() } // the export's copy read
+  await health.run()
+  expect(adapter.calls.filter(c => c[0] === 'deleteBW')).toEqual([])
+  expect(adapter.calls.filter(c => c[0] === 'saveBW').map(c => c[1].lb)).toEqual([183])
 })

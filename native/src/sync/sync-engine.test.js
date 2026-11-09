@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest'
 import { createNodeSqliteDb } from '../../scripts/node-sqlite.mjs'
 import { resetIdsOf } from '../../../frontend/src/lib/sync-merge.js'
 import { createSqliteFinishedWorkouts } from '../session/finished-workouts.js'
+import { createSqliteWeighIns } from '../body/weigh-ins.js'
 import { createSqliteHealthStore } from '../health/health-store.js'
 import { createCredentials } from './credentials.js'
 import { buildPush } from './outbox.js'
@@ -133,6 +134,7 @@ async function setup({ server = fakeServer(), paired = true, local = [] } = {}) 
   const copy = createSqliteServerCopy(db)
   const meta = createSqliteSyncMeta(db)
   const workouts = createSqliteFinishedWorkouts(db)
+  const weighIns = createSqliteWeighIns(db)
   let clock = T0
   const now = () => clock
   for (const w of local) await workouts.put(w)
@@ -141,11 +143,11 @@ async function setup({ server = fakeServer(), paired = true, local = [] } = {}) 
     await meta.set('server', BASE)
     await meta.set('profile', 'Mo')
   }
-  const sync = createSync({ client: server.client, credentials, copy, workouts, meta, now })
+  const sync = createSync({ client: server.client, credentials, copy, workouts, weighIns, meta, now })
   const pendingIds = async () => (await workouts.listPending()).map(w => w.id)
   const serverIds = () => server.doc.workouts.map(w => w.id)
   const fresh = () => { server.calls.length = 0 }
-  return { sync, server, db, keychain, credentials, copy, meta, workouts, now, pendingIds, serverIds, fresh, tick: ms => { clock += ms } }
+  return { sync, server, db, keychain, credentials, copy, meta, workouts, weighIns, now, pendingIds, serverIds, fresh, tick: ms => { clock += ms } }
 }
 
 function gate() {
@@ -158,7 +160,7 @@ describe('syncNow', () => {
   test('with no token it is unpaired and asks the server nothing', async () => {
     const t = await setup({ paired: false, local: [phone('p1')] })
     const r = await t.sync.syncNow()
-    expect(r).toMatchObject({ paired: false, state: 'unpaired', pending: 1 })
+    expect(r).toMatchObject({ paired: false, state: 'unpaired', pending: 1, pendingWeighIns: 0 })
     expect(r.problem).toBeUndefined()
     expect(t.server.calls).toEqual([])
   })
@@ -168,7 +170,7 @@ describe('syncNow', () => {
     const r = await t.sync.syncNow()
     expect(t.server.calls).toEqual(['me', 'rev', 'pull'])
     expect(await t.copy.get()).toEqual({ state: initialDoc(), rev: 3, wid: 'wid-3' })
-    expect(r).toEqual({ paired: true, state: 'idle', lastSyncedAt: iso(T0), pending: 0, copyKey: '3|wid-3', server: BASE, profile: 'Mo' })
+    expect(r).toEqual({ paired: true, state: 'idle', lastSyncedAt: iso(T0), pending: 0, pendingWeighIns: 0, copyKey: '3|wid-3', server: BASE, profile: 'Mo' })
     expect(t.server.pushes).toEqual([])
   })
 
@@ -353,7 +355,7 @@ describe('syncNow', () => {
 
   test('resendAll when not paired is just the status', async () => {
     const t = await setup({ paired: false, local: [phone('p1')] })
-    expect(await t.sync.resendAll()).toMatchObject({ paired: false, state: 'unpaired', pending: 1 })
+    expect(await t.sync.resendAll()).toMatchObject({ paired: false, state: 'unpaired', pending: 1, pendingWeighIns: 0 })
     expect(t.server.calls).toEqual([])
   })
 
@@ -659,7 +661,7 @@ describe('pair', () => {
     expect(await t.meta.get('profile')).toBe('Mo')
     expect(t.serverIds()).toEqual(['web-1', 'p1', 'p2'])
     expect((await t.copy.get()).state).toEqual(t.server.doc)
-    expect(await t.sync.status()).toEqual({ paired: true, state: 'idle', lastSyncedAt: iso(T0), pending: 0, copyKey: '4|wid-s1', server: BASE, profile: 'Mo' })
+    expect(await t.sync.status()).toEqual({ paired: true, state: 'idle', lastSyncedAt: iso(T0), pending: 0, pendingWeighIns: 0, copyKey: '4|wid-s1', server: BASE, profile: 'Mo' })
   })
 
   test('the old token is removed before the new address is written, and the new token is written last', async () => {
@@ -723,7 +725,7 @@ describe('pair', () => {
     expect(await t.copy.get()).toBeNull()
     expect((await t.workouts.list()).map(w => w.id)).toEqual(['p1', 'p2'])
     expect(await t.pendingIds()).toEqual(['p2'])
-    expect(await t.sync.status()).toEqual({ paired: false, state: 'unpaired', pending: 1 })
+    expect(await t.sync.status()).toEqual({ paired: false, state: 'unpaired', pending: 1, pendingWeighIns: 0 })
   })
 
   test('refusing a kilogram profile leaves the current pairing as it was', async () => {
@@ -790,13 +792,13 @@ describe('forget', () => {
     const t = await setup({ local: [phone('p1')] })
     await t.sync.syncNow()
     expect(await t.pendingIds()).toEqual([])
-    expect(await t.sync.forget()).toEqual({ paired: false, state: 'unpaired', pending: 1 })
+    expect(await t.sync.forget()).toEqual({ paired: false, state: 'unpaired', pending: 1, pendingWeighIns: 0 })
     expect(t.keychain.m.size).toBe(0)
     expect(await t.copy.get()).toBeNull()
     for (const k of ['server', 'profile', 'lastSyncedAt', 'problem', 'lastRenewedAt']) expect(await t.meta.get(k)).toBeNull()
     expect((await t.workouts.list()).map(w => w.id)).toEqual(['p1'])
     expect(await t.pendingIds()).toEqual(['p1'])
-    expect(await t.sync.status()).toEqual({ paired: false, state: 'unpaired', pending: 1 })
+    expect(await t.sync.status()).toEqual({ paired: false, state: 'unpaired', pending: 1, pendingWeighIns: 0 })
   })
 
   test('waits for a running sync, so the sync cannot write a copy back afterwards', async () => {
@@ -817,10 +819,10 @@ describe('forget', () => {
 describe('status', () => {
   test('says paired, server, profile, last sync and the pending count', async () => {
     const t = await setup({ local: [phone('p1')] })
-    expect(await t.sync.status()).toEqual({ paired: true, state: 'idle', pending: 1, server: BASE, profile: 'Mo' })
+    expect(await t.sync.status()).toEqual({ paired: true, state: 'idle', pending: 1, pendingWeighIns: 0, server: BASE, profile: 'Mo' })
     t.server.once.rev = [OFFLINE]
     await t.sync.syncNow()
-    expect(await t.sync.status()).toEqual({ paired: true, state: 'waiting', pending: 1, server: BASE, profile: 'Mo' })
+    expect(await t.sync.status()).toEqual({ paired: true, state: 'waiting', pending: 1, pendingWeighIns: 0, server: BASE, profile: 'Mo' })
   })
 })
 
@@ -878,5 +880,212 @@ describe('copyKey in status', () => {
     await t.sync.syncNow()
     t.copy.get = async () => { throw new Error('status read the whole body') }
     expect((await t.sync.status()).copyKey).toBe('3|wid-3')
+  })
+})
+
+const typed = (d, w, t, extra = {}) => ({ d, op: 'set', w, t, ...extra })
+const healthSet = (d, w, t, hk = 'u1', extra = {}) => ({ d, op: 'set', w, t, src: 'health', hk, ...extra })
+
+describe('weigh-ins', () => {
+  test('a pending weigh-in is pushed, then acked once the pulled copy holds it', async () => {
+    const t = await setup()
+    await t.weighIns.put(typed('2026-11-08', 181.2, T0 - 5))
+    const r = await t.sync.syncNow()
+    expect(t.server.calls).toEqual(['me', 'rev', 'pull', 'push', 'pull'])
+    expect(t.server.doc.bodyweight).toEqual([{ d: '2026-11-08', w: 181.2, t: T0 - 5 }])
+    expect(t.server.doc.workouts).toEqual(initialDoc().workouts)
+    expect(await t.weighIns.listPending()).toEqual([])
+    expect(r).toMatchObject({ state: 'idle', pending: 0, pendingWeighIns: 0 })
+  })
+
+  test('a superseded weigh-in is acked without a push', async () => {
+    const server = fakeServer({ ...initialDoc(), bodyweight: [{ d: '2026-11-08', w: 180, t: T0 }] })
+    const t = await setup({ server })
+    await t.weighIns.put(healthSet('2026-11-08', 175, T0 - 9))
+    const r = await t.sync.syncNow()
+    expect(t.server.calls).toEqual(['me', 'rev', 'pull'])
+    expect(await t.weighIns.listPending()).toEqual([])
+    expect(r.pendingWeighIns).toBe(0)
+    expect(t.server.doc.bodyweight).toEqual([{ d: '2026-11-08', w: 180, t: T0 }])
+  })
+
+  test('a weigh-in the server already holds is acked without a push', async () => {
+    const server = fakeServer({ ...initialDoc(), bodyweight: [{ d: '2026-11-08', w: 181.2, t: 7 }] })
+    const t = await setup({ server })
+    await t.weighIns.put(typed('2026-11-08', 181.2, 7))
+    await t.sync.syncNow()
+    expect(t.server.pushes).toEqual([])
+    expect(await t.weighIns.listPending()).toEqual([])
+  })
+
+  test('weigh-ins alone do not block workouts and ride in the same push', async () => {
+    const t = await setup({ local: [phone('p1')] })
+    await t.weighIns.put(typed('2026-11-08', 181.2, 5))
+    await t.sync.syncNow()
+    expect(t.server.pushes).toHaveLength(1)
+    expect(t.serverIds()).toEqual(['web-1', 'p1'])
+    expect(t.server.doc.bodyweight).toHaveLength(1)
+  })
+
+  test('a 409 re-applies on the new document: a web typed entry beats a pending Health set', async () => {
+    const t = await setup()
+    await t.sync.syncNow()
+    await t.weighIns.put(healthSet('2026-11-08', 175, T0 - 9))
+    t.server.once.push = [async () => {
+      const s = clone(t.server.doc)
+      s.bodyweight = [{ d: '2026-11-08', w: 182, t: T0 - 100 }]
+      t.server.write(s)
+      return undefined
+    }]
+    const r = await t.sync.syncNow()
+    expect(r).toMatchObject({ state: 'idle', pendingWeighIns: 0 })
+    expect(t.server.doc.bodyweight).toEqual([{ d: '2026-11-08', w: 182, t: T0 - 100 }])
+    expect(await t.weighIns.listPending()).toEqual([])
+  })
+
+  test('a Health op replaces only the entry it names: the web edits that entry in place, arriving in a 409, and it stays', async () => {
+    const imported = { d: '2026-11-08', w: 185, t: T0 - 50, src: 'health', hk: 'X' }
+    const editedOnWeb = { ...imported, w: 182, t: T0 - 20 } // the web's sheet keeps src and hk
+    for (const op of [healthSet('2026-11-08', 186, T0 - 9, 'Y', { baseT: T0 - 50 }), { d: '2026-11-08', op: 'remove', t: T0 - 9, src: 'health', baseT: T0 - 50 }]) {
+      const t = await setup({ server: fakeServer({ ...initialDoc(), bodyweight: [imported] }) })
+      await t.sync.syncNow()
+      await t.weighIns.put(op)
+      t.server.once.push = [async () => {
+        const s = clone(t.server.doc)
+        s.bodyweight = [editedOnWeb]
+        t.server.write(s)
+        return undefined
+      }]
+      expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingWeighIns: 0 })
+      expect(t.server.doc.bodyweight).toEqual([editedOnWeb])
+    }
+    // With no edit in between, the same ops apply.
+    const t = await setup({ server: fakeServer({ ...initialDoc(), bodyweight: [imported] }) })
+    await t.sync.syncNow()
+    await t.weighIns.put(healthSet('2026-11-08', 186, T0 - 9, 'Y', { baseT: T0 - 50 }))
+    await t.sync.syncNow()
+    expect(t.server.doc.bodyweight).toEqual([{ d: '2026-11-08', w: 186, t: T0 - 9, src: 'health', hk: 'Y' }])
+  })
+
+  test('a 409 still applies an op that the new document does not contradict', async () => {
+    const t = await setup()
+    await t.sync.syncNow()
+    await t.weighIns.put(typed('2026-11-08', 181.2, T0 - 9))
+    t.server.once.push = [async () => { t.server.webAdds(web('web-2')) }]
+    await t.sync.syncNow()
+    expect(t.server.doc.bodyweight).toEqual([{ d: '2026-11-08', w: 181.2, t: T0 - 9 }])
+    expect(t.serverIds()).toContain('web-2')
+  })
+
+  test('pair, forget and resendAll make every weigh-in pending again', async () => {
+    const t = await setup()
+    await t.weighIns.put(typed('2026-11-08', 181.2, 5))
+    await t.sync.syncNow()
+    expect(await t.weighIns.listPending()).toEqual([])
+    await t.sync.forget()
+    expect((await t.weighIns.listPending()).map(o => o.d)).toEqual(['2026-11-08'])
+    expect(await t.sync.status()).toMatchObject({ pendingWeighIns: 1 })
+
+    await t.weighIns.markAcked([{ d: '2026-11-08', t: 5 }], iso(T0))
+    t.server.doc = clone(initialDoc())
+    expect((await t.sync.pair(BASE, 'GOODCODE')).ok).toBe(true)
+    expect(t.server.doc.bodyweight).toEqual([{ d: '2026-11-08', w: 181.2, t: 5 }])
+
+    await t.meta.set('problem', 'server-older')
+    await t.weighIns.markAcked([{ d: '2026-11-08', t: 5 }], iso(T0))
+    await t.sync.resendAll()
+    expect(await t.weighIns.listPending()).toEqual([])
+    // resendAll cleared the ack: it was pending until the stored copy held it again.
+    expect(t.server.pushes.length).toBeGreaterThan(0)
+  })
+
+  test('status counts weigh-ins separately from workouts', async () => {
+    const t = await setup({ paired: false, local: [phone('p1')] })
+    await t.weighIns.put(typed('2026-11-08', 181.2, 5))
+    await t.weighIns.put(typed('2026-11-09', 181, 6))
+    expect(await t.sync.status()).toEqual({ paired: false, state: 'unpaired', pending: 1, pendingWeighIns: 2 })
+  })
+})
+
+const delOnWeb = (t, d, at, keep = []) => {
+  const s = clone(t.server.doc)
+  s.bodyweight = keep
+  s.deleted = { ...s.deleted, bodyweight: { [d]: at } }
+  t.server.write(s)
+}
+
+describe('weigh-ins and the server record', () => {
+  test('forget then pair after a web deletion: the day is not pushed back, the op is acked', async () => {
+    const t = await setup()
+    await t.weighIns.put(typed('2026-11-08', 181.2, T0 - 5))
+    await t.sync.syncNow()
+    delOnWeb(t, '2026-11-08', T0 + 1000)
+    await t.sync.forget()
+    expect((await t.sync.pair(BASE, 'GOODCODE')).ok).toBe(true)
+    expect(t.server.doc.bodyweight).toEqual([])
+    expect(t.server.doc.deleted.bodyweight).toEqual({ '2026-11-08': T0 + 1000 })
+    expect(await t.weighIns.listPending()).toEqual([])
+  })
+
+  test('push ok but the pull fails, the web deletes the day: the next sync does not re-add it', async () => {
+    const t = await setup()
+    await t.sync.syncNow()
+    await t.weighIns.put(typed('2026-11-08', 181.2, T0 - 5))
+    t.server.once.pull = [OFFLINE]
+    expect((await t.sync.syncNow()).state).toBe('waiting')
+    expect(t.server.doc.bodyweight).toHaveLength(1)
+    delOnWeb(t, '2026-11-08', T0 + 1000)
+    t.server.pushes.length = 0
+    await t.sync.syncNow()
+    expect(t.server.pushes).toEqual([])
+    expect(t.server.doc.bodyweight).toEqual([])
+    expect(await t.weighIns.listPending()).toEqual([])
+  })
+
+  test('a typed set re-sent after re-pairing loses to a newer web typed edit', async () => {
+    const t = await setup()
+    await t.weighIns.put(typed('2026-11-08', 181.2, T0 - 5))
+    await t.sync.syncNow()
+    delOnWeb(t, '2026-11-08', 0, [{ d: '2026-11-08', w: 179, t: T0 + 50 }])
+    await t.sync.forget()
+    t.server.pushes.length = 0
+    expect((await t.sync.pair(BASE, 'GOODCODE')).ok).toBe(true)
+    expect(t.server.pushes).toEqual([])
+    expect(t.server.doc.bodyweight).toEqual([{ d: '2026-11-08', w: 179, t: T0 + 50 }])
+    expect(await t.weighIns.listPending()).toEqual([])
+  })
+
+  test('resendAll after the server went back to a backup puts an acked weigh-in on it again', async () => {
+    const t = await setup()
+    const backup = clone(t.server.doc)
+    await t.weighIns.put(typed('2026-11-08', 181.2, T0 - 5))
+    await t.sync.syncNow()
+    expect(await t.weighIns.listPending()).toEqual([])
+    t.server.doc = clone(backup)
+    t.server.webAdds(web('web-9'))
+    t.server.doc._wids = ['other']
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'problem', problem: 'server-older' })
+    await t.sync.resendAll()
+    expect(t.server.doc.bodyweight).toEqual([{ d: '2026-11-08', w: 181.2, t: T0 - 5 }])
+    expect(await t.weighIns.listPending()).toEqual([])
+  })
+
+  test('the web edits a day after the phone decided to remove it, arriving in a 409: the removal is dropped', async () => {
+    const t = await setup()
+    await t.weighIns.put(typed('2026-11-08', 181.2, 5))
+    await t.sync.syncNow()
+    await t.weighIns.put({ d: '2026-11-08', op: 'remove', t: T0 - 1, baseT: 5 })
+    t.server.once.push = [async () => {
+      const s = clone(t.server.doc)
+      s.bodyweight = [{ d: '2026-11-08', w: 178, t: T0 - 2 }]
+      t.server.write(s)
+      return undefined
+    }]
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingWeighIns: 0 })
+    expect(t.server.doc.bodyweight).toEqual([{ d: '2026-11-08', w: 178, t: T0 - 2 }])
+  })
+
+  test('createSync refuses to be built without a weigh-in store', () => {
+    expect(() => createSync({ client: {}, credentials: {}, copy: {}, workouts: {}, meta: {}, now: Date.now })).toThrow(/weighIns/)
   })
 })

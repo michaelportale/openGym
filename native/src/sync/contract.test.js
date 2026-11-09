@@ -14,6 +14,7 @@ import { promisify } from 'node:util'
 import { describe, expect, onTestFinished, test } from 'vitest'
 import { boundPort } from '../../../api/test/helpers.mjs'
 import { SQLITE_DRIVERS } from '../../scripts/node-sqlite.mjs'
+import { createSqliteWeighIns } from '../body/weigh-ins.js'
 import { createSqliteFinishedWorkouts } from '../session/finished-workouts.js'
 import { createApiClient } from './api-client.js'
 import { createCredentials } from './credentials.js'
@@ -116,6 +117,18 @@ async function startServer({ state = fixture() } = {}) {
     },
     // What a signed-in web tab does: read the document, add a workout, write it back over the
     // revision it read.
+    // The same, for the web setting one day's weight.
+    async webWeighs(entry) {
+      const cookie = webCookie()
+      const got = await (await fetch(`${api}/api/data`, { headers: cookie })).json()
+      const state = { ...got.state, bodyweight: [...(got.state.bodyweight ?? []), entry] }
+      const res = await fetch(`${api}/api/data`, {
+        method: 'PUT',
+        headers: { ...cookie, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state, baseRev: got.rev, baseWid: got.state._wid, stamped: true }),
+      })
+      expect(res.status).toBe(200)
+    },
     async webAdds(workout) {
       const cookie = webCookie()
       const got = await (await fetch(`${api}/api/data`, { headers: cookie })).json()
@@ -134,8 +147,9 @@ function phoneApp(db, { keychain = fakeKeychain(), client = createApiClient({ fe
   const workouts = createSqliteFinishedWorkouts(db)
   const copy = createSqliteServerCopy(db)
   const meta = createSqliteSyncMeta(db)
-  const sync = createSync({ client, credentials: createCredentials(keychain), copy, workouts, meta, now: () => T0 })
-  return { sync, workouts, copy, meta, keychain, client }
+  const weighIns = createSqliteWeighIns(db)
+  const sync = createSync({ client, credentials: createCredentials(keychain), copy, workouts, weighIns, meta, now: () => T0 })
+  return { sync, workouts, weighIns, copy, meta, keychain, client }
 }
 
 async function paired(server, db = createRealDb(), options) {
@@ -196,7 +210,7 @@ describe.skipIf(!HAS_API_DEPS)(TITLE, { timeout: 30_000 }, () => {
     expect(stored.rev).toBe(12)
     expect(stored.wid).toBe(fixture()._wid)
     expect(await app.sync.status()).toEqual({
-      paired: true, state: 'idle', lastSyncedAt: new Date(T0).toISOString(), pending: 0, copyKey: `${stored.rev}|${stored.wid}`, server: server.api, profile: 'Owner',
+      paired: true, state: 'idle', lastSyncedAt: new Date(T0).toISOString(), pending: 0, pendingWeighIns: 0, copyKey: `${stored.rev}|${stored.wid}`, server: server.api, profile: 'Owner',
     })
     // the token is in the Keychain and nowhere in SQLite
     const token = app.keychain.m.get('opengym.token')
@@ -252,6 +266,110 @@ describe.skipIf(!HAS_API_DEPS)(TITLE, { timeout: 30_000 }, () => {
     expect(file.workouts).toHaveLength(5)
     expect((await app.copy.get()).state).toEqual(without(file, HIDDEN))
     await expectHiddenStayOnServer(app, file, { pushed: true })
+  })
+
+  test('a typed weigh-in reaches the server file, and a later typed remove takes it out and stamps the day', async () => {
+    const server = await startServer()
+    const app = await paired(server)
+    await app.weighIns.put({ d: '2026-11-08', op: 'set', w: 181.2, t: T0 })
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pending: 0, pendingWeighIns: 0 })
+    let file = server.file()
+    expect(file.bodyweight.filter(e => e.d === '2026-11-08')).toEqual([{ d: '2026-11-08', w: 181.2, t: T0 }])
+    expectOriginalKept(file)
+    expect(file.workouts.map(stripStamps)).toEqual(fixture().workouts.map(stripStamps))
+    expect((await app.copy.get()).state.bodyweight).toEqual(file.bodyweight)
+
+    await app.weighIns.put({ d: '2026-11-08', op: 'remove', t: T0 + 1000, baseT: T0 })
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingWeighIns: 0 })
+    file = server.file()
+    expect(file.bodyweight ?? []).toEqual([])
+    expect(Number(file.deleted.bodyweight['2026-11-08'])).toBeGreaterThan(0)
+    expect(file.deleted.workouts).toEqual(fixture().deleted.workouts)
+  })
+
+  test('a web weigh-in between the pull and the push survives, and a Health set for its day is dropped', async () => {
+    const server = await startServer()
+    const plain = createApiClient({ fetch: globalThis.fetch, timeoutMs: 10_000 })
+    let raced = false
+    const client = {
+      ...plain,
+      async push(...args) {
+        if (!raced) {
+          raced = true
+          await server.webWeighs({ d: '2026-11-08', w: 182, t: T0 - 500 })
+          await server.webWeighs({ d: '2026-11-06', w: 183, t: T0 - 400 })
+        }
+        return plain.push(...args)
+      },
+    }
+    const app = await paired(server, undefined, { client })
+    await app.weighIns.put({ d: '2026-11-08', op: 'set', w: 175, t: T0, src: 'health', hk: 'H1' })
+    await app.weighIns.put({ d: '2026-11-09', op: 'set', w: 181, t: T0 })
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingWeighIns: 0 })
+    const byDay = Object.fromEntries(server.file().bodyweight.map(e => [e.d, e]))
+    expect(byDay['2026-11-08']).toMatchObject({ w: 182, t: T0 - 500 })
+    expect(byDay['2026-11-08']).not.toHaveProperty('src')
+    expect(byDay['2026-11-06']).toMatchObject({ w: 183 })
+    expect(byDay['2026-11-09']).toMatchObject({ w: 181, t: T0 })
+  })
+
+  test('the web edits an imported day in place between the pull and the push: a Health op naming the old entry is dropped', async () => {
+    const server = await startServer()
+    const plain = createApiClient({ fetch: globalThis.fetch, timeoutMs: 10_000 })
+    let race = false
+    const client = {
+      ...plain,
+      async push(...args) {
+        if (race) {
+          race = false
+          // The web's weight sheet edits today's entry in place: ex.w = n; ex.t = Date.now().
+          const cookie = webCookie()
+          const got = await (await fetch(`${server.api}/api/data`, { headers: cookie })).json()
+          const bodyweight = got.state.bodyweight.map(e => (e.d === '2026-11-08' ? { ...e, w: 182, t: T0 + 500 } : e))
+          const res = await fetch(`${server.api}/api/data`, {
+            method: 'PUT',
+            headers: { ...cookie, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ state: { ...got.state, bodyweight }, baseRev: got.rev, baseWid: got.state._wid, stamped: true }),
+          })
+          expect(res.status).toBe(200)
+        }
+        return plain.push(...args)
+      },
+    }
+    const app = await paired(server, undefined, { client })
+    await app.weighIns.put({ d: '2026-11-08', op: 'set', w: 185, t: T0, src: 'health', hk: 'X' })
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingWeighIns: 0 })
+    expect(server.file().bodyweight.find(e => e.d === '2026-11-08')).toEqual({ d: '2026-11-08', w: 185, t: T0, src: 'health', hk: 'X' })
+
+    race = true
+    await app.weighIns.put({ d: '2026-11-08', op: 'remove', t: T0 + 1000, src: 'health', baseT: T0 })
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingWeighIns: 0 })
+    const kept = { d: '2026-11-08', w: 182, t: T0 + 500, src: 'health', hk: 'X' }
+    expect(server.file().bodyweight.find(e => e.d === '2026-11-08')).toEqual(kept)
+    await app.weighIns.put({ d: '2026-11-08', op: 'set', w: 186, t: T0 + 2000, src: 'health', hk: 'Y', baseT: T0 })
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingWeighIns: 0 })
+    expect(server.file().bodyweight.find(e => e.d === '2026-11-08')).toEqual(kept)
+    expect((await app.copy.get()).state.bodyweight.find(e => e.d === '2026-11-08')).toEqual(kept)
+  })
+
+  test('a day deleted on the web stays deleted after the phone forgets and pairs again', async () => {
+    const server = await startServer()
+    const app = await paired(server)
+    await app.weighIns.put({ d: '2026-11-08', op: 'set', w: 181.2, t: T0 })
+    await app.sync.syncNow()
+    expect(server.file().bodyweight).toHaveLength(1)
+    const cookie = webCookie()
+    const got = await (await fetch(`${server.api}/api/data`, { headers: cookie })).json()
+    const del = Math.max(Date.now(), T0 + 60_000)
+    const state = { ...got.state, bodyweight: [], deleted: { ...got.state.deleted, bodyweight: { '2026-11-08': del } } }
+    const res = await fetch(`${server.api}/api/data`, { method: 'PUT', headers: { ...cookie, 'Content-Type': 'application/json' }, body: JSON.stringify({ state, baseRev: got.rev, baseWid: got.state._wid, stamped: true }) })
+    expect(res.status).toBe(200)
+    await app.sync.forget()
+    expect(await app.sync.pair(server.api, await server.pairCode())).toEqual({ ok: true })
+    const file = server.file()
+    expect(file.bodyweight ?? []).toEqual([])
+    expect(Number(file.deleted.bodyweight['2026-11-08'])).toBeGreaterThan(0)
+    expect(await app.weighIns.listPending()).toEqual([])
   })
 
   test('a new profile with no document yet: pairing pulls an empty one and the first push starts it', async () => {

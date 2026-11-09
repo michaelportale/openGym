@@ -37,4 +37,14 @@ describe('healthLines', () => {
       '1 workout in Health',
     ])
   })
+  test('weights in Health follow the workouts line, only when there are some', () => {
+    expect(healthLines(st({ exported: 2, weighInsInHealth: 3 }))).toEqual([
+      'On. Finished workouts go to Apple Health.',
+      '2 workouts in Health',
+      '3 weights in Health',
+    ])
+    expect(healthLines(st({ weighInsInHealth: 1 }))[2]).toBe('1 weight in Health')
+    expect(healthLines(st({ weighInsInHealth: 0 }))).toHaveLength(2)
+    expect(healthLines(st({ on: false, weighInsInHealth: 2 }))).toEqual(['Off. Your workouts are not sent to Apple Health.'])
+  })
 })

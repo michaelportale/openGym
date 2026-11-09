@@ -26,10 +26,10 @@ export default function HealthSection() {
     }
     Alert.alert(
       'Turn off Apple Health?',
-      'Workouts already in Apple Health can stay there, or openGym can remove the ones it wrote. Turning Apple Health back on only sends workouts finished on this install.',
+      'Workouts and weights already in Apple Health can stay there, or openGym can remove the workouts and weights it wrote. Turning Apple Health back on only sends workouts and weights logged on this install.',
       [
         { text: "Keep what's there", onPress: () => settle({ intended: false, run: () => disable({ remove: false }) }) },
-        { text: "Also remove openGym's workouts", style: 'destructive', onPress: () => settle({ intended: false, run: () => disable({ remove: true }) }) },
+        { text: "Also remove openGym's workouts and weights", style: 'destructive', onPress: () => settle({ intended: false, run: () => disable({ remove: true }) }) },
         { text: 'Cancel', style: 'cancel' },
       ],
     )
