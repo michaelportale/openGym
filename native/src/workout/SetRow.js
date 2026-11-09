@@ -142,15 +142,16 @@ const styles = StyleSheet.create({
     borderWidth: size.stroke,
     borderRadius: radius.sm
   },
-  // An open warm-up: a quiet field, not the current set. A hairline, as on a keypad key, where the
-  // current set has a full-width strong border on a highlighted row.
+  // An open warm-up: a quiet field, not the current set. Its fill all but matches the card, so the
+  // box is its outline: the strong stroke (3:1 on the card, tokens.test.js), but a hairline on a
+  // plain row, where the current set has a full stroke on a highlighted row.
   filled: {
     minWidth: '100%',
     minHeight: touch.row,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: color.field,
-    borderColor: color.stroke,
+    borderColor: color.strokeStrong,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radius.sm
   },
