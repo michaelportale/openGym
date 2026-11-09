@@ -5,9 +5,12 @@ import AppText from '../ui/AppText'
 import IconButton from '../ui/IconButton'
 import PrimaryButton from '../ui/PrimaryButton'
 import ScaleButton from '../ui/ScaleButton'
+import WhySheet from './WhySheet'
+import { whyEntry } from './why-entry'
 import { actionsStacked, applyKey, completeBlocker, fieldLocked, fieldText, keypadState, keypadValues, sheetCloseAction, sideLockHint, sideLockNote } from './keypad'
 import { spokenField } from './spoken'
 
+const STEP_WHY = whyEntry('increments')
 const CHIPS = ['-10', '-5', '+5', '+10']
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'back']
 
@@ -68,6 +71,7 @@ export default function KeypadSheet({ visible, title, initial, perSide, side = n
   useEffect(() => {
     if (visible) setState(keypadState(initial, initialField, { weightSetWith }))
   }, [visible])
+  const [why, setWhy] = useState(false)
   const stacked = actionsStacked(useWindowDimensions().fontScale)
   const lockNote = sideLockNote(state.lock)
   const values = keypadValues(state)
@@ -115,6 +119,9 @@ export default function KeypadSheet({ visible, title, initial, perSide, side = n
               <Key key={chip} text={chip.replace('-', '−')} label={`${chip.startsWith('-') ? 'Minus' : 'Plus'} ${chip.slice(1)} pounds`} hint="Changes the weight." style={styles.chip} disabled={state.lock !== null} onPress={press(`chip:${chip}`)} />
             ))}
           </View>
+          <ScaleButton accessibilityLabel="Why these steps" accessibilityHint="Shows where this number comes from." onPress={() => setWhy(true)} style={styles.why} faceStyle={styles.whyFace}>
+            <AppText variant="label" color={color.textSecondary}>Why these steps?</AppText>
+          </ScaleButton>
           <View style={styles.grid}>
             {KEYS.map(key => (
               <Key key={key} text={key === 'back' ? '⌫' : key} label={keyLabel(key)} hint={keyHint(key)} onPress={press(key)} />
@@ -150,6 +157,9 @@ export default function KeypadSheet({ visible, title, initial, perSide, side = n
           ) : null}
         </ScrollView>
       </View>
+      {/* A second Modal inside this one's view: iOS presents it over the keypad, which keeps its
+          typed numbers; closing returns here. Reading it never writes. */}
+      <WhySheet visible={why} entry={STEP_WHY} onClose={() => setWhy(false)} />
     </Modal>
   )
 }
@@ -167,6 +177,8 @@ const styles = StyleSheet.create({
   fieldActive: { borderColor: color.text },
   chips: { flexDirection: 'row', gap: space.sm },
   chip: { flex: 1 },
+  why: { alignSelf: 'flex-start', minHeight: touch.min, justifyContent: 'center' },
+  whyFace: { minHeight: touch.min, justifyContent: 'center' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   key: { flexBasis: '31%', flexGrow: 1 },
   keyFace: { minHeight: touch.primary, alignItems: 'center', justifyContent: 'center', backgroundColor: color.control, borderColor: color.stroke, borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.md },
