@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest'
 import { createNodeSqliteDb } from '../../scripts/node-sqlite.mjs'
 import { resetIdsOf } from '../../../frontend/src/lib/sync-merge.js'
 import { createSqliteFinishedWorkouts } from '../session/finished-workouts.js'
+import { createSqliteHealthStore } from '../health/health-store.js'
 import { createCredentials } from './credentials.js'
 import { buildPush } from './outbox.js'
 import { createSqliteServerCopy, createSqliteSyncMeta } from './server-copy.js'
@@ -773,6 +774,18 @@ describe('pair', () => {
 })
 
 describe('forget', () => {
+  test('leaves the Health links and the on flag alone', async () => {
+    const t = await setup({ local: [phone('p1')] })
+    const health = createSqliteHealthStore(t.db)
+    const link = { kind: 'w', key: 'p1', syncId: 'opengym-w-p1', version: 5, hash: 'h', state: 'exported', error: null, updatedAt: 9 }
+    await health.links.put(link)
+    await health.state.set('on', '1')
+    await t.sync.syncNow()
+    await t.sync.forget()
+    expect(await health.links.list('w')).toEqual([link])
+    expect(await health.state.get('on')).toBe('1')
+  })
+
   test('clears the token, the copy and the meta, makes every workout pending, and keeps them all', async () => {
     const t = await setup({ local: [phone('p1')] })
     await t.sync.syncNow()

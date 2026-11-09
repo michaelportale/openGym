@@ -4,6 +4,7 @@ import { Stack, ThemeProvider, DarkTheme, router } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { onRestAlertTap, setRestAlertHandler } from '../notify/notifications'
 import { syncOnForeground } from '../sync/use-sync'
+import { healthOnForeground } from '../health/use-health'
 import { color } from '../theme/tokens'
 
 export const unstable_settings = { anchor: '(tabs)' }
@@ -20,11 +21,13 @@ export default function RootLayout() {
   // A tap on a rest alert opens the Workout tab and writes nothing: the screen there reads the
   // journal as it always does.
   useEffect(() => onRestAlertTap(() => router.navigate('/')), [])
-  // Back in the app: sync if paired (at most once a minute). It touches no session write.
+  // Back in the app: sync if paired, and the Health pass, each at most once a minute. Neither
+  // touches a session write.
   useEffect(() => {
     syncOnForeground()
+    healthOnForeground()
     const sub = AppState.addEventListener('change', state => {
-      if (state === 'active') syncOnForeground()
+      if (state === 'active') { syncOnForeground(); healthOnForeground() }
     })
     return () => sub.remove()
   }, [])

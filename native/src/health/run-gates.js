@@ -59,6 +59,7 @@ export async function runWorkoutGates(adapter, { nowMs }) {
       note = 'save threw: ' + message(e) + '; '
     }
     found = await find()
+    // The adapter returns HealthKit's numeric metadata as numbers, so strict equality is right.
     const replaced = !!found && found.length === 1 && found[0].syncVersion === 2 && found[0].volumeLb === V2_VOLUME
     record('replace', replaced, note + 'workouts found: ' + count(found) + (found && found[0] ? ', version ' + found[0].syncVersion : ''))
 

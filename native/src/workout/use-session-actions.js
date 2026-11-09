@@ -5,6 +5,7 @@ import { hapticForWrite } from '../feedback/haptics'
 import { playHaptic } from '../feedback/haptics-adapter'
 import { createEventId } from '../session/ids'
 import { syncAfterFinish } from '../sync/use-sync'
+import { healthAfterFinish } from '../health/use-health'
 import { closeOnReturn, typedNumbersKept } from './absence'
 import { createActionGate } from './action-gate'
 import { afterGatedWrite, alertsOffNotice } from './after-write'
@@ -393,7 +394,7 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
         }
         // The workout is durably stored once the result says saved (even if the session did not
         // close). Syncing starts now, on its own: nothing here waits for it.
-        if (result?.saved === true) syncAfterFinish()
+        if (result?.saved === true) { syncAfterFinish(); healthAfterFinish() }
         const text = resultNotice(result, 'finish')
         if (text) setFinishNotice(nextStamp()(text))
         else setFinishing(null)
