@@ -83,6 +83,14 @@ export function applyKey(state, key) {
   return state
 }
 
+// Why Complete must wait: 'weight' when it is blank, 'reps' when the set's reps (per side, the
+// side being completed) are blank, else null. A set is never logged without both.
+export function completeBlocker(values, side) {
+  if (values?.w == null) return 'weight'
+  const reps = side === 'L' || side === 'R' ? values.sides?.[side]?.r : values.r
+  return reps == null ? 'reps' : null
+}
+
 // 'save' when the sheet closes with different numbers than it opened with.
 export function sheetCloseAction(initial, state) {
   return JSON.stringify(keypadValues(initial)) === JSON.stringify(keypadValues(state)) ? 'none' : 'save'

@@ -112,13 +112,16 @@ function dockFor(view, entry, entries, index, current, number) {
     }
   }
   if (current) {
-    const blank = figures.w == null
-    const label = blank ? 'Enter weight'
-      : side === 'L' ? 'Complete left'
-        : side === 'R' ? 'Complete right'
-          : `Complete set ${number}`
+    // A set is never logged without a weight or reps: a blank one opens the keypad instead.
+    // For a per-side set, the reps are those of the side being worked.
+    const mode = figures.w == null ? 'enter-weight' : figures.r == null ? 'enter-reps' : 'ready'
+    const label = mode === 'enter-weight' ? 'Enter weight'
+      : mode === 'enter-reps' ? 'Enter reps'
+        : side === 'L' ? 'Complete left'
+          : side === 'R' ? 'Complete right'
+            : `Complete set ${number}`
     return {
-      mode: blank ? 'enter-weight' : 'ready',
+      mode,
       lead: `Set ${number} · ${figureText}`,
       sub: '',
       primaryLabel: label,

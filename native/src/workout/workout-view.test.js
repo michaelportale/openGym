@@ -47,6 +47,15 @@ describe('dock', () => {
     const { dock } = screen(view([bench([set('plan:0289:0', todo(null, 12))])]))
     expect(dock).toMatchObject({ mode: 'enter-weight', lead: 'Set 1 · – lb × 12', primaryLabel: 'Enter weight' })
   })
+  test('blank reps ask for the reps; a blank weight still wins', () => {
+    const { dock } = screen(view([bench([set('plan:0289:0', todo(75, null))])]))
+    expect(dock).toMatchObject({ mode: 'enter-reps', lead: 'Set 1 · 75 lb × –', primaryLabel: 'Enter reps', setId: 'plan:0289:0' })
+    expect(screen(view([bench([set('plan:0289:0', todo(null, null))])])).dock).toMatchObject({ mode: 'enter-weight', primaryLabel: 'Enter weight' })
+  })
+  test('a draft that fills the reps makes the set ready', () => {
+    const v = view([bench([set('plan:0289:0', todo(75, null), { draft: { r: 8 } })])])
+    expect(screen(v).dock).toMatchObject({ mode: 'ready', primaryLabel: 'Complete set 1' })
+  })
   test('resting', () => {
     const { dock } = screen({ ...mid(), rest: { status: 'running', remainingMs: 64_000, deadline: 1 } })
     expect(dock).toMatchObject({ mode: 'resting', lead: '1:04', sub: 'Next: set 2 · 75 lb × 8' })
@@ -71,6 +80,12 @@ describe('per-side sets', () => {
   test('left first, then right', () => {
     expect(screen(lateral(false, false)).dock).toMatchObject({ primaryLabel: 'Complete left', side: 'L' })
     expect(screen(lateral(true, false)).dock).toMatchObject({ primaryLabel: 'Complete right', side: 'R' })
+  })
+  test('blank reps on the side being worked ask for the reps', () => {
+    const blankRight = view([{ id: '0300', target: {}, sets: [set('s1', {
+      w: 7.5, done: false, sides: { L: { w: 7.5, r: 20, done: true }, R: { w: 7.5, r: null, done: false } },
+    }, { completed: true })] }])
+    expect(screen(blankRight).dock).toMatchObject({ mode: 'enter-reps', primaryLabel: 'Enter reps', side: 'R' })
   })
   test('one side done is still current, not counted, not advanced', () => {
     const v = view([

@@ -5,7 +5,7 @@ import { createEventId } from '../session/ids'
 import { createActionGate } from './action-gate'
 import { pendingRest, restMsFor } from './rest-after'
 import { shownAfterComplete, withTargets } from './session-screen'
-import { addSetCall, completeCall, editCall, findSet, keypadField, primaryAction, restAfterComplete, resultNotice, sheetCloseCall, sheetMode, shownValues, undoCall } from './set-calls'
+import { addSetCall, completeCall, dockKeypadField, editCall, findSet, keypadField, primaryAction, restAfterComplete, resultNotice, sheetCloseCall, sheetMode, sheetOutcome, shownValues, undoCall } from './set-calls'
 
 const sideLabel = { L: 'Complete left', R: 'Complete right' }
 const failed = error => ({ ok: false, saved: false, error: { code: 'storage', message: error?.message || String(error) } })
@@ -26,6 +26,9 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
   const [sheetNotice, setSheetNotice] = useState(null)
   const [finishing, setFinishing] = useState(null)
   const [finishNotice, setFinishNotice] = useState(null)
+  // Which sheet is on screen (its key), read when a write settles: state in a closure is stale.
+  const sheetKeys = useRef(0)
+  const openKey = useRef(null)
 
   const restMsOf = entry => restMsFor(entry, restSec)
   const latest = () => withTargets(session.getState().view, base)
@@ -82,8 +85,10 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
     const mode = sheetMode(row.status)
     const perSide = workoutModel.isSideSet(found.slot.row)
     const side = mode === 'current' && perSide ? screen.dock.side : null
-    setSheet(current => ({
-      key: (current?.key ?? 0) + 1,
+    const key = ++sheetKeys.current
+    openKey.current = key
+    setSheet({
+      key,
       setId,
       mode,
       side,
@@ -92,47 +97,38 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
       initialField: keypadField(field, perSide, side),
       title: `${screen.card.name} · Set ${row.number}`,
       completeLabel: sideLabel[side] ?? `Complete set ${row.number}`,
-    }))
+    })
     setSheetNotice(null)
     setSheetOpen(true)
   }
   // The sheet stays mounted with its last props while it slides away.
-  const closeSheet = () => setSheetOpen(false)
-  const afterSheetWrite = result => {
-    if (result?.ignored) return
-    const text = resultNotice(result)
-    if (text) {
-      setSheetNotice(text)
-      return
-    }
-    closeSheet()
-    setNotice(null)
+  const closeSheet = () => {
+    openKey.current = null
+    setSheetOpen(false)
+  }
+  // A refusal stays in the sheet only if that sheet is still open when the write settles;
+  // otherwise it shows on the screen, so a failed write is never hidden (sheetOutcome).
+  const settle = (result, key) => {
+    const outcome = sheetOutcome(result, openKey.current === key)
+    if (!outcome) return
+    if (outcome.close) closeSheet()
+    if (outcome.sheet) setSheetNotice(outcome.sheet)
+    if (outcome.screen !== undefined) setNotice(outcome.screen)
   }
 
   const sheetActions = {
     // Save keeps a draft; on a done set it is Update, an edit that keeps the set's time.
-    onSave: async values => afterSheetWrite(sheet.mode === 'done' ? await edit(sheet.setId, values) : await draft(sheet.setId, values)),
-    onComplete: async values => {
-      const result = await complete({ setId: sheet.setId, side: sheet.side, values })
-      if (result?.ignored) return
-      if (result?.committed) {
-        closeSheet()
-        setNotice(resultNotice(result))
-        return
-      }
-      afterSheetWrite(result)
-    },
-    onUndo: async () => afterSheetWrite(await act(async () => {
+    onSave: async values => settle(sheet.mode === 'done' ? await edit(sheet.setId, values) : await draft(sheet.setId, values), sheet.key),
+    onComplete: async values => settle(await complete({ setId: sheet.setId, side: sheet.side, values }), sheet.key),
+    onUndo: async () => settle(await act(async () => {
       const call = undoCall(latest(), { setId: sheet.setId, eventId: createEventId() })
       return call ? session.undoSet(call) : null
-    })),
-    // Swiping the sheet away after typing keeps it, as Save does. It is already gone, so a
-    // refused write shows on the screen.
+    }), sheet.key),
+    // Swiping the sheet away (or Close) after typing keeps a draft for the current set only;
+    // on a done or later set it cancels. The sheet is gone, so a refusal shows on the screen.
     onClose: async (values, changed) => {
       closeSheet()
-      const kind = sheetCloseCall(sheet.mode, changed)
-      if (kind === 'none') return
-      report(kind === 'edit' ? await edit(sheet.setId, values) : await draft(sheet.setId, values))
+      if (sheetCloseCall(sheet.mode, changed) === 'draft') report(await draft(sheet.setId, values))
     },
   }
 
@@ -151,11 +147,11 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
       const { mode, setId, side } = screen.dock
       const action = primaryAction(mode)
       if (action === 'complete') report(await complete({ setId, side }))
-      else if (action === 'keypad') openSheet(setId, 'w')
+      else if (action === 'keypad') openSheet(setId, dockKeypadField(mode))
       else if (action === 'follow') setShownIndex(null)
       else if (action === 'finish') openFinish(null)
     },
-    onPressLead: () => openSheet(screen.dock.setId, 'w'),
+    onPressLead: () => openSheet(screen.dock.setId, dockKeypadField(screen.dock.mode)),
     onAddTime: async () => report(await act(() => session.extendRest({ eventId: createEventId(), byMs: 30_000 }))),
     onSkip: async () => report(await act(() => session.cancelRest({ eventId: createEventId() }))),
   }

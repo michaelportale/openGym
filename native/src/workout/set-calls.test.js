@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { addSetCall, completeCall, editCall, keypadField, primaryAction, restAfterComplete, resultNotice, sheetCloseCall, sheetMode, shownValues, undoCall } from './set-calls.js'
+import { addSetCall, completeCall, dockKeypadField, editCall, keypadField, primaryAction, restAfterComplete, resultNotice, sheetCloseCall, sheetMode, sheetOutcome, shownValues, undoCall } from './set-calls.js'
 import { restEventId, restMsFor } from './rest-after.js'
 import { withTargets } from './session-screen.js'
 import { SQLITE_DRIVERS } from '../../scripts/node-sqlite.mjs'
@@ -61,6 +61,19 @@ describe('completeCall', () => {
     const v = view([bench([slot('b0', todo(null, 8))])])
     expect(completeCall(v, { setId: 'b0', side: null, eventId: 'e1' })).toBeNull()
     expect(completeCall(view([bench([slot('b0', todo(75, 8))])]), { setId: 'b0', side: null, values: { w: null, r: 8 }, eventId: 'e1' })).toBeNull()
+  })
+  test('blank reps are never logged, from the dock or the sheet', () => {
+    const v = view([bench([slot('b0', todo(75, null))])])
+    expect(completeCall(v, { setId: 'b0', side: null, eventId: 'e1' })).toBeNull()
+    const ready = view([bench([slot('b0', todo(75, 8))])])
+    expect(completeCall(ready, { setId: 'b0', side: null, values: { w: 75, r: null }, eventId: 'e1' })).toBeNull()
+  })
+  test('per side: blank reps on the side being completed are never logged', () => {
+    const blankL = { w: 7.5, done: false, sides: { L: { w: 7.5, r: null, done: false }, R: { w: 7.5, r: 10, done: false } } }
+    const v = view([lateral([slot('s', blankL)])])
+    expect(completeCall(v, { setId: 's', side: 'L', eventId: 'e1' })).toBeNull()
+    expect(completeCall(v, { setId: 's', side: 'L', values: { w: 7.5, sides: { L: { r: null }, R: { r: 10 } } }, eventId: 'e1' })).toBeNull()
+    expect(completeCall(v, { setId: 's', side: 'L', values: { w: 7.5, sides: { L: { r: 9 }, R: { r: null } } }, eventId: 'e1' }).fields.sides.L).toEqual({ w: 7.5, r: 9, done: true })
   })
   test('a done set is never completed again, and an unknown set is not either', () => {
     const v = view([bench([slot('b0', done(75, 10))])])
@@ -160,14 +173,41 @@ describe('addSetCall', () => {
 })
 
 describe('sheetCloseCall', () => {
-  test('closing after typing keeps it: a draft for a set not done, an edit for a done one', () => {
+  test('closing after typing keeps a draft for the current set only', () => {
     expect(sheetCloseCall('current', true)).toBe('draft')
-    expect(sheetCloseCall('pending', true)).toBe('draft')
-    expect(sheetCloseCall('done', true)).toBe('edit')
+  })
+  test('closing a done set cancels: only Update edits a logged set', () => {
+    expect(sheetCloseCall('done', true)).toBe('none')
+  })
+  test('closing a later set cancels too', () => {
+    expect(sheetCloseCall('pending', true)).toBe('none')
   })
   test('closing unchanged writes nothing', () => {
     expect(sheetCloseCall('current', false)).toBe('none')
     expect(sheetCloseCall('done', false)).toBe('none')
+  })
+})
+
+describe('sheetOutcome', () => {
+  const refused = { ok: false, saved: false, error: { message: 'disk full' } }
+  test('a refusal stays in the sheet, with the typed numbers, while that sheet is open', () => {
+    expect(sheetOutcome(refused, true)).toEqual({ close: false, sheet: 'Not saved: disk full', screen: undefined })
+  })
+  test('a refusal that arrives after the sheet closed shows on the screen', () => {
+    expect(sheetOutcome(refused, false)).toEqual({ close: false, sheet: null, screen: 'Not saved: disk full' })
+  })
+  test('a save closes the open sheet and clears the screen notice', () => {
+    expect(sheetOutcome({ ok: true, saved: true }, true)).toEqual({ close: true, sheet: null, screen: null })
+    expect(sheetOutcome(null, true)).toEqual({ close: true, sheet: null, screen: null })
+  })
+  test('a save after the sheet closed does not close another one', () => {
+    expect(sheetOutcome({ ok: true, saved: true }, false)).toEqual({ close: false, sheet: null, screen: null })
+  })
+  test('a set saved with a refused rest closes the sheet and shows on the screen', () => {
+    expect(sheetOutcome({ ...refused, committed: true }, true)).toEqual({ close: true, sheet: null, screen: 'Not saved: disk full' })
+  })
+  test('a tap the gate dropped changes nothing', () => {
+    expect(sheetOutcome({ ignored: true }, true)).toBeNull()
   })
 })
 
@@ -180,8 +220,19 @@ describe('primaryAction', () => {
     expect(primaryAction('exercise-done')).toBe('follow')
     expect(primaryAction('all-done')).toBe('finish')
   })
+  test('blank reps open the keypad too', () => {
+    expect(primaryAction('enter-reps')).toBe('keypad')
+  })
   test('resting has no primary button', () => {
     expect(primaryAction('resting')).toBe('none')
+  })
+})
+
+describe('dockKeypadField', () => {
+  test('blank reps open the keypad on reps; everything else on weight', () => {
+    expect(dockKeypadField('enter-reps')).toBe('r')
+    expect(dockKeypadField('enter-weight')).toBe('w')
+    expect(dockKeypadField('ready')).toBe('w')
   })
 })
 

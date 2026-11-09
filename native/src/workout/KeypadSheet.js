@@ -7,7 +7,7 @@ import IconButton from '../ui/IconButton'
 import PrimaryButton from '../ui/PrimaryButton'
 import { focusRingStyle } from '../ui/focus-ring'
 import { usePressScale } from '../ui/use-press-scale'
-import { applyKey, fieldText, keypadState, keypadValues, sheetCloseAction } from './keypad'
+import { applyKey, completeBlocker, fieldText, keypadState, keypadValues, sheetCloseAction } from './keypad'
 
 const CHIPS = ['-10', '-5', '+5', '+10']
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'back']
@@ -55,12 +55,14 @@ function Field({ title, text, active, onPress }) {
 // whether to store a draft. `initialField` is 'w', 'r', or per side 'L.r'/'R.r' (a tapped reps box
 // opens on reps). `weightTitle` is 'Lb each' for a per-hand exercise. A done set passes
 // saveLabel 'Update', onUndo, and no onComplete. `notice` shows a write that was refused.
-export default function KeypadSheet({ visible, title, initial, perSide, initialField = 'w', weightTitle = 'Lb', saveLabel = 'Save', completeLabel = 'Complete', notice, onSave, onComplete, onUndo, onClose }) {
+// `side` is the side Complete logs on a per-side set; Complete waits for its reps and the weight.
+export default function KeypadSheet({ visible, title, initial, perSide, side = null, initialField = 'w', weightTitle = 'Lb', saveLabel = 'Save', completeLabel = 'Complete', notice, onSave, onComplete, onUndo, onClose }) {
   const [state, setState] = useState(() => keypadState(initial, initialField))
   useEffect(() => {
     if (visible) setState(keypadState(initial, initialField))
   }, [visible])
   const values = keypadValues(state)
+  const blocked = completeBlocker(values, side)
   const press = key => () => setState(current => applyKey(current, key))
   const fields = perSide ? [['L.r', 'Left reps'], ['R.r', 'Right reps']] : [['r', 'Reps']]
   const close = () => onClose(values, sheetCloseAction(keypadState(initial), state) === 'save')
@@ -104,7 +106,7 @@ export default function KeypadSheet({ visible, title, initial, perSide, initialF
           </View>
           {onComplete ? (
             <View style={styles.action}>
-              <PrimaryButton label={completeLabel} disabled={values.w === null} accessibilityHint={values.w === null ? 'Enter a weight first.' : 'Logs this set.'} onPress={() => onComplete(values)} />
+              <PrimaryButton label={completeLabel} disabled={blocked !== null} accessibilityHint={blocked === 'weight' ? 'Enter a weight first.' : blocked === 'reps' ? 'Enter the reps first.' : 'Logs this set.'} onPress={() => onComplete(values)} />
             </View>
           ) : null}
         </View>

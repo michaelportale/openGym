@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { applyKey, fieldText, keypadState, keypadValues, sheetCloseAction } from './keypad.js'
+import { applyKey, completeBlocker, fieldText, keypadState, keypadValues, sheetCloseAction } from './keypad.js'
 
 const press = (state, ...keys) => keys.reduce(applyKey, state)
 const values = (state, ...keys) => keypadValues(press(state, ...keys))
@@ -94,4 +94,18 @@ test('reps stay whole numbers', () => {
   expect(values(keypadState({ w: 75, r: 8 }), 'field:r', '8', '.', '5').r).toBe(85)
   const sided = keypadState({ w: 25, sides: { L: { r: 12 }, R: { r: 12 } } })
   expect(values(sided, 'field:L.r', '1', '.', '5').sides.L.r).toBe(15)
+})
+
+test('completeBlocker: Complete waits for a weight, then for the reps being logged', () => {
+  expect(completeBlocker({ w: null, r: 8 }, null)).toBe('weight')
+  expect(completeBlocker({ w: 75, r: null }, null)).toBe('reps')
+  expect(completeBlocker({ w: 75, r: 8 }, null)).toBeNull()
+  expect(completeBlocker({ w: 0, r: 0 }, null)).toBeNull()
+})
+
+test('completeBlocker: per side, only the side being completed needs reps', () => {
+  const v = { w: 7.5, sides: { L: { r: 10 }, R: { r: null } } }
+  expect(completeBlocker(v, 'L')).toBeNull()
+  expect(completeBlocker(v, 'R')).toBe('reps')
+  expect(completeBlocker({ w: null, sides: { L: { r: 10 }, R: { r: 10 } } }, 'L')).toBe('weight')
 })

@@ -5,7 +5,7 @@ import GlassPanel from '../ui/GlassPanel'
 import PrimaryButton from '../ui/PrimaryButton'
 import RestPanel from './RestPanel'
 
-const OPENS_KEYPAD = ['ready', 'enter-weight']
+const OPENS_KEYPAD = ['ready', 'enter-weight', 'enter-reps']
 
 // Renders `workoutScreen(...).dock`. `inline` drops the pin so the dock can sit at the end of
 // the scroll at large text sizes. The lead figure opens the keypad while a set is up.

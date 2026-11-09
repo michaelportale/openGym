@@ -33,7 +33,8 @@ export function keypadField(field, perSide, side) {
 }
 
 // Complete logs the current set only. A done set changes through editCall, never a second
-// commit: that would move row.at and bring back a rest the owner skipped.
+// commit: that would move row.at and bring back a rest the owner skipped. A blank weight or
+// blank reps (per side, the side being completed) is never logged.
 export function completeCall(view, { setId, side, values, eventId }) {
   const found = findSet(view, setId)
   if (!found || isDone(found.slot)) return null
@@ -41,14 +42,17 @@ export function completeCall(view, { setId, side, values, eventId }) {
   const shown = values ?? shownValues(slot, side)
   if (shown.w == null) return null
   const call = fields => ({ eventId, exerciseId: entry.id, setId, fields })
-  if (!isSideSet(slot.row)) return call(completeFields(slot.row, null, { w: shown.w, r: shown.r }))
+  if (!isSideSet(slot.row)) {
+    return shown.r == null ? null : call(completeFields(slot.row, null, { w: shown.w, r: shown.r }))
+  }
   if (!SIDES.includes(side) || slot.row.sides[side]?.done === true) return null
+  const reps = shown.sides?.[side]?.r
+  if (reps == null) return null
   // The commit clears the draft, so reps typed for the other side go into the row now.
   const other = side === 'L' ? 'R' : 'L'
   const typed = shown.sides?.[other]?.r
   const row = typed == null ? slot.row : { ...slot.row, sides: { ...slot.row.sides, [other]: { ...slot.row.sides[other], r: typed } } }
-  const reps = shown.sides?.[side]?.r
-  return call(completeFields(row, side, reps == null ? { w: shown.w } : { w: shown.w, r: reps }))
+  return call(completeFields(row, side, { w: shown.w, r: reps }))
 }
 
 // The rest a Complete earns, read from the view after the commit: only once the set is done
@@ -101,12 +105,18 @@ export function addSetCall(entry, eventId) {
   return { eventId, exerciseId: entry.id, setId: `add:${entry.id}:${eventId}`, fields }
 }
 
-const PRIMARY = { ready: 'complete', 'enter-weight': 'keypad', 'exercise-done': 'follow', 'all-done': 'finish' }
+const PRIMARY = { ready: 'complete', 'enter-weight': 'keypad', 'enter-reps': 'keypad', 'exercise-done': 'follow', 'all-done': 'finish' }
 
 // What the dock's primary button does in each mode. Ready logs the set as shown with no sheet;
-// a blank weight opens the keypad; 'follow' shows the first exercise with a set left.
+// a blank weight or blank reps opens the keypad; 'follow' shows the first exercise with a set left.
 export function primaryAction(mode) {
   return PRIMARY[mode] ?? 'none'
+}
+
+// The field the dock opens the keypad on (the primary button or the lead figure): reps when they
+// are what is missing, else weight. keypadField then picks the side being worked.
+export function dockKeypadField(mode) {
+  return mode === 'enter-reps' ? 'r' : 'w'
 }
 
 // The keypad's mode for a tapped row. Only the current set can be completed (ruling: Complete
@@ -115,15 +125,24 @@ export function sheetMode(status) {
   return status === 'done' || status === 'current' ? status : 'pending'
 }
 
-// Closing the sheet after typing keeps what was typed, as its Save button would: a draft for a
-// set not done yet, an edit (Update) for a done one. A draft on a done row would show numbers
-// that were never logged.
+// Swiping the sheet away (or Close) after typing keeps a draft for the current set only, as its
+// Save would. On a done set it cancels: only Update edits a logged set. On a later set it cancels.
 export function sheetCloseCall(mode, changed) {
-  if (!changed) return 'none'
-  return mode === 'done' ? 'edit' : 'draft'
+  return changed && mode === 'current' ? 'draft' : 'none'
 }
 
 const reason = error => error?.message || error?.code || 'unknown error'
+
+// Where a sheet write's outcome shows. A refusal stays in the sheet, with the typed numbers, only
+// while that same sheet is still open; once it has closed the screen shows it, so a failed write
+// is never hidden. A set saved with a refused rest closes the sheet and shows on the screen.
+// `screen` undefined leaves the screen's notice as it is.
+export function sheetOutcome(result, stillOpen) {
+  if (result?.ignored) return null
+  const text = resultNotice(result)
+  if (text && stillOpen && !result.committed) return { close: false, sheet: text, screen: undefined }
+  return { close: stillOpen, sheet: null, screen: text }
+}
 
 // What the screen says after a write. Nothing for a save, a repeat, no change, or a dropped tap.
 export function resultNotice(result) {
