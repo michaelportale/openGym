@@ -26,6 +26,8 @@ test('paired: one read of the copy gives the state and the weigh-ins, pending on
   expect(out.state.workouts.map(w => w.id)).toEqual(['c1', 'p1'])
   expect(out.state.targetW).toBe(175)
   expect(out.bodyweight.map(e => [e.d, e.w])).toEqual([['2026-11-07', 181], ['2026-11-09', 180.4]])
+  // The copy as read, without the overlay: what a save's base is read from (Nutrition).
+  expect(out.copy).toBe(copyDoc)
 })
 
 test('unpaired: the snapshot stands in for the copy, for workouts and weigh-ins', async () => {
@@ -34,6 +36,7 @@ test('unpaired: the snapshot stands in for the copy, for workouts and weigh-ins'
   expect(log).toEqual(['copy'])
   expect(out.bodyweight).toEqual(bundled.state.bodyweight)
   expect(out.state.workouts).toEqual([])
+  expect(out.copy).toBeNull()
 })
 
 test('a weigh-in alone keeps the same state object, and changes the weigh-ins', async () => {

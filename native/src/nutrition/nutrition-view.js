@@ -18,15 +18,15 @@ const {
 export const ERR_BAD_DATE = 'Choose a valid date' // Nutrition.jsx:51
 export const ERR_DUPLICATE = 'That supplement is already on the list.' // Nutrition.jsx:105
 
-const NAME = { kcal: 'Calories', protein: 'Protein', carbs: 'Carbs', fat: 'Fat', fiber: 'Fiber' }
-const DAY_TYPE_NAME = { training: 'Training day', rest: 'Rest day' } // Nutrition.jsx:23
+export const NAME = { kcal: 'Calories', protein: 'Protein', carbs: 'Carbs', fat: 'Fat', fiber: 'Fiber' }
+export const DAY_TYPE_NAME = { training: 'Training day', rest: 'Rest day' } // Nutrition.jsx:23
 const isMap = v => !!v && typeof v === 'object' && !Array.isArray(v)
 const rawDay = (state, iso) => (isMap(state?.nutritionDays) && isMap(state.nutritionDays[iso]) ? state.nutritionDays[iso] : null)
 const KNOWN = new Set([...NUTRIENTS, 'dayType', 'note', 'supps', '_ts'])
 
 // The web's fmtNum in English: one decimal at most, thousands separators (format.js:58).
-const num = n => (Math.round(n * 10) / 10).toLocaleString('en-US', { maximumFractionDigits: 1 })
-const amount = (k, v) => `${num(v)} ${k === 'kcal' ? 'kcal' : 'g'}` // Nutrition.jsx:22,29
+export const num = n => (Math.round(n * 10) / 10).toLocaleString('en-US', { maximumFractionDigits: 1 })
+export const amount = (k, v) => `${num(v)} ${k === 'kcal' ? 'kcal' : 'g'}` // Nutrition.jsx:22,29
 const line = (k, v) => `${NAME[k]} ${amount(k, v)}`
 
 // The keys of the stored day this app doesn't own, plus its stored stamp. Never a new stamp.
