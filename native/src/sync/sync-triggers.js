@@ -1,4 +1,4 @@
-import { hostOf } from './sync-status.js'
+import { hostOf, statusText } from './sync-status.js'
 
 // The small decisions around when the phone syncs and what the screens show of it. Pure.
 
@@ -37,5 +37,7 @@ export function serverLines(status) {
     profile: status?.profile ? status.profile : null,
     pending: n > 0 ? `${n} workout${n === 1 ? '' : 's'} waiting` : null,
     canResend: status?.problem === 'server-older',
+    // Diagnostics' "Last synced" line, unless the status line already says when.
+    lastSynced: !statusText(status).startsWith('Synced to '),
   }
 }

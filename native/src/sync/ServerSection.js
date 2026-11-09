@@ -63,7 +63,7 @@ export default function ServerSection() {
             <AppText variant="value">{lines.host}</AppText>
             {lines.profile ? <AppText variant="body" color={color.textSecondary}>{`Signed in as ${lines.profile}`}</AppText> : null}
             <AppText variant="body" accessibilityLiveRegion="polite">{text}</AppText>
-            <AppText variant="body" color={color.textSecondary}>{lastSyncedLine(status)}</AppText>
+            {lines.lastSynced ? <AppText variant="body" color={color.textSecondary}>{lastSyncedLine(status)}</AppText> : null}
             {lines.pending ? <AppText variant="body" color={color.textSecondary}>{lines.pending}</AppText> : null}
           </Card>
           <PrimaryButton

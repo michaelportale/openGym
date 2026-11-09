@@ -54,8 +54,24 @@ describe('statusText', () => {
     expect(statusText(paired({}), opts)).toBe('Paired with gym.example.com. Not synced yet.')
   })
 
-  test('syncing', () => {
-    expect(statusText(paired({ state: 'syncing' }), opts)).toBe('Syncing with gym.example.com…')
+  test('syncing says the workout is already safe', () => {
+    expect(statusText(paired({ state: 'syncing' }), opts)).toBe('Saved on this phone. Syncing with gym.example.com…')
+  })
+
+  // The saved screen shows this line alone, so no state may say it twice.
+  test('"Saved on this phone" at most once in every state and problem', () => {
+    const problems = ['unpaired', 'server-older', 'conflict', 'too-large', 'refused', 'error', 'something-new']
+    const states = [
+      { paired: false, state: 'unpaired', pending: 0 },
+      { paired: false, state: 'unpaired', pending: 2 },
+      { paired: false, state: 'unpaired', problem: 'unpaired', pending: 1, server: 'https://gym.example.com' },
+      ...['idle', 'waiting', 'syncing'].flatMap(state => [0, 1].flatMap(pending => [undefined, AT].map(lastSyncedAt => paired({ state, pending, lastSyncedAt })))),
+      ...problems.flatMap(problem => [0, 1].map(pending => paired({ state: 'problem', problem, pending, httpStatus: 500, lastSyncedAt: AT }))),
+    ]
+    for (const s of states) {
+      const text = statusText(s, opts)
+      expect(text.split('Saved on this phone').length - 1, JSON.stringify(s)).toBeLessThanOrEqual(1)
+    }
   })
 
   test('not paired', () => {

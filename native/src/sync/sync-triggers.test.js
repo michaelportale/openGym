@@ -50,7 +50,7 @@ describe('canPair', () => {
 describe('serverLines', () => {
   const base = { paired: true, state: 'idle', pending: 0, server: 'https://gym.example.com:8443/x', profile: 'Mo' }
   test('host without scheme or port, profile, pending count', () => {
-    expect(serverLines({ ...base, pending: 1 })).toEqual({ host: 'gym.example.com', profile: 'Mo', pending: '1 workout waiting', canResend: false })
+    expect(serverLines({ ...base, pending: 1 })).toEqual({ host: 'gym.example.com', profile: 'Mo', pending: '1 workout waiting', canResend: false, lastSynced: true })
     expect(serverLines({ ...base, pending: 3 }).pending).toBe('3 workouts waiting')
     expect(serverLines(base).pending).toBeNull()
   })
@@ -60,5 +60,14 @@ describe('serverLines', () => {
   })
   test('no profile name gives null', () => {
     expect(serverLines({ ...base, profile: '' }).profile).toBeNull()
+  })
+  test('no "Last synced" line while the status line already says "Synced to <host> at <time>"', () => {
+    const at = '2026-11-09T09:14:00.000Z'
+    expect(serverLines({ ...base, lastSyncedAt: at }).lastSynced).toBe(false)
+    expect(serverLines({ ...base, state: 'waiting', lastSyncedAt: at }).lastSynced).toBe(false)
+    expect(serverLines(base).lastSynced).toBe(true)
+    expect(serverLines({ ...base, pending: 1, lastSyncedAt: at }).lastSynced).toBe(true)
+    expect(serverLines({ ...base, state: 'syncing', lastSyncedAt: at }).lastSynced).toBe(true)
+    expect(serverLines({ ...base, state: 'problem', problem: 'conflict', lastSyncedAt: at }).lastSynced).toBe(true)
   })
 })

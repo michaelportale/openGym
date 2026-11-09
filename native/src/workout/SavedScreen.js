@@ -47,7 +47,7 @@ function NextTimeLine({ line, onWhy }) {
   )
 }
 
-// After Finish. The phone holds the only copy until sync exists, so Export sits right here.
+// After Finish: one status line (saved, syncing or synced), then Export as an extra copy.
 // "Next time" reads the phone's workouts, the one just saved among them, into the session's
 // history; with no line to show (progression off, nothing weighted) it shows nothing.
 export default function SavedScreen({ db, state, base, names, onDone }) {
@@ -72,7 +72,7 @@ export default function SavedScreen({ db, state, base, names, onDone }) {
       <ScreenHeader title="Workout" />
       <View style={styles.body}>
         <Card accessibilityLiveRegion="polite" style={styles.card}>
-          <AppText variant="heading">{syncText ? `Saved on this phone. ${syncText}` : 'Saved on this phone.'}</AppText>
+          <AppText variant="heading">{syncText || 'Saved on this phone.'}</AppText>
         </Card>
         {lines.length ? (
           <Card style={[styles.card, styles.lines]}>

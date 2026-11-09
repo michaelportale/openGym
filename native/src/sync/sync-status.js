@@ -39,7 +39,7 @@ export function statusText(status, { now, server, formatTime = defaultTime, form
   if (!s.paired || s.state === 'unpaired') {
     return s.problem === 'unpaired' ? PROBLEMS.unpaired(host) : 'Not paired. Saved on this phone.'
   }
-  if (s.state === 'syncing') return `Syncing with ${host}…`
+  if (s.state === 'syncing') return `Saved on this phone. Syncing with ${host}…`
   if (s.state === 'problem') {
     const words = PROBLEMS[s.problem]
     return words ? words(host, s) : 'Saved on this phone. Syncing stopped on a problem; it will try again.'
