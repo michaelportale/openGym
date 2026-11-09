@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { color, radius, size, space, touch } from '../theme/tokens'
 import AppText from '../ui/AppText'
 import NativeSymbol from '../ui/NativeSymbol'
 import PrimaryButton from '../ui/PrimaryButton'
 import ScaleButton from '../ui/ScaleButton'
+import { announce } from './announce'
 import { draftChanged, sheetView, stepForm, withProg } from './plan-view'
 import { slotForm } from './slot-edit'
 
@@ -67,6 +68,8 @@ export default function SlotSheet({ visible, title, slot, routine, message, busy
   const [form, setForm] = useState(initial)
   const view = sheetView(form, slot, routine)
   const dirty = draftChanged(slot, routine, initial, form)
+  // Save refused for the Step: said to VoiceOver when it starts (a failed save is said by the caller).
+  useEffect(() => { announce(view.invalid) }, [view.invalid])
   const close = () => {
     if (!busy) onClose()
   }

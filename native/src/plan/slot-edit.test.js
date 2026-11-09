@@ -293,6 +293,13 @@ describe('moveSlot (history.moveRoutineEntry)', () => {
     const out = moveSlot(routine([a, b, c]), 1, 1, null)
     expect(out.routine.ex).toEqual([{ id: 'a', sets: 3, reps: 5 }, { id: 'b', sets: 3, reps: 5 }, c])
   })
+  test('at: where the moved slot is now (unchanged when it only left a superset)', () => {
+    expect(moveSlot(routine([c, d]), 0, 1, null).at).toBe(1)
+    expect(moveSlot(routine([a, b, c]), 0, 1, null).at).toBe(1)
+    expect(moveSlot(routine([a, b, c]), 1, 1, null).at).toBe(1)
+    expect(moveSlot(routine([c, a, b]), 0, 1, null).at).toBe(2) // jumps the superset whole
+    expect(moveSlot(routine([a, b, c]), 2, -1, null).at).toBe(0)
+  })
   test('returns null where moveRoutineEntry does', () => {
     expect(moveSlot(routine([c, d]), 0, -1, null)).toBeNull()
     expect(moveSlot(routine([c, d]), 1, 1, null)).toBeNull()

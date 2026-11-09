@@ -77,11 +77,34 @@ function exerciseName(state, names, id) {
   return ex?.n ? cap(ex.n) : `Unknown exercise (${id})`
 }
 
+// A row's key: its slot's exercise id, and which of that exercise it is (twins: #0, #1, …). Rows
+// are keyed by it, and a row's buttons find their slot by it when tapped (indexOfKey), not by the
+// index it had when drawn.
+function slotKeys(ex) {
+  const seen = new Map()
+  return ex.map(slot => {
+    if (!isObj(slot)) return null
+    const n = seen.get(slot.id) ?? 0
+    seen.set(slot.id, n + 1)
+    return `${slot.id}#${n}`
+  })
+}
+
+// Where the slot with this row key is in the routine now, or -1 when it is gone.
+export function indexOfKey(routine, key) {
+  return slotKeys(exOf(routine)).indexOf(key)
+}
+
+// What VoiceOver says after a move: the new place, or that the exercise only left its superset.
+export function movedText(name, from, to, count) {
+  return to === from ? `${name} left the superset, ${to + 1} of ${count}` : `${name} moved to ${to + 1} of ${count}`
+}
+
 // One routine's screen, or null when it is missing. `routine`, when given, is shown in place of
 // the state's (this screen's own writes, before they are read back). `index` is the slot's place
-// in routine.ex (a non-object slot shows no row but keeps its place). `up` / `down`: whether
-// Move up / Move down would move the row (moveSlot is not null); none when a slot is not an
-// object, since the shared move reads every slot.
+// in routine.ex (a non-object slot shows no row but keeps its place), `key` its slotKeys key.
+// `up` / `down`: whether Move up / Move down would move the row (moveSlot is not null); none when
+// a slot is not an object, since the shared move reads every slot.
 export function routineView(state, id, { unit = 'lb', names = {}, routine: given = null } = {}) {
   const found = findRoutine(state, id)
   if (!found) return null
@@ -90,11 +113,13 @@ export function routineView(state, id, { unit = 'lb', names = {}, routine: given
   const linked = new Set(history.supersetUnits(ex.map(s => (isObj(s) ? s : {}))).filter(u => u.length > 1).flat())
   const movable = ex.every(isObj)
   const speed = speedUnitOf(state)
+  const keys = slotKeys(ex)
   const rows = []
   ex.forEach((slot, index) => {
     if (!isObj(slot)) return
     rows.push({
       index,
+      key: keys[index],
       id: slot.id,
       name: exerciseName(state, names, slot.id),
       line: history.exLine(slot, unit, speed),

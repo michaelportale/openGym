@@ -11,9 +11,10 @@ import { usePushLock } from '../../ui/use-push-lock'
 import { routeId } from '../../exercises/route-id'
 import { Notices } from '../../plan/PlanScreen'
 import SlotSheet from '../../plan/SlotSheet'
+import { announce } from '../../plan/announce'
 import { waitForPick } from '../../plan/pick-relay'
 import { createWriteChain } from '../../plan/write-chain'
-import { MISSING_ROUTINE, UNSAFE_EDIT, findRoutine, noticeLines, routineView, savedRoutine } from '../../plan/plan-view'
+import { MISSING_ROUTINE, UNSAFE_EDIT, findRoutine, indexOfKey, movedText, noticeLines, routineView, savedRoutine } from '../../plan/plan-view'
 import { moveSlot, stepInvalid, swapSlot } from '../../plan/slot-edit'
 import { usePlan } from '../../plan/use-plan'
 
@@ -56,10 +57,10 @@ export default function RoutineScreen() {
 
   // This screen's writes go one after another (plan/write-chain.js), each a routine with the base
   // it was made on (and whether that base is the snapshot's, so its row starts fresh), and the last
-  // one's routine is shown at once, ahead of the store, until every
-  // write has run. Five taps on Move up move an exercise five places, each from the order on
-  // screen, however long a save takes; a sync landing mid-chain never lends its newer base to a
-  // routine made before it.
+  // one's routine is shown at once, ahead of the store, until every write has run and a render
+  // shows the store holding it. Five taps on Move up move an exercise five places, each from the
+  // order on screen, however long a save takes; a sync landing mid-chain never lends its newer
+  // base to a routine made before it.
   const [ahead, setAhead] = useState(null)
   const saveRef = useRef(null)
   saveRef.current = next => plan.save({ rid: id, routine: next.routine, copyRoutine: next.base, fresh: next.fresh })
@@ -79,20 +80,33 @@ export default function RoutineScreen() {
   )
   const notices = useMemo(() => noticeLines(plan.notices).filter(n => n.rid === id), [plan.notices, id])
 
-  // A refusal or a failed write, shown until the next action.
+  // A refusal or a failed write, shown until the next action, and said to VoiceOver (announce).
+  // A failed write's message goes once a later write in the chain lands.
   const [message, setMessage] = useState(null)
+  const say = text => {
+    setMessage(text)
+    announce(text)
+  }
+  const landed = r => {
+    if (r.ok) setMessage(m => (m === FAILED ? null : m))
+    else say(FAILED)
+  }
 
-  // Saved at once; an unsafe result is never saved.
-  const onRowMove = (index, dir) => {
+  // Saved at once; an unsafe result is never saved. The row's buttons carry its slot's key, and the
+  // slot is found where it is when the tap lands (a VoiceOver user's second tap on the same button
+  // moves the same exercise, not whichever moved into its place); gone, the tap does nothing.
+  const onRowMove = (key, name, dir) => {
     setMessage(null)
     const from = current()
-    const result = from.routine ? moveSlot(from.routine, index, dir, from.base) : null
+    const index = indexOfKey(from.routine, key)
+    const result = index >= 0 ? moveSlot(from.routine, index, dir, from.base) : null
     if (!result) return
     if (result.unsafe) {
-      setMessage(UNSAFE_EDIT)
+      say(UNSAFE_EDIT)
       return
     }
-    chain.commit({ routine: result.routine, base: from.base, fresh: from.fresh }).then(r => { if (!r.ok) setMessage(FAILED) })
+    chain.commit({ routine: result.routine, base: from.base, fresh: from.fresh }).then(landed)
+    announce(movedText(name, index, result.at, result.routine.ex.length))
   }
 
   // The sheet: which slot it was opened on (index and exercise id, so a sync that moves that
@@ -103,21 +117,28 @@ export default function RoutineScreen() {
   const opens = useRef(0)
   const live = sheet?.open && slotAt(routine, sheet.index)?.id === sheet.slotId ? slotAt(routine, sheet.index) : null
   // Run once the sheet has gone: a push while the sheet is still being dismissed can be dropped.
+  // `fallback` is the timer in case the dismissal is never reported, cleared when it is and when
+  // the screen goes.
   const afterClose = useRef(null)
+  const fallback = useRef(null)
   const runAfterClose = () => {
+    clearTimeout(fallback.current)
+    fallback.current = null
     const fn = afterClose.current
     afterClose.current = null
     fn?.()
   }
+  useEffect(() => () => clearTimeout(fallback.current), [])
 
   const patch = p => setSheet(s => (s ? { ...s, ...p } : s))
   const close = () => patch({ open: false })
   const open = row => {
     const from = current()
-    const slot = slotAt(from.routine, row.index)
+    const index = indexOfKey(from.routine, row.key)
+    const slot = slotAt(from.routine, index)
     if (!slot) return
     setMessage(null)
-    setSheet({ no: ++opens.current, open: true, index: row.index, slotId: row.id, title: row.name, slot, routine: from.routine, base: from.base, fresh: from.fresh, message: null, busy: false })
+    setSheet({ no: ++opens.current, open: true, index, slotId: row.id, title: row.name, slot, routine: from.routine, base: from.base, fresh: from.fresh, message: null, busy: false })
   }
 
   const onSave = async form => {
@@ -130,7 +151,13 @@ export default function RoutineScreen() {
     }
     patch({ busy: true, message: null })
     const result = await chain.commit({ routine: next, base: sheet.base, fresh: sheet.fresh })
-    patch(result.ok ? { busy: false, open: false } : { busy: false, message: FAILED })
+    if (result.ok) {
+      patch({ busy: false, open: false })
+      setMessage(m => (m === FAILED ? null : m))
+    } else {
+      patch({ busy: false, message: FAILED })
+      announce(FAILED)
+    }
   }
 
   const onSwap = () => {
@@ -142,13 +169,13 @@ export default function RoutineScreen() {
       const result = swapSlot(now.routine, index, exId, latest.current.state, now.base)
       if (!result) return 'same'
       if (result.unsafe) return 'unsafe'
-      chain.commit({ routine: result.routine, base: now.base, fresh: now.fresh }).then(r => { if (!r.ok) setMessage(FAILED) })
+      chain.commit({ routine: result.routine, base: now.base, fresh: now.fresh }).then(landed)
       return 'saved'
     })
     afterClose.current = () => guard(() => router.push({ pathname: '/routine-pick', params: { token, name: title } }))
     close()
-    // In case the sheet's dismissal is never reported.
-    setTimeout(runAfterClose, 700)
+    clearTimeout(fallback.current)
+    fallback.current = setTimeout(runAfterClose, 700)
   }
 
   const body = () => {
@@ -170,7 +197,7 @@ export default function RoutineScreen() {
             ) : null}
             <Card style={styles.list}>
               {view.rows.length ? view.rows.map((row, i) => (
-                <View key={row.index} style={[styles.row, i > 0 && styles.divided]}>
+                <View key={row.key} style={[styles.row, i > 0 && styles.divided]}>
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={`${row.name}, ${row.line}${row.superset ? ', superset' : ''}`}
@@ -184,8 +211,8 @@ export default function RoutineScreen() {
                     </View>
                     {row.superset ? <AppText variant="label" color={color.accent} style={styles.tag}>Superset</AppText> : null}
                   </Pressable>
-                  <MoveButton label={`Move ${row.name} up`} hint="Moves this exercise up one place and saves." glyph="↑" disabled={!row.up} onPress={() => onRowMove(row.index, -1)} />
-                  <MoveButton label={`Move ${row.name} down`} hint="Moves this exercise down one place and saves." glyph="↓" disabled={!row.down} onPress={() => onRowMove(row.index, 1)} />
+                  <MoveButton label={`Move ${row.name} up`} hint="Moves this exercise up one place and saves." glyph="↑" disabled={!row.up} onPress={() => onRowMove(row.key, row.name, -1)} />
+                  <MoveButton label={`Move ${row.name} down`} hint="Moves this exercise down one place and saves." glyph="↓" disabled={!row.down} onPress={() => onRowMove(row.key, row.name, 1)} />
                 </View>
               )) : (
                 <AppText variant="body" color={color.textSecondary} style={styles.empty}>No exercises in this routine.</AppText>

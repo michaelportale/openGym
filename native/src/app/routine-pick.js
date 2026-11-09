@@ -8,6 +8,7 @@ import IconButton from '../ui/IconButton'
 import ExerciseList from '../exercises/ExerciseList'
 import { routeId } from '../exercises/route-id'
 import { useExerciseSource } from '../exercises/use-exercise-source'
+import { announce } from '../plan/announce'
 import { deliverPick, endPick } from '../plan/pick-relay'
 import { UNSAFE_EDIT } from '../plan/plan-view'
 
@@ -29,6 +30,7 @@ export default function SwapPicker() {
     if (done.current) return
     if (deliverPick(token, id) === 'unsafe') {
       setMessage(UNSAFE_EDIT)
+      announce(UNSAFE_EDIT)
       return
     }
     done.current = true

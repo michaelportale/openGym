@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import {
-  MISSING_ROUTINE, UNSAFE_EDIT, baseRoutine, draftChanged, editBase, findRoutine, noticeLines, planView, routineView, savedRoutine, sheetView, stepForm, withProg,
+  MISSING_ROUTINE, UNSAFE_EDIT, baseRoutine, draftChanged, editBase, findRoutine, indexOfKey, movedText, noticeLines, planView, routineView, savedRoutine, sheetView, stepForm, withProg,
 } from './plan-view.js'
 import { slotForm } from './slot-edit.js'
 
@@ -109,7 +109,24 @@ describe('routineView', () => {
     expect(view.id).toBe('a')
     expect(view.name).toBe('Push A')
     expect(view.progLabel).toBe('Progression: Double progression')
-    expect(view.rows[0]).toEqual({ index: 0, id: 'bench', name: 'Barbell bench press', line: '3 × 10 · 135 lb', superset: false, up: false, down: true })
+    expect(view.rows[0]).toEqual({ index: 0, key: 'bench#0', id: 'bench', name: 'Barbell bench press', line: '3 × 10 · 135 lb', superset: false, up: false, down: true })
+  })
+  test('rows are keyed by the slot: its exercise id, and which of that exercise it is for twins', () => {
+    const twins = { id: 't', name: 'T', ex: [{ id: 'bench', sets: 3 }, null, { id: 'row', sets: 3 }, { id: 'bench', sets: 2 }] }
+    expect(routineView({ routines: [twins] }, 't', { unit: 'lb', names }).rows.map(r => [r.index, r.key])).toEqual([[0, 'bench#0'], [2, 'row#0'], [3, 'bench#1']])
+  })
+  test('indexOfKey finds a row\'s slot where it is now, and -1 once it is gone', () => {
+    const twins = { id: 't', ex: [{ id: 'bench', sets: 3 }, null, { id: 'row', sets: 3 }, { id: 'bench', sets: 2 }] }
+    expect(indexOfKey(twins, 'bench#1')).toBe(3)
+    expect(indexOfKey(twins, 'row#0')).toBe(2)
+    expect(indexOfKey({ ...twins, ex: [twins.ex[2], twins.ex[0]] }, 'row#0')).toBe(0)
+    expect(indexOfKey(twins, 'bench#2')).toBe(-1)
+    expect(indexOfKey({ id: 't', ex: 'oops' }, 'bench#0')).toBe(-1)
+    expect(indexOfKey(null, 'bench#0')).toBe(-1)
+  })
+  test('movedText: what VoiceOver says after a move', () => {
+    expect(movedText('Barbell bench press', 2, 1, 5)).toBe('Barbell bench press moved to 2 of 5')
+    expect(movedText('Overhead press', 1, 1, 5)).toBe('Overhead press left the superset, 2 of 5')
   })
   test("each row's Move up and Move down are offered exactly when moveSlot would move it", () => {
     const view = routineView({ routines: [routine] }, 'a', { unit: 'lb', names })

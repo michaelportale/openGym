@@ -117,11 +117,14 @@ function result(next, base) {
   return { routine: next, unsafe: base ? putBackChanges(base, next) : false }
 }
 
-// One press of the editor's up/down arrow, or null when it would do nothing.
+// One press of the editor's up/down arrow, or null when it would do nothing. `at`: where the moved
+// slot is now (moveRoutineEntry keeps the slot objects it moves; one that only left a superset is
+// rebuilt where it was).
 export function moveSlot(routine, index, dir, base) {
   const ex = history.moveRoutineEntry(routine.ex, index, dir)
   if (!ex) return null
-  return result(clone({ ...routine, ex }), base)
+  const at = ex.indexOf(routine.ex[index])
+  return { ...result(clone({ ...routine, ex }), base), at: at < 0 ? index : at }
 }
 
 // The slot at `index` becomes exId (replaceSlotExercise), or null when nothing would change.
