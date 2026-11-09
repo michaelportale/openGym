@@ -2,7 +2,7 @@ const destinations = {
   home: {
     title: 'Home',
     phase: null,
-    summary: 'Your next session, with start and resume, is not built. The nutrition summary is not built. Nothing on this screen is logged, saved, or synced.'
+    summary: 'Workouts are logged in the Workout tab. A summary of your next session and the nutrition summary are not built here yet. Nothing on this screen is logged, saved, or synced.'
   },
   plan: {
     title: 'Plan',

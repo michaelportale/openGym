@@ -1,11 +1,12 @@
 import { color } from '../theme/tokens.js'
 
-// Fixed positions from the PRD. `availability` is the honesty flag for this phase.
+// Fixed positions from the PRD. `availability` is the honesty flag for this phase. Expo Router 58
+// opens the app at '/', the index route, so Workout is the index route: every launch lands there.
 export const TABS = [
-  { name: 'index', label: 'Home', availability: 'unbuilt', sf: { default: 'house', selected: 'house.fill' } },
+  { name: 'home', label: 'Home', availability: 'unbuilt', sf: { default: 'house', selected: 'house.fill' } },
   { name: 'plan', label: 'Plan', availability: 'unbuilt', sf: { default: 'calendar', selected: 'calendar' } },
   {
-    name: 'workout',
+    name: 'index',
     label: 'Workout',
     availability: 'ready',
     sf: { default: 'dumbbell', selected: 'dumbbell.fill' },

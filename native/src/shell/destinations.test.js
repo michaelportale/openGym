@@ -20,6 +20,9 @@ test('home does not promise a single phase', () => {
   expect(home.phaseLabel).toBeNull()
   expect(home.summary).toMatch(/not built/i)
   expect(home.summary).toMatch(/nutrition/i)
+  // Workouts are logged now, in the Workout tab; Home does not claim start and resume are missing.
+  expect(home.summary).toMatch(/Workout tab/)
+  expect(home.summary).not.toMatch(/start and resume/i)
   expect(home.summary).toMatch(/Nothing on this screen is logged, saved, or synced/)
 })
 
@@ -38,7 +41,7 @@ test('an unknown destination throws', () => {
 
 test('the four screens render the shared copy', () => {
   for (const id of ids) {
-    const file = id === 'home' ? 'index.js' : `${id}.js`
+    const file = `${id}.js`
     const src = readFileSync(new URL(`../app/(tabs)/${file}`, import.meta.url), 'utf8')
     expect(src).toContain(`destinationCopy('${id}')`)
     expect(src).toContain('status={copy.status}')
