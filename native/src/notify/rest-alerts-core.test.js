@@ -200,6 +200,62 @@ describe('a native call that never settles', () => {
     expect(answer).toBeNull()
   })
 
+  test('a job that timed out can never change the schedule afterwards; the newer job stands', async () => {
+    vi.useFakeTimers()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const shown = { identifier: 'rest-s1', title: 'Rest over', body: 'x', data: { kind: 'rest', sessionId: 's1', deadline: DEADLINE } }
+    const adapter = fakeAdapter({ scheduled: [shown] })
+    // The first list answers only when released, long after its job timed out.
+    const real = adapter.listScheduled
+    let release
+    let calls = 0
+    adapter.listScheduled = () => (++calls === 1 ? new Promise(resolve => { release = () => resolve(real()) }) : real())
+    let status = 'active'
+    const read = () => journal(status)()
+    const alerts = make(adapter)
+    alerts.reconcile(read)
+    await vi.advanceTimersByTimeAsync(JOB_WAIT_MS)
+    // Finished: the newer job cancels the alert.
+    status = 'finished'
+    await alerts.reconcile(read)
+    expect(ids(adapter)).toEqual([])
+    // The abandoned job wakes with its old "active, rest running" snapshot and would schedule it.
+    release()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(ids(adapter)).toEqual([])
+    expect(warn.mock.calls.some(call => /timed out/.test(String(call[0]) + String(call[1])))).toBe(true)
+  })
+
+  test('a run abandoned while it read permission never shows the prompt late; the next rest start asks', async () => {
+    vi.useFakeTimers()
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    let release
+    let calls = 0
+    const adapter = fakeAdapter({ permissions: () => (++calls === 1 ? new Promise(resolve => { release = () => resolve(ask) }) : Promise.resolve(ask)) })
+    adapter.request = vi.fn(() => new Promise(() => {}))
+    const alerts = make(adapter)
+    alerts.reconcile(journal('active'), { restStarted: true })
+    await vi.advanceTimersByTimeAsync(JOB_WAIT_MS)
+    release()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(adapter.request).not.toHaveBeenCalled()
+    alerts.reconcile(journal('active'), { restStarted: true })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(adapter.request).toHaveBeenCalledTimes(1)
+  })
+
+  test('a live job that is slow but within JOB_WAIT_MS still schedules', async () => {
+    vi.useFakeTimers()
+    const adapter = fakeAdapter()
+    const real = adapter.listScheduled
+    adapter.listScheduled = () => new Promise(resolve => setTimeout(() => resolve(real()), JOB_WAIT_MS - 1))
+    let done
+    make(adapter).reconcile(journal('active')).then(r => { done = r })
+    await vi.advanceTimersByTimeAsync(JOB_WAIT_MS - 1)
+    expect(done).toEqual({ step: 'granted', asked: false })
+    expect(ids(adapter)).toEqual(['rest-s1'])
+  })
+
   test('a job that settles in time leaves no timer behind', async () => {
     vi.useFakeTimers()
     await make(fakeAdapter()).reconcile(journal('active'))
