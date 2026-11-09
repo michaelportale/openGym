@@ -23,18 +23,20 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
   const [busy, setBusy] = useState(false)
   // The screen's notice and its "Rest didn't start" line (noticesAfter).
   const [notices, setNotices] = useState(NO_NOTICES)
-  // VoiceOver ignores live regions: speak a notice or rest line once, when it appears or changes.
-  const spoken = useRef(NO_NOTICES)
-  useEffect(() => {
-    const text = noticeAnnouncement(spoken.current, notices)
-    spoken.current = notices
-    if (text) AccessibilityInfo.announceForAccessibility(text)
-  }, [notices])
   const [sheet, setSheet] = useState(null)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [sheetNotice, setSheetNotice] = useState(null)
   const [finishing, setFinishing] = useState(null)
   const [finishNotice, setFinishNotice] = useState(null)
+  // VoiceOver speaks neither live regions nor the alert role: speak each notice (the screen's,
+  // its rest line, the keypad's, Finish's) once, when it appears or its words change.
+  const spoken = useRef(null)
+  const shownNotices = { ...notices, sheet: sheetNotice, finish: finishNotice }
+  useEffect(() => {
+    const text = noticeAnnouncement(spoken.current, shownNotices)
+    spoken.current = shownNotices
+    if (text) AccessibilityInfo.announceForAccessibility(text)
+  }, [notices, sheetNotice, finishNotice])
   // Which sheet is on screen (its key), read when a write settles: state in a closure is stale.
   const sheetKeys = useRef(0)
   const openKey = useRef(null)

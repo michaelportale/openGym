@@ -533,6 +533,20 @@ describe('noticeAnnouncement', () => {
   test('both new: the notice, then the rest line', () => {
     expect(noticeAnnouncement(NO_NOTICES, { notice: FAILED, rest: SAVED_REST })).toBe(`${FAILED} ${SAVED_REST}`)
   })
+  // The keypad and Finish sheets show their own notice (a refusal kept with the typed numbers,
+  // a finish that did not go through); the alert role alone is silent on iOS too.
+  test("the keypad and Finish sheets' notices are spoken by the same rule, after the screen's", () => {
+    const quiet = { notice: null, rest: null, sheet: null, finish: null }
+    const notClosed = "The workout isn't closed yet. Tap Save workout again."
+    expect(noticeAnnouncement(quiet, { ...quiet, sheet: FAILED })).toBe(FAILED)
+    expect(noticeAnnouncement({ ...quiet, sheet: FAILED }, { ...quiet, sheet: FAILED })).toBeNull()
+    expect(noticeAnnouncement({ ...quiet, sheet: FAILED }, { ...quiet, sheet: 'Numbers not saved. The phone couldn\'t write it. Try again.' })).toBe("Numbers not saved. The phone couldn't write it. Try again.")
+    expect(noticeAnnouncement({ ...quiet, sheet: FAILED }, quiet)).toBeNull()
+    expect(noticeAnnouncement(quiet, { ...quiet, finish: notClosed })).toBe(notClosed)
+    expect(noticeAnnouncement({ ...quiet, finish: notClosed }, { ...quiet, finish: notClosed })).toBeNull()
+    expect(noticeAnnouncement(quiet, { notice: FAILED, rest: null, sheet: null, finish: notClosed })).toBe(`${FAILED} ${notClosed}`)
+    expect(noticeAnnouncement(null, quiet)).toBeNull()
+  })
   test('one that went away is not spoken', () => {
     expect(noticeAnnouncement({ notice: FAILED, rest: SAVED_REST }, NO_NOTICES)).toBeNull()
     expect(noticeAnnouncement({ notice: FAILED, rest: SAVED_REST }, { notice: null, rest: SAVED_REST })).toBeNull()

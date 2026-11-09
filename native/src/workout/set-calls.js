@@ -228,11 +228,12 @@ export function noticesAfter(notices, result, action) {
   return { notice: outcome?.text ?? null, rest: moved ? null : notices.rest }
 }
 
-// What VoiceOver says when the screen's notices change (iOS ignores live regions): a notice or
-// rest line that appeared or whose words changed, the notice first; nothing for one that went away
-// or stayed the same, so a re-render never repeats it.
+// What VoiceOver says when the notices change (iOS speaks neither live regions nor the alert
+// role): each one in `after` that appeared or whose words changed, in its order (the screen's
+// notice, its rest line, then the keypad's and Finish's); nothing for one that went away or stayed
+// the same, so a re-render never repeats it.
 export function noticeAnnouncement(before, after) {
-  const fresh = ['notice', 'rest'].map(key => (after?.[key] && after[key] !== before?.[key] ? after[key] : null)).filter(Boolean)
+  const fresh = Object.keys(after ?? {}).map(key => (after[key] && after[key] !== before?.[key] ? after[key] : null)).filter(Boolean)
   return fresh.length ? fresh.join(' ') : null
 }
 
