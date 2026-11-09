@@ -52,21 +52,22 @@ export default function RoutineScreen() {
   const plan = usePlan()
   const ready = plan.status === 'ready'
   const stored = ready ? findRoutine(plan.state, id) : null
-  const base = plan.baseOf(id)
+  const { base, fresh } = plan.baseOf(id)
 
   // This screen's writes go one after another (plan/write-chain.js), each a routine with the base
-  // it was made on, and the last one's routine is shown at once, ahead of the store, until every
+  // it was made on (and whether that base is the snapshot's, so its row starts fresh), and the last
+  // one's routine is shown at once, ahead of the store, until every
   // write has run. Five taps on Move up move an exercise five places, each from the order on
   // screen, however long a save takes; a sync landing mid-chain never lends its newer base to a
   // routine made before it.
   const [ahead, setAhead] = useState(null)
   const saveRef = useRef(null)
-  saveRef.current = next => plan.save({ rid: id, routine: next.routine, copyRoutine: next.base })
+  saveRef.current = next => plan.save({ rid: id, routine: next.routine, copyRoutine: next.base, fresh: next.fresh })
   const [chain] = useState(() => createWriteChain(next => saveRef.current(next), setAhead))
   const routine = stored ? ahead?.routine ?? stored : null
   // Read when a tap lands or the picker answers, not when the handler was made.
   const latest = useRef(null)
-  latest.current = { stored: { routine: stored, base }, state: plan.state }
+  latest.current = { stored: { routine: stored, base, fresh }, state: plan.state }
   // The routine the next edit builds on, with its base: the chain's while one runs, else the store's.
   const current = () => chain.from(latest.current.stored)
 
@@ -89,7 +90,7 @@ export default function RoutineScreen() {
       setMessage(UNSAFE_EDIT)
       return
     }
-    chain.commit({ routine: result.routine, base: from.base }).then(r => { if (!r.ok) setMessage(FAILED) })
+    chain.commit({ routine: result.routine, base: from.base, fresh: from.fresh }).then(r => { if (!r.ok) setMessage(FAILED) })
   }
 
   // The sheet: which slot it was opened on (index and exercise id, so a sync that moves that
@@ -114,7 +115,7 @@ export default function RoutineScreen() {
     const slot = slotAt(from.routine, row.index)
     if (!slot) return
     setMessage(null)
-    setSheet({ no: ++opens.current, open: true, index: row.index, slotId: row.id, title: row.name, slot, routine: from.routine, base: from.base, message: null, busy: false })
+    setSheet({ no: ++opens.current, open: true, index: row.index, slotId: row.id, title: row.name, slot, routine: from.routine, base: from.base, fresh: from.fresh, message: null, busy: false })
   }
 
   const onSave = async form => {
@@ -125,7 +126,7 @@ export default function RoutineScreen() {
       return
     }
     patch({ busy: true, message: null })
-    const result = await chain.commit({ routine: next, base: sheet.base })
+    const result = await chain.commit({ routine: next, base: sheet.base, fresh: sheet.fresh })
     patch(result.ok ? { busy: false, open: false } : { busy: false, message: FAILED })
   }
 
@@ -138,7 +139,7 @@ export default function RoutineScreen() {
       const result = swapSlot(now.routine, index, exId, latest.current.state, now.base)
       if (!result) return 'same'
       if (result.unsafe) return 'unsafe'
-      chain.commit({ routine: result.routine, base: now.base }).then(r => { if (!r.ok) setMessage(FAILED) })
+      chain.commit({ routine: result.routine, base: now.base, fresh: now.fresh }).then(r => { if (!r.ok) setMessage(FAILED) })
       return 'saved'
     })
     afterClose.current = () => guard(() => router.push({ pathname: '/routine-pick', params: { token, name: title } }))

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import {
-  MISSING_ROUTINE, UNSAFE_EDIT, baseRoutine, draftChanged, findRoutine, noticeLines, planView, routineView, savedRoutine, sheetView, stepForm, withProg,
+  MISSING_ROUTINE, UNSAFE_EDIT, baseRoutine, draftChanged, editBase, findRoutine, noticeLines, planView, routineView, savedRoutine, sheetView, stepForm, withProg,
 } from './plan-view.js'
 import { slotForm } from './slot-edit.js'
 
@@ -179,6 +179,11 @@ describe('baseRoutine: the routine as the server holds it, without the overlay',
     expect(baseRoutine({ copy, bundled }, 'b')).toBeNull()
     expect(baseRoutine({ copy: { state: { routines: 'x' } }, bundled }, 'a')).toBeNull()
     expect(baseRoutine({ copy: null, bundled: null }, 'a')).toBeNull()
+  })
+  test('editBase: an edit made with no copy held (on the snapshot) starts its row fresh; one made on the copy does not', () => {
+    expect(editBase({ copy, bundled }, 'a')).toEqual({ base: copy.state.routines[0], fresh: false })
+    expect(editBase({ copy: null, bundled }, 'a')).toEqual({ base: bundled.state.routines[0], fresh: true })
+    expect(editBase({ copy: null, bundled }, 'b')).toEqual({ base: null, fresh: true })
   })
 })
 

@@ -1,6 +1,7 @@
-// A routine screen's writes, one after another. Each write is { routine, base }: the whole
-// routine, and the base routine it was made on (the copy's or the snapshot's, without the
-// overlay; its _ts is the edit's baseTs). The last write's pair is shown at once, ahead of the
+// A routine screen's writes, one after another. Each write is { routine, base, fresh }: the whole
+// routine, the base routine it was made on (the copy's or the snapshot's, without the overlay;
+// its _ts is the edit's baseTs), and whether that base is the snapshot's (plan-view.js editBase).
+// The last write's pair is shown at once, ahead of the
 // store, until every write has run, so rapid taps each build on what is on screen.
 //
 // The base travels with the routine. It is taken from the store once, when a chain starts, and a

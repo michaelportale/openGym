@@ -112,6 +112,13 @@ export function baseRoutine({ copy, bundled }, rid) {
   return (Array.isArray(list) ? list : []).find(r => isObj(r) && r.id === rid) ?? null
 }
 
+// An edit's base routine, and whether the edit starts its row fresh: made with no server copy held
+// (on the bundled snapshot), it is measured against the snapshot's base alone. A row kept from a
+// paired edit (its base, or an ack's sent) would let the snapshot's routine over the server's.
+export function editBase({ copy, bundled }, rid) {
+  return { base: baseRoutine({ copy, bundled }, rid), fresh: !copy }
+}
+
 // What Save writes: the routine with the draft applied to slot `index`, or null when that changes
 // nothing (or there is no slot there). Every other slot keeps its identity.
 export function savedRoutine(routine, index, form) {

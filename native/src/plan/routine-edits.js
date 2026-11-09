@@ -24,7 +24,7 @@ function normalized(edit) {
   if (!edit.routine || typeof edit.routine !== 'object' || Array.isArray(edit.routine)) throw new Error('routine edit needs a routine object')
   if (!Number.isFinite(edit.t)) throw new Error('routine edit needs a time')
   if (edit.baseTs != null && !Number.isFinite(edit.baseTs)) throw new Error('routine edit baseTs must be a number')
-  return { rid: edit.rid, baseTs: edit.baseTs ?? null, routine: JSON.parse(JSON.stringify(edit.routine)), t: edit.t }
+  return { rid: edit.rid, baseTs: edit.baseTs ?? null, routine: JSON.parse(JSON.stringify(edit.routine)), t: edit.t, fresh: edit.fresh === true }
 }
 
 const isPending = row => row.ackedAt == null && row.supersededAt == null
@@ -36,11 +36,12 @@ const byAt = (a, b) => (a.supersededAt < b.supersededAt ? -1 : a.supersededAt > 
 // The row a put leaves. A pending row keeps its baseTs and sent. An acked one takes the caller's
 // baseTs, and its routine, known to be on the server, as sent: a save made on a copy read before
 // that ack is then rebased onto it, not taken for a change on the web. A superseded one starts
-// fresh. The same t with different content moves up one, so an older ack keyed on { rid, t }
-// cannot settle the new content.
-function merged(s, existing) {
-  const keep = existing && isPending(existing)
-  const acked = existing && existing.ackedAt != null && existing.supersededAt == null
+// fresh, and so does any row on a `fresh` put (an edit made with no server copy held, on the
+// bundled snapshot: it was built on neither the old base nor the acked routine). The same t with
+// different content moves up one, so an older ack keyed on { rid, t } cannot settle the new content.
+function merged({ fresh, ...s }, existing) {
+  const keep = !fresh && existing && isPending(existing)
+  const acked = !fresh && existing && existing.ackedAt != null && existing.supersededAt == null
   const next = { ...s, baseTs: keep ? existing.baseTs : s.baseTs, sent: keep ? existing.sent : acked ? existing.routine : null,
     ackedAt: null, supersededAt: null, supersededKind: null, dismissed: 0 }
   if (existing && existing.t === next.t &&

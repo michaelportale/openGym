@@ -9,7 +9,7 @@ import { createCredentials } from './credentials.js'
 import { buildPush } from './outbox.js'
 import { createSqliteServerCopy, createSqliteSyncMeta } from './server-copy.js'
 import { readScreenSource, screenSource } from './source.js'
-import { baseRoutine, findRoutine } from '../plan/plan-view.js'
+import { editBase, findRoutine } from '../plan/plan-view.js'
 import { SERVER_WID_KEEP, createSync } from './sync-engine.js'
 
 const BASE = 'https://gym.example.com'
@@ -1405,8 +1405,8 @@ async function screenEdit(t, change, at) {
   const bundled = snapshotDoc()
   const src = await readScreenSource({ finished: t.workouts, serverCopy: t.copy, bundled, routineEdits: t.routineEdits })
   const shown = findRoutine(src.state, 'r1')
-  const base = baseRoutine({ copy: src.copy, bundled }, 'r1')
-  await t.routineEdits.put({ rid: 'r1', baseTs: base?._ts ?? null, routine: change(clone(shown)), t: at })
+  const { base, fresh } = editBase({ copy: src.copy, bundled }, 'r1')
+  await t.routineEdits.put({ rid: 'r1', baseTs: base?._ts ?? null, routine: change(clone(shown)), t: at, fresh })
   return { shown }
 }
 
@@ -1425,5 +1425,57 @@ describe('routine edits made on the bundled snapshot', () => {
     expect(t.server.pushes).toEqual([])
     expect(t.server.routine('r1')).toEqual(before)
     expect(await t.routineEdits.listNotices()).toEqual([{ rid: 'r1', name: 'Push', kind: 'changed', at: iso(T0) }])
+  })
+
+  // Forget, then an edit on the snapshot, then pairing the same server again (as changing the
+  // server's address does). The row starts over on the snapshot's base, whatever it held: an ack's
+  // `sent`, or a pending edit's older base, would let the snapshot's routine over the server's.
+  test('an edit acked before forget, an unpaired edit, re-pair: the web\'s change since the snapshot stands, with a notice', async () => {
+    const t = await setup({ server: fakeServer(webChangedR1()) })
+    await t.sync.syncNow()
+    await screenEdit(t, setsOn(4), T0 + 1)
+    await t.sync.syncNow()
+    expect(await t.routineEdits.listPending()).toEqual([])
+    expect(t.server.routine('r1').ex[0]).toMatchObject({ sets: 4, reps: 6 })
+
+    await t.sync.forget()
+    const { shown } = await screenEdit(t, setsOn(5), T0 + 2)
+    expect(shown.ex[0]).toMatchObject({ sets: 3, reps: 8 })
+    const before = clone(t.server.routine('r1'))
+    t.server.pushes.length = 0
+    expect((await t.sync.pair(BASE, 'GOODCODE')).ok).toBe(true)
+    expect(t.server.pushes).toEqual([])
+    expect(t.server.routine('r1')).toEqual(before)
+    expect(await t.routineEdits.listPending()).toEqual([])
+    expect(await t.routineEdits.listNotices()).toEqual([{ rid: 'r1', name: 'Push', kind: 'changed', at: iso(T0) }])
+  })
+
+  test('an edit still pending at forget, an unpaired edit, re-pair: the web\'s change since the snapshot stands, with a notice', async () => {
+    const t = await setup({ server: fakeServer(webChangedR1()) })
+    await t.sync.syncNow()
+    await screenEdit(t, setsOn(4), T0 + 1)
+    await t.sync.forget()
+    const { shown } = await screenEdit(t, setsOn(5), T0 + 2)
+    expect(shown.ex[0]).toMatchObject({ sets: 3, reps: 8 })
+    const before = clone(t.server.routine('r1'))
+    t.server.pushes.length = 0
+    expect((await t.sync.pair(BASE, 'GOODCODE')).ok).toBe(true)
+    expect(t.server.pushes).toEqual([])
+    expect(t.server.routine('r1')).toEqual(before)
+    expect(await t.routineEdits.listNotices()).toEqual([{ rid: 'r1', name: 'Push', kind: 'changed', at: iso(T0) }])
+  })
+
+  test('an unpaired edit of a routine unchanged since the snapshot goes on pairing, over an older pending one', async () => {
+    const t = await setup({ server: fakeServer({ ...initialDoc(), routines: [clone(SNAP_R1)] }) })
+    await t.sync.syncNow()
+    t.server.once.push = [OFFLINE]
+    await screenEdit(t, setsOn(4), T0 + 1)
+    await t.sync.syncNow()
+    await t.sync.forget()
+    await screenEdit(t, setsOn(5), T0 + 2)
+    expect((await t.sync.pair(BASE, 'GOODCODE')).ok).toBe(true)
+    expect(content(t.server.routine('r1'))).toEqual({ ...content(SNAP_R1), ex: [{ ...SNAP_R1.ex[0], sets: 5 }] })
+    expect(await t.routineEdits.listPending()).toEqual([])
+    expect(await t.routineEdits.listNotices()).toEqual([])
   })
 })

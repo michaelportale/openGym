@@ -53,6 +53,33 @@ describe.each(Object.entries(makers))('%s routine edits', (_, make) => {
     expect(await s.get('r2')).toEqual({ rid: 'r2', baseTs: 2, routine: { id: 'r2', name: 'Y' }, sent: { id: 'r2' }, t: 2 })
   })
 
+  test('a fresh put (made with no server copy held, on the snapshot) starts the row over whatever it holds: the caller\'s baseTs, sent null, not acked or superseded', async () => {
+    const s = make()
+    // pending, with what a push sent
+    await s.put({ rid: 'p', baseTs: 100, routine: { name: 'P' }, t: 1 })
+    await s.markSent([{ rid: 'p', routine: { name: 'P' } }])
+    await s.put({ rid: 'p', baseTs: 7, routine: { name: 'P2' }, t: 2, fresh: true })
+    expect(await s.get('p')).toEqual({ rid: 'p', baseTs: 7, routine: { name: 'P2' }, sent: null, t: 2 })
+    // acked: no sent from the ack either
+    await s.put({ rid: 'a', baseTs: 100, routine: { name: 'A' }, t: 1 })
+    await s.markAcked([{ rid: 'a', t: 1 }], 'x')
+    await s.put({ rid: 'a', baseTs: 7, routine: { name: 'A2' }, t: 2, fresh: true })
+    expect(await s.get('a')).toEqual({ rid: 'a', baseTs: 7, routine: { name: 'A2' }, sent: null, t: 2 })
+    // superseded and dismissed
+    await s.put({ rid: 'x', baseTs: 100, routine: { name: 'X' }, t: 1 })
+    await s.markSuperseded([{ rid: 'x', t: 1, kind: 'changed' }], 'y')
+    await s.dismiss('x')
+    await s.put({ rid: 'x', baseTs: null, routine: { name: 'X2' }, t: 2, fresh: true })
+    expect(await s.get('x')).toEqual({ rid: 'x', baseTs: null, routine: { name: 'X2' }, sent: null, t: 2 })
+    expect((await s.listPending()).map(e => e.rid).sort()).toEqual(['a', 'p', 'x'])
+    expect(await s.listNotices()).toEqual([])
+    // the same t with other content still moves up one
+    expect(await s.put({ rid: 'p', baseTs: 7, routine: { name: 'P3' }, t: 2, fresh: true })).toMatchObject({ t: 3 })
+    // only `true` is fresh
+    await s.put({ rid: 'p', baseTs: 9, routine: { name: 'P4' }, t: 4, fresh: 'yes' })
+    expect(await s.get('p')).toMatchObject({ baseTs: 7 })
+  })
+
   test('markAcked with an old t does nothing', async () => {
     const s = make()
     await s.put({ rid: 'r1', baseTs: 1, routine: r1, t: 5 })

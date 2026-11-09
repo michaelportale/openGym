@@ -8,17 +8,18 @@ import { readScreenSource } from '../sync/source'
 import { keyed, readSourceKey } from '../sync/source-key'
 import { syncAfterFinish } from '../sync/use-sync'
 import { useFocusReload } from '../sync/use-focus-reload'
-import { baseRoutine } from './plan-view'
+import { editBase } from './plan-view'
 import { createSqliteRoutineEdits } from './routine-edits'
 
 const LOADING = { status: 'loading', state: null, names: null, copy: null, notices: [], error: null }
 
 // One routine edit: the whole routine, on the base the server holds (copyRoutine: the copy's or
 // the snapshot's routine, without the overlay), then the sync is asked to run, not awaited, as a
-// weigh-in's write does. Throws when the write fails.
-export async function savePlanEdit({ rid, routine, copyRoutine }) {
+// weigh-in's write does. `fresh`: made with no copy held (editBase), so its row starts over.
+// Throws when the write fails.
+export async function savePlanEdit({ rid, routine, copyRoutine, fresh = false }) {
   const db = await openAppDatabase()
-  await createSqliteRoutineEdits(db).put({ rid, baseTs: copyRoutine?._ts ?? null, routine, t: Date.now() })
+  await createSqliteRoutineEdits(db).put({ rid, baseTs: copyRoutine?._ts ?? null, routine, t: Date.now(), fresh })
   syncAfterFinish()
 }
 
@@ -78,7 +79,8 @@ export function usePlan() {
     return { ok: true }
   }, [reload])
 
-  const baseOf = useCallback(rid => baseRoutine({ copy: source.copy, bundled: snapshot }, rid), [source.copy])
+  // { base, fresh } for an edit of routine rid (plan-view.js editBase).
+  const baseOf = useCallback(rid => editBase({ copy: source.copy, bundled: snapshot }, rid), [source.copy])
 
   return { ...source, save, dismiss, baseOf }
 }
