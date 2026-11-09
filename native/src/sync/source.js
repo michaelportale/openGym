@@ -29,11 +29,31 @@ function namesFor(state) {
   return names
 }
 
+const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v)
+// A list from the server's document as the screen reads it: its objects only, each passed through
+// `each`. A value that is not a list reads as an empty one; a missing one stays missing.
+const listed = (obj, key, each = x => x) =>
+  (obj[key] === undefined ? {} : { [key]: (Array.isArray(obj[key]) ? obj[key].filter(isObj) : []).map(each) })
+
+// The server's document arrives as the file holds it, so one malformed entry (a null workout, a
+// null exercise in a routine) must not stop the tab. The screen reads routines, workouts and
+// custom exercises, and the lists inside them, as objects only. The stored copy is never changed:
+// a push sends it as it is.
+function readable(state) {
+  return {
+    ...state,
+    ...listed(state, 'routines', r => ({ ...r, ...listed(r, 'ex') })),
+    ...listed(state, 'workouts', w => ({ ...w, ...listed(w, 'entries', e => ({ ...e, ...listed(e, 'sets') })) })),
+    ...listed(state, 'customEx'),
+  }
+}
+
 export function screenSource({ copy, bundled, pending }) {
   if (!copy) return { state: sessionState(bundled, pending), names: bundled.names }
+  const doc = readable(copy.state)
   // Acked workouts are in the copy and it wins; only unsent ones are added.
-  const held = new Set((copy.state.workouts ?? []).map(w => w.id))
-  const state = sessionState(copy, (pending ?? []).filter(w => !held.has(w.id)))
+  const held = new Set((doc.workouts ?? []).map(w => w.id))
+  const state = sessionState({ state: doc }, (pending ?? []).filter(w => !held.has(w.id)))
   return { state, names: namesFor(state) }
 }
 
@@ -45,4 +65,22 @@ export async function readCopy(serverCopy) {
   } catch {
     return null
   }
+}
+
+// What the Workout tab opens on, read from the stores: `finished` (the finished-workout store)
+// and `serverCopy`. Paired: the server copy, plus the workouts it has not acked. Not paired: the
+// bundled snapshot plus every workout on the phone. `workouts` is every workout on the phone.
+// A copy the screen still cannot build from reads as no copy, as a corrupt one does.
+export async function readScreenSource({ finished, serverCopy, bundled }) {
+  const workouts = await finished.list()
+  const copy = await readCopy(serverCopy)
+  if (copy) {
+    const pending = await finished.listPending()
+    try {
+      return { ...screenSource({ copy, bundled, pending }), workouts }
+    } catch {
+      // falls through to the bundled snapshot
+    }
+  }
+  return { ...screenSource({ copy: null, bundled, pending: workouts }), workouts }
 }

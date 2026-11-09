@@ -6,7 +6,7 @@ import { createSqliteSessionStorage } from '../session/sqlite-storage'
 import { homeKey, shouldReloadHome } from '../sync/sync-triggers'
 import { useSync } from '../sync/use-sync'
 import { createSqliteServerCopy } from '../sync/server-copy'
-import { readCopy, screenSource } from '../sync/source'
+import { readScreenSource } from '../sync/source'
 import { nextRoutineId } from './next-up'
 import { buildSessionBase } from './start-session'
 
@@ -29,12 +29,12 @@ export function useWorkoutHome() {
     let next
     try {
       const db = await openAppDatabase()
-      const finished = createSqliteFinishedWorkouts(db)
-      const workouts = await finished.list()
       // Paired: the server copy, plus the workouts it has not acked. Not paired: as before.
-      const copy = await readCopy(createSqliteServerCopy(db))
-      const pending = copy ? await finished.listPending() : workouts
-      const { state, names } = screenSource({ copy, bundled: snapshot, pending })
+      const { state, names, workouts } = await readScreenSource({
+        finished: createSqliteFinishedWorkouts(db),
+        serverCopy: createSqliteServerCopy(db),
+        bundled: snapshot,
+      })
       const stored = await createSqliteSessionStorage(db).readBase()
       if (stored) {
         next = { ...LOADING, status: 'session', db, state, workouts, names, base: stored, sessionId: stored.id }

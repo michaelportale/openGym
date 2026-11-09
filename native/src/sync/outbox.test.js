@@ -43,3 +43,27 @@ test('a copy with no workouts array is treated as empty', () => {
   const copy = { state: { unit: 'lb' }, rev: 0, wid: 'w', pulledAt: 't' }
   expect(buildPush(copy, [pend('p1')]).state).toEqual({ unit: 'lb', workouts: [pend('p1')] })
 })
+
+// Server documents with a malformed entry: the push still sends the document as it is, plus the
+// workout it lacks.
+const okWorkout = { id: 'w1', d: '2026-11-01', entries: [{ id: 'bench', sets: [{ w: 60, r: 5, done: true }] }] }
+const okRoutine = { id: 'r1', name: 'Push', ex: [{ id: 'bench' }] }
+test.each([
+  ['a null routine', { routines: [null, okRoutine], workouts: [okWorkout] }],
+  ['a null workout', { routines: [okRoutine], workouts: [null, okWorkout] }],
+  ['a null element in a routine\'s ex', { routines: [{ ...okRoutine, ex: [null] }], workouts: [okWorkout] }],
+  ['a null element in a workout\'s entries', { routines: [okRoutine], workouts: [{ ...okWorkout, entries: [null] }] }],
+  ['a null element in customEx', { routines: [okRoutine], workouts: [okWorkout], customEx: [null] }],
+])('%s: sent verbatim with the new workout on the end', (_n, doc) => {
+  const copy = { state: doc, rev: 5, wid: 'w', pulledAt: 't' }
+  const stored = JSON.parse(JSON.stringify(doc))
+  const push = buildPush(copy, [pend('w1'), pend('p1')])
+  expect(push.state).toEqual({ ...stored, workouts: [...stored.workouts, pend('p1')] })
+  expect(push.added).toEqual(['p1'])
+  expect(doc).toEqual(stored)
+})
+
+test('workouts that is not a list: the new workout starts the list, as with none', () => {
+  const copy = { state: { routines: [okRoutine], workouts: {} }, rev: 5, wid: 'w', pulledAt: 't' }
+  expect(buildPush(copy, [pend('p1')]).state).toEqual({ routines: [okRoutine], workouts: [pend('p1')] })
+})

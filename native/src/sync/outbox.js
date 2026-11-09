@@ -2,7 +2,7 @@
 // Nothing else in the document is read or changed, so keys this app does not know survive.
 export function buildPush(copy, pending) {
   const held = Array.isArray(copy.state.workouts) ? copy.state.workouts : []
-  const have = new Set(held.map(w => w.id))
+  const have = new Set(held.map(w => w?.id))
   const add = []
   for (const w of pending) {
     if (have.has(w.id)) continue
