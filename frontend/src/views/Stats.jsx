@@ -16,7 +16,8 @@ import { loadOfWeeklyPlan, loadOfWorkouts, muscleBalanceWindow, rankOf, MUSCLES,
 import { fatigueOf, strengthOf, STRENGTH_FLOOR } from '../lib/recovery.js'
 import { strengthExerciseRowsForMuscle } from '../lib/strength-exercises.js'
 import { fatigueStateOf, profileBodyweightKg } from '../lib/recovery-view.js'
-import { bwTrend, bwWeekChange, bwTrendChange, bwTowardGoal, BW_TREND_MIN } from '../lib/bw-trend.js'
+import { BW_TREND_MIN } from '../lib/bw-trend.js'
+import { bodyweightView } from '../lib/bw-view.js'
 import { e1rmSeries, best1RM, formulaOf } from '../lib/onerm.js'
 import { currentDbLoad, workoutAs } from '../lib/dumbbells.js'
 import { maxRepsSeries } from '../lib/pyramid.js'
@@ -424,20 +425,10 @@ export default function Stats() {
   const kind = displayScale(S)
   const hd = scaleName(kind)
 
-  const bwPts = S.bodyweight.filter(b => range === 0 || (b.t || new Date(b.d).getTime()) > now - range * 86400000)
-    .map(b => ({ t: b.t || new Date(b.d).getTime(), y: b.w, d: b.d }))
-  // The 7-day trend runs over every weigh-in, then is cut to the range, so the first point of
-  // a 30-day view still averages the week before it.
-  const bwAll = S.bodyweight.map(b => ({ t: b.t || new Date(b.d).getTime(), y: b.w, d: b.d }))
-  const bwTrendAll = bwTrend(bwAll)
-  const bwTrendPts = bwTrendAll.filter(p => range === 0 || p.t > now - range * 86400000)
+  const bwView = bodyweightView(S.bodyweight, { range, now, targetW: S.targetW })
+  const { points: bwPts, trend: bwTrendPts, trendNow: bwTrendNow, week: bwWeek, delta30: bwDelta30, toward: bwToward, last7: bwLast7 } = bwView
   // Scrubbing names the weigh-in and the 7-day average under it.
   if (bwTrendPts.length === bwPts.length) bwPts.forEach((p, i) => { p.note = t('avg {0}', fmtNum(bwTrendPts[i].y)) })
-  const bwWeek = bwWeekChange(bwTrendAll)
-  const bwTrendNow = bwTrendAll.at(-1)
-  // The tile reads the trend, not the first and last raw weigh-ins of the month.
-  const bwDelta30 = bwTrendChange(bwTrendAll, 30, now)
-  const bwToward = bwTowardGoal(bwWeek, bwTrendNow?.y, S.targetW)
   const bwSigned = v => (v > 0 ? '+' : v < 0 ? '−' : '±') + fmtNum(Math.abs(v)) + ' ' + S.unit
   const bwRangeName = range === 0 ? t('all time') : range === 365 ? t('last year') : t('last {0} days', range)
   const bwSummary = bwTrendNow && bwPts.length >= BW_TREND_MIN
@@ -445,7 +436,6 @@ export default function Stats() {
       + (bwWeek !== null ? ', ' + t('{0} this week', bwSigned(bwWeek)) : '')
       + (bwToward ? ', ' + t('toward goal') : '')
     : t('Body weight, {0}', bwRangeName)
-  const bwLast7 = S.bodyweight.slice(-7).reverse()
   const workouts = S.workouts
   const monthW = workouts.filter(w => workoutDay(w)?.slice(0, 7) === todayISO().slice(0, 7)).length
   const rotStreak = rotationStreak(S, todayISO())
