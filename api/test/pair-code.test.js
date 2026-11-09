@@ -133,3 +133,13 @@ test('server refuses (secret differs from the running server\'s): exit 1, nothin
   assert.equal(r.all.includes(wrong), false);
   assert.equal(r.all.includes(SECRET), false);
 });
+
+// The same default as server.js (DATA_DIR || '/data'), so a bare `docker run` without -e DATA_DIR
+// reads the folder the server uses. Skipped on a machine that has a real /data/secret.
+test('DATA_DIR defaults to /data, as the server does', { skip: fs.existsSync('/data/secret') && 'this machine has a /data/secret' }, () => {
+  const env = { ...process.env, PORT: '1' };
+  delete env.DATA_DIR;
+  const r = spawnSync(process.execPath, ['scripts/pair-code.mjs'], { cwd: API, encoding: 'utf8', env });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /no secret in \/data /);
+});

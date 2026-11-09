@@ -14,7 +14,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const DATA_DIR = process.env.DATA_DIR || './data';
+const DATA_DIR = process.env.DATA_DIR || '/data'; // the same default as server.js
 const PORT = process.env.PORT || '3000';
 
 const fail = msg => { console.error('pair-code: ' + msg); process.exit(1); };
