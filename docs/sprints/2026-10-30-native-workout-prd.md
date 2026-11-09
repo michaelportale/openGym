@@ -245,7 +245,8 @@ proxies the API and serves exercise media, so its replacement is planned before 
 | 2 | Code done; the owner's device checklist is pending | Engine hardening PRs #101–#105, #107–#109 and #111 (real-SQLite kill tests); real workout stage 1 in PR #112 (merged 2026-11-09); stage 2 in PR #113 (merged 2026-11-09) |
 | 3 | Code done; the owner's device checklist is pending | PR #114 |
 | 4 | Code done; the owner's device checklist is pending | PR #115 |
-| 5-10 | Not started | |
+| 5 | Code done; the owner's device checklist is pending | the Phase 5 PR |
+| 6-10 | Not started | |
 
 Phase 9's device acceptance and the real gym sessions are the owner's to run. The checklist is
 [`2026-11-native-first-workout-checklist.md`](2026-11-native-first-workout-checklist.md).

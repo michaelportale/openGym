@@ -2,7 +2,7 @@
 
 Run this on the iPhone before the first real gym session. Tick each line. Record pass or fail per line in the PR, not here.
 
-Read this first: the dev build and the Release build share one bundle id, so they share one database. Everything you log while testing is written to the same place as real sessions. That is why step 11 wipes the app once. After the wipe, any later test on that phone writes into the real record.
+Read this first: the dev build and the Release build share one bundle id, so they share one database. Everything you log while testing is written to the same place as real sessions. That is why step 12 wipes the app once. After the wipe, any later test on that phone writes into the real record.
 
 ## Before you build
 
@@ -101,24 +101,45 @@ Phase 4. Start Push A from the routine list on the Workout start screen. Discard
 
 - [ ] Turn Airplane Mode off when the checks above are done.
 
-## 10. Before the wipe
+## 10. Pairing and restore, on a copy
+
+This rehearses sync and restore against a **copy** of `data/`, never the real one. Do it before the wipe. It needs the Mac and the phone on the same network, and the dev or Release build of this branch on the phone. Anything you log here goes into the phone's database, like every other test in this file; the wipe in step 12 clears it.
+
+- [ ] Back up the real data, with the tar from [SELF_HOSTING section 6](../SELF_HOSTING.md#6-backups): `tar czf opengym-backup-$(date +%F).tar.gz data/`. Only the real folder is read; nothing here changes it.
+- [ ] Make the copy, from the repository root: `cp -a data ../opengym-data-copy`. The copy sits outside the repository so it cannot be committed.
+- [ ] Start a second API on the copy, on another port, with Docker, leaving the real container and the real `./data` alone: `docker build -t opengym-api-copy ./api`, then `docker run -d --name opengym-api-copy -p 3100:3000 -e DATA_DIR=/data -v "$PWD/../opengym-data-copy:/data" opengym-api-copy`. Use any free host port in place of `3100`; write it as `<port>` below. Without Docker, from `api/` (needs `npm install` there): `DATA_DIR=<the copy> PORT=<port> node server.js`. The `docker run` form is written from the compose file and the Dockerfile and has not been run end to end; if it does not start, use the bare-metal form.
+- [ ] Print a pairing code for the copy: `docker exec opengym-api-copy node scripts/pair-code.mjs` (bare metal: `cd api && DATA_DIR=<the copy> PORT=<port> node scripts/pair-code.mjs`). With more than one profile, add `--user <name>`. The code lasts 5 minutes.
+- [ ] On the phone, open ··· More, then Diagnostics. In "Your server" tap "Pair with your server". Enter `http://<the Mac's LAN IP>:<port>` and the code, then tap Pair. Plain http is accepted here because a private address is allowed; a public address needs https. The section now shows the host, "Signed in as" your profile, a status line, "Last synced" and, if anything is queued, "N workouts waiting". Routines, rotation and history now come from the copy.
+- [ ] Finish a short workout. The saved screen says "Synced to <host> at <time>".
+- [ ] Turn Airplane Mode on. Finish another workout. The saved screen says "Saved on this phone. It will sync when <host> is reachable." Diagnostics shows "1 workout waiting".
+- [ ] Turn Airplane Mode off and return to the app. Within a minute, or at once with "Sync now" in Diagnostics, the line says "Synced to <host> at <time>" and no workouts are waiting.
+- [ ] Delete the openGym app. Reinstall the Release build with the command from step 1. Pair with the copy again (new code from the pair command, same address). Every workout you finished, from before pairing and since, is back in History, and the rotation and routines match.
+- [ ] In Diagnostics tap "Forget this server" and confirm. The section goes back to "Pair with your server" and the status says "Not paired. Saved on this phone." The workouts on the phone are still there.
+- [ ] Stop the copy: `docker rm -f opengym-api-copy` (bare metal: stop the process). Delete `../opengym-data-copy` when done. Do not delete `data/`.
+
+## 11. Before the wipe
 
 - [ ] Every line above has a recorded pass or fail in the PR. Fix any failure before wiping.
 - [ ] From the repository root, `git status` does not list `native/local/`.
 - [ ] The privacy search covers every tracked file in the repository, not only `native/` and `docs/sprints/`: `git grep -n -I -e '<your user id>' -e '<one of your routine ids>' -e '<one of your custom exercise ids>'` prints nothing. Your user id is the part of your data file's name between `state-` and `.json`. Type the real values only in the terminal, never into a tracked file, this one included.
 
-## 11. The wipe
+## 12. The wipe
 
 This removes the test workouts so your first real session starts clean.
 
 - [ ] Delete the openGym app from the phone.
 - [ ] Install the Release build fresh with the command from step 1. Check the snapshot is still in place.
 - [ ] Open it. Push A is next.
-- [ ] No workouts are listed. Export says "Nothing to export yet".
+- [ ] Before you pair, no workouts are listed. Export says "Nothing to export yet".
 - [ ] The example-data banner is absent.
+- [ ] This is the cutover. In ··· More, Diagnostics, pair with the **real** server: run the pair command against it (`docker compose exec api node scripts/pair-code.mjs`, or the bare-metal form in SELF_HOSTING) and enter its address and the code. Routines, rotation and history load from the server, and History lists your past workouts.
+- [ ] Stop logging on the web. From now on the phone is the only writer.
+- [ ] Close every web tab and installed web app that is signed in to openGym. An open tab holds its own copy of your data; when it next syncs it merges and pushes that copy to the server, which can put stale data next to what the phone wrote.
+- [ ] Do not use "Sign out everywhere" on the web unless you mean to: it also unpairs the phone. The phone then says the server signed it out, keeps every workout, and syncs again after you pair it again.
 
 From here on, do not install a dev build over the Release app. Any test on this phone now writes into the real record.
 
 ## After each real session
 
-- [ ] Tap Export workouts and AirDrop the JSON to the Mac. Until Phase 5 pairing, the phone holds the only copy.
+- [ ] Check the saved screen says "Synced to <host> at <time>". If it says "It will sync when <host> is reachable", open the app again with the server reachable, or tap "Sync now" in Diagnostics, until it does.
+- [ ] Optional: tap Export workouts and AirDrop the JSON to the Mac as an extra copy. The server holds the synced copy.

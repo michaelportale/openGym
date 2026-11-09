@@ -97,6 +97,8 @@ the code from Settings. With more than one profile, say which: `--user <name>` (
 too); without it the command lists the names and stops. It needs the server running, refuses a
 disabled profile, and prints only the code — never the secret or a session token. A code made this
 way is the same as one made in Settings, so "sign out everywhere" unpairs the phone the same way.
+To rehearse pairing and restore against a copy of `data/` before relying on it, follow
+[the native checklist's restore rehearsal](sprints/2026-11-native-first-workout-checklist.md#10-pairing-and-restore-on-a-copy).
 
 ## 3. Expose it over HTTPS on your own domain
 
