@@ -135,18 +135,7 @@ const migrations = new WeakMap()
 function migrate(db) {
   let opening = migrations.get(db)
   if (!opening) {
-    opening = (async () => {
-      await db.exec(ROUTINE_EDITS_SCHEMA)
-      // A table made before the resent flag: add it once, its rows not resent.
-      const columns = await db.getAll('PRAGMA table_info(routine_edits)')
-      if (!columns.some(column => column.name === 'resent')) {
-        try {
-          await db.run('ALTER TABLE routine_edits ADD COLUMN resent INTEGER NOT NULL DEFAULT 0')
-        } catch (error) {
-          if (!/duplicate column/i.test(String(error?.message))) throw error
-        }
-      }
-    })().catch(error => {
+    opening = db.exec(ROUTINE_EDITS_SCHEMA).catch(error => {
       migrations.delete(db)
       throw error
     })

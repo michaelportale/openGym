@@ -251,20 +251,6 @@ test('real sqlite: a markSent landing while a put is on its way in is kept, sinc
   expect(await s.get('r1')).toEqual({ rid: 'r1', baseTs: 1, routine: { ...r1, name: 'Pull' }, sent: r1, t: 6 })
 })
 
-test('a table from before the resent flag gains it once, its rows not resent', async () => {
-  const db = createNodeSqliteDb()
-  await db.exec(`CREATE TABLE routine_edits (
-    rid TEXT PRIMARY KEY, base_ts INTEGER, routine TEXT NOT NULL, sent TEXT, t INTEGER NOT NULL,
-    acked_at TEXT, superseded_at TEXT, superseded_kind TEXT, dismissed INTEGER NOT NULL DEFAULT 0)`)
-  await db.run("INSERT INTO routine_edits (rid, base_ts, routine, t) VALUES ('r1', 5, '{\"name\":\"Push\"}', 1)")
-  const s = createSqliteRoutineEdits(db)
-  expect(await s.listPending()).toEqual([{ rid: 'r1', baseTs: 5, routine: { name: 'Push' }, sent: null, t: 1 }])
-  await s.markSuperseded([{ rid: 'r1', t: 1, kind: 'changed' }], 'y')
-  expect(await s.listNotices()).toEqual([{ rid: 'r1', name: 'Push', kind: 'changed', at: 'y' }])
-  await createSqliteRoutineEdits(db).list()
-  expect(db.executed.filter(sql => /ALTER TABLE routine_edits ADD COLUMN resent/.test(sql))).toHaveLength(1)
-})
-
 test('two stores on one db migrate once', async () => {
   const db = createNodeSqliteDb()
   const stores = [createSqliteRoutineEdits(db), createSqliteRoutineEdits(db)]
