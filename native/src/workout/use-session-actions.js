@@ -11,7 +11,8 @@ import { completeLabels } from './keypad'
 import { pendingRest, restMsFor } from './rest-after'
 import { shownAfterComplete, withTargets } from './session-screen'
 import { carriedWeight, lockedWeight, shownValues } from './workout-view'
-import { NO_NOTICES, addSetCall, addWarmupCall, completeAfterCommit, completeCall, dockKeypadField, draftCall, editCall, findSet, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightRefusal, pauseRestCall, primaryAction, removeWarmupCall, restAfterComplete, resultNotice, resumeRestCall, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, sheetSide, thrown, undoWrite } from './set-calls'
+import { effortShown, withRir } from './effort-choice'
+import { NO_NOTICES, addSetCall, addWarmupCall, addWarmupsCall, addWarmupsInOrder, completeAfterCommit, completeCall, dockKeypadField, draftCall, editCall, findSet, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightRefusal, pauseRestCall, primaryAction, removeWarmupCall, restAfterComplete, resultNotice, resumeRestCall, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, sheetSide, thrown, undoWrite } from './set-calls'
 
 // The sessions already told that rest alerts are off. In memory: a relaunch tells again.
 const explainedAlertsOff = new Set()
@@ -25,7 +26,7 @@ const explainedAlertsOff = new Set()
 // Overnight is checked inside the gate as each write runs, against the clock then, not when the
 // view was last drawn (write).
 // `afterWrite` runs once each gated write settles (useRestAlerts' reconcile), outside the gate.
-export function useSessionActions({ session, base, restSec, view, screen, shownEntry, setShownIndex, afterWrite }) {
+export function useSessionActions({ session, base, restSec, view, screen, shownEntry, setShownIndex, afterWrite, promptFor }) {
   const gate = useRef(null)
   if (gate.current == null) gate.current = createActionGate()
   const [busy, setBusy] = useState(false)
@@ -216,6 +217,8 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
       // A warm-up not done yet offers Remove warm-up: only where the tap would write.
       removable: removeWarmupCall(view, { setId, now: Date.now() }) !== null,
       initial: shownValues(found.slot, side, carriedWeight(found.entry, setId)),
+      // Reps left: shown for a work set that is current or done; starts at what the row holds.
+      effort: effortShown({ mode, warmup: row.warmup, perSide, side }) ? { rir: found.slot.row.rir ?? null } : null,
       initialField: keypadField(field, perSide, side),
       // A half-done per-side set's weight stays the one its first side was logged at.
       weightSetWith: lockedWeight(found.slot.row)?.side ?? null,
@@ -243,13 +246,15 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
 
   const sheetActions = {
     // Save keeps a draft; on a done set it is Update, an edit that keeps the set's time.
-    onSave: async values => {
+    // Reps left is not drafted: it lives in the sheet until Complete or Update (`rir` undefined =
+    // untouched, null = cleared). So Save on an unfinished set keeps the numbers only.
+    onSave: async (values, rir) => {
       const done = sheet.mode === 'done'
-      settle(done ? await edit(sheet.setId, values) : await draft(sheet.setId, values), sheet.key, done ? 'edit' : 'draft')
+      settle(done ? await edit(sheet.setId, withRir(values, rir)) : await draft(sheet.setId, values), sheet.key, done ? 'edit' : 'draft')
     },
     // A warm-up's Complete and Undo are named for it: its words say warm-up, and they leave the
     // work set's "Rest didn't start" line alone (noticesAfter).
-    onComplete: async values => settle(await complete({ setId: sheet.setId, side: sheet.side, values }), sheet.key, sheet.warmup ? 'complete-warmup' : 'complete'),
+    onComplete: async (values, rir) => settle(await complete({ setId: sheet.setId, side: sheet.side, values: withRir(values, rir) }), sheet.key, sheet.warmup ? 'complete-warmup' : 'complete'),
     // Undo also clears a draft a failed clear left on the set, first, in the same gated write.
     onUndo: async () => settle(await write((view, now) => undoWrite(session, view, { setId: sheet.setId, eventId: createEventId(), now })), sheet.key, sheet.warmup ? 'undo-warmup' : 'undo'),
     // Remove warm-up takes a mis-tapped warm-up off again, through the gate like every write.
@@ -301,6 +306,21 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
     }), action)
   }
 
+  // The prompt's Add warm-ups: both rows in one gated action, decided on the engine's latest view
+  // (a tap that lands after the first add finds the prompt gone and writes nothing). The adds run
+  // in order; if the second is refused the first stays, and that refusal is what is reported.
+  const addWarmups = async () => {
+    if (!shownEntry) return
+    const result = await write(async (view, now) => {
+      const prompt = promptFor?.(view, shownEntry.id)
+      if (!prompt) return null
+      const calls = addWarmupsCall(view, shownEntry.id, prompt.sets.map(() => createEventId()), prompt.sets, now)
+      if (!calls) return null
+      return addWarmupsInOrder(session, calls, { now: Date.now })
+    })
+    report(result, result?.partial ? 'add-warmups-partial' : 'add-warmup')
+  }
+
   const openFinish = end => {
     setFinishNotice(null)
     setFinishing({ end: end ?? null })
@@ -348,6 +368,7 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
     openSheet,
     addSet: addRow(addSetCall, 'add-set'),
     addWarmup: addRow(addWarmupCall, 'add-warmup'),
+    addWarmups,
     resume: async () => report(await act(() => session.resume({ eventId: createEventId() })), 'resume'),
     dock: dockActions,
     sheet: { ...sheet, open: sheetOpen, notice: sheetNotice?.text ?? null, ...sheetActions },

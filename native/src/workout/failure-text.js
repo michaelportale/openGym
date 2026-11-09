@@ -16,6 +16,7 @@ const NOT_DONE = {
   'undo-warmup': 'Warm-up not undone.',
   'add-set': 'Set not added.',
   'add-warmup': 'Warm-up not added.',
+  'add-warmups-partial': "One warm-up added; the other didn't save. Use Add warm-up to add it.",
   'remove-warmup': 'Warm-up not removed.',
   'add-time': 'Time not added.',
   'skip-rest': 'Rest not skipped.',
@@ -66,6 +67,7 @@ const lookup = (table, key) => (typeof key === 'string' && Object.hasOwn(table, 
 // An overnight refusal keeps stage 1's sentence whatever was tapped.
 export function failureText(code, { action } = {}) {
   if (code === 'overnight') return OVERNIGHT_NOTICE
+  if (action === 'add-warmups-partial') return NOT_DONE[action]
   const why = (action === 'open' ? lookup(OPEN_WHY, code) : null) ?? lookup(WHY, code) ?? GENERIC
   return `${lookup(NOT_DONE, action) ?? 'Not saved.'} ${why}`
 }

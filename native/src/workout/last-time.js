@@ -1,4 +1,5 @@
 import { workoutModel } from '../shared/training.js'
+import { prescribedOpening } from './next-time.js'
 
 const num = v => typeof v === 'number' && Number.isFinite(v)
 
@@ -44,18 +45,30 @@ export function lastTime(state, exerciseId, routineId) {
   }
 }
 
-// Every work row opens at last time's top weight, or blank. Returns new objects.
-export function applyOpeningWeights(entries, state, routineId) {
+// Every work row opens at the prescription's weight, and its reps when it sets them, when the
+// routine's progression names one; else at last time's top weight, or blank, reps as built.
+// Without a routine, last time decides. A per-side row's reps are both sides together, as the
+// shared model stores them: each side gets half. Warm-ups are untouched. With a prescription the
+// entry's target takes the same weight and reps, as buildPlannedEntry stamps its own plan, so the
+// session is graded against what it opened at. A drop-set or rest-pause exercise has no
+// prescription, so it opens at last time as before. Returns new objects.
+export function applyOpeningWeights(entries, state, routineId, routine) {
   return entries.map(entry => {
-    const top = lastTime(state, entry.id, routineId)?.top ?? null
+    const opening = prescribedOpening(state, routine, entry.id)
+    const top = opening ? opening.weight : lastTime(state, entry.id, routineId)?.top ?? null
+    const reps = opening?.reps ?? null
     const sets = (entry.sets ?? []).map(set => {
       if (workoutModel.isWarmupRow(set)) return set
       const next = { ...set, w: top }
+      if (reps != null) next.r = reps
       if (workoutModel.isSideSet(set)) {
-        next.sides = { L: { ...set.sides.L, w: top }, R: { ...set.sides.R, w: top } }
+        const side = s => (reps == null ? { ...s, w: top } : { ...s, w: top, r: reps / 2 })
+        next.sides = { L: side(set.sides.L), R: side(set.sides.R) }
       }
       return next
     })
-    return { ...entry, sets }
+    if (!opening || !entry.target) return { ...entry, sets }
+    const target = { ...entry.target, weight: opening.weight, ...(reps != null ? { reps } : {}) }
+    return { ...entry, target, sets }
   })
 }

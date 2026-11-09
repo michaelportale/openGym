@@ -82,13 +82,13 @@ function filesUnder(dir) {
   })
 }
 
-test('the sheet is not mounted from a screen, and Gus has the handoff', () => {
+test('only the workout WhySheet host mounts the sheet, and Gus has the handoff', () => {
   const decisions = readFileSync(new URL('../../../../docs/science/decisions.md', import.meta.url), 'utf8')
   expect(decisions).toContain('WhyThisSheet')
-  expect(decisions).toContain('does not mount it in any screen')
+  expect(decisions).toContain('mounted only by `native/src/workout/WhySheet.js`')
   const nativeRoot = fileURLToPath(new URL('../../', import.meta.url))
   for (const lane of ['app', 'workout', 'ui', 'session']) {
     const hits = filesUnder(join(nativeRoot, lane)).filter(path => readFileSync(path, 'utf8').includes('WhyThisSheet'))
-    expect(hits).toEqual([])
+    expect(hits.map(path => path.slice(nativeRoot.length))).toEqual(lane === 'workout' ? ['workout/WhySheet.js'] : [])
   }
 })

@@ -21,6 +21,7 @@ import SavedScreen from './SavedScreen'
 import { finishSummary, lastTimesFor, liveView, withTargets } from './session-screen'
 import UpNextRow from './UpNextRow'
 import { useSessionActions } from './use-session-actions'
+import { promptForExercise, warmupPromptText } from './warmup-prompt-view'
 import { deviceTimeZone } from './use-workout-home'
 import { currentExerciseIndex, workoutScreen } from './workout-view'
 import WorkoutDock from './WorkoutDock'
@@ -55,7 +56,9 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
   // discarded), on each return to the app, and after every write. Opening and each return read the
   // notification permission again (Settings may have changed it while the app was away).
   const alerts = useRestAlerts({ session, sessionId: base?.id, names })
-  const actions = useSessionActions({ session, base, restSec: state.restSec ?? 90, view, screen, shownEntry, setShownIndex, afterWrite: alerts })
+  // The warm-up prompt for an exercise in a view: the same decision on screen and inside the write.
+  const promptFor = (from, id) => promptForExercise(from, id, state)
+  const actions = useSessionActions({ session, base, restSec: state.restSec ?? 90, view, screen, shownEntry, setShownIndex, afterWrite: alerts, promptFor })
 
   // A rest that ends while the app is active buzzes once (the alert is suppressed while active, so
   // this is the only signal; in front but inactive, the alert shows instead). `prev` is the last
@@ -96,7 +99,7 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
     return () => sub.remove()
   }, [])
 
-  if (session.status === 'saved') return <SavedScreen db={db} onDone={onExit} />
+  if (session.status === 'saved') return <SavedScreen db={db} state={state} base={base} names={names} onDone={onExit} />
   if (session.status === 'discarded') return null
   if (session.status !== 'ready' || !screen) {
     const failed = session.status === 'error'
@@ -122,6 +125,8 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
   // was offered when that work was under 20 minutes before); the engine refuses a finish without one.
   const finishEnd = overnight ? view.disposition.suggestedEnd ?? view.startedAt : null
   const upNext = view.entries[index + 1]
+  const found = shownEntry ? promptFor(view, shownEntry.id) : null
+  const prompt = found ? { text: warmupPromptText(found.sets, card.perHand) } : null
   const move = step => setShownIndex(Math.max(0, Math.min(count - 1, index + step)))
   const { sheet, finish } = actions
 
@@ -180,7 +185,7 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
         {pinned ? null : head}
         <View style={styles.body}>
           <Animated.View key={index} entering={cardEntering}>
-            <ExerciseCard {...card} onPressRow={actions.openSheet} onAddSet={actions.addSet} onAddWarmup={actions.addWarmup} />
+            <ExerciseCard {...card} warmupPrompt={prompt} onAddWarmups={actions.addWarmups} onPressRow={actions.openSheet} onAddSet={actions.addSet} onAddWarmup={actions.addWarmup} />
           </Animated.View>
           {upNext ? <UpNextRow name={nameOf(names, upNext.id)} onPress={() => move(1)} /> : null}
         </View>
@@ -201,6 +206,7 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
         saveLabel={sheet.mode === 'done' ? 'Update' : 'Save'}
         completeLabel={sheet.completeButton?.label}
         completeSpoken={sheet.completeButton?.spoken}
+        effort={sheet.effort}
         notice={sheet.notice}
         onSave={sheet.onSave}
         onComplete={sheet.mode === 'current' ? sheet.onComplete : undefined}

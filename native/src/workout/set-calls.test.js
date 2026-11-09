@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest'
-import { NO_NOTICES, OVERNIGHT_NOTICE, PAST_MIDNIGHT, addSetCall, addWarmupCall, completeAfterCommit, completeCall, completeResult, dockKeypadField, draftCall, editCall, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightNow, overnightRefusal, pauseRestCall, resumeRestCall, primaryAction, removeWarmupCall, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, sheetSide, thrown, undoCall, undoWrite, writeOutcome, findSet } from './set-calls.js'
+import { NO_NOTICES, OVERNIGHT_NOTICE, PAST_MIDNIGHT, addSetCall, addWarmupCall, addWarmupsCall, addWarmupsInOrder, completeAfterCommit, completeCall, completeResult, dockKeypadField, draftCall, editCall, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightNow, overnightRefusal, pauseRestCall, resumeRestCall, primaryAction, removeWarmupCall, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, sheetSide, thrown, undoCall, undoWrite, writeOutcome, findSet } from './set-calls.js'
+import { workoutModel } from '../shared/training.js'
 import { shownValues, workoutScreen } from './workout-view.js'
 import { pendingRest, restEventId, restMsFor } from './rest-after.js'
 import { withTargets } from './session-screen.js'
@@ -265,6 +266,76 @@ describe('addWarmupCall', () => {
   test('an exercise not in the view adds nothing', () => {
     expect(addWarmupCall(view([]), '0289', 'e9')).toBeNull()
     expect(addWarmupCall(null, '0289', 'e9')).toBeNull()
+  })
+})
+
+describe('addWarmupsCall', () => {
+  const sets = [{ w: 30, r: 6 }, { w: 60, r: 6 }]
+  test('one prefilled warm-up row per load, each named by its own event', () => {
+    const v = view([bench([slot('b0', todo(80, 8))])])
+    expect(addWarmupsCall(v, '0289', ['e1', 'e2'], sets)).toEqual([
+      { eventId: 'e1', exerciseId: '0289', setId: 'warm:0289:e1', fields: { phase: 'warmup', warmup: true, w: 30, r: 6 } },
+      { eventId: 'e2', exerciseId: '0289', setId: 'warm:0289:e2', fields: { phase: 'warmup', warmup: true, w: 60, r: 6 } },
+    ])
+  })
+  test('null for an unknown exercise, overnight, or ids that do not match the loads', () => {
+    const v = view([bench([slot('b0', todo(80, 8))])])
+    expect(addWarmupsCall(view([]), '0289', ['e1', 'e2'], sets)).toBeNull()
+    expect(addWarmupsCall({ ...v, disposition: { kind: 'overnight' } }, '0289', ['e1', 'e2'], sets)).toBeNull()
+    expect(addWarmupsCall(v, '0289', ['e1'], sets)).toBeNull()
+    expect(addWarmupsCall(v, '0289', ['e1', 'e2'], [])).toBeNull()
+  })
+})
+
+describe('addWarmupsInOrder', () => {
+  const T = Date.parse('2026-11-09T18:00:00.000Z')
+  const MIDNIGHT = Date.parse('2026-11-10T00:10:00.000Z')
+  const calls = [{ eventId: 'e1', exerciseId: '0289', setId: 'warm:0289:e1', fields: {} }, { eventId: 'e2', exerciseId: '0289', setId: 'warm:0289:e2', fields: {} }]
+  const active = { status: 'active', disposition: { kind: 'active' }, activityAt: T, timeZone: 'UTC', entries: [] }
+  // A session whose addSet results are scripted; `clock` moves on after each add.
+  const fake = (results, onAdd = () => {}) => {
+    const added = []
+    return {
+      added,
+      getState: () => ({ view: active }),
+      addSet: async call => { added.push(call.setId); onAdd(added.length); return results[added.length - 1] }
+    }
+  }
+  const saved = { ok: true, saved: true }
+  test('both succeed: both added in order, the last result returned', async () => {
+    const s = fake([saved, saved])
+    expect(await addWarmupsInOrder(s, calls, { now: () => T })).toEqual(saved)
+    expect(s.added).toEqual(['warm:0289:e1', 'warm:0289:e2'])
+  })
+  test('the first fails: nothing else is added and its failure is the result', async () => {
+    const failed = { ok: false, saved: false, error: { code: 'storage' } }
+    const s = fake([failed])
+    const result = await addWarmupsInOrder(s, calls, { now: () => T })
+    expect(result).toEqual(failed)
+    expect(s.added).toEqual(['warm:0289:e1'])
+    expect(resultNotice(result, 'add-warmup')).toBe("Warm-up not added. The phone couldn't write it. Try again.")
+  })
+  test('the second fails: the first stays and the result says one was added', async () => {
+    const failed = { ok: false, saved: false, error: { code: 'storage' } }
+    const s = fake([saved, failed])
+    const result = await addWarmupsInOrder(s, calls, { now: () => T })
+    expect(result).toMatchObject({ ok: false, saved: false, partial: true, error: { code: 'storage' } })
+    expect(s.added).toHaveLength(2)
+    expect(resultNotice(result, 'add-warmups-partial')).toBe("One warm-up added; the other didn't save. Use Add warm-up to add it.")
+  })
+  test('overnight before the first add writes nothing', async () => {
+    const s = fake([saved, saved])
+    const result = await addWarmupsInOrder(s, calls, { now: () => MIDNIGHT })
+    expect(result).toEqual({ ok: false, saved: false, error: { code: 'overnight' } })
+    expect(s.added).toEqual([])
+  })
+  test('midnight crossed between the adds: the second is refused and the first stays', async () => {
+    let clock = T
+    const s = fake([saved, saved], n => { if (n === 1) clock = MIDNIGHT })
+    const result = await addWarmupsInOrder(s, calls, { now: () => clock })
+    expect(s.added).toEqual(['warm:0289:e1'])
+    expect(result).toMatchObject({ saved: false, partial: true, error: { code: 'overnight' } })
+    expect(resultNotice(result, 'add-warmups-partial')).toBe(OVERNIGHT_NOTICE)
   })
 })
 
@@ -976,6 +1047,71 @@ describe.each(SQLITE_DRIVERS)('%s: the calls drive the engine', (_name, createDb
     expect(current(session).entries[0].sets[0].row.done).toBe(false)
   })
 
+  test('Complete with reps left 3, kill, reopen: the row keeps rir 3 and the weight is unchanged', async () => {
+    clock = T0 + 1000
+    let db = createDb()
+    const first = await open(db)
+    const call = completeCall(current(first), { setId: benchSet, side: null, values: { w: 75, r: 8, rir: 3 }, eventId: 'c1', now: clock })
+    expect(call.fields).toEqual({ w: 75, r: 8, rir: 3 })
+    expect((await first.call('commitSet', call)).saved).toBe(true)
+    db = db.reopen()
+    const row = (await open(db, false)).getState().view.entries[0].sets[0].row
+    expect(row).toMatchObject({ w: 75, r: 8, rir: 3, done: true })
+  })
+
+  test('Complete with reps left 0, Undo, then the dock\'s Complete: the row has no reps left', async () => {
+    clock = T0 + 1000
+    const session = await open(createDb())
+    await session.call('commitSet', completeCall(current(session), { setId: benchSet, side: null, values: { w: 75, r: 8, rir: 0 }, eventId: 'c1', now: clock }))
+    await session.call('undoSet', undoCall(current(session), { setId: benchSet, eventId: 'u1', now: clock }))
+    expect(current(session).entries[0].sets[0].row.rir).toBe(0)
+    await session.call('commitSet', completeCall(current(session), { setId: benchSet, side: null, eventId: 'c2', now: clock }))
+    const row = current(session).entries[0].sets[0].row
+    expect(row).toMatchObject({ done: true })
+    expect(Object.hasOwn(row, 'rir')).toBe(false)
+  })
+
+  test('Update sets, changes and clears reps left; a kill keeps what was saved', async () => {
+    clock = T0 + 1000
+    let db = createDb()
+    const first = await open(db)
+    await first.call('commitSet', completeCall(current(first), { setId: benchSet, side: null, eventId: 'c1', now: clock }))
+    expect(current(first).entries[0].sets[0].row.rir).toBeUndefined()
+    await first.call('editSet', editCall(current(first), { setId: benchSet, values: { w: 75, r: 8, rir: 2 }, eventId: 'e1', now: clock }))
+    db = db.reopen()
+    const second = await open(db, false)
+    expect(current(second).entries[0].sets[0].row).toMatchObject({ w: 75, r: 8, rir: 2, done: true })
+    await second.call('editSet', editCall(current(second), { setId: benchSet, values: { w: 75, r: 8, rir: null }, eventId: 'e2', now: clock }))
+    const row = (await open(db.reopen(), false)).getState().view.entries[0].sets[0].row
+    expect(Object.hasOwn(row, 'rir')).toBe(false)
+    expect(row).toMatchObject({ w: 75, r: 8, done: true })
+  })
+
+  test('per side: row-level, L and R rir, saved with the side that finishes the set, kept through a kill', async () => {
+    clock = T0 + 1000
+    let db = createDb()
+    const first = await open(db)
+    const values = { w: 10, sides: { L: { r: 12 }, R: { r: 11 } }, rir: 4 }
+    await first.call('commitSet', completeCall(current(first), { setId: latSet, side: 'L', values, eventId: 'l1', now: clock }))
+    expect(current(first).entries[1].sets[0].row.rir).toBeUndefined()
+    db = db.reopen()
+    const second = await open(db, false)
+    await second.call('commitSet', completeCall(current(second), { setId: latSet, side: 'R', values: { w: 10, sides: { L: { r: 12 }, R: { r: 11 } }, rir: 1 }, eventId: 'r1', now: clock }))
+    db = db.reopen()
+    const row = (await open(db, false)).getState().view.entries[1].sets[0].row
+    expect(row).toMatchObject({ rir: 1, done: true })
+    expect(row.sides).toEqual({ L: { w: 10, r: 12, done: true, rir: 1 }, R: { w: 10, r: 11, done: true, rir: 1 } })
+    expect(workoutModel.syncSideAggregate(row).rir).toBe(1)
+    // Update clears all three, and a kill keeps that too.
+    const third = await open(db, false)
+    await third.call('editSet', editCall(current(third), { setId: latSet, values: { w: 10, sides: { L: { r: 12 }, R: { r: 11 } }, rir: null }, eventId: 'e9', now: clock }))
+    db = db.reopen()
+    const cleared = (await open(db, false)).getState().view.entries[1].sets[0].row
+    expect(cleared).not.toHaveProperty('rir')
+    expect(cleared.sides.L).not.toHaveProperty('rir')
+    expect(cleared.sides.R).not.toHaveProperty('rir')
+  })
+
   test('Add set on a per-side exercise adds a per-side set that survives a kill', async () => {
     let db = createDb()
     const first = await open(db)
@@ -984,6 +1120,45 @@ describe.each(SQLITE_DRIVERS)('%s: the calls drive the engine', (_name, createDb
     const added = (await open(db, false)).getState().view.entries[1].sets[1]
     expect(added.setId).toBe('add:lat:a1')
     expect(added.row.sides).toEqual({ L: { w: 7.5, r: 10, done: false }, R: { w: 7.5, r: 10, done: false } })
+  })
+
+  test('Add warm-ups: two prefilled rows survive a kill, not done, no rest, the dock still on work set 1', async () => {
+    clock = T0 + 1000
+    let db = createDb()
+    const first = await open(db)
+    for (const call of addWarmupsCall(current(first), 'bench', ['p1', 'p2'], [{ w: 30, r: 6 }, { w: 60, r: 6 }], clock)) {
+      expect((await first.call('addSet', call)).saved).toBe(true)
+    }
+    db = db.reopen()
+    clock = T0 + 5000
+    const view = current(await open(db, false))
+    const warmups = view.entries[0].sets.filter(s => s.warmup || s.row.phase === 'warmup')
+    expect(warmups.map(s => [s.setId, s.row.w, s.row.r, s.row.done])).toEqual([['warm:bench:p1', 30, 6, false], ['warm:bench:p2', 60, 6, false]])
+    expect(pendingRest(view, clock, () => 120_000)).toBeNull()
+    expect(view.rest).toBeNull()
+    const screen = workoutScreen(view, { names: {}, lastTimes: {} })
+    expect(screen.card.rows.map(r => [r.label, r.weightText, r.status])).toEqual([['W', '30', 'current'], ['W', '60', 'pending'], ['1', '75', 'current'], ['2', '75', 'pending']])
+    expect(screen.dock).toMatchObject({ lead: 'Set 1 · 75 lb × 8', setId: benchSet })
+    expect(screen.header.progress).toBe(0)
+  })
+
+  test('a prefilled warm-up completed, then a kill: still done, no rest pending, dock on work set 1', async () => {
+    clock = T0 + 1000
+    let db = createDb()
+    const first = await open(db)
+    const [one, two] = addWarmupsCall(current(first), 'bench', ['p1', 'p2'], [{ w: 30, r: 6 }, { w: 60, r: 6 }], clock)
+    await first.call('addSet', one)
+    await first.call('addSet', two)
+    expect((await first.call('commitSet', completeCall(current(first), { setId: one.setId, side: null, eventId: 'c1', now: clock }))).saved).toBe(true)
+    db = db.reopen()
+    clock = T0 + 5000
+    const view = current(await open(db, false))
+    expect(view.entries[0].sets.find(s => s.setId === one.setId).row).toMatchObject({ w: 30, r: 6, done: true })
+    expect(pendingRest(view, clock, () => 120_000)).toBeNull()
+    expect(view.rest).toBeNull()
+    const screen = workoutScreen(view, { names: {}, lastTimes: {} })
+    expect(screen.card.rows.map(r => [r.label, r.status])).toEqual([['W', 'done'], ['W', 'current'], ['1', 'current'], ['2', 'pending']])
+    expect(screen.dock).toMatchObject({ lead: 'Set 1 · 75 lb × 8', setId: benchSet })
   })
 
   test('a warm-up: add, complete, kill; still a warm-up, no rest, out of the numbers', async () => {
@@ -1454,5 +1629,102 @@ describe.each(SQLITE_DRIVERS)('%s: pausing a rest survives a kill', (_name, crea
     clock += 70_000
     const third = await open(db.reopen(), false)
     expect(third.getState().view.rest).toMatchObject({ status: 'complete', remainingMs: 0 })
+  })
+})
+
+describe('reps left in the calls', () => {
+  const bench1 = (row, extra) => view([bench([slot('s1', row, extra)])])
+  test('Complete carries rir for a work set when chosen; blank carries none', () => {
+    const v = bench1(todo(75, 8))
+    expect(completeCall(v, { setId: 's1', values: { w: 75, r: 8, rir: 2 }, eventId: 'e', now: 0 }).fields).toEqual({ w: 75, r: 8, rir: 2 })
+    expect(completeCall(v, { setId: 's1', values: { w: 75, r: 8, rir: 0 }, eventId: 'e', now: 0 }).fields).toEqual({ w: 75, r: 8, rir: 0 })
+    for (const rir of [undefined, null]) {
+      const fields = completeCall(v, { setId: 's1', values: { w: 75, r: 8, rir }, eventId: 'e', now: 0 }).fields
+      expect(Object.hasOwn(fields, 'rir')).toBe(false)
+    }
+  })
+  test('Complete: untouched rir (undefined) keeps a logged value, an explicit null clears it', () => {
+    const v = bench1({ ...todo(75, 8), rir: 3 })
+    expect(completeCall(v, { setId: 's1', values: { w: 75, r: 8 }, eventId: 'e', now: 0 }).fields).toEqual({ w: 75, r: 8 })
+    expect(completeCall(v, { setId: 's1', values: { w: 75, r: 8, rir: undefined }, eventId: 'e', now: 0 }).fields).toEqual({ w: 75, r: 8 })
+    // The dock's Complete passes no values at all: a reps left left over from an Undo is cleared.
+    expect(completeCall(v, { setId: 's1', eventId: 'e', now: 0 }).fields).toEqual({ w: 75, r: 8, rir: null })
+    expect(completeCall(v, { setId: 's1', values: { w: 75, r: 8, rir: null }, eventId: 'e', now: 0 }).fields).toEqual({ w: 75, r: 8, rir: null })
+    // Nothing logged: a clear writes nothing.
+    expect(completeCall(bench1(todo(75, 8)), { setId: 's1', values: { w: 75, r: 8, rir: null }, eventId: 'e', now: 0 }).fields).toEqual({ w: 75, r: 8 })
+  })
+  test('a warm-up never carries rir', () => {
+    const v = view([bench([warm('w1', todo(45, 5))])])
+    const fields = completeCall(v, { setId: 'w1', values: { w: 45, r: 5, rir: 3 }, eventId: 'e', now: 0 }).fields
+    expect(fields).toEqual({ w: 45, r: 5 })
+    const doneV = view([bench([warm('w1', done(45, 5, 5))])])
+    expect(editCall(doneV, { setId: 'w1', values: { w: 45, r: 5, rir: 3 }, eventId: 'e', now: 0 }).fields).toEqual({ w: 45, r: 5 })
+  })
+  test('an invalid rir is refused: no write (rirFields carries the validator\'s sentence)', () => {
+    const v = bench1(todo(75, 8))
+    expect(completeCall(v, { setId: 's1', values: { w: 75, r: 8, rir: 11 }, eventId: 'e', now: 0 })).toBeNull()
+    expect(editCall(bench1(done(75, 8)), { setId: 's1', values: { w: 75, r: 8, rir: 2.5 }, eventId: 'e', now: 0 })).toBeNull()
+  })
+  test('per side: the first side writes none, the finishing side writes row, L and R rir', () => {
+    const values = { w: 10, sides: { L: { r: 12 }, R: { r: 11 } }, rir: 3 }
+    const fresh = view([lateral([slot('s', sided(10, { r: 10, done: false }, { r: 10, done: false }))])])
+    expect(completeCall(fresh, { setId: 's', side: 'L', values, eventId: 'e', now: 0 }).fields).not.toHaveProperty('rir')
+    const half = view([lateral([slot('s', sided(10, { r: 12, done: true }, { r: 10, done: false }))])])
+    const fields = completeCall(half, { setId: 's', side: 'R', values, eventId: 'e', now: 0 }).fields
+    expect(fields.rir).toBe(3)
+    expect(fields.sides.L.rir).toBe(3)
+    expect(fields.sides.R.rir).toBe(3)
+    expect(workoutModel.syncSideAggregate({ ...half.entries[0].sets[0].row, ...fields }).rir).toBe(3)
+  })
+  test('Update: untouched keeps, a number sets, null removes only a logged value; per side too', () => {
+    const logged = bench1({ ...done(75, 8), rir: 2 })
+    expect(editCall(logged, { setId: 's1', values: { w: 75, r: 8 }, eventId: 'e', now: 0 }).fields).toEqual({ w: 75, r: 8 })
+    expect(editCall(logged, { setId: 's1', values: { w: 75, r: 8, rir: 4 }, eventId: 'e', now: 0 }).fields).toEqual({ w: 75, r: 8, rir: 4 })
+    expect(editCall(logged, { setId: 's1', values: { w: 75, r: 8, rir: null }, eventId: 'e', now: 0 }).fields).toEqual({ w: 75, r: 8, rir: null })
+    expect(editCall(bench1(done(75, 8)), { setId: 's1', values: { w: 75, r: 8, rir: null }, eventId: 'e', now: 0 }).fields).toEqual({ w: 75, r: 8 })
+    const side = view([lateral([slot('s', sided(10, { r: 12, done: true }, { r: 11, done: true }, { at: 5, rir: 1 }))])])
+    const f = editCall(side, { setId: 's', values: { w: 10, sides: { L: { r: 12 }, R: { r: 11 } }, rir: 3 }, eventId: 'e', now: 0 }).fields
+    expect(f.rir).toBe(3)
+    expect(f.sides.L.rir).toBe(3)
+    expect(f.sides.R.rir).toBe(3)
+  })
+  test('(a) per side: rir 3 lands on L, R and the row, and the web\'s sync leaves it at 3', () => {
+    const half = view([lateral([slot('s', sided(10, { r: 12, done: true }, { r: 10, done: false }))])])
+    const fields = completeCall(half, { setId: 's', side: 'R', values: { w: 10, sides: { L: { r: 12 }, R: { r: 11 } }, rir: 3 }, eventId: 'e', now: 0 }).fields
+    expect(fields.sides).toEqual({ L: { w: 10, r: 12, done: true, rir: 3 }, R: { w: 10, r: 11, done: true, rir: 3 } })
+    const row = { ...half.entries[0].sets[0].row, ...fields }
+    const synced = workoutModel.syncSideAggregate(row)
+    expect(synced.rir).toBe(3)
+    expect(synced.sides).toEqual(fields.sides)
+  })
+  test('(b) per side: an Update that clears removes all three; clearing nothing writes nothing', () => {
+    const row = sided(10, { r: 12, done: true }, { r: 11, done: true }, { at: 5, rir: 2 })
+    row.sides.L.rir = 2; row.sides.R.rir = 2
+    const f = editCall(view([lateral([slot('s', row)])]), { setId: 's', values: { w: 10, sides: { L: { r: 12 }, R: { r: 11 } }, rir: null }, eventId: 'e', now: 0 }).fields
+    expect(f.rir).toBeNull()
+    expect(f.sides.L).not.toHaveProperty('rir')
+    expect(f.sides.R).not.toHaveProperty('rir')
+    const plain = sided(10, { r: 12, done: true }, { r: 11, done: true }, { at: 5 })
+    const g = editCall(view([lateral([slot('s', plain)])]), { setId: 's', values: { w: 10, sides: { L: { r: 12 }, R: { r: 11 } }, rir: null }, eventId: 'e', now: 0 }).fields
+    expect(g).not.toHaveProperty('rir')
+    expect(g.sides.L).not.toHaveProperty('rir')
+  })
+  test('(b) a web-written side rir (row has none) is still cleared by Update', () => {
+    const row = sided(10, { r: 12, done: true }, { r: 11, done: true }, { at: 5 })
+    row.sides.L.rir = 2
+    const f = editCall(view([lateral([slot('s', row)])]), { setId: 's', values: { w: 10, sides: { L: { r: 12 }, R: { r: 11 } }, rir: null }, eventId: 'e', now: 0 }).fields
+    expect(f.sides.L).not.toHaveProperty('rir')
+  })
+  test('(d) a non-side set: row only', () => {
+    const v = bench1(todo(75, 8))
+    const f = completeCall(v, { setId: 's1', values: { w: 75, r: 8, rir: 3 }, eventId: 'e', now: 0 }).fields
+    expect(f).toEqual({ w: 75, r: 8, rir: 3 })
+    expect(editCall(bench1(done(75, 8)), { setId: 's1', values: { w: 75, r: 8, rir: 1 }, eventId: 'e', now: 0 }).fields).toEqual({ w: 75, r: 8, rir: 1 })
+  })
+  test('the weight and reps are the same with or without rir', () => {
+    const v = bench1(todo(75, 8))
+    const base = completeCall(v, { setId: 's1', values: { w: 75, r: 8 }, eventId: 'e', now: 0 }).fields
+    const withRir = completeCall(v, { setId: 's1', values: { w: 75, r: 8, rir: 9 }, eventId: 'e', now: 0 }).fields
+    expect({ w: withRir.w, r: withRir.r }).toEqual(base)
   })
 })

@@ -1,6 +1,7 @@
 import { workoutModel } from '../shared/training.js'
 import { isOvernight, projectRest } from '../session/timing.js'
 import { OVERNIGHT_NOTICE, failureText } from './failure-text.js'
+import { rirFields, sidesWithRir } from './effort-choice.js'
 import { completeFields, restEventId } from './rest-after.js'
 import { carriedWeight, isDone, isWarmup, lockedWeight, shownValues } from './workout-view.js'
 
@@ -73,7 +74,15 @@ export function completeCall(view, { setId, side, values, eventId, now }) {
   // A half-done per-side set logs the weight its first side was logged at (lockedWeight).
   const w = lockedWeight(slot.row)?.w ?? shown.w
   if (w == null) return null
-  const call = fields => ({ eventId, exerciseId: entry.id, setId, fields })
+  // Reps left rides on the commit that finishes the set (a plain set's, a per-side set's second
+  // side), never a warm-up's; untouched keypad values (rir undefined) keep a logged value, an explicit null clears it, and a Complete with no values (the dock's) clears one an Undo left, since the dock never shows it. A bad value writes nothing at all.
+  const effort = rirFields(slot.row, values ? values.rir : null, { clear: true })
+  if (!effort.ok) return null
+  const call = (fields, withEffort = true) => {
+    const out = withEffort ? { ...fields, ...effort.fields } : fields
+    if (withEffort && out.sides && 'rir' in effort.fields) out.sides = sidesWithRir(out.sides, effort.fields.rir)
+    return { eventId, exerciseId: entry.id, setId, fields: out }
+  }
   if (!isSideSet(slot.row)) {
     return shown.r == null ? null : call(completeFields(slot.row, null, { w, r: shown.r }))
   }
@@ -85,7 +94,7 @@ export function completeCall(view, { setId, side, values, eventId, now }) {
   const other = side === 'L' ? 'R' : 'L'
   const typed = slot.row.sides[other]?.done === true ? null : shown.sides?.[other]?.r
   const row = typed == null ? slot.row : { ...slot.row, sides: { ...slot.row.sides, [other]: { ...slot.row.sides[other], r: typed } } }
-  return call(completeFields(row, side, { w, r: reps }))
+  return call(completeFields(row, side, { w, r: reps }), slot.row.sides[other]?.done === true)
 }
 
 // The rest a Complete earns, read from the view after the commit: only once the set is done
@@ -133,6 +142,11 @@ export function editCall(view, { setId, values, eventId, now }) {
     const side = s => ({ ...row.sides[s], ...(w != null ? { w } : {}), r: kept(values.sides?.[s]?.r, row.sides[s].r) })
     fields.sides = { L: side('L'), R: side('R') }
   }
+  // Reps left: untouched keeps the logged one, a number sets it, null removes it.
+  const effort = rirFields(row, values.rir, { clear: true })
+  if (!effort.ok) return null
+  Object.assign(fields, effort.fields)
+  if (fields.sides && 'rir' in effort.fields) fields.sides = sidesWithRir(fields.sides, effort.fields.rir)
   return { eventId, exerciseId: entry.id, setId, fields }
 }
 
@@ -196,6 +210,31 @@ export function addWarmupCall(view, exerciseId, eventId, now) {
   const entry = (view?.entries ?? []).find(e => e.id === exerciseId)
   if (!entry) return null
   return { eventId, exerciseId: entry.id, setId: `warm:${entry.id}:${eventId}`, fields: { phase: 'warmup', warmup: true, w: null, r: null } }
+}
+
+// The prompt's two warm-ups: one prefilled row per suggested load, in order, each named by its own
+// event. Prefilled is not done: the owner completes each. Null overnight, for an unknown exercise,
+// or when `eventIds` and `sets` do not pair up.
+export function addWarmupsCall(view, exerciseId, eventIds, sets, now) {
+  if (!Array.isArray(sets) || sets.length === 0 || !Array.isArray(eventIds) || eventIds.length !== sets.length) return null
+  const calls = sets.map((set, i) => addWarmupCall(view, exerciseId, eventIds[i], now))
+  if (calls.some(call => call === null)) return null
+  return calls.map((call, i) => ({ ...call, fields: { ...call.fields, w: sets[i].w, r: sets[i].r } }))
+}
+
+// Runs the prompt's adds one after another on `session` (inside the gate). Overnight is checked
+// against the clock before each add, on the session's own latest view, so a midnight between the
+// two refuses the second. The first add failing is that failure as it is, nothing else written.
+// A later add failing leaves the earlier rows and returns its failure marked `partial`, which the
+// screen reports as 'add-warmups-partial' (not "Warm-up not added", one was). `now` is the clock.
+export async function addWarmupsInOrder(session, calls, { now = Date.now } = {}) {
+  let result = null
+  for (const [i, call] of calls.entries()) {
+    const refused = overnightRefusal(session.getState().view, now())
+    result = refused ?? await session.addSet(call)
+    if (result?.saved !== true) return i === 0 ? result : { ...result, ok: false, saved: false, partial: true }
+  }
+  return result
 }
 
 // A mis-tapped Add warm-up comes off again: the engine's removeSet drops the row and any numbers
