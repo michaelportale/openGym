@@ -24,6 +24,12 @@ describe('spokenField', () => {
     expect(spokenField('r', '20 / 18')).toBe('Reps, left 20, right 18')
     expect(spokenField('r', '– / 18')).toBe('Reps, left not set, right 18')
   })
+  // A half-done per-side set's weight is the one its first side was logged at, and cannot change.
+  test('a weight set with the other side says so', () => {
+    expect(spokenField('w', '7.5', { perHand: true, setWith: 'L' })).toBe('Weight, 7.5 pounds each, set with the left side')
+    expect(spokenField('w', '7.5', { setWith: 'R' })).toBe('Weight, 7.5 pounds, set with the right side')
+    expect(spokenField('w', '7.5', { setWith: null })).toBe('Weight, 7.5 pounds')
+  })
   test('an unknown field throws', () => {
     expect(() => spokenField('x', '1')).toThrow('x')
     expect(() => spokenField('constructor', '1')).toThrow('constructor')

@@ -2,7 +2,7 @@ import { workoutModel } from '../shared/training.js'
 import { isOvernight } from '../session/timing.js'
 import { OVERNIGHT_NOTICE, failureText } from './failure-text.js'
 import { completeFields, restEventId } from './rest-after.js'
-import { carriedWeight, isDone, isWarmup, shownValues } from './workout-view.js'
+import { carriedWeight, isDone, isWarmup, lockedWeight, shownValues } from './workout-view.js'
 
 // Which engine call a tap makes, and with what. Each returns null when the tap must not write.
 
@@ -70,10 +70,12 @@ export function completeCall(view, { setId, side, values, eventId, now }) {
   if (!found || isDone(found.slot)) return null
   const { entry, slot } = found
   const shown = values ?? shownValues(slot, side, carriedWeight(entry, setId))
-  if (shown.w == null) return null
+  // A half-done per-side set logs the weight its first side was logged at (lockedWeight).
+  const w = lockedWeight(slot.row)?.w ?? shown.w
+  if (w == null) return null
   const call = fields => ({ eventId, exerciseId: entry.id, setId, fields })
   if (!isSideSet(slot.row)) {
-    return shown.r == null ? null : call(completeFields(slot.row, null, { w: shown.w, r: shown.r }))
+    return shown.r == null ? null : call(completeFields(slot.row, null, { w, r: shown.r }))
   }
   if (!SIDES.includes(side) || slot.row.sides[side]?.done === true) return null
   const reps = shown.sides?.[side]?.r
@@ -82,7 +84,7 @@ export function completeCall(view, { setId, side, values, eventId, now }) {
   const other = side === 'L' ? 'R' : 'L'
   const typed = shown.sides?.[other]?.r
   const row = typed == null ? slot.row : { ...slot.row, sides: { ...slot.row.sides, [other]: { ...slot.row.sides[other], r: typed } } }
-  return call(completeFields(row, side, { w: shown.w, r: reps }))
+  return call(completeFields(row, side, { w, r: reps }))
 }
 
 // The rest a Complete earns, read from the view after the commit: only once the set is done
@@ -141,12 +143,14 @@ export async function undoWrite(session, view, { setId, eventId, now }) {
 }
 
 // A draft (Save, or typed numbers kept on close) is for a set not done yet; a done set changes
-// only through editCall.
+// only through editCall. A half-done per-side set's draft keeps the weight its first side was
+// logged at (lockedWeight), so what is stored is what the set shows.
 export function draftCall(view, { setId, values, now }) {
   if (overnightNow(view, now)) return null
   const found = findSet(view, setId)
   if (!found || isDone(found.slot)) return null
-  return { setId, values }
+  const locked = lockedWeight(found.slot.row)
+  return { setId, values: locked ? { ...values, w: locked.w } : values }
 }
 
 // One more set like the last work set, as the web's Add set does; per side stays per side.

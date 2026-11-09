@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { applyKey, completeBlocker, fieldText, keypadState, keypadValues, sheetCloseAction } from './keypad.js'
+import { applyKey, completeBlocker, fieldText, keypadState, keypadValues, sheetCloseAction, weightLockNote } from './keypad.js'
 
 const press = (state, ...keys) => keys.reduce(applyKey, state)
 const values = (state, ...keys) => keypadValues(press(state, ...keys))
@@ -108,4 +108,27 @@ test('completeBlocker: per side, only the side being completed needs reps', () =
   expect(completeBlocker(v, 'L')).toBeNull()
   expect(completeBlocker(v, 'R')).toBe('reps')
   expect(completeBlocker({ w: null, sides: { L: { r: 10 }, R: { r: 10 } } }, 'L')).toBe('weight')
+})
+
+// A per-side set with one side logged: both sides share one weight (one machine setting), so it
+// stays the one logged with that side. Only the other side's reps can change.
+test('a half-done per-side set refuses weight input; the other side\'s reps stay editable', () => {
+  const initial = { w: 7.5, sides: { L: { r: 10 }, R: { r: 10 } } }
+  const left = keypadState(initial, 'w', { weightSetWith: 'L' })
+  expect(left.field).toBe('R.r')
+  expect(values(left, '1', '2')).toEqual({ w: 7.5, sides: { L: { r: 10 }, R: { r: 12 } } })
+  expect(values(left, 'field:w', '1', '0')).toEqual({ w: 7.5, sides: { L: { r: 10 }, R: { r: 10 } } })
+  expect(press(left, 'field:w').field).toBe('R.r')
+  expect(values(left, 'chip:+5', 'chip:-10').w).toBe(7.5)
+  expect(values(left, 'back').w).toBe(7.5)
+  expect(fieldText(press(left, 'field:w', '1'), 'w')).toBe('7.5')
+  expect(keypadState(initial, 'w', { weightSetWith: 'R' }).field).toBe('L.r')
+  // A tapped reps box still opens on it.
+  expect(keypadState(initial, 'R.r', { weightSetWith: 'L' }).field).toBe('R.r')
+})
+test('weightLockNote says which side set the weight', () => {
+  expect(weightLockNote('L')).toBe('Set with the left side.')
+  expect(weightLockNote('R')).toBe('Set with the right side.')
+  expect(weightLockNote(null)).toBeNull()
+  expect(weightLockNote(undefined)).toBeNull()
 })

@@ -5,34 +5,38 @@ import AppText from '../ui/AppText'
 import IconButton from '../ui/IconButton'
 import PrimaryButton from '../ui/PrimaryButton'
 import ScaleButton from '../ui/ScaleButton'
-import { applyKey, completeBlocker, fieldText, keypadState, keypadValues, sheetCloseAction } from './keypad'
+import { applyKey, completeBlocker, fieldText, keypadState, keypadValues, sheetCloseAction, weightLockNote } from './keypad'
 import { spokenField } from './spoken'
 
 const CHIPS = ['-10', '-5', '+5', '+10']
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'back']
 
 // A neutral key: ink on grey, never the accent.
-function Key({ text, label, hint, style = styles.key, onPress }) {
+function Key({ text, label, hint, style = styles.key, disabled = false, onPress }) {
   return (
-    <ScaleButton accessibilityLabel={label} accessibilityHint={hint} onPress={onPress} style={style} faceStyle={styles.keyFace}>
+    <ScaleButton accessibilityLabel={label} accessibilityHint={hint} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={style} faceStyle={[styles.keyFace, disabled && styles.off]}>
       <AppText variant="value">{text}</AppText>
     </ScaleButton>
   )
 }
 
 // `id` is the keypad field ('w', 'r', 'L.r', 'R.r'); `title` is what it shows ('Lb each').
-function Field({ id, title, text, active, perHand, onPress }) {
+// `setWith` ('L' or 'R') marks a weight logged with that side: it shows, says so, and takes no input.
+function Field({ id, title, text, active, perHand, setWith = null, onPress }) {
+  const note = weightLockNote(setWith)
   return (
     <ScaleButton
-      accessibilityLabel={spokenField(id, text, { perHand })}
-      accessibilityHint="Selects this field for the keypad."
-      accessibilityState={{ selected: active }}
+      accessibilityLabel={spokenField(id, text, { perHand, setWith })}
+      accessibilityHint={note ? undefined : 'Selects this field for the keypad.'}
+      accessibilityState={{ selected: active, disabled: note !== null }}
+      disabled={note !== null}
       onPress={onPress}
       style={styles.fieldSlot}
       faceStyle={[styles.field, active && styles.fieldActive]}
     >
       <AppText variant="label" color={color.textSecondary}>{title}</AppText>
       <AppText variant="lead">{text}</AppText>
+      {note ? <AppText variant="label" color={color.textSecondary}>{note}</AppText> : null}
     </ScaleButton>
   )
 }
@@ -48,12 +52,14 @@ const keyHint = key => (key === 'back' ? 'Deletes the last character.' : 'Types 
 // so the weight field is spoken "pounds each". A done set passes saveLabel 'Update', onUndo, and
 // no onComplete. `notice` shows a write that was refused.
 // `side` is the side Complete logs on a per-side set; Complete waits for its reps and the weight.
+// `weightSetWith` ('L' or 'R') is the side a half-done per-side set's weight was logged with: the
+// weight field and the weight chips take no input, and the sheet opens on the other side's reps.
 // While open, every app state change calls onAppState(next, values, changed), so the caller can
 // keep typed numbers when the app leaves the front (a kill from the app switcher follows).
-export default function KeypadSheet({ visible, title, initial, perSide, side = null, initialField = 'w', weightTitle = 'Lb', perHand = false, saveLabel = 'Save', completeLabel = 'Complete', notice, onSave, onComplete, onUndo, onClose, onAppState }) {
-  const [state, setState] = useState(() => keypadState(initial, initialField))
+export default function KeypadSheet({ visible, title, initial, perSide, side = null, initialField = 'w', weightSetWith = null, weightTitle = 'Lb', perHand = false, saveLabel = 'Save', completeLabel = 'Complete', notice, onSave, onComplete, onUndo, onClose, onAppState }) {
+  const [state, setState] = useState(() => keypadState(initial, initialField, { weightSetWith }))
   useEffect(() => {
-    if (visible) setState(keypadState(initial, initialField))
+    if (visible) setState(keypadState(initial, initialField, { weightSetWith }))
   }, [visible])
   const values = keypadValues(state)
   const blocked = completeBlocker(values, side)
@@ -83,14 +89,14 @@ export default function KeypadSheet({ visible, title, initial, perSide, side = n
           <AppText variant="body" color={color.text} accessibilityLiveRegion="polite" accessibilityRole="alert">{notice}</AppText>
         ) : null}
         <View style={styles.fields}>
-          <Field id="w" title={weightTitle} text={fieldText(state, 'w')} active={state.field === 'w'} perHand={perHand} onPress={press('field:w')} />
+          <Field id="w" title={weightTitle} text={fieldText(state, 'w')} active={state.field === 'w'} perHand={perHand} setWith={state.lock} onPress={press('field:w')} />
           {fields.map(([id, name]) => (
             <Field key={id} id={id} title={name} text={fieldText(state, id)} active={state.field === id} onPress={press(`field:${id}`)} />
           ))}
         </View>
         <View style={styles.chips}>
           {CHIPS.map(chip => (
-            <Key key={chip} text={chip.replace('-', '−')} label={`${chip.startsWith('-') ? 'Minus' : 'Plus'} ${chip.slice(1)} pounds`} hint="Changes the weight." style={styles.chip} onPress={press(`chip:${chip}`)} />
+            <Key key={chip} text={chip.replace('-', '−')} label={`${chip.startsWith('-') ? 'Minus' : 'Plus'} ${chip.slice(1)} pounds`} hint="Changes the weight." style={styles.chip} disabled={state.lock !== null} onPress={press(`chip:${chip}`)} />
           ))}
         </View>
         <View style={styles.grid}>
@@ -138,6 +144,7 @@ const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   key: { flexBasis: '31%', flexGrow: 1 },
   keyFace: { minHeight: touch.primary, alignItems: 'center', justifyContent: 'center', backgroundColor: color.control, borderColor: color.stroke, borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.md },
+  off: { opacity: 0.4 },
   actions: { flexDirection: 'row', gap: space.sm },
   action: { flex: 1 },
   save: { minHeight: touch.primary, alignItems: 'center', justifyContent: 'center', backgroundColor: color.control, borderColor: color.stroke, borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.md },

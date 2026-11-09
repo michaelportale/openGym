@@ -28,12 +28,25 @@ function commit(state) {
 
 const validField = (field, sided) => (sided ? ['w', 'L.r', 'R.r'] : ['w', 'r']).includes(field)
 
+const OTHER = { L: 'R', R: 'L' }
+
 // `field` is the one the sheet opens on: 'w' by default, 'r' when the reps box was tapped.
-export function keypadState({ w = null, r = null, sides } = {}, field = 'w') {
+// `weightSetWith` ('L' or 'R') is the side a half-done per-side set's weight was logged with:
+// that weight is shared and stays (lockedWeight), so the weight field takes no input and the
+// sheet opens on the other side's reps instead.
+export function keypadState({ w = null, r = null, sides } = {}, field = 'w', { weightSetWith = null } = {}) {
   const sided = sides
     ? { L: { r: sides.L?.r ?? null }, R: { r: sides.R?.r ?? null } }
     : null
-  return { field: validField(field, sided !== null) ? field : 'w', entry: null, w: w ?? null, r: sided ? null : (r ?? null), sides: sided }
+  const lock = sided && Object.hasOwn(OTHER, weightSetWith ?? '') ? weightSetWith : null
+  const valid = validField(field, sided !== null) ? field : 'w'
+  const opens = lock && valid === 'w' ? `${OTHER[lock]}.r` : valid
+  return { field: opens, entry: null, w: w ?? null, r: sided ? null : (r ?? null), sides: sided, lock }
+}
+
+// The line under a weight set with the other side: 'Set with the left side.', or null.
+export function weightLockNote(side) {
+  return side === 'L' ? 'Set with the left side.' : side === 'R' ? 'Set with the right side.' : null
 }
 
 export function keypadValues(state) {
@@ -60,11 +73,13 @@ function back(state) {
 }
 
 function chip(state, amount) {
+  if (state.lock) return state
   const s = commit(state)
   return { ...s, w: Math.round(Math.max(0, (s.w ?? 0) + amount) * 1000) / 1000 }
 }
 
 function pick(state, field) {
+  if (field === 'w' && state.lock) return state
   if (field !== 'w' && field !== 'r' && !/^[LR]\.r$/.test(field)) return state
   if (field === 'r' ? isSided(state) : field !== 'w' && !isSided(state)) return state
   return { ...commit(state), field }

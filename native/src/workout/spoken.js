@@ -26,12 +26,17 @@ export function sideValues(text) {
 }
 
 const FIELDS = { w: 'Weight', r: 'Reps', 'L.r': 'Left reps', 'R.r': 'Right reps' }
+const SIDES = { L: 'left side', R: 'right side' }
 
 // A keypad field or an open row's box: 'w', 'r', or per side 'L.r'/'R.r', and the text it shows.
-export function spokenField(field, value, { perHand = false } = {}) {
+// `setWith` ('L' or 'R') is the side a half-done per-side set's weight was logged with.
+export function spokenField(field, value, { perHand = false, setWith = null } = {}) {
   if (!Object.hasOwn(FIELDS, field)) throw new Error(`Unknown field: ${field}`)
   if (isBlank(value)) return `${FIELDS[field]}, not set`
-  if (field === 'w') return `Weight, ${spokenWeight(value, { perHand })}`
+  if (field === 'w') {
+    const lockedTo = Object.hasOwn(SIDES, setWith ?? '') ? `, set with the ${SIDES[setWith]}` : ''
+    return `Weight, ${spokenWeight(value, { perHand })}${lockedTo}`
+  }
   if (field === 'r' && String(value).includes(' / ')) {
     const { L, R } = sideValues(value)
     const said = text => (isBlank(text) ? 'not set' : text)
@@ -54,7 +59,6 @@ export function spokenDuration(ms) {
   return parts.length > 0 ? parts.join(' ') : '0 seconds'
 }
 
-const SIDES = { L: 'left side', R: 'right side' }
 const SET_MODES = ['ready', 'enter-weight', 'enter-reps']
 
 // "2, left side, 75 pounds each, 8 reps": the dock's set after the word "set".

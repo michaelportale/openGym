@@ -132,6 +132,13 @@ describe('completeCall', () => {
       sides: { L: { w: 10, r: 12, done: true }, R: { w: 10, r: 11, done: false } },
     })
   })
+  // Both sides share one weight: on a half-done set it is the one the first side was logged at,
+  // whatever the sheet hands over.
+  test('per side: the second side logs the first side\'s weight even if the sheet sends another', () => {
+    const v = view([lateral([slot('s', sided(7.5, { r: 10, done: true }, { r: 10, done: false }), { completed: true })])])
+    const call = completeCall(v, { setId: 's', side: 'R', values: { w: 10, sides: { L: { r: 10 }, R: { r: 9 } } }, eventId: 'e2' })
+    expect(call.fields).toEqual({ w: 7.5, sides: { L: { w: 7.5, r: 10, done: true }, R: { w: 7.5, r: 9, done: true } } })
+  })
   test('per side: the right side after the left keeps the left done', () => {
     const v = view([lateral([slot('s', sided(7.5, { r: 10, done: true }, { r: 10, done: false }), { completed: true })])])
     expect(completeCall(v, { setId: 's', side: 'R', eventId: 'e2' }).fields.sides).toEqual({
@@ -255,6 +262,14 @@ describe('draftCall', () => {
     const v = view([bench([slot('b0', done(75, 10)), slot('b1', todo(75, 8)), slot('b2', todo(75, 8))])])
     expect(draftCall(v, { setId: 'b1', values: { w: 80, r: 8 } })).toEqual({ setId: 'b1', values: { w: 80, r: 8 } })
     expect(draftCall(v, { setId: 'b2', values: { w: 80, r: 6 } })).toEqual({ setId: 'b2', values: { w: 80, r: 6 } })
+  })
+  // What is stored is what the set shows: a half-done set's weight is the first side's.
+  test('per side, one side done: the draft keeps the logged weight, never a typed one', () => {
+    const v = view([lateral([slot('s', sided(7.5, { r: 10, done: false }, { r: 8, done: true }), { completed: true })])])
+    expect(draftCall(v, { setId: 's', values: { w: 10, sides: { L: { r: 9 }, R: { r: 8 } } } }))
+      .toEqual({ setId: 's', values: { w: 7.5, sides: { L: { r: 9 }, R: { r: 8 } } } })
+    const fresh = view([lateral([slot('s', sided(7.5, { r: 10, done: false }, { r: 8, done: false }))])])
+    expect(draftCall(fresh, { setId: 's', values: { w: 10, sides: { L: { r: 9 }, R: { r: 8 } } } }).values.w).toBe(10)
   })
   test('never on a done set (only Update changes it) or an unknown one', () => {
     const v = view([bench([slot('b0', done(75, 10))])])
@@ -834,6 +849,30 @@ describe.each(SQLITE_DRIVERS)('%s: the calls drive the engine', (_name, createDb
 
   // The draft the 'inactive' wrote is in the engine's view as the same numbers, so the
   // 'background' right after it writes nothing.
+  // Left logged at 7.5. A Save of 10 for the right stores 7.5, as shown; a sheet Complete of 10
+  // for the right logs 7.5 on both sides.
+  test('per side: after the first side, a typed weight never reaches the draft or the log', async () => {
+    clock = T0 + 1000
+    let db = createDb()
+    const session = await open(db)
+    await session.call('commitSet', completeCall(current(session), { setId: latSet, side: 'L', values: { w: 7.5, sides: { L: { r: 10 }, R: { r: 10 } } }, eventId: 'l1', now: clock }))
+    const save = draftCall(current(session), { setId: latSet, values: { w: 10, sides: { L: { r: 10 }, R: { r: 9 } } }, now: clock })
+    expect((await session.call('putDraft', save.setId, save.values)).saved).toBe(true)
+    expect((await createSqliteSessionStorage(db).readDrafts())[latSet]).toEqual({ w: 7.5, sides: { L: { r: 10 }, R: { r: 9 } } })
+    const set0 = current(session).entries[1].sets[0]
+    expect(shownValues(set0, 'R')).toEqual({ w: 7.5, sides: { L: { r: 10 }, R: { r: 9 } } })
+    expect(workoutScreen(current(session), { names: {}, lastTimes: {}, exerciseIndex: 1 }).dock).toMatchObject({ side: 'R', figures: { w: 7.5, r: 9 } })
+
+    clock = T0 + 20_000
+    const right = completeCall(current(session), { setId: latSet, side: 'R', values: { w: 10, sides: { L: { r: 10 }, R: { r: 9 } } }, eventId: 'r1', now: clock })
+    expect((await session.call('commitSet', right)).saved).toBe(true)
+    const logged = view => expect(view.entries[1].sets[0].row.sides).toEqual({ L: { w: 7.5, r: 10, done: true }, R: { w: 7.5, r: 9, done: true } })
+    logged(current(session))
+    expect(current(session).entries[1].sets[0].row.w).toBe(7.5)
+    db = db.reopen()
+    logged(current(await open(db, false)))
+  })
+
   test("leaving the app writes the typed numbers once: 'inactive' keeps them, 'background' finds them kept", async () => {
     const db = createDb()
     const session = await open(db)

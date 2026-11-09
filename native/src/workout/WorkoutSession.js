@@ -163,6 +163,7 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
         perSide={sheet.perSide}
         side={sheet.side}
         initialField={sheet.initialField}
+        weightSetWith={sheet.weightSetWith}
         weightTitle={card.weightTitle}
         perHand={card.perHand}
         saveLabel={sheet.mode === 'done' ? 'Update' : 'Save'}

@@ -5,7 +5,7 @@ import { createEventId } from '../session/ids'
 import { createActionGate } from './action-gate'
 import { pendingRest, restMsFor } from './rest-after'
 import { shownAfterComplete, withTargets } from './session-screen'
-import { carriedWeight, shownValues } from './workout-view'
+import { carriedWeight, lockedWeight, shownValues } from './workout-view'
 import { NO_NOTICES, addSetCall, addWarmupCall, completeCall, completeResult, dockKeypadField, draftCall, editCall, findSet, finishRetarget, keypadField, noticeAnnouncement, noticesAfter, overnightNotice, overnightRefusal, primaryAction, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, undoWrite } from './set-calls'
 
 const sideLabel = { L: 'Complete left', R: 'Complete right' }
@@ -120,7 +120,9 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
   // The typed numbers kept as the app leaves the front. Through the gate like every write, and the
   // same checks, but it holds the gate for that one draft write and nothing more: no busy flag and
   // no view reload after an overnight refusal (nothing on screen changes while the app leaves; the
-  // next tap, or the new-day reopen, reloads it). A tap on coming back waits on that write at most.
+  // next tap, or the new-day reopen, reloads it). A tap that lands during the write is dropped by
+  // the gate ({ ignored: true }), as during any write; holding nothing else keeps that window to
+  // the write itself.
   const keepDraft = (setId, values) => gate.current(async () => {
     const view = latest()
     const now = Date.now()
@@ -161,6 +163,8 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
       perSide,
       initial: shownValues(found.slot, side, carriedWeight(found.entry, setId)),
       initialField: keypadField(field, perSide, side),
+      // A half-done per-side set's weight stays the one its first side was logged at.
+      weightSetWith: lockedWeight(found.slot.row)?.side ?? null,
       title: `${screen.card.name} · ${row.warmup ? 'Warm-up' : `Set ${row.number}`}`,
       completeLabel: sideLabel[side] ?? (row.warmup ? 'Complete warm-up' : `Complete set ${row.number}`),
     })
