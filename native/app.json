@@ -9,7 +9,13 @@
     "userInterfaceStyle": "dark",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "io.github.michaelportale.opengym"
+      "bundleIdentifier": "io.github.michaelportale.opengym",
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        },
+        "NSLocalNetworkUsageDescription": "openGym connects to your own server on your network to back up your workouts."
+      }
     },
     "plugins": [
       "expo-router",
@@ -32,6 +38,12 @@
         "expo-notifications",
         {
           "enableRemoteNotifications": false
+        }
+      ],
+      [
+        "expo-secure-store",
+        {
+          "faceIDPermission": false
         }
       ]
     ]
