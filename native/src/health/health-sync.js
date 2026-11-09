@@ -13,10 +13,13 @@ const BW_SINCE = 'bwSince' // health_state: the start of the local day the impor
 const BW_ANCHOR = 'bwAnchor' // health_state: the anchored body-mass query's anchor
 
 // weighIns: the weigh-in store (createSqliteWeighIns); readCopy: () => the server copy or null;
-// ownBundleId: () => the app's own Health bundle id; timeZone: the local days' zone;
+// ownBundleId: () => the app's own Health bundle id; timeZone: () => the local days' zone, read
+// once per import pass;
 // onWeighIns: called when an import wrote an op (the server sync), never awaited.
 export function createHealthSync({ adapter, store, workouts, now, weighIns, readCopy, ownBundleId, timeZone, onWeighIns }) {
-  const missing = Object.entries({ weighIns, readCopy, ownBundleId, timeZone, onWeighIns }).filter(([, v]) => !v).map(([k]) => k)
+  const missing = Object.entries({ weighIns, readCopy, ownBundleId, timeZone, onWeighIns })
+    .filter(([k, v]) => (k === 'weighIns' ? !v : typeof v !== 'function'))
+    .map(([k]) => k)
   if (missing.length) throw new Error('createHealthSync needs ' + missing.join(', '))
   const { links, state, readings } = store
 
@@ -123,17 +126,17 @@ export function createHealthSync({ adapter, store, workouts, now, weighIns, read
     return own
   }
 
-  // The anchored read. A throw with a stored anchor clears it and reads once from `since`.
-  // null when Health was turned off meanwhile.
+  // { read, full }: the anchored read, or a read without an anchor (full: every sample from
+  // `since`). A throw with a stored anchor reads once without it; the stored anchor stays until
+  // a pass's ops are written. null when Health was turned off meanwhile.
   async function readChanges(mine, since) {
     const anchor = (await state.get(BW_ANCHOR)) || null
     try {
-      return await adapter.readBodyMassChanges({ anchor, since })
+      return { read: await adapter.readBodyMassChanges({ anchor, since }), full: !anchor }
     } catch (error) {
       if (generation !== mine) return null
       if (!anchor) throw error
-      await state.set(BW_ANCHOR, '')
-      return adapter.readBodyMassChanges({ anchor: null, since })
+      return { read: await adapter.readBodyMassChanges({ anchor: null, since }), full: true }
     }
   }
 
@@ -147,27 +150,39 @@ export function createHealthSync({ adapter, store, workouts, now, weighIns, read
   // putFromHealth so a weight typed meanwhile is never replaced. The anchor moves only after
   // the ops are written and the cache updated, so a failure reads the same changes again.
   async function importWeighIns(mine) {
+    const zone = timeZone()
     let since = Number((await state.get(BW_SINCE)) || NaN)
     if (!Number.isFinite(since)) {
-      since = startOfLocalDay(now(), timeZone)
+      since = startOfLocalDay(now(), zone)
       await state.set(BW_SINCE, String(since))
     }
     if (generation !== mine) return
     const ownBundle = await ownId()
     if (generation !== mine) return
-    const read = await readChanges(mine, new Date(since))
-    if (!read || generation !== mine) return
+    const changes = await readChanges(mine, new Date(since))
+    if (!changes || generation !== mine) return
+    const { read, full } = changes
 
-    // New readings go in now; deleted ones leave the cache only after the ops are written, so a
-    // deletion read again after a failed write still finds its day.
+    // New readings go in now (a cached one keeps its day, whatever the zone is now); deleted ones
+    // leave the cache only after the ops are written, so a deletion read again after a failed
+    // write still finds its day.
     const days = new Set()
     for (const sample of read.samples) {
       if (!isExternal(sample, ownBundle)) continue
-      const d = localDate(sample.at, timeZone)
+      const d = (await readings.get(sample.uuid))?.d ?? localDate(sample.at, zone)
       await readings.put({ uuid: sample.uuid, d, lb: sample.lb, at: sample.at })
       days.add(d)
     }
     const gone = new Set()
+    if (full) {
+      // A full read reports no deletions: a cached reading it did not return is gone.
+      const returned = new Set(read.samples.map((s) => s.uuid))
+      for (const cached of await readings.list()) {
+        if (returned.has(cached.uuid)) continue
+        gone.add(cached.uuid)
+        days.add(cached.d)
+      }
+    }
     for (const uuid of read.deleted) {
       const cached = await readings.get(uuid)
       if (!cached) continue // not an external reading this import kept
@@ -183,11 +198,12 @@ export function createHealthSync({ adapter, store, workouts, now, weighIns, read
     const entryByDay = {}
     for (const entry of applyDayOps(doc.bodyweight, pending, deleted).next) entryByDay[entry.d] = entry
     const unacked = new Set(pending.map((o) => o.d + '@' + o.t))
+    const firstDay = localDate(since, zone)
     const localOpByDay = {}
     for (const row of rows) {
       localOpByDay[row.d] = { ...row, acked: !unacked.has(row.d + '@' + row.t) }
-      // This phone's own typed removal lets the day's readings back in.
-      if (row.op === 'remove' && row.src == null && !entryByDay[row.d]) days.add(row.d)
+      // This phone's own typed removal lets the day's readings back in (no reading predates bwSince).
+      if (row.op === 'remove' && row.src == null && row.d >= firstDay && !entryByDay[row.d]) days.add(row.d)
     }
     const readingsByDay = {}
     for (const d of days) readingsByDay[d] = (await readings.listDay(d)).filter((r) => !gone.has(r.uuid))

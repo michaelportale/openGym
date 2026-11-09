@@ -71,6 +71,7 @@ async function readingsRoundTrip(store) {
   expect(await readings.remove('a')).toBeNull()
   expect(await readings.remove('never')).toBeNull()
   expect(await readings.listDay('2026-11-09')).toEqual([reading('b', { at: 2000 })])
+  expect(await readings.list()).toEqual([reading('b', { at: 2000 }), reading('c', { d: '2026-11-10' })])
 }
 
 test('memory store: readings put, get, list by day and remove', async () => {

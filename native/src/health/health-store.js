@@ -104,6 +104,9 @@ export function createMemoryHealthStore() {
       async listDay(d) {
         return [...readings.values()].filter(r => r.d === d).sort(byTime).map(toReading)
       },
+      async list() {
+        return [...readings.values()].sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : byTime(a, b))).map(toReading)
+      },
     },
   }
 }
@@ -197,6 +200,10 @@ export function createSqliteHealthStore(db) {
         await ready()
         const rows = await db.getAll('SELECT uuid, d, lb, at FROM health_readings WHERE d = ? ORDER BY at, uuid', [d])
         return rows.map(toReading)
+      },
+      async list() {
+        await ready()
+        return (await db.getAll('SELECT uuid, d, lb, at FROM health_readings ORDER BY d, at, uuid')).map(toReading)
       },
     },
   }

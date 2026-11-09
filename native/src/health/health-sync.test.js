@@ -60,7 +60,7 @@ const importDeps = () => ({
   weighIns: createMemoryWeighIns(),
   readCopy: async () => null,
   ownBundleId: async () => 'io.github.michaelportale.opengym',
-  timeZone: 'UTC',
+  timeZone: () => 'UTC',
   onWeighIns: () => {},
 })
 
@@ -389,6 +389,7 @@ test('the engine needs every weigh-in import dependency', () => {
   for (const key of ['weighIns', 'readCopy', 'ownBundleId', 'timeZone', 'onWeighIns']) {
     expect(() => createHealthSync({ ...base, [key]: undefined }), key).toThrow(key)
   }
+  expect(() => createHealthSync({ ...base, timeZone: 'UTC' })).toThrow('timeZone')
 })
 
 test('a workout export that throws does not stop the import; its error shows', async () => {

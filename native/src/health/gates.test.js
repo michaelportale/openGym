@@ -131,6 +131,12 @@ test('an anchored sample without a source, metadata, finite quantity, start or u
   expect(toBodyMassChanges({ samples: bad, deletedSamples: [], newAnchor: 'x' }).samples).toEqual([])
 })
 
+test('a reading outside (0, 1000] lb is skipped, like a typed weight', () => {
+  const lbs = [0, -1, 1000.01, 2000, 0.1, 1000]
+  const out = toBodyMassChanges({ samples: lbs.map((quantity, i) => sample('s' + i, { quantity })), deletedSamples: [], newAnchor: 'x' })
+  expect(out.samples.map(s => s.lb)).toEqual([0.1, 1000])
+})
+
 test('only a string sync identifier counts; the early workout key is not read', () => {
   const read = metadata => toBodyMassChanges({ samples: [sample('a', { metadata })], deletedSamples: [], newAnchor: 'x' }).samples[0].syncId
   expect(read({ HKMetadataKeySyncIdentifier: 42 })).toBeNull()

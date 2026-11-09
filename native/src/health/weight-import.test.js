@@ -82,6 +82,15 @@ test('plan: a reading deleted elsewhere is refused while the day stays absent; a
   expect(plan({ readingsByDay: { [DAY]: [r('x', 180, hour(7))] }, localOpByDay: typedRemove })[0].hk).toBe('x')
 })
 
+test('plan: a pending Health set the removal on record already beats is refused too', () => {
+  const row = { d: DAY, op: 'set', w: 180, t: NOW - 100, src: 'health', hk: 'x', acked: false }
+  const readingsByDay = { [DAY]: [r('x', 180, hour(9)), r('y', 181, hour(7))] }
+  expect(plan({ readingsByDay, localOpByDay: { [DAY]: row }, deleted: { [DAY]: NOW - 100 } }))
+    .toEqual([{ d: DAY, op: 'set', w: 181, t: NOW, src: 'health', hk: 'y' }])
+  // A removal stamped before the row's t does not refuse it.
+  expect(plan({ readingsByDay, localOpByDay: { [DAY]: row }, deleted: { [DAY]: NOW - 101 } })[0].hk).toBe('x')
+})
+
 test('plan: a set on a day with a removal on record takes a t past it', () => {
   const readingsByDay = { [DAY]: [r('a', 180, hour(7))] }
   expect(plan({ readingsByDay, deleted: { [DAY]: NOW + 5000 } })[0].t).toBe(NOW + 5001)
@@ -119,7 +128,7 @@ async function setup({ on = true, now = NOW } = {}) {
   const store = createMemoryHealthStore()
   if (on) await store.state.set('on', '1')
   const weighIns = createMemoryWeighIns()
-  const world = { copy: null, clock: now, pokes: 0 }
+  const world = { copy: null, clock: now, pokes: 0, zone: 'UTC' }
   const health = createHealthSync({
     adapter,
     store,
@@ -128,7 +137,7 @@ async function setup({ on = true, now = NOW } = {}) {
     weighIns,
     readCopy: async () => world.copy,
     ownBundleId: async () => OWN,
-    timeZone: 'UTC',
+    timeZone: () => world.zone,
     onWeighIns: () => { world.pokes++ },
   })
   return { adapter, store, weighIns, health, world }
@@ -306,12 +315,19 @@ test('a phone that had Health on before weigh-ins gets bwSince on its first pass
   expect(adapter.calls[0].since).toEqual(new Date(MIDNIGHT))
 })
 
-test('a malformed anchor is cleared and read once without it', async () => {
+test('a malformed anchor is read past once without it, and replaced only after the ops are written', async () => {
   const { adapter, store, weighIns, health } = await setup()
   await store.state.set('bwSince', String(MIDNIGHT - 86400000))
   await store.state.set('bwAnchor', 'garbage')
+  const put = weighIns.putFromHealth
+  const seen = []
+  weighIns.putFromHealth = async op => {
+    seen.push(await store.state.get('bwAnchor'))
+    return put(op)
+  }
   adapter.reads.push(new Error('malformed anchor'), changes([scale('a', 180, hour(9))]))
   await health.run()
+  expect(seen).toEqual(['garbage'])
   expect(adapter.calls).toEqual([
     { anchor: 'garbage', since: new Date(MIDNIGHT - 86400000) },
     { anchor: null, since: new Date(MIDNIGHT - 86400000) },
@@ -334,14 +350,89 @@ test('a failing read without a stored anchor is not retried; the error shows and
   expect((await health.status()).error).toBeNull()
 })
 
-test('a second failure after clearing the anchor reads no more', async () => {
+test('two failures in one pass read no more and keep the stored anchor for the next pass', async () => {
   const { adapter, store, health } = await setup()
-  await store.state.set('bwAnchor', 'garbage')
-  adapter.reads.push(new Error('bad anchor'), new Error('still failing'))
+  await store.state.set('bwAnchor', 'good')
+  adapter.reads.push(new Error('database inaccessible'), new Error('still failing'))
   await health.run()
-  expect(adapter.calls).toHaveLength(2)
-  expect(await store.state.get('bwAnchor')).toBeFalsy()
+  expect(adapter.calls.map(c => c.anchor)).toEqual(['good', null])
+  expect(await store.state.get('bwAnchor')).toBe('good')
   expect((await health.status()).error).toBe('still failing')
+  await health.run()
+  expect(adapter.calls[2].anchor).toBe('good')
+  expect(await store.state.get('bwAnchor')).toBe('anchor-3')
+})
+
+test('a reading deleted while the anchored read failed: the full re-read falls back, then removes the day', async () => {
+  const { adapter, store, weighIns, health, world } = await setup()
+  adapter.reads.push(changes([scale('P', 181, hour(7)), scale('Q', 180, hour(9))]))
+  await health.run()
+  await pushed(weighIns, world)
+  expect((await weighIns.get(DAY)).hk).toBe('Q')
+  // Q is deleted in Health; the anchored read fails and the read without an anchor sees only P.
+  world.clock += 1000
+  adapter.reads.push(new Error('transient'), changes([scale('P', 181, hour(7))]))
+  await health.run()
+  expect(adapter.calls.slice(1).map(c => c.anchor)).toEqual(['anchor-1', null])
+  expect(await weighIns.get(DAY)).toEqual({ d: DAY, op: 'set', w: 181, t: NOW + 1000, src: 'health', hk: 'P' })
+  expect((await store.readings.listDay(DAY)).map(x => x.uuid)).toEqual(['P'])
+  await pushed(weighIns, world)
+  // P goes the same way: the day is removed, not fallen back to the stale Q.
+  world.clock += 1000
+  adapter.reads.push(new Error('transient'), changes([]))
+  await health.run()
+  expect(await weighIns.get(DAY)).toEqual({ d: DAY, op: 'remove', t: NOW + 2000, src: 'health' })
+  expect(await store.readings.listDay(DAY)).toEqual([])
+})
+
+test('every read without an anchor is a full snapshot: a cached reading it does not return is gone', async () => {
+  const { adapter, store, weighIns, health } = await setup()
+  adapter.reads.push({ ...changes([scale('P', 181, hour(7)), scale('Q', 180, hour(9))]), anchor: null })
+  await health.run()
+  expect(await store.state.get('bwAnchor')).toBeNull()
+  adapter.reads.push(changes([scale('P', 181, hour(7)), scale('own', 179, hour(10), { bundleId: OWN })]))
+  await health.run()
+  expect(adapter.calls[1].anchor).toBeNull()
+  expect((await weighIns.get(DAY)).hk).toBe('P')
+  expect((await store.readings.listDay(DAY)).map(x => x.uuid)).toEqual(['P'])
+})
+
+test('the time zone is resolved each pass, and a cached reading keeps its day', async () => {
+  const { adapter, store, weighIns, health, world } = await setup()
+  const r1 = Date.parse('2026-11-09T03:00:00Z') // 11-09 in UTC, 11-08 in Los Angeles
+  adapter.reads.push(changes([scale('r', 180, r1)]))
+  await health.run()
+  world.zone = 'America/Los_Angeles'
+  const s1 = Date.parse('2026-11-11T05:00:00Z') // 11-11 in UTC, 11-10 in Los Angeles
+  adapter.reads.push(changes([scale('r', 180, r1), scale('s', 182, s1)]))
+  await health.run()
+  expect((await store.readings.get('r')).d).toBe(DAY)
+  expect((await weighIns.list()).map(o => [o.d, o.hk])).toEqual([[DAY, 'r'], ['2026-11-10', 's']])
+})
+
+test('a pending import the removal on record already beats is not imported again (resent before the ack)', async () => {
+  const { adapter, weighIns, health, world } = await setup()
+  adapter.reads.push(changes([scale('X', 180, hour(9))]))
+  await health.run()
+  await pushed(weighIns, world)
+  const stamp = NOW + 5000
+  world.copy = { state: { bodyweight: [], deleted: { bodyweight: { [DAY]: stamp } } }, rev: 2, wid: 'w' }
+  await weighIns.resetAcked() // a resend before the next reconcile
+  world.clock += 1000
+  adapter.reads.push(changes([scale('Y', 181, hour(7))]))
+  await health.run()
+  expect(await weighIns.get(DAY)).toEqual({ d: DAY, op: 'set', w: 181, t: stamp + 1, src: 'health', hk: 'Y' })
+})
+
+test('typed removals before bwSince are not re-checked', async () => {
+  const { store, weighIns, health } = await setup()
+  await weighIns.put({ d: '2026-11-01', op: 'remove', t: 600, baseT: 500 })
+  await weighIns.put({ d: DAY, op: 'remove', t: 700, baseT: 650 })
+  const days = []
+  const listDay = store.readings.listDay
+  store.readings.listDay = async d => { days.push(d); return listDay(d) }
+  await health.run()
+  expect(days).toEqual([DAY])
 })
 
 test('the anchor is stored only after the ops are written: a failed write leaves the old anchor', async () => {
@@ -408,7 +499,7 @@ test('onWeighIns fires only when an op was written, and its failure never reache
     weighIns: failing.weighIns,
     readCopy: async () => null,
     ownBundleId: async () => OWN,
-    timeZone: 'UTC',
+    timeZone: () => 'UTC',
     onWeighIns: () => Promise.reject(new Error('offline')),
   })
   await health2.run()
@@ -458,7 +549,7 @@ test('Health off while the own bundle id is looked up: no read', async () => {
     weighIns,
     readCopy: async () => null,
     ownBundleId: () => new Promise(resolve => { give = resolve }),
-    timeZone: 'UTC',
+    timeZone: () => 'UTC',
     onWeighIns: () => {},
   })
   const running = health.run()
@@ -481,7 +572,7 @@ test('the own bundle id is looked up once per engine; a missing one stops the im
     weighIns,
     readCopy: async () => null,
     ownBundleId: async () => { lookups++; return answer },
-    timeZone: 'UTC',
+    timeZone: () => 'UTC',
     onWeighIns: () => {},
   })
   await health.run()

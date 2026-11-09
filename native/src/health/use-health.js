@@ -31,7 +31,7 @@ export function getHealth() {
           weighIns: createSqliteWeighIns(db),
           readCopy: () => readCopy(copy),
           ownBundleId: adapter.ownBundleId, // the engine keeps the first answer
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          timeZone: () => Intl.DateTimeFormat().resolvedOptions().timeZone,
           // An import that wrote an op sends it to the server on its own; the Health pass and
           // the server sync otherwise stay independent.
           onWeighIns: () => getSync().then(sync => sync.syncNow()).catch(() => {}),
@@ -67,8 +67,8 @@ export function healthAfterFinish() {
   return getHealth().then(health => health.run()).catch(() => {})
 }
 
-// Back in the app: at most once a minute, like the server sync (shouldSyncOnForeground). A pass
-// with nothing to do makes no HealthKit call.
+// Back in the app: at most once a minute, like the server sync (shouldSyncOnForeground). With
+// Health on, every pass reads body-mass changes from HealthKit, even with no workout to write.
 export function healthOnForeground() {
   const now = Date.now()
   // Throttled: no pass, but a watching screen still re-reads, so a changed write access shows at once.

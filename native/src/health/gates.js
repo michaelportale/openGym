@@ -40,9 +40,10 @@ export function toBodyMassReading(s) {
 const nonEmpty = v => typeof v === 'string' && v !== ''
 
 // One anchored body-mass sample, or null when it cannot be trusted: without a source the import
-// cannot tell its own samples from a scale's, and without metadata it cannot see a sync id.
+// cannot tell its own samples from a scale's, and without metadata it cannot see a sync id. A
+// weight outside (0, 1000] lb is not one a typed entry could hold either.
 function toAnchoredBodyMass(s) {
-  if (!s || !nonEmpty(s.uuid) || !Number.isFinite(s.quantity)) return null
+  if (!s || !nonEmpty(s.uuid) || !Number.isFinite(s.quantity) || !(s.quantity > 0 && s.quantity <= 1000)) return null
   const bundleId = s.sourceRevision?.source?.bundleIdentifier
   if (!nonEmpty(bundleId) || !s.metadata || typeof s.metadata !== 'object') return null
   const at = s.startDate instanceof Date ? s.startDate.getTime() : NaN

@@ -43,16 +43,18 @@ function latest(readings) {
 // localOpByDay - this phone's row for the day ({ op, src, hk, ... , acked });
 // deleted - the copy's deleted.bodyweight (day -> removal stamp).
 // An entry without src 'health' is typed and wins its day. A reading this phone imported and
-// another device then removed (the row is an acked Health set with that hk and the day is
-// absent) is not imported again; another reading is. A pending typed removal's baseT is not
-// set here: putFromHealth carries it over atomically.
+// another device then removed is not imported again; another reading is. That is the day being
+// absent while this phone's row is a Health set with that hk which is acked, or which the
+// removal on record already beats (deleted[d] >= its t: the push would supersede it). A pending
+// typed removal's baseT is not set here: putFromHealth carries it over atomically.
 export function dayOpsFromReadings({ days, readingsByDay = {}, entryByDay = {}, localOpByDay = {}, deleted = {}, now }) {
   const ops = []
   for (const d of days) {
     const entry = entryByDay[d] ?? null
     if (entry && entry.src !== 'health') continue
     const local = localOpByDay[d]
-    const refused = !entry && local?.acked && local.op === 'set' && local.src === 'health' ? local.hk : null
+    const beaten = local && (local.acked || Number(deleted[d]) >= local.t)
+    const refused = !entry && beaten && local.op === 'set' && local.src === 'health' ? local.hk : null
     const best = latest((readingsByDay[d] ?? []).filter(r => r.uuid !== refused))
     if (best) {
       const w = roundLb(best.lb)
