@@ -171,7 +171,7 @@ test('a moved slot carries every key it had to its new place, and the other rout
   expect(push.state.workouts).toBe(copy.state.workouts)
   expect(push.baseRev).toBe(7)
   expect(push.baseWid).toBe('wid-a')
-  expect(push.routineEdits).toEqual([{ kind: 'routine', key: 'r1', t: 50, baseTs: 1000, value: mine }])
+  expect(push.edits).toEqual([{ kind: 'routine', key: 'r1', t: 50, baseTs: 1000, value: mine }])
   expect(copy).toEqual(planCopy()) // input not mutated
 })
 
@@ -181,7 +181,7 @@ test('a superseded edit makes no push, and the routines are not touched', () => 
   expect(buildPush(copy, [], [], [routineEdit({ ...movedR1(), id: 'gone' })])).toBeNull() // deleted on the web
   const withWorkout = buildPush(copy, [pend('p1')], [], [routineEdit(movedR1(), { baseTs: 999 })])
   expect(withWorkout.state.routines).toBe(copy.state.routines)
-  expect(withWorkout.routineEdits).toEqual([])
+  expect(withWorkout.edits).toEqual([])
 })
 
 test('an edit the copy already holds makes no push', () => {
@@ -196,13 +196,13 @@ test('an edit plus a workout and a weigh-in gives one push carrying all three', 
   expect(push.state.workouts.map(w => w.id)).toEqual(['w1', 'w2', 'p1'])
   expect(push.state.bodyweight).toEqual([{ d: '2026-11-08', w: 181.2, t: 5 }])
   expect(push.state.routines[0]).toEqual(mine)
-  expect(push.routineEdits).toEqual([{ kind: 'routine', key: 'r1', t: 50, baseTs: 1000, value: mine }])
+  expect(push.edits).toEqual([{ kind: 'routine', key: 'r1', t: 50, baseTs: 1000, value: mine }])
 })
 
 test('a push without routine edits says it carries none', () => {
   const copy = planCopy()
-  expect(buildPush(copy, [pend('p1')]).routineEdits).toEqual([])
-  expect(buildPush(copy, [], [typedSet('2026-11-08', 180, 5)]).routineEdits).toEqual([])
+  expect(buildPush(copy, [pend('p1')]).edits).toEqual([])
+  expect(buildPush(copy, [], [typedSet('2026-11-08', 180, 5)]).edits).toEqual([])
   expect(buildPush(copy, [pend('p1')]).state.routines).toBe(copy.state.routines)
 })
 
@@ -213,7 +213,7 @@ test('a rebased edit goes in with its newer routine: the copy holds what this ph
   const push = buildPush(copy, [], [], [routineEdit(newer, { baseTs: 1, sent: sentBefore, t: 60 })])
   expect(push.state.routines[0]).toEqual(newer)
   // the row's own baseTs as listed, not the copy's _ts it goes on: markSent matches the row
-  expect(push.routineEdits).toEqual([{ kind: 'routine', key: 'r1', t: 60, baseTs: 1, value: newer }])
+  expect(push.edits).toEqual([{ kind: 'routine', key: 'r1', t: 60, baseTs: 1, value: newer }])
 })
 
 test('only the edits that go are carried, each with its own t', () => {
@@ -221,7 +221,7 @@ test('only the edits that go are carried, each with its own t', () => {
   const mine = movedR1()
   const r2 = { ...copy.state.routines[1], ex: [{ id: '0027', sets: 5, reps: 8 }] }
   const push = buildPush(copy, [], [], [routineEdit(mine, { t: 70 }), routineEdit(r2, { baseTs: 2, t: 71 })])
-  expect(push.routineEdits).toEqual([{ kind: 'routine', key: 'r1', t: 70, baseTs: 1000, value: mine }])
+  expect(push.edits).toEqual([{ kind: 'routine', key: 'r1', t: 70, baseTs: 1000, value: mine }])
   expect(push.state.routines[1]).toBe(copy.state.routines[1])
 })
 
@@ -230,5 +230,102 @@ test('an edit made on older stamps goes on the copy\'s, and is recorded for mark
   const { _f, ...stale } = { ...movedR1(), _ts: 1 }
   const push = buildPush(copy, [], [], [routineEdit(stale)])
   expect(push.state.routines[0]).toEqual({ ...stale, _ts: 1000, _f: { ex: 900 } })
-  expect(push.routineEdits).toEqual([{ kind: 'routine', key: 'r1', t: 50, baseTs: 1000, value: push.state.routines[0] }])
+  expect(push.edits).toEqual([{ kind: 'routine', key: 'r1', t: 50, baseTs: 1000, value: push.state.routines[0] }])
+})
+
+// Nutrition days and the two settings (pending-edits.js rows of kind nutritionDay and setting): a
+// day goes in on the copy day's _ts, a setting whole; `edited` goes as the copy has it, since the
+// server moves a changed setting's stamp itself.
+const nutritionCopy = () => ({
+  state: {
+    ...fixture(),
+    nutritionDays: {
+      '2026-11-07': { kcal: 2000, protein: 150, carbs: 200, fat: 60, fiber: 25, dayType: 'rest', supps: ['s1'], futureDayKey: { x: 1 }, _ts: 100 },
+      '2026-11-08': { kcal: 2400, protein: 170, carbs: 260, fat: 70, fiber: 30, dayType: 'training', note: 'leg day', _ts: 200 },
+    },
+    nutritionTargets: { training: { kcal: 2400, protein: 170, fiber: 30 }, rest: { kcal: 2000, protein: 160, fiber: 30 }, futureTargetKey: 'x' },
+    supplements: [{ id: 's1', name: 'Creatine' }],
+    edited: { ...fixture().edited, nutritionTargets: 300, supplements: 310 },
+  },
+  rev: 9,
+  wid: 'wid-n',
+})
+const dayEdit = (key, value, extra = {}) => ({ kind: 'nutritionDay', key, baseTs: null, value, sent: null, t: 80, ...extra })
+const settingEdit = (key, value, extra = {}) => ({ kind: 'setting', key, baseTs: null, value, sent: null, t: 81, ...extra })
+const NEW_DAY = { kcal: 2100, protein: 160, carbs: 220, fat: 70, fiber: 30, dayType: 'training' }
+
+test('a nutrition day and a targets edit go out; every other day and key is byte-identical', () => {
+  const copy = nutritionCopy()
+  // made on the copy's day, so it carries that day's _ts
+  const day = { ...copy.state.nutritionDays['2026-11-08'], kcal: 2500, note: 'more rice' }
+  const targets = { ...copy.state.nutritionTargets, training: { kcal: 2600, protein: 180, fiber: 32 } }
+  const push = buildPush(copy, [], [], [dayEdit('2026-11-08', day, { baseTs: 200 }), settingEdit('nutritionTargets', targets, { baseTs: 300 })])
+  expect(push.state.nutritionDays['2026-11-08']).toEqual({ ...day, _ts: 200 })
+  expect(push.state.nutritionDays['2026-11-07']).toBe(copy.state.nutritionDays['2026-11-07'])
+  expect(push.state.nutritionTargets).toEqual(targets)
+  expect(push.state.supplements).toBe(copy.state.supplements)
+  expect(push.state.edited).toBe(copy.state.edited) // the server moves edited.nutritionTargets
+  expect(push.state.routines).toBe(copy.state.routines)
+  expect(push.state.workouts).toBe(copy.state.workouts)
+  const rest = s => JSON.stringify({ ...s, nutritionDays: { ...s.nutritionDays, '2026-11-08': undefined }, nutritionTargets: undefined })
+  expect(rest(push.state)).toBe(rest(nutritionCopy().state))
+  expect(push.baseRev).toBe(9)
+  expect(push.baseWid).toBe('wid-n')
+  expect(push.edits).toEqual([
+    { kind: 'nutritionDay', key: '2026-11-08', t: 80, baseTs: 200, value: { ...day, _ts: 200 } },
+    { kind: 'setting', key: 'nutritionTargets', t: 81, baseTs: 300, value: targets },
+  ])
+  expect(copy).toEqual(nutritionCopy()) // input not mutated
+})
+
+test('a day the copy lacks goes in with no _ts, starting nutritionDays when the copy has none', () => {
+  const copy = planCopy()
+  const push = buildPush(copy, [], [], [dayEdit('2026-11-09', NEW_DAY)])
+  expect(push.state.nutritionDays).toEqual({ '2026-11-09': NEW_DAY })
+  expect({ ...push.state, nutritionDays: undefined }).toEqual({ ...copy.state, nutritionDays: undefined })
+  expect(push.edits).toEqual([{ kind: 'nutritionDay', key: '2026-11-09', t: 80, baseTs: null, value: NEW_DAY }])
+  expect(copy).toEqual(planCopy())
+})
+
+test('supplements go whole, as a list', () => {
+  const copy = nutritionCopy()
+  const supps = [{ id: 's1', name: 'Creatine' }, { id: 's2', name: 'Fish oil' }]
+  const push = buildPush(copy, [], [], [settingEdit('supplements', supps, { baseTs: 310 })])
+  expect(push.state.supplements).toEqual(supps)
+  expect(push.state.nutritionDays).toBe(copy.state.nutritionDays)
+  expect(push.state.nutritionTargets).toBe(copy.state.nutritionTargets)
+  expect(push.edits).toEqual([{ kind: 'setting', key: 'supplements', t: 81, baseTs: 310, value: supps }])
+})
+
+test('a day or setting the web changed first makes no push, and nothing of it is touched', () => {
+  const copy = nutritionCopy()
+  expect(buildPush(copy, [], [], [dayEdit('2026-11-08', NEW_DAY, { baseTs: 150 })])).toBeNull()
+  expect(buildPush(copy, [], [], [dayEdit('2026-11-08', NEW_DAY)])).toBeNull() // logged on the web first
+  expect(buildPush(copy, [], [], [settingEdit('supplements', [], { baseTs: 1 })])).toBeNull()
+  const withWorkout = buildPush(copy, [pend('p1')], [], [dayEdit('2026-11-08', NEW_DAY, { baseTs: 150 }), settingEdit('nutritionTargets', {}, { baseTs: 1 })])
+  expect(withWorkout.state.nutritionDays).toBe(copy.state.nutritionDays)
+  expect(withWorkout.state.nutritionTargets).toBe(copy.state.nutritionTargets)
+  expect(withWorkout.edits).toEqual([])
+})
+
+test('a rebased day goes in with its newer value on the copy day\'s _ts; markSent gets the row\'s own base', () => {
+  const copy = nutritionCopy()
+  const { _ts, ...sentBefore } = copy.state.nutritionDays['2026-11-08']
+  const newer = { ...sentBefore, kcal: 2700 }
+  const push = buildPush(copy, [], [], [dayEdit('2026-11-08', newer, { baseTs: null, sent: sentBefore, t: 90 })])
+  expect(push.state.nutritionDays['2026-11-08']).toEqual({ ...newer, _ts: 200 })
+  expect(push.edits).toEqual([{ kind: 'nutritionDay', key: '2026-11-08', t: 90, baseTs: null, value: { ...newer, _ts: 200 } }])
+})
+
+test('a routine, a day and a setting ride one push, each in its own place', () => {
+  const copy = { ...planCopy(), state: { ...planCopy().state, nutritionDays: nutritionCopy().state.nutritionDays } }
+  const mine = movedR1()
+  const supps = [{ id: 's9', name: 'Magnesium' }]
+  const push = buildPush(copy, [pend('p1')], [], [routineEdit(mine), dayEdit('2026-11-09', NEW_DAY), settingEdit('supplements', supps)])
+  expect(push.state.routines[0]).toEqual(mine)
+  expect(push.state.routines[1]).toBe(copy.state.routines[1])
+  expect(push.state.nutritionDays).toEqual({ ...copy.state.nutritionDays, '2026-11-09': NEW_DAY })
+  expect(push.state.supplements).toEqual(supps)
+  expect(push.state.workouts.map(w => w.id)).toEqual(['w1', 'w2', 'p1'])
+  expect(push.edits.map(e => [e.kind, e.key])).toEqual([['routine', 'r1'], ['nutritionDay', '2026-11-09'], ['setting', 'supplements']])
 })

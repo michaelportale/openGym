@@ -41,11 +41,11 @@ describe('statusText', () => {
     expect(statusText(paired({ state: 'idle', pending: 2, lastSyncedAt: AT }), opts)).toBe(words)
   })
 
-  test('a routine edit waiting to send counts as something waiting', () => {
+  test('a plan or nutrition edit waiting to send counts as something waiting', () => {
     const words = 'Saved on this phone. It will sync when gym.example.com is reachable.'
-    expect(statusText(paired({ state: 'waiting', pendingRoutineEdits: 1, lastSyncedAt: AT }), opts)).toBe(words)
-    expect(statusText(paired({ state: 'idle', pendingRoutineEdits: 2, lastSyncedAt: AT }), opts)).toBe(words)
-    expect(statusText(paired({ state: 'waiting', pendingRoutineEdits: 0, lastSyncedAt: AT }), opts))
+    expect(statusText(paired({ state: 'waiting', pendingEdits: 1, lastSyncedAt: AT }), opts)).toBe(words)
+    expect(statusText(paired({ state: 'idle', pendingEdits: 2, lastSyncedAt: AT }), opts)).toBe(words)
+    expect(statusText(paired({ state: 'waiting', pendingEdits: 0, lastSyncedAt: AT }), opts))
       .toBe("Synced to gym.example.com at 9:14. gym.example.com isn't reachable right now.")
   })
 

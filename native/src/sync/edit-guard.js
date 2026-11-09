@@ -136,9 +136,17 @@ export function applyEdits(state, edits) {
   return { state: next, done, rebased, applied, superseded }
 }
 
-// The routine edits among `edits` over a routines list (a non-array reads as empty), as the outbox,
-// the engine and the screens read them until they take every kind: { next, done, rebased, applied,
-// superseded }, next being the list itself when nothing applies or rebases.
+// What a document holds for one edit's kind and key, as the adapter reads it (undefined when it
+// holds none): after applyEdits, the value as it goes, on the copy's stamps.
+export function entryValue(state, kind, key) {
+  if (!Object.hasOwn(ADAPTERS, kind)) return undefined
+  return ADAPTERS[kind].read(isMap(state) ? state : {}, key)?.value
+}
+
+// The routine edits among `edits` over a routines list (a non-array reads as empty), in 7C's shape:
+// { next, done, rebased, applied, superseded }, next being the list itself when nothing applies or
+// rebases. The outbox, the engine and the screens now take every kind through applyEdits; the
+// routine guard tests still read the routine rules through this.
 export function applyRoutineEdits(routines, edits) {
   const list = Array.isArray(routines) ? routines : []
   const mine = (Array.isArray(edits) ? edits : []).filter((e) => e?.kind === 'routine')

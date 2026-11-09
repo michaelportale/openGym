@@ -130,6 +130,17 @@ async function startServer({ state = fixture() } = {}) {
       })
       expect(res.status).toBe(200)
     },
+    // The same for any other change a web tab makes, which stamps its own edits.
+    async webWrites(change) {
+      const cookie = webCookie()
+      const got = await (await fetch(`${api}/api/data`, { headers: cookie })).json()
+      const res = await fetch(`${api}/api/data`, {
+        method: 'PUT',
+        headers: { ...cookie, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state: change(got.state), baseRev: got.rev, baseWid: got.state._wid, stamped: true }),
+      })
+      expect(res.status).toBe(200)
+    },
     async webAdds(workout) {
       const cookie = webCookie()
       const got = await (await fetch(`${api}/api/data`, { headers: cookie })).json()
@@ -212,7 +223,7 @@ describe.skipIf(!HAS_API_DEPS)(TITLE, { timeout: 30_000 }, () => {
     expect(stored.rev).toBe(12)
     expect(stored.wid).toBe(fixture()._wid)
     expect(await app.sync.status()).toEqual({
-      paired: true, state: 'idle', lastSyncedAt: new Date(T0).toISOString(), pending: 0, pendingWeighIns: 0, pendingRoutineEdits: 0, copyKey: `${stored.rev}|${stored.wid}`, server: server.api, profile: 'Owner',
+      paired: true, state: 'idle', lastSyncedAt: new Date(T0).toISOString(), pending: 0, pendingWeighIns: 0, pendingEdits: 0, copyKey: `${stored.rev}|${stored.wid}`, server: server.api, profile: 'Owner',
     })
     // the token is in the Keychain and nowhere in SQLite
     const token = app.keychain.m.get('opengym.token')
@@ -401,9 +412,9 @@ describe.skipIf(!HAS_API_DEPS)(TITLE, { timeout: 30_000 }, () => {
     const base = (await app.copy.get()).state.routines[0]
     const mine = swappedEdit(base)
     await app.routineEdits.put(mine)
-    expect(await app.sync.status()).toMatchObject({ pendingRoutineEdits: 1 })
+    expect(await app.sync.status()).toMatchObject({ pendingEdits: 1 })
 
-    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
     const file = server.file()
     const stored = file.routines.find(r => r.id === 'r1')
     expect(content(stored)).toEqual(content(mine.value))
@@ -447,7 +458,7 @@ describe.skipIf(!HAS_API_DEPS)(TITLE, { timeout: 30_000 }, () => {
     const app = await paired(server, undefined, { client })
     await app.routineEdits.put(swappedEdit((await app.copy.get()).state.routines[0]))
     race = true
-    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
     expect(pushes).toEqual(['conflict'])
     const stored = server.file().routines.find(r => r.id === 'r1')
     expect(content(stored)).toEqual({ ...content(planned().routines[0]), name: 'Push A' })
@@ -455,7 +466,7 @@ describe.skipIf(!HAS_API_DEPS)(TITLE, { timeout: 30_000 }, () => {
     expect(await app.routineEdits.listPending()).toEqual([])
     expect(await app.routineEdits.listNotices()).toEqual([{ kind: 'routine', key: 'r1', name: 'Push', reason: 'changed', at: new Date(T0).toISOString() }])
 
-    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
     expect(pushes).toEqual(['conflict'])
     expect(server.file().routines.find(r => r.id === 'r1')).toEqual(stored)
   })
@@ -473,7 +484,7 @@ describe.skipIf(!HAS_API_DEPS)(TITLE, { timeout: 30_000 }, () => {
     const base = (await app.copy.get()).state.routines.find(r => r.id === 'r3')
     const setsOnly = { ...base, ex: [base.ex[0], { ...base.ex[1], sets: 4 }] }
     await app.routineEdits.put({ kind: 'routine', key: 'r3', baseTs: base._ts, value: setsOnly, t: T0 })
-    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
     let stored = server.file().routines.find(r => r.id === 'r3')
     expect(stored.ex).toEqual(setsOnly.ex) // each twin keeps its own keys
     expect(stored._ts).toBeGreaterThan(twins._ts)
@@ -482,7 +493,7 @@ describe.skipIf(!HAS_API_DEPS)(TITLE, { timeout: 30_000 }, () => {
     const now = (await app.copy.get()).state.routines.find(r => r.id === 'r3')
     await app.routineEdits.put({ kind: 'routine', key: 'r3', baseTs: now._ts, value: { ...now, ex: [now.ex[1], now.ex[0]] }, t: T0 + 1 })
     const before = server.file()
-    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
     expect(server.file()).toEqual(before)
     expect(await app.routineEdits.listNotices()).toEqual([{ kind: 'routine', key: 'r3', name: 'Bench day', reason: 'unsafe', at: new Date(T0).toISOString() }])
   })
@@ -499,7 +510,7 @@ describe.skipIf(!HAS_API_DEPS)(TITLE, { timeout: 30_000 }, () => {
     const cross = { ...base, ex: [{ ...firstRest, id: '0047', weight: 0 }, { ...base.ex[1], id: base.ex[0].id }] }
     await app.routineEdits.put({ kind: 'routine', key: 'r1', baseTs: base._ts, value: cross, t: T0 })
     const before = server.file()
-    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
     expect(pushes).toEqual([])
     expect(server.file()).toEqual(before)
     expect(await app.routineEdits.listNotices()).toEqual([{ kind: 'routine', key: 'r1', name: 'Push', reason: 'unsafe', at: new Date(T0).toISOString() }])
@@ -532,18 +543,136 @@ describe.skipIf(!HAS_API_DEPS)(TITLE, { timeout: 30_000 }, () => {
       const res = await fetch(`${server.api}/api/data`, { method: 'PUT', headers: { ...cookie, 'Content-Type': 'application/json' }, body: JSON.stringify({ state, baseRev: got.rev, baseWid: got.state._wid, stamped: true }) })
       expect(res.status).toBe(200)
     }
-    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 1 })
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 1 })
     expect(server.file().routines[0].ex[0].sets).toBe(4)
     expect(server.file().lang).toBe('de')
 
-    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
     const stored = server.file().routines[0]
     expect(content(stored)).toEqual(content(setsTo(3)))
     expect(await app.routineEdits.listNotices()).toEqual([])
     expect(await app.routineEdits.listPending()).toEqual([])
-    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
     expect(pushes).toEqual([200, 200])
     expect(server.file().routines[0]).toEqual(stored)
+  })
+
+  // Nutrition days and the two settings, as the web keeps them: a day stamped by its own _ts, a
+  // setting by its stamp in `edited`.
+  const nourished = () => ({
+    ...fixture(),
+    nutritionDays: {
+      '2026-11-07': { kcal: 2000, protein: 150, carbs: 200, fat: 60, fiber: 25, dayType: 'rest', supps: ['s1'], futureDayKey: { x: 1 }, _ts: 1730000000000 },
+    },
+    nutritionTargets: { training: { kcal: 2400, protein: 170, fiber: 30 }, rest: { kcal: 2000, protein: 160, fiber: 30 } },
+    supplements: [{ id: 's1', name: 'Creatine' }],
+    edited: { ...fixture().edited, nutritionTargets: 1730000000000 },
+  })
+  const DAY = { kcal: 2100, protein: 160, carbs: 220, fat: 70, fiber: 30, dayType: 'training', note: 'leg day' }
+  // What the Nutrition screen saves: a day on the copy day's _ts (null when the copy has none).
+  const dayEdit = async (app, d, value, t = T0) => {
+    const held = (await app.copy.get()).state.nutritionDays?.[d]
+    await app.routineEdits.put({ kind: 'nutritionDay', key: d, baseTs: held?._ts ?? null, value, t })
+  }
+  const watched = () => {
+    const plain = createApiClient({ fetch: globalThis.fetch, timeoutMs: 10_000 })
+    const pushes = []
+    const client = { ...plain, before: null, async push(...args) { if (client.before) { const go = client.before; client.before = null; await go() } const r = await plain.push(...args); pushes.push(r.ok ? 200 : r.kind); return r } }
+    return { client, pushes }
+  }
+  const editRows = app => app.db.getAll('SELECT kind, key, acked_at, superseded_at FROM pending_edits')
+
+  test('a phone nutrition day reaches the server file with a _ts the server stamps; every other day and key is kept; the pull acks it', async () => {
+    const server = await startServer({ state: nourished() })
+    const { client, pushes } = watched()
+    const app = await paired(server, undefined, { client })
+    await dayEdit(app, '2026-11-08', DAY)
+    expect(await app.sync.status()).toMatchObject({ pendingEdits: 1 })
+
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    expect(pushes).toEqual([200])
+    const file = server.file()
+    expect(without(file.nutritionDays['2026-11-08'], ['_ts'])).toEqual(DAY)
+    expect(file.nutritionDays['2026-11-08']._ts).toBeGreaterThan(T0)
+    expect(file.nutritionDays['2026-11-07']).toEqual(nourished().nutritionDays['2026-11-07'])
+    expect(file.nutritionTargets).toEqual(nourished().nutritionTargets)
+    expect(file.supplements).toEqual(nourished().supplements)
+    expect(file.edited).toEqual(nourished().edited)
+    expect(file.routines).toEqual(fixture().routines)
+    expect(file.workouts).toEqual(fixture().workouts)
+    expect(file.queue).toEqual(fixture().queue)
+    expect((await app.copy.get()).state).toEqual(without(file, HIDDEN))
+    expect(await app.routineEdits.listPending()).toEqual([])
+    expect(await editRows(app)).toEqual([{ kind: 'nutritionDay', key: '2026-11-08', acked_at: new Date(T0).toISOString(), superseded_at: null }])
+    expect(await app.routineEdits.listNotices()).toEqual([])
+
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    expect(pushes).toEqual([200])
+    expect(server.file()).toEqual(file)
+  })
+
+  test('a phone targets edit reaches the server file, which moves edited.nutritionTargets; the pull acks it', async () => {
+    const server = await startServer({ state: nourished() })
+    const { client, pushes } = watched()
+    const app = await paired(server, undefined, { client })
+    const targets = { training: { kcal: 2600, protein: 180, fiber: 32 }, rest: { kcal: 2000, protein: 160, fiber: 30 } }
+    const base = (await app.copy.get()).state.edited.nutritionTargets
+    await app.routineEdits.put({ kind: 'setting', key: 'nutritionTargets', baseTs: base, value: targets, t: T0 })
+
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    expect(pushes).toEqual([200])
+    const file = server.file()
+    expect(file.nutritionTargets).toEqual(targets)
+    expect(file.edited.nutritionTargets).toBeGreaterThan(nourished().edited.nutritionTargets)
+    expect(without(file.edited, ['nutritionTargets'])).toEqual(without(nourished().edited, ['nutritionTargets']))
+    expect(file.nutritionDays).toEqual(nourished().nutritionDays)
+    expect(file.supplements).toEqual(nourished().supplements)
+    expect((await app.copy.get()).state).toEqual(without(file, HIDDEN))
+    expect(await editRows(app)).toEqual([{ kind: 'setting', key: 'nutritionTargets', acked_at: new Date(T0).toISOString(), superseded_at: null }])
+    expect(await app.routineEdits.listNotices()).toEqual([])
+
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    expect(pushes).toEqual([200])
+    expect(server.file()).toEqual(file)
+  })
+
+  test('the web edits the same day before the phone pushes: the phone\'s edit is superseded as changed and never sent', async () => {
+    const server = await startServer({ state: nourished() })
+    const { client, pushes } = watched()
+    const app = await paired(server, undefined, { client })
+    await dayEdit(app, '2026-11-07', { ...without(nourished().nutritionDays['2026-11-07'], ['_ts']), kcal: 2300 })
+    await server.webWrites(state => ({ ...state, nutritionDays: { ...state.nutritionDays, '2026-11-07': { ...state.nutritionDays['2026-11-07'], kcal: 1900, _ts: T0 + 500 } } }))
+    const before = server.file()
+    expect(before.nutritionDays['2026-11-07']).toMatchObject({ kcal: 1900, _ts: T0 + 500 })
+
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    expect(pushes).toEqual([])
+    expect(server.file()).toEqual(before)
+    expect((await app.copy.get()).state.nutritionDays['2026-11-07']).toEqual(before.nutritionDays['2026-11-07'])
+    expect(await app.routineEdits.listPending()).toEqual([])
+    expect(await app.routineEdits.listNotices()).toEqual([{ kind: 'nutritionDay', key: '2026-11-07', name: '2026-11-07', reason: 'changed', at: new Date(T0).toISOString() }])
+
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    expect(pushes).toEqual([])
+  })
+
+  test('the phone edits one day while the web edits another: a real 409, one retry, and both days survive', async () => {
+    const server = await startServer({ state: nourished() })
+    const { client, pushes } = watched()
+    const app = await paired(server, undefined, { client })
+    await dayEdit(app, '2026-11-08', DAY)
+    const web = { ...nourished().nutritionDays['2026-11-07'], note: 'from the web', _ts: T0 + 500 }
+    client.before = () => server.webWrites(state => ({ ...state, nutritionDays: { ...state.nutritionDays, '2026-11-07': web } }))
+
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    expect(pushes).toEqual(['conflict', 200])
+    const file = server.file()
+    expect(file.nutritionDays['2026-11-07']).toEqual(web)
+    expect(without(file.nutritionDays['2026-11-08'], ['_ts'])).toEqual(DAY)
+    expect(file.nutritionDays['2026-11-08']._ts).toBeGreaterThan(T0 + 500)
+    expect((await app.copy.get()).state).toEqual(without(file, HIDDEN))
+    expect(await app.routineEdits.listPending()).toEqual([])
+    expect(await app.routineEdits.listNotices()).toEqual([])
   })
 
   test('a new profile with no document yet: pairing pulls an empty one and the first push starts it', async () => {

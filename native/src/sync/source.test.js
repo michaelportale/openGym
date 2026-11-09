@@ -257,3 +257,64 @@ test('routine edits: unpaired, a swapped-in built-in exercise gets its catalogue
   expect(out.names.snap).toEqual(bundled.names.snap)
   expect(JSON.stringify(bundled.names)).toBe(before)
 })
+
+// Nutrition days and settings waiting to sync show the same way, through the same guard.
+const DAY = { kcal: 2100, protein: 160, carbs: 220, fat: 70, fiber: 30, dayType: 'training' }
+const dayEdit = (d, value, extra = {}) => ({ kind: 'nutritionDay', key: d, baseTs: null, value, sent: null, t: 6, ...extra })
+const settingEdit = (key, value, extra = {}) => ({ kind: 'setting', key, baseTs: null, value, sent: null, t: 7, ...extra })
+
+test('nutrition: unpaired, a pending day shows on the snapshot state, which has no nutritionDays, and the bundle is untouched', () => {
+  expect(bundled.state).not.toHaveProperty('nutritionDays')
+  const before = JSON.stringify(bundled)
+  const out = screenSource({ copy: null, bundled, pending: [], routineEdits: [dayEdit('2026-11-09', DAY), settingEdit('supplements', [{ id: 's1', name: 'Creatine' }])] })
+  expect(out.state.nutritionDays).toEqual({ '2026-11-09': DAY })
+  expect(out.state.supplements).toEqual([{ id: 's1', name: 'Creatine' }])
+  expect(out.state.routines).toBe(bundled.state.routines)
+  expect(out.state.workouts.map(x => x.id)).toEqual(['b1'])
+  expect(JSON.stringify(bundled)).toBe(before)
+})
+
+test('nutrition: paired, a pending day and targets show over the copy on its stamps; other days stay; the copy stays as stored', () => {
+  const other = { kcal: 1900, protein: 140, carbs: 180, fat: 60, fiber: 20, dayType: 'rest', _ts: 3 }
+  const copy = {
+    state: {
+      routines: [], workouts: [],
+      nutritionDays: { '2026-11-08': { ...DAY, _ts: 4 }, '2026-11-07': other },
+      nutritionTargets: { training: { kcal: 2400 } },
+      edited: { nutritionTargets: 8 },
+    },
+    rev: 2, wid: 'x',
+  }
+  const before = JSON.stringify(copy)
+  const targets = { training: { kcal: 2600 } }
+  const out = screenSource({ copy, bundled, pending: [], routineEdits: [dayEdit('2026-11-08', { ...DAY, kcal: 2500 }, { baseTs: 4 }), settingEdit('nutritionTargets', targets, { baseTs: 8 })] })
+  expect(out.state.nutritionDays).toEqual({ '2026-11-08': { ...DAY, kcal: 2500, _ts: 4 }, '2026-11-07': other })
+  expect(out.state.nutritionDays['2026-11-07']).toBe(copy.state.nutritionDays['2026-11-07'])
+  expect(out.state.nutritionTargets).toEqual(targets)
+  expect(out.state.edited).toEqual({ nutritionTargets: 8 })
+  expect(JSON.stringify(copy)).toBe(before)
+})
+
+test('nutrition: a day or setting the web changed first does not show; the web\'s does', () => {
+  const copy = { state: { routines: [], workouts: [], nutritionDays: { '2026-11-08': { ...DAY, kcal: 1800, _ts: 9 } }, supplements: [], edited: { supplements: 9 } }, rev: 2, wid: 'x' }
+  const out = screenSource({ copy, bundled, pending: [], routineEdits: [dayEdit('2026-11-08', DAY, { baseTs: 4 }), settingEdit('supplements', [{ id: 's1', name: 'Creatine' }], { baseTs: 4 })] })
+  expect(out.state.nutritionDays['2026-11-08'].kcal).toBe(1800)
+  expect(out.state.supplements).toEqual([])
+})
+
+test('readScreenSource over the real store shows every kind, paired or not, and each goes once acked', async () => {
+  const edits = createMemoryPendingEdits()
+  await edits.put(dayEdit('2026-11-09', DAY))
+  await edits.put(settingEdit('nutritionTargets', { training: { kcal: 2600 } }))
+  const unpaired = await readScreenSource({ ...stores({ copy: null, all: [], pending: [] }), routineEdits: edits, bundled })
+  expect(unpaired.state.nutritionDays).toEqual({ '2026-11-09': DAY })
+  expect(unpaired.state.nutritionTargets).toEqual({ training: { kcal: 2600 } })
+  const s = stores({ copy: { state: { routines: [], workouts: [] }, rev: 1, wid: 'x' }, all: [], pending: [] })
+  const paired = await readScreenSource({ ...s, routineEdits: edits, bundled })
+  expect(paired.state.nutritionDays).toEqual({ '2026-11-09': DAY })
+  expect(paired.state.nutritionTargets).toEqual({ training: { kcal: 2600 } })
+  await edits.markAcked([{ kind: 'nutritionDay', key: '2026-11-09', t: 6 }, { kind: 'setting', key: 'nutritionTargets', t: 7 }], 'now')
+  const after = await readScreenSource({ ...s, routineEdits: edits, bundled })
+  expect(after.state).not.toHaveProperty('nutritionDays')
+  expect(after.state).not.toHaveProperty('nutritionTargets')
+})
