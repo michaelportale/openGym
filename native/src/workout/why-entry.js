@@ -10,6 +10,8 @@ const ENTRIES = Object.freeze({
   'warmup-prompt': { id: 'warmup-prompt', payload: () => whyThis('warmup-prompt'), title: 'Why a warm-up is offered' },
   progression: { id: 'double-progression', payload: () => whyThis('double-progression'), title: 'Why this progression' },
   effort: { id: 'effort-proximity', payload: () => whyThis('effort-proximity'), title: 'Why this effort' },
+  'bodyweight-trend': { id: 'bodyweight-trend', payload: () => whyThis('bodyweight-trend'), title: 'Why a 7-day average' },
+  'e1rm-formula': { id: 'e1rm-formula', payload: () => whyThis('e1rm-formula'), title: 'Why this e1RM' },
   deload: { id: 'deload-after-misses', payload: () => whyThis('deload-after-misses'), title: 'Why a deload' }
 })
 
