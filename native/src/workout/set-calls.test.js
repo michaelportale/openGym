@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { NO_NOTICES, OVERNIGHT_NOTICE, PAST_MIDNIGHT, addSetCall, addWarmupCall, completeCall, completeResult, dockKeypadField, draftCall, editCall, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightNow, overnightRefusal, primaryAction, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, undoCall, undoWrite, writeOutcome, findSet } from './set-calls.js'
+import { NO_NOTICES, OVERNIGHT_NOTICE, PAST_MIDNIGHT, addSetCall, addWarmupCall, completeAfterCommit, completeCall, completeResult, dockKeypadField, draftCall, editCall, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightNow, overnightRefusal, primaryAction, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, thrown, undoCall, undoWrite, writeOutcome, findSet } from './set-calls.js'
 import { shownValues, workoutScreen } from './workout-view.js'
 import { pendingRest, restEventId, restMsFor } from './rest-after.js'
 import { withTargets } from './session-screen.js'
@@ -596,6 +596,39 @@ describe('completeResult', () => {
     const repeat = { ok: true, saved: false, duplicate: true }
     expect(completeResult(repeat, refused)).toBe(repeat)
     expect(completeResult(null, refused)).toBeNull()
+  })
+})
+
+describe('completeAfterCommit', () => {
+  const saved = { ok: true, saved: true }
+  test('anything that throws after the set saved is its rest not starting, never "not saved"', async () => {
+    for (const after of [() => { throw new Error('view gone') }, async () => { throw new Error('refresh failed') }, () => Promise.reject(new Error('rest threw'))]) {
+      const result = await completeAfterCommit(saved, after)
+      expect(result).toEqual({ ok: true, saved: true, restFailed: true })
+      expect(writeOutcome(result, 'complete')).toEqual({ kind: 'saved-rest-failed', text: SAVED_REST })
+    }
+    // What the set's own commit carried stays on it.
+    expect(await completeAfterCommit({ ...saved, draftError: STORAGE }, () => { throw new Error('x') }))
+      .toEqual({ ok: true, saved: true, draftError: STORAGE, restFailed: true })
+  })
+  test('a rest that started, none due, or one refused reads as completeResult does', async () => {
+    expect(await completeAfterCommit(saved, async () => ({ ok: true, saved: true }))).toBe(saved)
+    expect(await completeAfterCommit(saved, async () => null)).toBe(saved)
+    expect(await completeAfterCommit(saved, async () => refused)).toEqual({ ok: true, saved: true, restFailed: true })
+  })
+  test('a commit that did not save is reported as it is, and nothing after it runs', async () => {
+    let ran = 0
+    const after = async () => { ran += 1; return refused }
+    expect(await completeAfterCommit(refused, after)).toBe(refused)
+    const repeat = { ok: true, saved: false, duplicate: true }
+    expect(await completeAfterCommit(repeat, after)).toBe(repeat)
+    expect(await completeAfterCommit(null, after)).toBeNull()
+    expect(ran).toBe(0)
+  })
+  test('a thrown write reads as a storage refusal, never the raw message', () => {
+    expect(thrown(new Error('disk full'))).toEqual({ ok: false, saved: false, error: { code: 'storage', message: 'disk full' } })
+    expect(thrown('boom').error).toEqual({ code: 'storage', message: 'boom' })
+    expect(resultNotice(thrown(new Error('disk full')), 'complete')).toBe("Set not saved. The phone couldn't write it. Try again.")
   })
 })
 

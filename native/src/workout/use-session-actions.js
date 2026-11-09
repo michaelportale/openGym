@@ -6,10 +6,9 @@ import { createActionGate } from './action-gate'
 import { pendingRest, restMsFor } from './rest-after'
 import { shownAfterComplete, withTargets } from './session-screen'
 import { carriedWeight, lockedWeight, shownValues } from './workout-view'
-import { NO_NOTICES, addSetCall, addWarmupCall, completeCall, completeResult, dockKeypadField, draftCall, editCall, findSet, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightRefusal, primaryAction, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, undoWrite } from './set-calls'
+import { NO_NOTICES, addSetCall, addWarmupCall, completeAfterCommit, completeCall, dockKeypadField, draftCall, editCall, findSet, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightRefusal, primaryAction, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, thrown, undoWrite } from './set-calls'
 
 const sideLabel = { L: 'Complete left', R: 'Complete right' }
-const failed = error => ({ ok: false, saved: false, error: { code: 'storage', message: error?.message || String(error) } })
 
 // Every write the session screen makes, through one action gate: a tap while a write is in
 // flight is dropped, so a double tap on Complete logs one set. `view` is this render's view (with
@@ -63,7 +62,7 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
       if (result?.error?.code === 'overnight') await session.refresh()
       return result
     } catch (error) {
-      return failed(error)
+      return thrown(error)
     } finally {
       setBusy(false)
     }
@@ -87,22 +86,24 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
 
   // setId and side come from the tap. The commit is awaited first; its rest is named and timed
   // by the row's `at` in the view the commit produced (one side of a per-side set, or a warm-up,
-  // earns none). The set is saved either way: a refused (or thrown) rest is `restFailed` on the
-  // set's result, shown as "Saved. Rest didn't start." with Start rest; a reopen rebuilds it too.
-  // The rest is a write of its own, so it is checked again: a midnight between the commit and it
-  // refuses it (and reloads the view) like any other.
+  // earns none). The set is saved either way: a refused rest, or anything that throws after the
+  // commit, is `restFailed` on the set's result (completeAfterCommit), shown as "Saved. Rest
+  // didn't start." with Start rest; a reopen rebuilds it too. The rest is a write of its own, so
+  // it is checked again: a midnight between the commit and it refuses it (and reloads the view)
+  // like any other.
   const complete = ({ setId, side, values }) => write(async (view, now) => {
     const call = completeCall(view, { setId, side, values, eventId: createEventId(), now })
     if (!call) return null
-    const result = await session.commitSet(call)
-    if (!result?.saved) return result
-    const next = latest()
-    setShownIndex(index => shownAfterComplete(next, index, setId))
-    const rest = restAfterComplete(next, setId, restMsOf)
-    if (!rest) return result
-    const refused = overnightRefusal(next, Date.now())
-    if (refused) await session.refresh()
-    return completeResult(result, refused ?? await session.startRest(rest).catch(failed))
+    return completeAfterCommit(await session.commitSet(call), async () => {
+      const next = latest()
+      setShownIndex(index => shownAfterComplete(next, index, setId))
+      const rest = restAfterComplete(next, setId, restMsOf)
+      if (!rest) return null
+      const refused = overnightRefusal(next, Date.now())
+      if (!refused) return session.startRest(rest)
+      await session.refresh()
+      return refused
+    })
   })
 
   // The rest the latest completed work set earned and has not had: on open ('rest'), the one a
@@ -135,7 +136,7 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
     const view = latest()
     const now = Date.now()
     return overnightRefusal(view, now) ?? putDraft(setId, values)(view, now)
-  }).catch(failed)
+  }).catch(thrown)
   const edit = (setId, values) => write(async (view, now) => {
     const call = editCall(view, { setId, values, eventId: createEventId(), now })
     return call ? session.editSet(call) : null

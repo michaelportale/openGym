@@ -235,6 +235,27 @@ export function completeResult(commit, started) {
   return checkpoint ? { ...commit, ...checkpoint } : commit
 }
 
+// A write that threw: storage refused it, and nothing was saved by it.
+export function thrown(error) {
+  return { ok: false, saved: false, error: { code: 'storage', message: error?.message || String(error) } }
+}
+
+// What a Complete reports once its commit has run. `afterCommit` is the rest of the Complete
+// (reading the view the commit produced, the rest's checks, the rest itself); it returns the
+// rest's result, or null when no rest is due. The set is saved once its commit is, so anything
+// after it that throws is its rest not starting ("Saved. Rest didn't start." with Start rest),
+// never "not saved". A commit that did not save is reported as it is, and nothing after it runs.
+export async function completeAfterCommit(commit, afterCommit) {
+  if (commit?.saved !== true) return commit
+  let started
+  try {
+    started = await afterCommit()
+  } catch (error) {
+    started = thrown(error)
+  }
+  return completeResult(commit, started)
+}
+
 // What a write's result means for the owner, or null when there is nothing to say (a save, a
 // repeat, no change, a dropped tap). `action` is what was tapped (failureText's). Kinds:
 // 'failed' (nothing saved; or a workout saved but not closed), 'saved-rest-failed' (the set
