@@ -12,7 +12,7 @@ const CODES = [
 ]
 // What the screen was doing when the write was refused; undefined is a caller that did not say.
 // 'rest' is the rest restored on open, 'start-rest' the Start rest tap.
-const ACTIONS = ['complete', 'rest', 'start-rest', 'draft', 'edit', 'undo', 'add-set', 'add-warmup', 'add-time', 'skip-rest', 'resume', 'discard', 'finish', undefined]
+const ACTIONS = ['complete', 'complete-warmup', 'rest', 'start-rest', 'draft', 'edit', 'undo', 'undo-warmup', 'add-set', 'add-warmup', 'add-time', 'skip-rest', 'resume', 'discard', 'finish', undefined]
 const GENERIC = 'Something went wrong. Try again.'
 
 describe('failureText', () => {
@@ -51,6 +51,8 @@ describe('failureText', () => {
     expect(failureText('unknown-set', { action: 'undo' })).toBe('Set not undone. That set is no longer in this workout.')
     expect(failureText('unknown-exercise', { action: 'add-set' })).toBe('Set not added. That exercise is no longer in this workout.')
     expect(failureText('known-set', { action: 'add-warmup' })).toBe('Warm-up not added. That set is already in this workout.')
+    expect(failureText('storage', { action: 'complete-warmup' })).toBe("Warm-up not saved. The phone couldn't write it. Try again.")
+    expect(failureText('unknown-set', { action: 'undo-warmup' })).toBe('Warm-up not undone. That set is no longer in this workout.')
     expect(failureText('no-rest', { action: 'add-time' })).toBe('Time not added. No rest is running.')
     expect(failureText('bad-extend', { action: 'add-time' })).toBe("Time not added. The rest can't get any longer.")
     expect(failureText('no-rest', { action: 'skip-rest' })).toBe('Rest not skipped. No rest is running.')

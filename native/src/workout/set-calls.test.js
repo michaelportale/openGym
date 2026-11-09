@@ -641,7 +641,7 @@ describe('noticesAfter', () => {
     expect(noticesAfter({ notice: 'old', rest: null }, restFailed, 'complete')).toEqual(restLine)
   })
   test('the rest line stays through every other write, saved or refused', () => {
-    for (const action of ['draft', 'edit', 'add-set', 'add-warmup', 'add-time', 'skip-rest', 'resume']) {
+    for (const action of ['draft', 'edit', 'add-set', 'add-warmup', 'complete-warmup', 'undo-warmup', 'add-time', 'skip-rest', 'resume']) {
       expect(noticesAfter(restLine, { ok: true, saved: true }, action), action).toEqual(restLine)
       expect(noticesAfter(restLine, refused, action).rest, action).toBe(SAVED_REST)
     }
@@ -652,6 +652,14 @@ describe('noticesAfter', () => {
     expect(noticesAfter(restLine, refused, 'complete')).toEqual({ notice: "Set not saved. The phone couldn't write it. Try again.", rest: SAVED_REST })
     expect(noticesAfter(restLine, null, 'complete')).toEqual(restLine)
     expect(noticesAfter(restLine, { ok: true, saved: false, duplicate: true }, 'complete')).toEqual(restLine)
+  })
+  // Warming up for the next lift right after the last work set whose rest failed: that rest is
+  // still the one Start rest starts.
+  test('a warm-up completed or undone leaves it and its Start rest; its own refusal says warm-up', () => {
+    expect(noticesAfter(restLine, { ok: true, saved: true }, 'complete-warmup')).toEqual(restLine)
+    expect(noticesAfter(restLine, { ok: true, saved: true }, 'undo-warmup')).toEqual(restLine)
+    expect(noticesAfter(restLine, refused, 'complete-warmup')).toEqual({ notice: "Warm-up not saved. The phone couldn't write it. Try again.", rest: SAVED_REST })
+    expect(noticesAfter(restLine, refused, 'undo-warmup')).toEqual({ notice: "Warm-up not undone. The phone couldn't write it. Try again.", rest: SAVED_REST })
   })
   test('a set undone takes it away: its "Saved." is no longer true', () => {
     expect(noticesAfter(restLine, { ok: true, saved: true }, 'undo')).toEqual(NO_NOTICES)

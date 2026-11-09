@@ -6,11 +6,13 @@ export const OVERNIGHT_NOTICE = 'Choose Resume, Finish or Discard first.'
 // What the screen was doing when the write was refused.
 const NOT_DONE = {
   complete: 'Set not saved.',
+  'complete-warmup': 'Warm-up not saved.',
   rest: "Rest didn't start.",
   'start-rest': "Rest didn't start.",
   draft: 'Numbers not saved.',
   edit: 'Change not saved.',
   undo: 'Set not undone.',
+  'undo-warmup': 'Warm-up not undone.',
   'add-set': 'Set not added.',
   'add-warmup': 'Warm-up not added.',
   'add-time': 'Time not added.',

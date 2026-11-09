@@ -289,8 +289,9 @@ export const noticeStamp = seq => text => ({ text, seq })
 // The screen's two notices after a write. `notice` is what the last write said (null clears
 // it). `rest` is the line that carries the Start rest button: set by a Complete whose set saved
 // but whose rest was refused (or by a rest that failed to start), gone once a rest runs, another
-// set is completed or a set is undone (its "Saved." would no longer hold), and kept through every
-// other write. 'rest' is the rest restored on open, 'start-rest' the Start rest tap; `result`
+// work set is completed or a work set is undone (its "Saved." would no longer hold), and kept
+// through every other write: a warm-up's 'complete-warmup' or 'undo-warmup' leaves it, since the
+// work set's rest is still the one to start. 'rest' is the rest restored on open, 'start-rest' the Start rest tap; `result`
 // null there means no rest was left to start. A rest refused overnight says so as the notice and
 // leaves the line as it was: its Start rest works again after Resume. A dropped tap changes nothing.
 // `stamp` (noticeStamp) wraps each notice this write sets; one kept through it passes as it was.

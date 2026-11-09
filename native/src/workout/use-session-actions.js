@@ -171,6 +171,7 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
       mode,
       side,
       perSide,
+      warmup: row.warmup,
       initial: shownValues(found.slot, side, carriedWeight(found.entry, setId)),
       initialField: keypadField(field, perSide, side),
       // A half-done per-side set's weight stays the one its first side was logged at.
@@ -202,9 +203,11 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
       const done = sheet.mode === 'done'
       settle(done ? await edit(sheet.setId, values) : await draft(sheet.setId, values), sheet.key, done ? 'edit' : 'draft')
     },
-    onComplete: async values => settle(await complete({ setId: sheet.setId, side: sheet.side, values }), sheet.key, 'complete'),
+    // A warm-up's Complete and Undo are named for it: its words say warm-up, and they leave the
+    // work set's "Rest didn't start" line alone (noticesAfter).
+    onComplete: async values => settle(await complete({ setId: sheet.setId, side: sheet.side, values }), sheet.key, sheet.warmup ? 'complete-warmup' : 'complete'),
     // Undo also clears a draft a failed clear left on the set, first, in the same gated write.
-    onUndo: async () => settle(await write((view, now) => undoWrite(session, view, { setId: sheet.setId, eventId: createEventId(), now })), sheet.key, 'undo'),
+    onUndo: async () => settle(await write((view, now) => undoWrite(session, view, { setId: sheet.setId, eventId: createEventId(), now })), sheet.key, sheet.warmup ? 'undo-warmup' : 'undo'),
     // Swiping the sheet away (or Close) after typing keeps a draft for any set not done yet; on a
     // done set it cancels. The sheet is gone, so a refusal shows on the screen.
     onClose: async (values, changed) => {
