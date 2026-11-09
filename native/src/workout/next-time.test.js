@@ -197,7 +197,7 @@ test('a per-side set with only one side done is not a completed set: no line', (
   expect(nextTimeLines({ unit: 'lb', routines: [r], workouts: [lastWeek, full] }, r, full.entries, names)).toHaveLength(1)
 })
 
-test('rest-pause and drop-set exercises open exactly as the shared builder builds them, with no line', () => {
+test('rest-pause and drop-set exercises open as before Phase 4: at last time, no line', () => {
   // Both topped last week. Rest-pause: one work set of 20 reps in bursts. Drop-set: two drops.
   const rp = { id: '0025', sets: 1, reps: 12, repsMin: 8, intensifier: { type: 'restpause', totalReps: 20, restSec: 15 } }
   const ds = { id: '0289', sets: 2, reps: 12, repsMin: 8, intensifier: { type: 'dropset', count: 2, pct: 20 } }
@@ -208,16 +208,18 @@ test('rest-pause and drop-set exercises open exactly as the shared builder build
       { id: '0289', rid: 'r1', target: { ...ds }, planned: progression.plannedOf(ds), sets: [1, 2].map(() => work(40, 12, { type: 'dropset', drops: [{ w: 30, r: 12 }, { w: 25, r: 12 }] })) },
     ],
   }
-  for (const r of [{ ...routine, ex: [rp, ds] }, { ...routine, prog: 'double', ex: [rp, ds] }]) {
+  // Unnamed policy (the web builds its linear raise), named double, and off: all the same.
+  for (const r of [{ ...routine, ex: [rp, ds] }, { ...routine, prog: 'double', ex: [rp, ds] }, { ...routine, prog: 'off', ex: [rp, ds] }]) {
     const S = { unit: 'lb', routines: [r], workouts: [last] }
     const built = sessionStart.buildSessionEntries(S, r).map(e => ({ ...e, rid: r.id }))
-    // The reference is consistent: a rest-pause row's bursts sum to its reps, a drop keeps its row's reps.
-    const work0 = built[0].sets.find(s => s.type === 'restpause')
-    expect(work0.clusters.reduce((n, c) => n + c.r, 0)).toBe(work0.r)
-    for (const row of built[1].sets) expect(row.drops.every(d => d.r === row.r)).toBe(true)
-
     const next = buildSessionBase({ state: S, routine: r, now, timeZone, id: 'n1' })
-    expect(next.entries).toStrictEqual(built)
+    // Weight follows last time's top (80 and 40), never the builder's raise; reps, bursts, drops and target as built.
+    const expected = built.map(e => ({
+      ...e,
+      sets: e.sets.map(row => (row.warmup || row.phase === 'warmup' ? row : { ...row, w: e.id === '0025' ? 80 : 40 })),
+    }))
+    expect(next.entries).toStrictEqual(expected)
+    expect(next.entries[1].sets.map(s => s.w)).toEqual([40, 40])
     expect(nextTimeLines(S, r, last.entries, names)).toEqual([])
   }
 })

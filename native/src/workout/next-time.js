@@ -38,13 +38,12 @@ const structured = cfg => cfg?.intensifier?.type === 'dropset' || cfg?.intensifi
 
 /**
  * What a new session opens this exercise at from its prescription: `{ weight, reps }`, reps null
- * when the engine sets none; `{ asBuilt: true }` for a drop-set or rest-pause exercise, which
- * keeps the shared builder's rows. Null falls back to last time.
+ * when the engine sets none. Null falls back to last time, as before Phase 4: a drop-set or
+ * rest-pause exercise is always null, since its rows come from the plan's structure.
  */
 export function prescribedOpening(state, routine, exerciseId) {
   const found = weightedPrescription(state, routine, exerciseId)
-  if (!found) return null
-  if (structured(found.cfg)) return { asBuilt: true }
+  if (!found || structured(found.cfg)) return null
   const { p } = found
   return { weight: p.weight, reps: num(p.reps) && p.reps > 0 ? p.reps : null }
 }

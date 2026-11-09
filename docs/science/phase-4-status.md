@@ -23,7 +23,7 @@ Nothing is blocked on the shell or the journal any more. What was blocked now sh
 - **Next time.** After Finish, the saved screen lists a line per exercise that used double progression and has a completed work row. The next session opens at that weight and reps, and the target is stamped to match.
 - **Why sheets.** About rest times on the resting dock, Why these steps? under the keypad's ±5 and ±10 chips, Why? and Why offered? on the warm-up prompt, Why? on a Next time line, and Why? on the effort note and the keypad's reps-left row.
 
-Lines are double-only. Linear, Greyskull, triple, pyramid, off, excluded, timed, drop-set and rest-pause exercises get no line and open exactly as before. A deload line opens the new `deload` Why kind, which shows the `deload-after-misses` entry.
+Lines are double-only. Linear, Greyskull, triple, pyramid, off, excluded, timed, drop-set and rest-pause exercises get no line and open exactly as before Phase 4: the weight follows last time, and the reps, drops and bursts stay as the shared builder made them. That holds under any policy, including none named. A deload line opens the new `deload` Why kind, which shows the `deload-after-misses` entry.
 
 Phase 4 added no rule, number or citation. The register entries are as before.
 
