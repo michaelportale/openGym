@@ -803,4 +803,11 @@ describe('copyKey in status', () => {
     expect(pulled.copyKey).not.toBe(first.copyKey)
     expect((await t.sync.forget()).copyKey).toBeUndefined()
   })
+
+  test('is read without the copy\'s body', async () => {
+    const t = await setup()
+    await t.sync.syncNow()
+    t.copy.get = async () => { throw new Error('status read the whole body') }
+    expect((await t.sync.status()).copyKey).toBe('3|wid-3')
+  })
 })

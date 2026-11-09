@@ -208,6 +208,7 @@ export function createFakeSqliteDb() {
     if (/^PRAGMA table_info\(finished_workouts\)$/i.test(text)) {
       return ['id', 'd', 'body', 'acked_at'].map(name => ({ name }))
     }
+    if (/^SELECT rev, wid FROM server_copy/i.test(text)) return tables.server_copy.map(row => ({ rev: row.rev, wid: row.wid }))
     if (/FROM server_copy/i.test(text)) return tables.server_copy.map(row => ({ ...row }))
     if (/FROM sync_meta/i.test(text)) {
       const rows = /WHERE key = \?/i.test(text) ? tables.sync_meta.filter(row => row.key === params[0]) : tables.sync_meta

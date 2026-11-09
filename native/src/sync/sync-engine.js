@@ -213,7 +213,8 @@ export function createSync({ client, credentials, copy, workouts, meta, now }) {
     let problem = await meta.get('problem')
     const httpStatus = Number(await meta.get('httpStatus')) || null
     const pending = (await workouts.listPending()).length
-    const held = await readCopy()
+    // The rev and wid alone: this runs on every state change, and the body can be megabytes.
+    const held = await copy.key().catch(() => null)
     const isPaired = !!auth && !!server
     let state
     if (!isPaired) state = 'unpaired'

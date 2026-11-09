@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { SQLITE_DRIVERS } from '../../scripts/node-sqlite.mjs'
+import { SQLITE_DRIVERS, createNodeSqliteDb } from '../../scripts/node-sqlite.mjs'
 import { buildPush } from './outbox.js'
 import { createSqliteServerCopy, createSqliteSyncMeta } from './server-copy.js'
 
@@ -64,4 +64,25 @@ test.each(SQLITE_DRIVERS)('%s: put, get, then buildPush keeps everything but wor
   expect(workouts).toEqual([...original, { id: 'new', d: '2026-11-09' }])
   expect(push.baseRev).toBe(7)
   expect(push.baseWid).toBe('wid-9')
+})
+
+test.each(SQLITE_DRIVERS)('%s: key() is the rev and wid alone, read without the body', async (_n, createDb) => {
+  const db = createDb()
+  const copy = createSqliteServerCopy(db)
+  expect(await copy.key()).toBeNull()
+  await copy.put({ state, rev: 7, wid: 'wid-9', pulledAt: 't' })
+  expect(await copy.key()).toEqual({ rev: 7, wid: 'wid-9' })
+  await copy.put({ state, rev: 8, wid: null, pulledAt: 't' })
+  expect(await copy.key()).toEqual({ rev: 8, wid: null })
+  await copy.clear()
+  expect(await copy.key()).toBeNull()
+})
+
+test('key() never parses the body: a corrupt one still has its key', async () => {
+  const db = createNodeSqliteDb()
+  const copy = createSqliteServerCopy(db)
+  await copy.put({ state, rev: 7, wid: 'wid-9', pulledAt: 't' })
+  await db.run('UPDATE server_copy SET body = ?', ['{not json'])
+  expect(await copy.key()).toEqual({ rev: 7, wid: 'wid-9' })
+  await expect(copy.get()).rejects.toThrow()
 })

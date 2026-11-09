@@ -39,6 +39,12 @@ export function createSqliteServerCopy(db) {
       const row = rows[0]
       return { state: JSON.parse(row.body), rev: row.rev, wid: row.wid, pulledAt: row.pulled_at }
     },
+    // The copy's rev and wid without its body, or null: what status() needs, at no parse.
+    async key() {
+      await ready()
+      const rows = await db.getAll('SELECT rev, wid FROM server_copy WHERE id = 1')
+      return rows.length ? { rev: rows[0].rev, wid: rows[0].wid } : null
+    },
     async put({ state, rev, wid, pulledAt }) {
       await ready()
       await db.run(
