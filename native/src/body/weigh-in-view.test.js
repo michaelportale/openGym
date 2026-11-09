@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { canRemove, parseWeight, saveOp, sheetButtons, todayLine } from './weigh-in-view.js'
+import { afterWeighIn, canRemove, parseWeight, saveOp, sheetButtons, todayLine } from './weigh-in-view.js'
 
 test('parseWeight accepts dot or comma, trims, rounds to 0.1', () => {
   expect(parseWeight('182.4')).toBe(182.4)
@@ -62,4 +62,34 @@ test('sheetButtons: the busy action\'s button says what is happening, in text an
   expect(sheetButtons(null)).toEqual(idle)
   expect(sheetButtons('save')).toEqual({ ...idle, save: { label: 'Saving…', a11y: 'Saving' } })
   expect(sheetButtons('remove')).toEqual({ ...idle, remove: { label: 'Removing…', a11y: 'Removing' } })
+})
+
+test('afterWeighIn starts the server sync only once the Health pass has settled', async () => {
+  const events = []
+  let release
+  const healthPass = () => new Promise(resolve => { release = () => { events.push('health done'); resolve() } })
+  const serverSync = () => { events.push('sync'); return Promise.resolve() }
+  const done = afterWeighIn(healthPass, serverSync)
+  await new Promise(r => setTimeout(r, 0))
+  expect(events).toEqual([])
+  release()
+  await done
+  expect(events).toEqual(['health done', 'sync'])
+})
+
+test('afterWeighIn still runs the server sync when the Health pass rejects', async () => {
+  let synced = 0
+  await afterWeighIn(() => Promise.reject(new Error('health')), () => { synced++ }).catch(() => {})
+  expect(synced).toBe(1)
+})
+
+test('afterWeighIn settles after the server sync', async () => {
+  let release
+  let settled = false
+  const done = afterWeighIn(() => Promise.resolve(), () => new Promise(resolve => { release = resolve })).then(() => { settled = true })
+  await new Promise(r => setTimeout(r, 0))
+  expect(settled).toBe(false)
+  release()
+  await done
+  expect(settled).toBe(true)
 })

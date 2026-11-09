@@ -688,7 +688,7 @@ async function webEditSetup() {
     entry.w = 182
     entry.t = atHour(9)
   }
-  return { reads, health, w, sync, pull, editOnWeb }
+  return { reads, health, w, sync, pull, editOnWeb, weighIns }
 }
 
 test('C1 residual: a deleted reading, a stale-copy pass and a later reading leave the web-typed weight alone', async () => {
@@ -726,4 +726,24 @@ test('C1 residual: the deletion and the next reading in one stale pass, then a t
   await health.run()
   await sync()
   expect(w.server.bodyweight).toEqual([expect.objectContaining({ d: DAY, w: 182 })])
+})
+
+// "Remove today's weight" while paired: the Health pass runs before the push is built (afterWeighIn),
+// so the fallback replaces the unsent remove and the server ends up holding the Health reading. (Pushed
+// side by side, the remove could reach the server first and its deletion stamp would beat the fallback.)
+test('after a typed remove, the Health pass before the push leaves the Health reading on the server', async () => {
+  const { reads, health, w, sync, weighIns } = await webEditSetup()
+  await weighIns.put({ d: DAY, op: 'set', w: 182, t: atHour(8) })
+  await health.run()
+  await sync()
+  w.clock = atHour(8) + 30 * 60000
+  reads.push({ samples: [scale('Y', 184, atHour(8) + 20 * 60000)], deleted: [], anchor: 'a1' })
+  await health.run()
+  await sync()
+  w.clock = atHour(9)
+  await weighIns.put({ d: DAY, op: 'remove', t: atHour(9), baseT: atHour(8) })
+  await health.run() // the pass first: the Health fallback replaces the unsent remove
+  w.clock = atHour(9) + 120
+  await sync()
+  expect(w.server.bodyweight).toEqual([expect.objectContaining({ d: DAY, w: 184, hk: 'Y' })])
 })

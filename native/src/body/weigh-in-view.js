@@ -38,3 +38,11 @@ export function sheetButtons(busy) {
     remove: busy === 'remove' ? { label: 'Removing…', a11y: 'Removing' } : { label: remove, a11y: remove },
   }
 }
+
+// The work after a weigh-in is written: the Health pass, then the server sync. The order matters: after
+// "Remove today's weight" the Health fallback must replace the unsent remove before the push is built.
+// Otherwise the server's deletion stamp beats the fallback and the reading is refused for good.
+// The sync runs even if the pass rejects (both callers never reject today).
+export function afterWeighIn(healthPass, serverSync) {
+  return healthPass().then(() => serverSync(), () => serverSync())
+}

@@ -8,7 +8,7 @@ import { readCopy, createSqliteServerCopy } from '../sync/server-copy'
 import { localDate } from '../session/timing'
 import { getHealth, healthAfterFinish } from '../health/use-health'
 import { getSync, syncAfterFinish } from '../sync/use-sync'
-import { canRemove, saveOp, todayLine } from './weigh-in-view'
+import { afterWeighIn, canRemove, saveOp, todayLine } from './weigh-in-view'
 
 const CHANGED = "That weight changed. Check today's weight and try again."
 
@@ -33,7 +33,7 @@ async function readToday(db) {
 }
 
 // { entry, line, removable, save(w), remove() }. save and remove resolve { ok } and never throw;
-// the Health pass and the server sync run after the write and are never awaited. While the tab is
+// the Health pass, then the server sync, run after the write and are never awaited. While the tab is
 // focused, a Health pass or a server sync that changes something reloads the line. Reloads are
 // coalesced (one at a time, at most one waiting), so back-to-back changes read the copy once.
 export function useWeighIns() {
@@ -77,8 +77,9 @@ export function useWeighIns() {
     } catch {
       return { ok: false }
     }
-    healthAfterFinish()
-    syncAfterFinish()
+    // Not awaited. The Health pass goes first: its fallback must replace an unsent remove before the
+    // push is built, or the server's deletion stamp beats it and the reading is refused for good.
+    afterWeighIn(healthAfterFinish, syncAfterFinish)
     await reload()
     return { ok: true }
   }
