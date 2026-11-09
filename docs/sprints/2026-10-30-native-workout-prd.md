@@ -1,6 +1,6 @@
 # Native openGym sprint: PRD
 
-Status: agreed scope, awaiting review. No implementation has started.
+Status: agreed scope. Implementation is under way; see the Status table under Delivery phases.
 Replaces the October 30 draft. Decisions come from the grilling sessions of November 2026.
 
 ## Summary
@@ -229,6 +229,13 @@ more reviewable branches and PRs, split at implementation time.
 | 9 | Device acceptance | Scenario table and a real gym session pass on an internal TestFlight release build. |
 | 10 | Web retirement | Web UI removed; shared logic moved to `packages/core`, because `mcp/` still imports it; docs updated. |
 
+**HealthKit gates (Phase 0).** `@kingstinct/react-native-healthkit` is the first candidate. On the
+iPhone it must: save a workout, retry without a duplicate, replace after an edit, delete it, and read
+body weight from another app. If any gate fails, build a small custom Expo module instead.
+
+Phase 10 depends on Phase 9 passing and on the pair command existing. The nginx `web` container also
+proxies the API and serves exercise media, so its replacement is planned before removal.
+
 ### Status
 
 | Phase | State | Where |
@@ -240,13 +247,6 @@ more reviewable branches and PRs, split at implementation time.
 
 Phase 9's device acceptance and the real gym sessions are the owner's to run. The checklist is
 [`2026-11-native-first-workout-checklist.md`](2026-11-native-first-workout-checklist.md).
-
-**HealthKit gates (Phase 0).** `@kingstinct/react-native-healthkit` is the first candidate. On the
-iPhone it must: save a workout, retry without a duplicate, replace after an edit, delete it, and read
-body weight from another app. If any gate fails, build a small custom Expo module instead.
-
-Phase 10 depends on Phase 9 passing and on the pair command existing. The nginx `web` container also
-proxies the API and serves exercise media, so its replacement is planned before removal.
 
 ## Acceptance criteria
 
