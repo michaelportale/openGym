@@ -1,4 +1,4 @@
-import { dumbbells } from '../shared/training.js'
+import { dumbbells, exercises } from '../shared/training.js'
 import { warmupPrompts } from '../science/warmup-prompt.js'
 import { warmupRamp } from '../science/warmup-ramp.js'
 import { carriedWeight, isDone, isWarmup, shownValues } from './workout-view.js'
@@ -40,4 +40,16 @@ export function warmupPromptText(sets, perHand) {
 // The owned dumbbells that apply to this exercise in the way its sets are logged; null when none.
 export function ownedFor(state, entry) {
   return dumbbells.ownedWeightsFor(state, { id: entry?.id, dbLoad: entry?.target?.dbLoad }) ?? undefined
+}
+
+// The prompt for one exercise in a view, in the profile's unit (state.unit, lb when unset): the
+// bar, the load step and the owned bells all follow it. The screen and the write both call this.
+export function promptForExercise(view, id, state) {
+  const entries = view?.entries ?? []
+  const at = entries.findIndex(e => e.id === id)
+  if (at < 0) return null
+  const entry = entries[at]
+  const step = entry.target?.inc > 0 ? entry.target.inc : undefined
+  const unit = state?.unit === 'kg' ? 'kg' : 'lb'
+  return warmupPromptFor({ entry, entryIndex: at, entries, unit, equipment: exercises.EXIDX[id]?.eq, step, owned: ownedFor(state, entry) })
 }

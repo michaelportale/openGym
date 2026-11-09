@@ -13,7 +13,7 @@ const CODES = [
 // What the screen was doing when the write was refused; undefined is a caller that did not say.
 // 'open' is the session failing to open; 'rest' is the rest restored on open, 'start-rest' the
 // Start rest tap.
-const ACTIONS = ['open', 'complete', 'complete-warmup', 'rest', 'start-rest', 'draft', 'edit', 'undo', 'undo-warmup', 'add-set', 'add-warmup', 'remove-warmup', 'add-time', 'skip-rest', 'pause-rest', 'resume-rest', 'resume', 'discard', 'finish', undefined]
+const ACTIONS = ['open', 'complete', 'complete-warmup', 'rest', 'start-rest', 'draft', 'edit', 'undo', 'undo-warmup', 'add-set', 'add-warmup', 'add-warmups-partial', 'remove-warmup', 'add-time', 'skip-rest', 'pause-rest', 'resume-rest', 'resume', 'discard', 'finish', undefined]
 const GENERIC = 'Something went wrong. Try again.'
 
 describe('failureText', () => {
@@ -75,5 +75,13 @@ describe('failureText', () => {
   test('an overnight refusal keeps the stage-1 sentence, whatever was tapped', () => {
     expect(OVERNIGHT_NOTICE).toBe('Choose Resume, Finish or Discard first.')
     for (const action of ACTIONS) expect(failureText('overnight', { action })).toBe(OVERNIGHT_NOTICE)
+  })
+})
+
+describe('a partial warm-up add', () => {
+  test('says one was added, whatever the reason, even overnight', () => {
+    const text = "One warm-up added; the other didn't save. Use Add warm-up to add it."
+    expect(failureText('storage', { action: 'add-warmups-partial' })).toBe(text)
+    expect(failureText('overnight', { action: 'add-warmups-partial' })).toBe(text)
   })
 })

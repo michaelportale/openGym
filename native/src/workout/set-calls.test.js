@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { NO_NOTICES, OVERNIGHT_NOTICE, PAST_MIDNIGHT, addSetCall, addWarmupCall, addWarmupsCall, completeAfterCommit, completeCall, completeResult, dockKeypadField, draftCall, editCall, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightNow, overnightRefusal, pauseRestCall, resumeRestCall, primaryAction, removeWarmupCall, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, sheetSide, thrown, undoCall, undoWrite, writeOutcome, findSet } from './set-calls.js'
+import { NO_NOTICES, OVERNIGHT_NOTICE, PAST_MIDNIGHT, addSetCall, addWarmupCall, addWarmupsCall, addWarmupsInOrder, completeAfterCommit, completeCall, completeResult, dockKeypadField, draftCall, editCall, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightNow, overnightRefusal, pauseRestCall, resumeRestCall, primaryAction, removeWarmupCall, restAfterComplete, resultNotice, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, sheetSide, thrown, undoCall, undoWrite, writeOutcome, findSet } from './set-calls.js'
 import { shownValues, workoutScreen } from './workout-view.js'
 import { pendingRest, restEventId, restMsFor } from './rest-after.js'
 import { withTargets } from './session-screen.js'
@@ -283,6 +283,58 @@ describe('addWarmupsCall', () => {
     expect(addWarmupsCall({ ...v, disposition: { kind: 'overnight' } }, '0289', ['e1', 'e2'], sets)).toBeNull()
     expect(addWarmupsCall(v, '0289', ['e1'], sets)).toBeNull()
     expect(addWarmupsCall(v, '0289', ['e1', 'e2'], [])).toBeNull()
+  })
+})
+
+describe('addWarmupsInOrder', () => {
+  const T = Date.parse('2026-11-09T18:00:00.000Z')
+  const MIDNIGHT = Date.parse('2026-11-10T00:10:00.000Z')
+  const calls = [{ eventId: 'e1', exerciseId: '0289', setId: 'warm:0289:e1', fields: {} }, { eventId: 'e2', exerciseId: '0289', setId: 'warm:0289:e2', fields: {} }]
+  const active = { status: 'active', disposition: { kind: 'active' }, activityAt: T, timeZone: 'UTC', entries: [] }
+  // A session whose addSet results are scripted; `clock` moves on after each add.
+  const fake = (results, onAdd = () => {}) => {
+    const added = []
+    return {
+      added,
+      getState: () => ({ view: active }),
+      addSet: async call => { added.push(call.setId); onAdd(added.length); return results[added.length - 1] }
+    }
+  }
+  const saved = { ok: true, saved: true }
+  test('both succeed: both added in order, the last result returned', async () => {
+    const s = fake([saved, saved])
+    expect(await addWarmupsInOrder(s, calls, { now: () => T })).toEqual(saved)
+    expect(s.added).toEqual(['warm:0289:e1', 'warm:0289:e2'])
+  })
+  test('the first fails: nothing else is added and its failure is the result', async () => {
+    const failed = { ok: false, saved: false, error: { code: 'storage' } }
+    const s = fake([failed])
+    const result = await addWarmupsInOrder(s, calls, { now: () => T })
+    expect(result).toEqual(failed)
+    expect(s.added).toEqual(['warm:0289:e1'])
+    expect(resultNotice(result, 'add-warmup')).toBe("Warm-up not added. The phone couldn't write it. Try again.")
+  })
+  test('the second fails: the first stays and the result says one was added', async () => {
+    const failed = { ok: false, saved: false, error: { code: 'storage' } }
+    const s = fake([saved, failed])
+    const result = await addWarmupsInOrder(s, calls, { now: () => T })
+    expect(result).toMatchObject({ ok: false, saved: false, partial: true, error: { code: 'storage' } })
+    expect(s.added).toHaveLength(2)
+    expect(resultNotice(result, 'add-warmups-partial')).toBe("One warm-up added; the other didn't save. Use Add warm-up to add it.")
+  })
+  test('overnight before the first add writes nothing', async () => {
+    const s = fake([saved, saved])
+    const result = await addWarmupsInOrder(s, calls, { now: () => MIDNIGHT })
+    expect(result).toEqual({ ok: false, saved: false, error: { code: 'overnight' } })
+    expect(s.added).toEqual([])
+  })
+  test('midnight crossed between the adds: the second is refused and the first stays', async () => {
+    let clock = T
+    const s = fake([saved, saved], n => { if (n === 1) clock = MIDNIGHT })
+    const result = await addWarmupsInOrder(s, calls, { now: () => clock })
+    expect(s.added).toEqual(['warm:0289:e1'])
+    expect(result).toMatchObject({ saved: false, partial: true, error: { code: 'overnight' } })
+    expect(resultNotice(result, 'add-warmups-partial')).toBe("One warm-up added; the other didn't save. Use Add warm-up to add it.")
   })
 })
 
@@ -1022,6 +1074,25 @@ describe.each(SQLITE_DRIVERS)('%s: the calls drive the engine', (_name, createDb
     expect(screen.card.rows.map(r => [r.label, r.weightText, r.status])).toEqual([['W', '30', 'current'], ['W', '60', 'pending'], ['1', '75', 'current'], ['2', '75', 'pending']])
     expect(screen.dock).toMatchObject({ lead: 'Set 1 · 75 lb × 8', setId: benchSet })
     expect(screen.header.progress).toBe(0)
+  })
+
+  test('a prefilled warm-up completed, then a kill: still done, no rest pending, dock on work set 1', async () => {
+    clock = T0 + 1000
+    let db = createDb()
+    const first = await open(db)
+    const [one, two] = addWarmupsCall(current(first), 'bench', ['p1', 'p2'], [{ w: 30, r: 6 }, { w: 60, r: 6 }], clock)
+    await first.call('addSet', one)
+    await first.call('addSet', two)
+    expect((await first.call('commitSet', completeCall(current(first), { setId: one.setId, side: null, eventId: 'c1', now: clock }))).saved).toBe(true)
+    db = db.reopen()
+    clock = T0 + 5000
+    const view = current(await open(db, false))
+    expect(view.entries[0].sets.find(s => s.setId === one.setId).row).toMatchObject({ w: 30, r: 6, done: true })
+    expect(pendingRest(view, clock, () => 120_000)).toBeNull()
+    expect(view.rest).toBeNull()
+    const screen = workoutScreen(view, { names: {}, lastTimes: {} })
+    expect(screen.card.rows.map(r => [r.label, r.status])).toEqual([['W', 'done'], ['W', 'current'], ['1', 'current'], ['2', 'pending']])
+    expect(screen.dock).toMatchObject({ lead: 'Set 1 · 75 lb × 8', setId: benchSet })
   })
 
   test('a warm-up: add, complete, kill; still a warm-up, no rest, out of the numbers', async () => {

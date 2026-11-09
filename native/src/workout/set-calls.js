@@ -208,6 +208,21 @@ export function addWarmupsCall(view, exerciseId, eventIds, sets, now) {
   return calls.map((call, i) => ({ ...call, fields: { ...call.fields, w: sets[i].w, r: sets[i].r } }))
 }
 
+// Runs the prompt's adds one after another on `session` (inside the gate). Overnight is checked
+// against the clock before each add, on the session's own latest view, so a midnight between the
+// two refuses the second. The first add failing is that failure as it is, nothing else written.
+// A later add failing leaves the earlier rows and returns its failure marked `partial`, which the
+// screen reports as 'add-warmups-partial' (not "Warm-up not added", one was). `now` is the clock.
+export async function addWarmupsInOrder(session, calls, { now = Date.now } = {}) {
+  let result = null
+  for (const [i, call] of calls.entries()) {
+    const refused = overnightRefusal(session.getState().view, now())
+    result = refused ?? await session.addSet(call)
+    if (result?.saved !== true) return i === 0 ? result : { ...result, ok: false, saved: false, partial: true }
+  }
+  return result
+}
+
 // A mis-tapped Add warm-up comes off again: the engine's removeSet drops the row and any numbers
 // typed for it, so no blank warm-up is saved into history. Only a warm-up not done yet; a done one
 // goes back through Undo first. Null for a work set, a done warm-up, a row not in the view, or

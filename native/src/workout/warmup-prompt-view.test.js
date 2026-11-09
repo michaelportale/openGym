@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { ownedFor, warmupPromptFor, warmupPromptText } from './warmup-prompt-view.js'
+import { ownedFor, promptForExercise, warmupPromptFor, warmupPromptText } from './warmup-prompt-view.js'
 
 const slot = (setId, row, extra = {}) => ({ setId, completed: row.done === true, warmup: false, draft: null, row, ...extra })
 let n = 0
@@ -45,6 +45,37 @@ describe('warmupPromptFor', () => {
   test('owned dumbbells round down to a bell you have', () => {
     const entries = [ent('0289', [todo(80, 8)])]
     expect(ask(entries, 0, { owned: [10, 25, 35, 65, 80] }).sets.map(s => s.w)).toEqual([25, 35])
+  })
+})
+
+describe('kg profiles', () => {
+  test('the bar floor is 20 kg, not 45', () => {
+    const entries = [ent('0025', [todo(60, 5)])]
+    expect(ask(entries, 0, { equipment: 'barbell', unit: 'kg', step: 2.5 }).sets.map(s => s.w)).toEqual([22.5, 47.5])
+    expect(ask([ent('0025', [todo(20, 5)])], 0, { equipment: 'barbell', unit: 'kg', step: 2.5 })).toBeNull()
+  })
+  test('without a step the kg grid is used', () => {
+    const entries = [ent('0289', [todo(30, 8)])]
+    const kg = ask(entries, 0, { unit: 'kg' }).sets.map(s => s.w)
+    const lb = ask(entries, 0, { unit: 'lb' }).sets.map(s => s.w)
+    expect(kg).toEqual([10, 22.5])
+    expect(lb).not.toEqual(kg)
+  })
+})
+
+describe('promptForExercise reads the profile unit', () => {
+  const view = entries => ({ entries })
+  test('a kg state gets the 20 kg bar and the kg owned bells', () => {
+    const v = view([ent('0025', [todo(60, 5)])])
+    expect(promptForExercise(v, '0025', { unit: 'kg' }).sets.map(s => s.w)).toEqual([22.5, 47.5])
+    expect(promptForExercise(v, '0025', { unit: 'lb' }).sets.map(s => s.w)).toEqual([45, 45])
+    const bells = view([ent('0289', [todo(30, 8)])])
+    const state = { unit: 'kg', dumbbells: { kg: { weights: [4, 8, 12, 20, 24, 30] } } }
+    expect(promptForExercise(bells, '0289', state).sets.map(s => s.w)).toEqual([12, 24])
+  })
+  test('no unit means lb; an exercise not in the view has no prompt', () => {
+    expect(promptForExercise(view([ent('0025', [todo(60, 5)])]), '0025', {}).sets.map(s => s.w)).toEqual([45, 45])
+    expect(promptForExercise(view([]), '0025', {})).toBeNull()
   })
 })
 

@@ -21,8 +21,7 @@ import SavedScreen from './SavedScreen'
 import { finishSummary, lastTimesFor, liveView, withTargets } from './session-screen'
 import UpNextRow from './UpNextRow'
 import { useSessionActions } from './use-session-actions'
-import { ownedFor, warmupPromptFor, warmupPromptText } from './warmup-prompt-view'
-import { exercises } from '../shared/training'
+import { promptForExercise, warmupPromptText } from './warmup-prompt-view'
 import { deviceTimeZone } from './use-workout-home'
 import { currentExerciseIndex, workoutScreen } from './workout-view'
 import WorkoutDock from './WorkoutDock'
@@ -58,14 +57,7 @@ export default function WorkoutSession({ db, base, openBase, state, names, onExi
   // notification permission again (Settings may have changed it while the app was away).
   const alerts = useRestAlerts({ session, sessionId: base?.id, names })
   // The warm-up prompt for an exercise in a view: the same decision on screen and inside the write.
-  const promptFor = (from, id) => {
-    const entries = from?.entries ?? []
-    const at = entries.findIndex(e => e.id === id)
-    if (at < 0) return null
-    const entry = entries[at]
-    const step = entry.target?.inc > 0 ? entry.target.inc : undefined
-    return warmupPromptFor({ entry, entryIndex: at, entries, unit: 'lb', equipment: exercises.EXIDX[id]?.eq, step, owned: ownedFor(state, entry) })
-  }
+  const promptFor = (from, id) => promptForExercise(from, id, state)
   const actions = useSessionActions({ session, base, restSec: state.restSec ?? 90, view, screen, shownEntry, setShownIndex, afterWrite: alerts, promptFor })
 
   // A rest that ends while the app is active buzzes once (the alert is suppressed while active, so

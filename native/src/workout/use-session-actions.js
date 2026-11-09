@@ -11,7 +11,7 @@ import { completeLabels } from './keypad'
 import { pendingRest, restMsFor } from './rest-after'
 import { shownAfterComplete, withTargets } from './session-screen'
 import { carriedWeight, lockedWeight, shownValues } from './workout-view'
-import { NO_NOTICES, addSetCall, addWarmupCall, addWarmupsCall, completeAfterCommit, completeCall, dockKeypadField, draftCall, editCall, findSet, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightRefusal, pauseRestCall, primaryAction, removeWarmupCall, restAfterComplete, resultNotice, resumeRestCall, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, sheetSide, thrown, undoWrite } from './set-calls'
+import { NO_NOTICES, addSetCall, addWarmupCall, addWarmupsCall, addWarmupsInOrder, completeAfterCommit, completeCall, dockKeypadField, draftCall, editCall, findSet, finishRetarget, keypadField, noticeAnnouncement, noticeStamp, noticesAfter, overnightNotice, overnightRefusal, pauseRestCall, primaryAction, removeWarmupCall, restAfterComplete, resultNotice, resumeRestCall, sheetBackgroundCall, sheetCloseCall, sheetMode, sheetOutcome, sheetSide, thrown, undoWrite } from './set-calls'
 
 // The sessions already told that rest alerts are off. In memory: a relaunch tells again.
 const explainedAlertsOff = new Set()
@@ -306,18 +306,14 @@ export function useSessionActions({ session, base, restSec, view, screen, shownE
   // in order; if the second is refused the first stays, and that refusal is what is reported.
   const addWarmups = async () => {
     if (!shownEntry) return
-    report(await write(async (view, now) => {
+    const result = await write(async (view, now) => {
       const prompt = promptFor?.(view, shownEntry.id)
       if (!prompt) return null
       const calls = addWarmupsCall(view, shownEntry.id, prompt.sets.map(() => createEventId()), prompt.sets, now)
       if (!calls) return null
-      let result = null
-      for (const call of calls) {
-        result = await session.addSet(call)
-        if (result?.saved !== true) return result
-      }
-      return result
-    }), 'add-warmup')
+      return addWarmupsInOrder(session, calls, { now: Date.now })
+    })
+    report(result, result?.partial ? 'add-warmups-partial' : 'add-warmup')
   }
 
   const openFinish = end => {
