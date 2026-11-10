@@ -753,6 +753,9 @@ app." and you should do exactly that. You can connect again afterwards.
   A file that won't decrypt reads as not connected.
 - A copy of `data/` **without** `secret` can't use them. The rehearsal copy in the native app's device
   checklist (the Phase 5 pairing rehearsal) deletes its `secret`, so it cannot spend or rotate your real tokens.
+- Never boot a second api on a copy of `data/` that still has its `secret` while WHOOP is set up
+  there: its first token refresh rotates the token at WHOOP, and your real server loses the grant
+  (its card then asks you to connect again). Delete the copy's `secret` first.
 - A full backup that **includes** `secret` can decrypt them. That is the same exposure as the
   session secret. If a backup like that leaks, Disconnect: it revokes at WHOOP.
 - Deleting a profile revokes its WHOOP and removes its token file.
@@ -779,7 +782,11 @@ app." and you should do exactly that. You can connect again afterwards.
 | "Connect WHOOP to see recovery, strain and cardio here." after it worked before | The grant expired or was revoked at WHOOP, so the server forgot the tokens. Tap **Connect WHOOP** to connect again. |
 | "WHOOP wasn't connected: WHOOP said no" | You declined, or left a permission out. Connect again and allow every permission, and check the app's scopes in the dashboard. |
 | "WHOOP wasn't connected: WHOOP couldn't be reached" | The server couldn't reach WHOOP to finish. Try again later. |
-| "Couldn't open WHOOP's sign-in. Try again." | The server's link was refused or couldn't be fetched. Check the phone is paired at the `ORIGIN` address. |
+| "WHOOP wasn't connected: your server couldn't save the WHOOP connection" | The server couldn't write the token file in `./data` (a full disk, say). `docker compose logs api` has a line starting `whoop: could not save the connection of`. Fix that, then tap **Connect WHOOP** again. |
+| WHOOP's own error page about the redirect URI (an invalid or mismatched `redirect_uri`), after you tap Continue | The Redirect URI registered on your WHOOP app is not exactly your `ORIGIN` plus `/api/whoop/callback`. Make it match exactly (scheme, host, any port, no trailing slash) in the WHOOP developer dashboard, then tap **Connect WHOOP** again. If `ORIGIN` is what's wrong, fix it in `.env` and run `docker compose up -d` first. |
+| "Couldn't open WHOOP's sign-in. Try again." | The phone couldn't get a connect link from your server: the phone is offline or can't reach the server, the server answered with an error, or the server signed this phone out. Check the phone is online and that Diagnostics shows it synced (if Diagnostics says the server signed this phone out, pair again), look in `docker compose logs api`, then tap **Connect WHOOP** again. A phone paired at another address than `ORIGIN` gets the next line instead. |
+| "Connect works when this phone is paired with <address>. Forget the server and pair again at that address." | The phone is paired at an address that is not the server's `ORIGIN` (a LAN or Tailscale address, say, or `http` where `ORIGIN` is `https`). Do what it says: Forget the server in Diagnostics and pair again at that address. |
+| "Couldn't reach your server. Try again later." on the card | The card's read got no usable answer from your server, and the phone has no earlier WHOOP numbers for this pairing to show instead: the phone is offline, the server is down or answered with an error, the server signed this phone out, or the server is older than the WHOOP card (update it: see [Updating](#9-updating)). Check the phone is online and Diagnostics shows it synced, and look in `docker compose logs api`. The card asks again when you open Progress a minute later. |
 | "Couldn't reach WHOOP. Try again later." | WHOOP is failing or rate-limiting. The server retries after a minute. |
 
 ## 9. Updating
