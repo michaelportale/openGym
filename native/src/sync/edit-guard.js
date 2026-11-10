@@ -70,16 +70,18 @@ function tombstoned(state, key) {
 // The document with routine `key` deleted as the web deletes it (routines.js deleteRoutine): out of
 // routines, out of every weekday that names it (a weekday left empty goes) and its dayPlan pins
 // gone. The loop and the queue keep its id; their readers skip one that no longer resolves. It
-// runs on a clone, so the copy is never changed. deleteRoutine reads every entry's id, which a
-// null has not: it sees the list without them, and they stay where they were.
+// runs on a clone of the three keys deleteRoutine cleans, so the copy is never changed and every
+// other key, the workouts included, keeps its identity. deleteRoutine reads every entry's id,
+// which a null has not: it sees the list without them, and they stay where they were.
 function withoutRoutine(state, key) {
-  const draft = structuredClone(state)
+  const draft = structuredClone({ routines: state.routines, week: state.week, dayPlan: state.dayPlan })
   const list = draft.routines
   draft.routines = list.filter((r) => r != null)
   routineLib.deleteRoutine(draft, key)
   const kept = new Set(draft.routines)
-  draft.routines = list.filter((r) => r == null || kept.has(r))
-  return draft
+  const out = { ...state, routines: list.filter((r) => r == null || kept.has(r)) }
+  for (const k of ['week', 'dayPlan']) if (Object.hasOwn(state, k)) out[k] = draft[k]
+  return out
 }
 
 // The routine ids of a document, in its order (an entry with no id left out).
@@ -108,15 +110,18 @@ const sameOrder = (a, b) => deepEqual(orderWithin(a, b), orderWithin(b, a))
 // entry { value, stamp } (value undefined when the copy has none); a routine the copy lacks is
 // `absent`, and `tombstoned` when the server deleted it. content(value) is what counts for "the
 // same". write(state, key, value, entry) is a new document with the edit's value in, on the
-// entry's stamps. unsafe(entry, value) is the routine's alone. same(a, b), when a kind has one,
-// replaces comparing content. A `late` kind settles after every other row, on the document they
-// leave.
+// entry's stamps. unsafe(entry, value, key) is the routine's alone. same(a, b), when a kind has
+// one, replaces comparing content. A `late` kind settles after every other row, on the document
+// they leave.
 const ADAPTERS = {
   // Matched by id, first routine wins. A routine whose id the list holds twice is malformed, and the
   // API would pair the last of them, not the first: an edit of it that would go is unsafe.
   // A routine the copy lacks reads as ROUTINE_DELETED on stamp 0: a delete of it is done, and a
-  // create (base 0) goes unless the id is tombstoned. Neither is unsafe: the API pairs only a
-  // routine both sides hold.
+  // create (base 0) goes unless the id is tombstoned. Neither is unsafe for its slots: the API
+  // pairs only a routine both sides hold. Any routine whose id is not its row's key is unsafe,
+  // create or edit: the row is read by its key, so a create of it would read as absent and go
+  // again on every sync, and an edit would take the keyed routine out of the list, which the
+  // server records as a delete.
   routine: {
     read(state, key) {
       const list = Array.isArray(state.routines) ? state.routines : []
@@ -129,15 +134,21 @@ const ADAPTERS = {
     content: routineContent,
     // A create goes at the end, its stamps taken off: the server stamps a new routine itself. An
     // edit goes in its routine's place in `state`, found again by id there, since a delete
-    // settled before it in the same call may have moved it up.
+    // settled before it in the same call may have moved it up; one `state` no longer holds is not
+    // written.
     write(state, key, value, entry) {
       if (isRoutineDeleted(value)) return withoutRoutine(state, key)
       const routines = Array.isArray(state.routines) ? state.routines.slice() : []
       if (entry.absent) routines.push(routineContent(value))
-      else routines[routineAt(routines, key)] = onCopyStamps(value, entry.value)
+      else {
+        const index = routineAt(routines, key)
+        if (index < 0) return state
+        routines[index] = onCopyStamps(value, entry.value)
+      }
       return { ...state, routines }
     },
-    unsafe: (entry, value) => !entry.absent && !isRoutineDeleted(value) && (entry.twice || putBackChanges(entry.value, value)),
+    unsafe: (entry, value, key) =>
+      !isRoutineDeleted(value) && (value?.id !== key || (!entry.absent && (entry.twice || putBackChanges(entry.value, value)))),
   },
   // state.nutritionDays[key], stamped by its _ts (the server stamps a day it changed). A day the copy
   // lacks is not deleted: it is a day with no stamp.
@@ -197,8 +208,8 @@ const ADAPTERS = {
 // superseded }, each settled edit as
 // { kind, key, t }, a rebased one with the copy's stamp as its new baseTs and a superseded one with
 // its reason ('changed', 'deleted' or 'unsafe'). state is a new document only when something
-// applies or rebases, and untouched parts keep their identity (all but a routine delete, which
-// works on a clone of the whole document). Inputs are never mutated.
+// applies or rebases, and untouched parts keep their identity (a routine delete clones the
+// routines, week and dayPlan it cleans). Inputs are never mutated.
 export function applyEdits(state, edits) {
   const doc = isMap(state) ? state : {}
   const done = []
@@ -215,11 +226,12 @@ export function applyEdits(state, edits) {
     const held = !!entry && entry.value !== undefined
     const same = adapter.same ?? ((a, b) => deepEqual(adapter.content(a), adapter.content(b)))
     const ref = { kind: edit.kind, key: edit.key, t: edit.t }
-    const rebase = held && !!edit.sent && same(entry.value, edit.sent)
+    // never onto a routine the copy lacks: that would bring back one this phone deleted
+    const rebase = held && !entry.absent && !!edit.sent && same(entry.value, edit.sent)
     // nothing applies to an entry the server deleted, a create included
     const apply = !!entry && !entry.tombstoned && entry.stamp === edit.baseTs
     if (held && same(entry.value, edit.value)) done.push(ref)
-    else if ((rebase || apply) && adapter.unsafe?.(entry, edit.value)) superseded.push({ ...ref, reason: 'unsafe' })
+    else if ((rebase || apply) && adapter.unsafe?.(entry, edit.value, edit.key)) superseded.push({ ...ref, reason: 'unsafe' })
     else if (rebase || apply) {
       if (rebase) rebased.push({ ...ref, baseTs: entry.stamp })
       else applied.push(ref)

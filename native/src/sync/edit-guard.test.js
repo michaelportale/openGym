@@ -623,3 +623,61 @@ test('routineOrder: stampOf is edited.routineOrder, null when there is none', ()
   expect(stampOf({ edited: { unit: 3 } }, 'routineOrder', 'routineOrder')).toBeNull()
   expect(stampOf({}, 'routineOrder', 'routineOrder')).toBeNull()
 })
+
+// Guards on the routine kind's create and delete (Task 1's review).
+test('a routine saved again after its own delete went out is never brought back by a rebase, deleted on the server or not', () => {
+  const back = routine('a', 'Back')
+  for (const state of [doc([], gone), doc([])]) {
+    const r = applyEdits(state, [edit('a', back, { baseTs: 5, sent: ROUTINE_DELETED, t: 3 })])
+    expect(verdictOf(r)).toBe('superseded deleted')
+    expect(r.state).toBe(state)
+  }
+})
+
+test('an edit whose routine is no longer in the document being written is not written at all', () => {
+  // two rows for one routine, which only a caller's own list can hold (the store keeps one per
+  // key): the delete has taken the routine out by the time the edit is written
+  const state = doc([routine('a', 'A', { _ts: 5 }), routine('b', 'B')])
+  const r = applyEdits(state, [edit('a', ROUTINE_DELETED, { baseTs: 5, t: 1 }), edit('a', R, { baseTs: 5, t: 2 })])
+  expect(r.state.routines).toEqual([routine('b', 'B')])
+  expect(Object.keys(r.state.routines)).toEqual(['0'])
+})
+
+test('a routine row whose routine has another id than its key is never sent: a create would go again on every sync, an edit would remove its routine', () => {
+  const state = doc([routine('b', 'B', { _ts: 1 })])
+  for (const value of [routine('x', 'Other'), { name: 'No id' }]) {
+    const r = applyEdits(state, [edit('a', value, { baseTs: 0, t: 3 })])
+    expect(r.superseded).toEqual([{ kind: 'routine', key: 'a', t: 3, reason: 'unsafe' }])
+    expect(r.state).toBe(state)
+  }
+  const edited = applyEdits(state, [edit('b', routine('x', 'B2'), { baseTs: 1, t: 4 })])
+  expect(edited.superseded).toEqual([{ kind: 'routine', key: 'b', t: 4, reason: 'unsafe' }])
+  expect(edited.state).toBe(state)
+})
+
+test('a delete clones only what it cleans: every other part of the document keeps its identity, and no key is added', () => {
+  const state = {
+    unit: 'lb',
+    routines: [routine('a', 'A', { _ts: 5 }), routine('b', 'B')],
+    week: { 1: ['a', 'b'] },
+    dayPlan: { '2026-11-12': 'a' },
+    workouts: [{ id: 'w1', entries: [{ id: 'bench', sets: [{ w: 60, r: 5 }] }] }],
+    rotation: { id: 'loop', sequence: ['a', 'b'] },
+    queue: { ids: ['a', 'b'] },
+    exWeights: { bench: { w: 60 } },
+  }
+  const before = structuredClone(state)
+  const r = applyEdits(state, [edit('a', ROUTINE_DELETED, { baseTs: 5 })])
+  for (const k of ['workouts', 'rotation', 'queue', 'exWeights']) expect(r.state[k], k).toBe(state[k])
+  expect(r.state).toEqual({ ...before, routines: [routine('b', 'B')], week: { 1: ['b'] }, dayPlan: {} })
+  expect(state).toEqual(before)
+  const bare = applyEdits({ routines: [routine('a', 'A', { _ts: 5 })] }, [edit('a', ROUTINE_DELETED, { baseTs: 5 })]).state
+  expect(bare).toEqual({ routines: [] })
+  expect(Object.keys(bare)).toEqual(['routines'])
+})
+
+test('a deleted.routines record of either sign counts as deleted: a create over an add-back on record (negative) is not sent', () => {
+  const r = applyEdits(doc([], { deleted: { routines: { a: -6 } } }), [edit('a', R, { baseTs: 0, t: 2 })])
+  expect(r.superseded).toEqual([{ kind: 'routine', key: 'a', t: 2, reason: 'deleted' }])
+  expect(r.applied).toEqual([])
+})
