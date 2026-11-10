@@ -1,10 +1,11 @@
 import { useMemo, useRef, useState } from 'react'
-import { Platform, ScrollView, StyleSheet, View } from 'react-native'
+import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { screenTopInset } from '../shell/tabs'
-import { color, space } from '../theme/tokens'
+import { color, radius, size, space, touch } from '../theme/tokens'
 import AppText from '../ui/AppText'
 import Card from '../ui/Card'
+import NativeSymbol from '../ui/NativeSymbol'
 import PrimaryButton from '../ui/PrimaryButton'
 import ScreenHeader from '../ui/ScreenHeader'
 import TextButton from '../ui/TextButton'
@@ -12,12 +13,13 @@ import { usePushLock } from '../ui/use-push-lock'
 import DaySheet from '../nutrition/DaySheet'
 import { canAct, todayView } from '../nutrition/nutrition-screen'
 import { todayIso, useNutrition } from '../nutrition/use-nutrition'
-import { HOME_EMPTY, homeView } from './home-view'
+import { HOME_EMPTY, homeView, nutritionNoticeLink } from './home-view'
 
 // Home: the session the Workout tab would start, and today's nutrition. Next only switches to the
 // Workout tab, which shows its start screen (or the session in progress). Log opens the Nutrition
 // screen's day sheet for today and saves through the same hook, so the base is the copy the card
-// was drawn from; it cannot open while a save runs (canAct).
+// was drawn from; it cannot open while a save runs (canAct). A nutrition edit the web overtook is
+// explained only on the Nutrition screen, so the card points there while one is not dismissed.
 export default function HomeScreen() {
   const router = useRouter()
   const guard = usePushLock()
@@ -28,8 +30,8 @@ export default function HomeScreen() {
   const view = useMemo(() => {
     if (!ready) return null
     const now = Date.now()
-    return { ...homeView(n.state, { today, now }), today: todayView(n.state, { today }) }
-  }, [ready, n.state, today])
+    return { ...homeView(n.state, { today, now }), today: todayView(n.state, { today }), notice: nutritionNoticeLink(n.notices) }
+  }, [ready, n.state, n.notices, today])
 
   const opens = useRef(0)
   const [day, setDay] = useState(null)
@@ -84,6 +86,19 @@ export default function HomeScreen() {
                 />
               </View>
               {view.today.lines.map(line => <AppText key={line} variant="body">{line}</AppText>)}
+              {view.notice ? (
+                <Pressable
+                  key={view.notice.key}
+                  accessibilityRole="button"
+                  accessibilityLabel={view.notice.text}
+                  accessibilityHint={view.notice.hint}
+                  onPress={() => guard(() => router.push(view.notice.href))}
+                  style={({ pressed }) => [styles.row, styles.link, pressed && styles.pressed]}
+                >
+                  <AppText variant="body" style={styles.grow}>{view.notice.text}</AppText>
+                  <NativeSymbol name="chevron.right" tintColor={color.textSecondary} size={size.icon} />
+                </Pressable>
+              ) : null}
             </Card>
           </>
         )}
@@ -108,5 +123,7 @@ const styles = StyleSheet.create({
   pad: { marginHorizontal: space.lg },
   card: { marginHorizontal: space.lg, padding: space.lg, gap: space.sm },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  grow: { flexShrink: 1, flexGrow: 1 }
+  grow: { flexShrink: 1, flexGrow: 1 },
+  link: { minHeight: touch.row, borderRadius: radius.sm },
+  pressed: { backgroundColor: color.surfaceActive }
 })

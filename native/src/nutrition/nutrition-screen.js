@@ -141,10 +141,13 @@ export function targetsSave(state, draft) {
 const SETTING = { nutritionTargets: 'your nutrition targets', supplements: 'your supplements' }
 const byAt = (a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0)
 
+/** Whether a notice (pending-edits.js listNotices) is one the Nutrition screen shows: a day's or a nutrition setting's. */
+export const isNutritionNotice = n => n?.kind === 'nutritionDay' || (n?.kind === 'setting' && Object.hasOwn(SETTING, n.key))
+
 /** The nutrition-day and setting notices (pending-edits.js listNotices), oldest first, in the exact texts. */
 export function nutritionNotices(notices, { now }) {
   return (Array.isArray(notices) ? notices : [])
-    .filter(n => n?.kind === 'nutritionDay' || (n?.kind === 'setting' && Object.hasOwn(SETTING, n.key)))
+    .filter(isNutritionNotice)
     .sort(byAt)
     .map(n => {
       const what = n.kind === 'nutritionDay' ? `${dayLabel(n.key, now)} nutrition` : SETTING[n.key]
