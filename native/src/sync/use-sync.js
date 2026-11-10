@@ -3,6 +3,7 @@ import * as SecureStore from 'expo-secure-store'
 import { openAppDatabase } from '../storage/database'
 import { createSqliteWeighIns } from '../body/weigh-ins'
 import { createSqliteMeasurements } from '../body/measurement-store'
+import { createSqliteWhoopCache } from '../whoop/whoop-cache'
 import { createSqliteFinishedWorkouts } from '../session/finished-workouts'
 import { createSqlitePendingEdits } from './pending-edits'
 import { createApiClient } from './api-client'
@@ -33,6 +34,7 @@ export function getSync() {
           weighIns: createSqliteWeighIns(db),
           edits: createSqlitePendingEdits(db),
           measurements: createSqliteMeasurements(db),
+          whoopCache: createSqliteWhoopCache(db),
           now: Date.now,
         })
         sync.subscribe(refresh)

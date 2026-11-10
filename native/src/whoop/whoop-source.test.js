@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { createMemoryWhoopCache } from './whoop-cache.js'
-import { createWhoopSource, isServerLink, WHOOP_EVERY_MS } from './whoop-source.js'
+import { createWhoopSource, isGoodRead, isServerLink, WHOOP_EVERY_MS } from './whoop-source.js'
 
 const BASE = 'https://gym.example.com'
 const TOKEN = 'SECRET.TOKEN.VALUE'
@@ -29,7 +29,7 @@ function fakeClient() {
   }
 }
 
-function setup({ pairing = { base: BASE, token: TOKEN, profile: 'Mo' } } = {}) {
+function setup({ pairing = { base: BASE, token: TOKEN, profileId: 'u_mo' } } = {}) {
   const fake = fakeClient()
   const cache = createMemoryWhoopCache()
   const clock = { t: Date.UTC(2026, 10, 9, 12) }
@@ -62,7 +62,7 @@ describe('read', () => {
     fake.answer('getWhoop', ok(read1))
     expect(await source.read()).toEqual({ paired: true, payload: read1, cached: false })
     expect(fake.calls).toEqual([{ name: 'getWhoop', base: BASE, token: TOKEN }])
-    expect(await cache.get()).toEqual({ server: BASE, profile: 'Mo', savedAt: clock.t, payload: read1 })
+    expect(await cache.get()).toEqual({ server: BASE, profileId: 'u_mo', savedAt: clock.t, payload: read1 })
   })
 
   test('at most every 10 minutes: a read inside the window answers from memory, the same object', async () => {
@@ -102,11 +102,13 @@ describe('read', () => {
     expect(await source.read()).toEqual({ paired: true, payload: null, cached: false })
     clock.t += WHOOP_EVERY_MS
     fake.answer('getWhoop', ok(read1))
+    const savedAt = clock.t
     await source.read()
     for (const failure of [offline, { ok: false, kind: 'server', status: 503 }, { ok: false, kind: 'unauthorized' }, { ok: false, kind: 'refused', status: 404 }]) {
       clock.t += WHOOP_EVERY_MS
       fake.answer('getWhoop', failure)
-      expect(await source.read()).toEqual({ paired: true, payload: read1, cached: true })
+      // savedAt rides along, for "As of" when a read has no fetchedAt.
+      expect(await source.read()).toEqual({ paired: true, payload: read1, cached: true, savedAt })
     }
   })
 
@@ -116,10 +118,11 @@ describe('read', () => {
     expect(await source.read()).toEqual({ paired: true, payload: unavailable, cached: false })
     clock.t += WHOOP_EVERY_MS
     fake.answer('getWhoop', ok(read1))
+    const savedAt = clock.t
     await source.read()
     clock.t += WHOOP_EVERY_MS
     fake.answer('getWhoop', ok(unavailable))
-    expect(await source.read()).toEqual({ paired: true, payload: read1, cached: true })
+    expect(await source.read()).toEqual({ paired: true, payload: read1, cached: true, savedAt })
   })
 
   test("a stale read from the server is shown as sent, and kept", async () => {
@@ -148,11 +151,11 @@ describe('read', () => {
     fake.answer('getWhoop', ok(read1))
     await source.read()
     clock.t += 1000
-    state.pairing = { base: 'http://192.168.1.5:3000', token: 'T2', profile: 'Mo' }
+    state.pairing = { base: 'http://192.168.1.5:3000', token: 'T2', profileId: 'u_mo' }
     fake.answer('getWhoop', offline)
     expect(await source.read()).toEqual({ paired: true, payload: null, cached: false })
     expect(fake.calls.at(-1)).toEqual({ name: 'getWhoop', base: 'http://192.168.1.5:3000', token: 'T2' })
-    state.pairing = { base: BASE, token: 'T3', profile: 'Ann' }
+    state.pairing = { base: BASE, token: 'T3', profileId: 'u_ann' }
     expect(await source.read()).toEqual({ paired: true, payload: null, cached: false })
     expect(fake.count('getWhoop')).toBe(3)
   })
@@ -161,7 +164,7 @@ describe('read', () => {
     const fake = fakeClient()
     const broken = { get: async () => { throw new Error('db') }, put: async () => { throw new Error('db') }, clear: async () => { throw new Error('db') } }
     let t = 0
-    const source = createWhoopSource({ client: fake.client, cache: broken, pairing: async () => ({ base: BASE, token: TOKEN, profile: '' }), now: () => t })
+    const source = createWhoopSource({ client: fake.client, cache: broken, pairing: async () => ({ base: BASE, token: TOKEN, profileId: '' }), now: () => t })
     fake.answer('getWhoop', ok(read1), offline, ok(notConnected))
     expect(await source.read()).toEqual({ paired: true, payload: read1, cached: false })
     t += WHOOP_EVERY_MS
@@ -172,14 +175,218 @@ describe('read', () => {
 
   test('the cached read is offered before a first fetch, and only then', async () => {
     const { fake, cache, clock, source } = setup()
-    await cache.put({ server: BASE, profile: 'Mo', savedAt: 1, payload: read1 })
+    await cache.put({ server: BASE, profileId: 'u_mo', savedAt: 1, payload: read1 })
     const early = []
     fake.answer('getWhoop', ok(read2))
     expect(await source.read({ onCached: s => early.push(s) })).toEqual({ paired: true, payload: read2, cached: false })
-    expect(early).toEqual([{ paired: true, payload: read1, cached: true }])
+    expect(early).toEqual([{ paired: true, payload: read1, cached: true, savedAt: 1 }])
     clock.t += WHOOP_EVERY_MS
     await source.read({ onCached: s => early.push(s) })
     expect(early).toHaveLength(1)
+  })
+})
+
+describe('the pairing', () => {
+  const A = { base: BASE, token: 'TOKEN-A', profileId: 'id_a' }
+  const B = { base: BASE, token: 'TOKEN-B', profileId: 'id_b' } // same server, same name, another profile
+
+  test("Forget, then pair a same-named profile on that server: asked afresh, never the first profile's read or row", async () => {
+    const { fake, clock, state, source } = setup({ pairing: A })
+    fake.answer('getWhoop', ok(read1))
+    await source.read()
+    state.pairing = null
+    expect((await source.read()).paired).toBe(false)
+    state.pairing = B
+    clock.t += 60_000
+    fake.answer('getWhoop', offline)
+    expect(await source.read()).toEqual({ paired: true, payload: null, cached: false })
+    expect(fake.calls.at(-1)).toEqual({ name: 'getWhoop', base: BASE, token: 'TOKEN-B' })
+  })
+
+  test("a pairing change with nothing cached drops what was shown at once, before the new read lands", async () => {
+    const { fake, clock, state, source } = setup({ pairing: A })
+    fake.answer('getWhoop', ok(read1))
+    await source.read()
+    state.pairing = { base: 'https://other.example.com', token: 'T2', profileId: 'id_c' }
+    clock.t += 1000
+    let release
+    fake.answer('getWhoop', () => new Promise(resolve => { release = () => resolve(ok(read2)) }))
+    const early = []
+    const inFlight = source.read({ onCached: s => early.push(s) })
+    await vi.waitFor(() => expect(release).toBeTypeOf('function'))
+    expect(early).toEqual([null])
+    release()
+    expect((await inFlight).payload).toEqual(read2)
+  })
+
+  test("back to a pairing whose read has aged out: the other pairing's card drops at once", async () => {
+    const { fake, clock, state, source } = setup({ pairing: A })
+    fake.answer('getWhoop', ok(read1), ok(read2))
+    await source.read()
+    state.pairing = { base: 'https://other.example.com', token: 'T2', profileId: 'id_c' }
+    await source.read()
+    state.pairing = A
+    clock.t += WHOOP_EVERY_MS
+    const early = []
+    let release
+    fake.answer('getWhoop', () => new Promise(resolve => { release = () => resolve(ok(read1)) }))
+    const inFlight = source.read({ onCached: s => early.push(s) })
+    await vi.waitFor(() => expect(release).toBeTypeOf('function'))
+    // The one cache row is the other pairing's now, so there is nothing of A's to show yet.
+    expect(early).toEqual([null])
+    release()
+    await inFlight
+  })
+
+  test('back to the same pairing after a Forget: its cached read, not the unpaired line, while it reads', async () => {
+    const { fake, clock, state, source } = setup({ pairing: A })
+    fake.answer('getWhoop', ok(read1))
+    const savedAt = clock.t
+    await source.read({ onCached: () => {} })
+    state.pairing = null
+    expect((await source.read({ onCached: () => {} })).paired).toBe(false)
+    state.pairing = A
+    clock.t += WHOOP_EVERY_MS
+    const early = []
+    fake.answer('getWhoop', offline)
+    await source.read({ onCached: s => early.push(s) })
+    expect(early).toEqual([{ paired: true, payload: read1, cached: true, savedAt }])
+  })
+
+  test('re-paired to the same profile inside the 10 minutes: its read again, and no blank when it next reads', async () => {
+    const { fake, clock, state, source } = setup({ pairing: A })
+    fake.answer('getWhoop', ok(notConnected))
+    const first = await source.read({ onCached: () => {} })
+    state.pairing = null
+    await source.read({ onCached: () => {} })
+    state.pairing = A
+    clock.t += 1000
+    expect(await source.read({ onCached: () => {} })).toBe(first)
+    clock.t += WHOOP_EVERY_MS
+    const early = []
+    await source.read({ onCached: s => early.push(s) })
+    expect(early).toEqual([])
+  })
+
+  test('the same pairing is never blanked while it reads again after 10 minutes', async () => {
+    const { fake, clock, source } = setup()
+    fake.answer('getWhoop', ok(notConnected)) // nothing is cached for it
+    await source.read()
+    clock.t += WHOOP_EVERY_MS
+    const early = []
+    await source.read({ onCached: s => early.push(s) })
+    expect(early).toEqual([])
+    expect(fake.count('getWhoop')).toBe(2)
+  })
+
+  test('a read overtaken before it saves never writes its row at all (a kill then cannot leave it)', async () => {
+    for (const overtake of ['disconnect', 'forget']) {
+      const fake = fakeClient()
+      const memory = createMemoryWhoopCache()
+      const puts = []
+      const cache = { ...memory, put: row => { puts.push(row); return memory.put(row) } }
+      let pairing = A
+      const source = createWhoopSource({ client: fake.client, cache, pairing: async () => pairing, now: () => 0 })
+      let release
+      fake.answer('getWhoop', () => new Promise(resolve => { release = () => resolve(ok(read1)) }), offline)
+      const inFlight = source.read()
+      await vi.waitFor(() => expect(release).toBeTypeOf('function'))
+      if (overtake === 'disconnect') {
+        fake.answer('whoopDisconnect', { ok: true, revoked: true, wasConnected: true })
+        await source.disconnect()
+      } else pairing = null
+      release()
+      await inFlight
+      expect(puts, overtake).toEqual([])
+    }
+  })
+
+  test("a pairing change shows the new pairing's own cached read at once", async () => {
+    const { fake, cache, clock, state, source } = setup({ pairing: A })
+    fake.answer('getWhoop', ok(read1))
+    await source.read()
+    state.pairing = B
+    await cache.put({ server: BASE, profileId: 'id_b', savedAt: 7, payload: read2 })
+    clock.t += 1000
+    const early = []
+    fake.answer('getWhoop', offline)
+    await source.read({ onCached: s => early.push(s) })
+    expect(early).toEqual([{ paired: true, payload: read2, cached: true, savedAt: 7 }])
+  })
+
+  test('after a Disconnect the same pairing is not blanked while it reads again', async () => {
+    const { fake, clock, source } = setup()
+    fake.answer('getWhoop', ok(read1), ok(notConnected))
+    await source.read({ onCached: () => {} })
+    fake.answer('whoopDisconnect', { ok: true, revoked: true, wasConnected: true })
+    await source.disconnect()
+    clock.t += 1000
+    const early = []
+    expect((await source.read({ onCached: s => early.push(s) })).payload).toEqual(notConnected)
+    expect(early).toEqual([])
+  })
+
+  test('a Forget while a read is out: the read says unpaired and plants no row', async () => {
+    const { fake, cache, state, source } = setup({ pairing: A })
+    let release
+    fake.answer('getWhoop', () => new Promise(resolve => { release = () => resolve(ok(read1)) }))
+    const inFlight = source.read()
+    await vi.waitFor(() => expect(release).toBeTypeOf('function'))
+    state.pairing = null
+    await cache.clear() // what the sync engine's forget() does
+    release()
+    expect(await inFlight).toEqual({ paired: false, payload: null, cached: false })
+    expect(await cache.get()).toBeNull()
+  })
+
+  test('a Forget while the read is saving: the row it saved is taken out again', async () => {
+    const fake = fakeClient()
+    const memory = createMemoryWhoopCache()
+    let releasePut
+    const cache = { ...memory, put: row => new Promise(resolve => { releasePut = () => resolve(memory.put(row)) }) }
+    let pairing = A
+    const source = createWhoopSource({ client: fake.client, cache, pairing: async () => pairing, now: () => 0 })
+    fake.answer('getWhoop', ok(read1))
+    const inFlight = source.read()
+    await vi.waitFor(() => expect(releasePut).toBeTypeOf('function'))
+    pairing = null
+    await memory.clear()
+    releasePut()
+    expect(await inFlight).toEqual({ paired: false, payload: null, cached: false })
+    expect(await memory.get()).toBeNull()
+  })
+
+  test('a Disconnect that lands while the read is saving, then offline: the old numbers never come back', async () => {
+    const fake = fakeClient()
+    const memory = createMemoryWhoopCache()
+    let releasePut
+    let held = true
+    const cache = { ...memory, put: row => (held ? new Promise(resolve => { releasePut = () => { held = false; resolve(memory.put(row)) } }) : memory.put(row)) }
+    const source = createWhoopSource({ client: fake.client, cache, pairing: async () => A, now: () => 0 })
+    fake.answer('getWhoop', ok(read1), offline)
+    const inFlight = source.read()
+    await vi.waitFor(() => expect(releasePut).toBeTypeOf('function'))
+    fake.answer('whoopDisconnect', { ok: true, revoked: true, wasConnected: true })
+    await source.disconnect()
+    releasePut()
+    expect(await inFlight).toEqual({ paired: true, payload: null, cached: false })
+    expect(await memory.get()).toBeNull()
+  })
+})
+
+describe('isGoodRead: a fresh answer from the server, which clears a failure message', () => {
+  test.each([
+    ['a connected read', { paired: true, payload: read1, cached: false }, true],
+    ['not connected', { paired: true, payload: notConnected, cached: false }, true],
+    ['not set up', { paired: true, payload: unconfigured, cached: false }, true],
+    ['a stale read the server still answered with', { paired: true, payload: { ...read1, stale: true }, cached: false }, true],
+    ["the phone's cached read", { paired: true, payload: read1, cached: true, savedAt: 1 }, false],
+    ['WHOOP unavailable', { paired: true, payload: unavailable, cached: false }, false],
+    ['the server not reached', { paired: true, payload: null, cached: false }, false],
+    ['unpaired', { paired: false, payload: null, cached: false }, false],
+    ['nothing yet', null, false],
+  ])('%s: %s', (_n, shown, want) => {
+    expect(isGoodRead(shown)).toBe(want)
   })
 })
 
@@ -246,10 +453,30 @@ describe('connect', () => {
     expect(fake.count('getWhoop')).toBe(1)
   })
 
-  test('a link to anywhere but the paired server is refused', async () => {
+  test('a link to anywhere but the paired server is refused, naming the host it is on', async () => {
+    const { fake, clock, source } = setup()
+    fake.answer('getWhoop', ok(notConnected))
+    await source.read()
+    for (const [url, elsewhere] of [
+      ['https://evil.example.com/api/whoop/connect?c=abc', 'evil.example.com'],
+      ['https://Gym.Example.org:443/api/whoop/connect?c=abc', 'gym.example.org'],
+      ['http://localhost:8080/api/whoop/connect?c=abc', 'localhost:8080'],
+    ]) {
+      fake.answer('whoopConnectLink', { ok: true, url })
+      expect(await source.connectLink()).toEqual({ ok: false, elsewhere })
+    }
+    // Nothing was opened, so the 10 minutes still apply.
+    clock.t += 1000
+    await source.read()
+    expect(fake.count('getWhoop')).toBe(1)
+  })
+
+  test('a link that is not an http(s) address is a plain failure, with no host named', async () => {
     const { fake, source } = setup()
-    fake.answer('whoopConnectLink', { ok: true, url: 'https://evil.example.com/api/whoop/connect?c=abc' })
-    expect(await source.connectLink()).toEqual({ ok: false })
+    for (const url of ['javascript:alert(1)', 'opengym://whoop', 'https://gym.example.com/x y', 'https://evil.example.com/x\n']) {
+      fake.answer('whoopConnectLink', { ok: true, url })
+      expect(await source.connectLink()).toEqual({ ok: false })
+    }
   })
 
   test('not set up on the server says so, and the next read asks at once', async () => {
@@ -324,7 +551,7 @@ describe('disconnect', () => {
     let releasePut
     const cache = { ...memory, put: row => new Promise(resolve => { releasePut = () => resolve(memory.put(row)) }) }
     let t = 0
-    const source = createWhoopSource({ client: fake.client, cache, pairing: async () => ({ base: BASE, token: TOKEN, profile: '' }), now: () => t })
+    const source = createWhoopSource({ client: fake.client, cache, pairing: async () => ({ base: BASE, token: TOKEN, profileId: '' }), now: () => t })
     fake.answer('getWhoop', ok(read1), ok(notConnected))
     const inFlight = source.read()
     await vi.waitFor(() => expect(releasePut).toBeTypeOf('function'))

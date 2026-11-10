@@ -19,6 +19,8 @@ export const WHOOP_TEXT = {
   unavailable: "Couldn't reach WHOOP. Try again later.",
   unreachable: "Couldn't reach your server. Try again later.",
   connectFailed: "Couldn't open WHOOP's sign-in. Try again.",
+  // The server's link is on its ORIGIN; the phone is paired at another address.
+  pairedElsewhere: host => `Connect works when this phone is paired with ${host}. Forget the server and pair again at that address.`,
   disconnectFailed: "Couldn't disconnect WHOOP. Try again.",
   disconnectDone: 'WHOOP disconnected.',
   notRevoked: "WHOOP is disconnected here, but WHOOP couldn't be told. Remove openGym's access in the WHOOP app.",
@@ -33,7 +35,8 @@ const DAY_RE = /^(\d{4})-(\d{2})-(\d{2})$/
 const pct = v => (has(v) ? `${whole(v)}%` : DASH)
 const msText = v => (has(v) ? `${whole(v)} ms` : DASH)
 const bpm = v => (has(v) ? `${whole(v)} bpm` : DASH)
-const strainText = v => (has(v) ? v.toFixed(1) : DASH)
+// Rounded as the app's num() rounds, halves up (toFixed alone gives 8.4 for 8.45).
+const strainText = v => (has(v) ? (Math.round(v * 10) / 10).toFixed(1) : DASH)
 const kcalText = v => (has(v) ? `${num(whole(v))} kcal` : DASH)
 const minText = v => (has(v) ? `${whole(v)} min` : DASH)
 
@@ -134,9 +137,11 @@ function cardioRows(workouts, now) {
     })
 }
 
-function asOfLine(fetchedAt, now, formatTime, formatDay) {
-  const at = typeof fetchedAt === 'string' ? Date.parse(fetchedAt) : NaN
-  if (!Number.isFinite(at)) return null
+// When the read was fetched from WHOOP, or else when the phone saved it.
+function asOfLine(fetchedAt, savedAt, now, formatTime, formatDay) {
+  const fetched = typeof fetchedAt === 'string' ? Date.parse(fetchedAt) : NaN
+  const at = Number.isFinite(fetched) ? fetched : savedAt
+  if (typeof at !== 'number' || !Number.isFinite(at)) return null
   const time = formatTime(at)
   return formatDay(at) === formatDay(now) ? `As of ${time}` : `As of ${formatDay(at)}, ${time}`
 }
@@ -150,9 +155,10 @@ const shell = (state, line, extra = {}) => ({
  * `cached`), or null when none could be had. state is unpaired | unconfigured | disconnected |
  * empty | ready; a connected card with nothing to show and an error is `empty` with `error` set,
  * and `line` is then the error. `connected` is when Disconnect shows. asOf is set when the read
- * is stale on the server or came from the phone's cache. Formatters are injectable for tests.
+ * is stale on the server or came from the phone's cache: from its fetchedAt, or else `savedAt`
+ * (ms, when the phone kept it). Formatters are injectable for tests.
  */
-export function whoopCardView(payload, { paired, now = Date.now(), cached = false, formatTime = defaultTime, formatDay = defaultDay } = {}) {
+export function whoopCardView(payload, { paired, now = Date.now(), cached = false, savedAt = null, formatTime = defaultTime, formatDay = defaultDay } = {}) {
   if (!paired) return shell('unpaired', WHOOP_TEXT.unpaired)
   if (!isRead(payload)) return shell('empty', WHOOP_TEXT.unreachable, { error: WHOOP_TEXT.unreachable })
   if (!payload.configured) return shell('unconfigured', WHOOP_TEXT.unconfigured)
@@ -180,7 +186,7 @@ export function whoopCardView(payload, { paired, now = Date.now(), cached = fals
     series,
     chartLabel: recoveryChartLabel(series, { now }),
     cardio,
-    asOf: stale ? asOfLine(payload.fetchedAt, now, formatTime, formatDay) : null,
+    asOf: stale ? asOfLine(payload.fetchedAt, savedAt, now, formatTime, formatDay) : null,
     stale,
   }
 }

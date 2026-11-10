@@ -1,4 +1,3 @@
-import { useMemo } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { color, space } from '../theme/tokens'
 import AppText from '../ui/AppText'
@@ -14,8 +13,9 @@ import { WHOOP_TEXT, whoopCardView } from './whoop-view'
 // "As of" when the numbers are not fresh. Not connected, it has Connect; unpaired, only its line.
 export default function WhoopCard() {
   const { shown, busy, message, connect, disconnect } = useWhoop()
-  // `now` is read when the read changes.
-  const v = useMemo(() => (shown ? whoopCardView(shown.payload, { paired: shown.paired, cached: shown.cached, now: Date.now() }) : null), [shown])
+  // Worked out on every render (it is small), so "Today" and "As of" follow the clock past
+  // midnight: Progress renders again on focus then, as its source key holds the date.
+  const v = shown ? whoopCardView(shown.payload, { paired: shown.paired, cached: shown.cached, savedAt: shown.savedAt ?? null, now: Date.now() }) : null
 
   return (
     <Card style={styles.card}>

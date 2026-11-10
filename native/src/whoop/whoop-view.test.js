@@ -47,6 +47,10 @@ describe('the state of every server shape', () => {
     expect(WHOOP_TEXT.connect).toBe('Connect WHOOP')
   })
 
+  test('a Connect link on another address than the paired one says where to pair', () => {
+    expect(WHOOP_TEXT.pairedElsewhere('gym.example.com')).toBe('Connect works when this phone is paired with gym.example.com. Forget the server and pair again at that address.')
+  })
+
   test('connected with nothing scored: 14 empty days and no workouts is empty, with Disconnect', () => {
     const v = whoopCardView(connected(), opts())
     expect(v).toEqual({ state: 'empty', line: WHOOP_TEXT.empty, error: null, connected: true, ...NOTHING })
@@ -120,6 +124,8 @@ describe("today's lines", () => {
   test('strain to one decimal', () => {
     const strainOf = s => whoopCardView(connected({ days: days({ '2026-11-09': { strain: s } }) }), opts()).today.strain
     expect([strainOf(12.34), strainOf(8.46), strainOf(21), strainOf(7), strainOf(0.04)]).toEqual(['12.3', '8.5', '21.0', '7.0', '0.0'])
+    // Halves round up, as the app's num() rounds (toFixed alone gives 8.4 for 8.45).
+    expect([strainOf(8.45), strainOf(1.45), strainOf(0.05), strainOf(-0.01)]).toEqual(['8.5', '1.5', '0.1', '0.0'])
   })
 
   test('calibrating shows on recovery, with or without a score', () => {
@@ -253,6 +259,18 @@ describe('as of', () => {
   test('an empty cached read still says as of; a stale read with no time says nothing', () => {
     expect(whoopCardView(connected({ fetchedAt: '2026-11-09T09:41:00.000Z' }), opts({ cached: true, now: Date.parse('2026-11-09T15:00:00.000Z') })).asOf).toBe('As of T09:41')
     expect(whoopCardView(connected({ stale: true, fetchedAt: null, days: days({ '2026-11-09': { recovery: 1 } }) }), opts()).asOf).toBeNull()
+  })
+
+  test("a stale or cached read with no fetchedAt says as of when the phone saved it", () => {
+    const savedAt = Date.parse('2026-11-09T08:05:00.000Z')
+    const now = Date.parse('2026-11-09T15:00:00.000Z')
+    const read = connected({ fetchedAt: null, days: days({ '2026-11-09': { recovery: 1 } }) })
+    expect(whoopCardView(read, opts({ cached: true, savedAt, now })).asOf).toBe('As of T08:05')
+    expect(whoopCardView({ ...read, stale: true }, opts({ savedAt, now })).asOf).toBe('As of T08:05')
+    // fetchedAt, when there is one, is when WHOOP was read: it wins.
+    expect(whoopCardView({ ...read, fetchedAt: '2026-11-09T07:00:00.000Z' }, opts({ cached: true, savedAt, now })).asOf).toBe('As of T07:00')
+    // A fresh read never says as of, whatever savedAt says.
+    expect(whoopCardView(read, opts({ savedAt, now })).asOf).toBeNull()
   })
 
   test('the default formatters give a time', () => {
