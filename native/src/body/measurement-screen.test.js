@@ -3,7 +3,7 @@ import { applyMeasurementOps } from './measurement-ops.js'
 import { createMemoryMeasurements } from './measurement-store.js'
 import { applyLogForm, fieldChoices, fieldView } from './measurement-view.js'
 import {
-  historyList, latestView, logDraft, logValues, measurementChartLabel, measurementSaveArgs, pickField, putMeasurement,
+  historyList, latestView, logDraft, logSave, logValues, measurementChartLabel, measurementSaveArgs, pickField, putMeasurement,
 } from './measurement-screen.js'
 
 const NOW = new Date(2026, 10, 9, 12).getTime()
@@ -107,19 +107,34 @@ describe('logValues: only what the owner changed counts as typed', () => {
     expect(logValues({ opened: { waist: null }, text: { waist: '33,5' }, latest: {} })).toEqual({ waist: 33.5 })
   })
 
+})
+
+describe('logSave: what the log sheet\'s Save builds', () => {
   // A sync that brought a web change to an untouched field while the sheet was open keeps it: the
-  // log is built on the day as it is now and changes only the touched field.
-  test('with applyLogForm: a web change to an untouched field survives byte for byte', () => {
-    const opened = { d: TODAY, t: 2, waist: 81.28, chest: 101.6 }
+  // log is built on the day as it is at Save and changes only the touched field.
+  test('a web change to an untouched field survives byte for byte, and so does every untouched cm', () => {
+    // Hips 99.9 cm shows as 39.3 in, which is 99.8 cm back: left alone it must stay 99.9.
+    const opened = { d: TODAY, t: 2, waist: 81.28, chest: 101.6, hips: 99.9 }
     const before = { measurements: [opened] }
     const draft = logDraft(before, TODAY, { edit: true })
     const now = { measurements: [{ ...opened, t: 5, chest: 102.3 }] }
-    const text = { ...draft.text, waist: '33' }
-    const values = logValues({ opened: draft.opened, text, latest: logDraft(now, TODAY, { edit: true }).opened })
-    const out = applyLogForm(now, TODAY, { values, editing: true }, { now: NOW })
+    const out = logSave(now, { draft, d: TODAY, text: { ...draft.text, waist: '33' } }, { now: NOW })
     expect(out.error).toBeNull()
     expect(out.entry.chest).toBe(102.3)
+    expect(out.entry.hips).toBe(99.9)
     expect(out.entry.waist).toBe(Math.round(33 * IN * 10) / 10)
+    expect(out.entry.t).toBe(NOW)
+  })
+
+  test('a new log is built on the day the sheet stepped to; a day that has an entry, or nothing typed, is refused', () => {
+    const state = { measurements: [entry(TODAY, 2)] }
+    const draft = logDraft(state, TODAY, { edit: false })
+    const out = logSave(state, { draft, d: '2026-11-08', text: { ...draft.text, waist: '33' } }, { now: NOW })
+    expect(out.error).toBeNull()
+    expect(out.entry).toMatchObject({ d: '2026-11-08', waist: Math.round(33 * IN * 10) / 10, chest: null })
+    expect(logSave(state, { draft, d: TODAY, text: { ...draft.text, waist: '33' } }, { now: NOW }).error)
+      .toBe('That date already has measurements. Edit it instead.')
+    expect(logSave({}, { draft, d: TODAY, text: draft.text }, { now: NOW }).error).toBe('Enter at least one measurement')
   })
 })
 

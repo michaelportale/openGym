@@ -5,7 +5,7 @@
 import { readCopy } from '../sync/server-copy.js'
 import { dayLabel } from '../ui/dates.js'
 import { numberText, parseNumberText } from '../ui/number-text.js'
-import { historyRows, logForm, removeOp } from './measurement-view.js'
+import { applyLogForm, historyRows, logForm, removeOp } from './measurement-view.js'
 
 // The web's fmtNum in English: one decimal at most, thousands separators (format.js:58).
 const num = n => (Math.round(n * 10) / 10).toLocaleString('en-US', { maximumFractionDigits: 1 })
@@ -71,6 +71,18 @@ export function logValues({ opened, text, latest }) {
     out[key] = typed === (opened?.[key] ?? null) ? latest?.[key] ?? null : typed
   }
   return out
+}
+
+/**
+ * What the log sheet's Save builds: day `d` on `state` as it is at the tap, from `draft` (logDraft
+ * when the sheet opened) and `text` (the fields as typed). A field left as it showed takes the
+ * value the day holds now, so its stored cm stays as it is, a sync's change since the sheet opened
+ * included. Returns applyLogForm's { entry, error }.
+ */
+export function logSave(state, { draft, d, text }, { now }) {
+  const latest = logDraft(state, d, { edit: true }).opened
+  const values = logValues({ opened: draft.opened, text, latest })
+  return applyLogForm(state, d, { values, editing: draft.editing }, { now })
 }
 
 /**

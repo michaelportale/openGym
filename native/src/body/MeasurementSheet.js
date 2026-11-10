@@ -10,8 +10,7 @@ import { sheetDate } from '../ui/dates'
 import { announce } from '../plan/announce'
 import { stepDay } from '../nutrition/nutrition-screen'
 import { localDate } from '../session/timing'
-import { applyLogForm } from './measurement-view'
-import { logDraft, logValues } from './measurement-screen'
+import { logDraft, logSave } from './measurement-screen'
 
 const FAILED = "Couldn't save. Try again."
 const SPOKEN_UNIT = { in: 'inches', '%': 'percent' }
@@ -22,7 +21,7 @@ const todayIso = () => localDate(Date.now(), Intl.DateTimeFormat().resolvedOptio
 // percent. Mounted per open (the caller keys it). `edit` opens on day `initialDate` with its values
 // and keeps that day; a new log starts empty and its day steps back from today. `source` is the
 // screen's { state } as it is now: Save builds the day on it as it is then, writing only the
-// fields typed to something other than they showed (measurement-screen.js logValues). onSave(entry)
+// fields typed to something other than they showed (measurement-screen.js logSave). onSave(entry)
 // resolves { ok }: a refusal or a failed save shows here, is said to VoiceOver and keeps the sheet
 // open with what was typed.
 export default function MeasurementSheet({ visible, source, initialDate, edit, onSave, onClose }) {
@@ -51,10 +50,7 @@ export default function MeasurementSheet({ visible, source, initialDate, edit, o
 
   const save = async () => {
     if (busy || !draft.fields.length) return
-    const { state } = live.current
-    const latest = logDraft(state, d, { edit: true }).opened
-    const values = logValues({ opened: draft.opened, text, latest })
-    const out = applyLogForm(state, d, { values, editing: draft.editing }, { now: Date.now() })
+    const out = logSave(live.current.state, { draft, d, text }, { now: Date.now() })
     if (out.error) {
       say(out.error)
       return
