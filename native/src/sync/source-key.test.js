@@ -1,8 +1,9 @@
 import { expect, test, vi } from 'vitest'
 import { createNodeSqliteDb } from '../../scripts/node-sqlite.mjs'
 import { createSqliteWeighIns } from '../body/weigh-ins.js'
+import { createSqliteMeasurements } from '../body/measurement-store.js'
 import { createSqliteFinishedWorkouts } from '../session/finished-workouts.js'
-import { createSqliteRoutineEdits } from '../plan/routine-edits.js'
+import { createSqlitePendingEdits } from './pending-edits.js'
 import { createSqliteServerCopy } from './server-copy.js'
 import { keyed, readSourceKey, sourceKey } from './source-key.js'
 
@@ -96,25 +97,77 @@ test('keyed retries a failed build on the next call', async () => {
   expect(await load()).toEqual({ ok: true })
 })
 
-test('a pending routine edit moves the key, by its rid and time', () => {
+test('a pending routine edit moves the key, by its key and time', () => {
   const key = sourceKey(base())
-  expect(sourceKey({ ...base(), routineEdits: [] })).toBe(key)
-  const one = sourceKey({ ...base(), routineEdits: [{ rid: 'a', t: 1 }] })
+  expect(sourceKey({ ...base(), edits: [] })).toBe(key)
+  const one = sourceKey({ ...base(), edits: [{ kind: 'routine', key: 'a', t: 1 }] })
   expect(one).not.toBe(key)
-  expect(sourceKey({ ...base(), routineEdits: [{ rid: 'a', t: 2 }] })).not.toBe(one)
-  expect(sourceKey({ ...base(), routineEdits: [{ rid: 'b', t: 1 }] })).not.toBe(one)
+  expect(sourceKey({ ...base(), edits: [{ kind: 'routine', key: 'a', t: 2 }] })).not.toBe(one)
+  expect(sourceKey({ ...base(), edits: [{ kind: 'routine', key: 'b', t: 1 }] })).not.toBe(one)
 })
 
 test('readSourceKey follows routine edits: put, and acked', async () => {
   const db = createNodeSqliteDb()
-  const stores = { finished: createSqliteFinishedWorkouts(db), serverCopy: createSqliteServerCopy(db), routineEdits: createSqliteRoutineEdits(db) }
+  const stores = { finished: createSqliteFinishedWorkouts(db), serverCopy: createSqliteServerCopy(db), edits: createSqlitePendingEdits(db) }
   const read = () => readSourceKey({ ...stores, now: NOW })
   const none = await read()
-  await stores.routineEdits.put({ rid: 'a', baseTs: null, routine: { id: 'a', name: 'A' }, t: 3 })
+  await stores.edits.put({ kind: 'routine', key: 'a', baseTs: null, value: { id: 'a', name: 'A' }, t: 3 })
   const put = await read()
   expect(put).not.toBe(none)
-  await stores.routineEdits.markAcked([{ rid: 'a', t: 3 }], 'now')
+  await stores.edits.markAcked([{ kind: 'routine', key: 'a', t: 3 }], 'now')
   expect(await read()).toBe(none)
   // Without a store the edits read as none.
   expect(await readSourceKey({ finished: stores.finished, serverCopy: stores.serverCopy, now: NOW })).toBe(none)
+})
+
+test('pending edits are keyed by kind, key and time: the same key and time under two kinds are two keys', () => {
+  const at = (kind, key, t) => sourceKey({ ...base(), edits: [{ kind, key, t }] })
+  const day = at('nutritionDay', '2026-11-09', 1)
+  expect(day).not.toBe(sourceKey(base()))
+  expect(at('setting', '2026-11-09', 1)).not.toBe(day)
+  expect(at('routine', '2026-11-09', 1)).not.toBe(day)
+  expect(at('nutritionDay', '2026-11-08', 1)).not.toBe(day)
+  expect(at('nutritionDay', '2026-11-09', 2)).not.toBe(day)
+  expect(at('nutritionDay', '2026-11-09', 1)).toBe(day)
+})
+
+test('readSourceKey follows nutrition days and settings too: put, and acked', async () => {
+  const db = createNodeSqliteDb()
+  const stores = { finished: createSqliteFinishedWorkouts(db), serverCopy: createSqliteServerCopy(db), edits: createSqlitePendingEdits(db) }
+  const read = () => readSourceKey({ ...stores, now: NOW })
+  const none = await read()
+  await stores.edits.put({ kind: 'nutritionDay', key: '2026-11-09', baseTs: null, value: { kcal: 2000 }, t: 3 })
+  const day = await read()
+  expect(day).not.toBe(none)
+  await stores.edits.put({ kind: 'setting', key: 'supplements', baseTs: null, value: [], t: 4 })
+  const both = await read()
+  expect(both).not.toBe(day)
+  await stores.edits.markAcked([{ kind: 'nutritionDay', key: '2026-11-09', t: 3 }, { kind: 'setting', key: 'supplements', t: 4 }], 'now')
+  expect(await read()).toBe(none)
+})
+
+test('a pending measurement change gives a new key, apart from the weigh-ins', () => {
+  const m = { d: '2026-11-09', op: 'set', entry: { d: '2026-11-09', t: 100, waist: 80 }, t: 100 }
+  const key = sourceKey({ ...base(), measurements: [m] })
+  expect(key).not.toBe(sourceKey(base()))
+  expect(sourceKey({ ...base(), measurements: [structuredClone(m)] })).toBe(key)
+  expect(sourceKey({ ...base(), measurements: [{ ...m, t: 101 }] })).not.toBe(key)
+  expect(sourceKey({ ...base(), measurements: [{ d: m.d, op: 'remove', t: 100 }] })).not.toBe(key)
+  // a weigh-in and a measurement of the same day, op and time are two different keys
+  const w = base().weighIns[0]
+  expect(sourceKey({ ...base(), weighIns: [], measurements: [{ d: w.d, op: w.op, t: w.t }] })).not.toBe(sourceKey(base()))
+})
+
+test('readSourceKey follows the measurement store, and leaves measurements out without one', async () => {
+  const db = createNodeSqliteDb()
+  const measurements = createSqliteMeasurements(db)
+  const stores = { finished: createSqliteFinishedWorkouts(db), serverCopy: createSqliteServerCopy(db), measurements }
+  const read = () => readSourceKey({ ...stores, now: NOW })
+  const first = await read()
+  await measurements.put({ d: '2026-11-09', op: 'set', entry: { d: '2026-11-09', t: 5, waist: 80 }, t: 5 })
+  const second = await read()
+  expect(second).not.toBe(first)
+  expect(await readSourceKey({ ...stores, measurements: null, now: NOW })).toBe(first)
+  await measurements.markAcked([{ d: '2026-11-09', t: 5 }], 'now')
+  expect(await read()).toBe(first)
 })

@@ -3,8 +3,10 @@ import { createNodeSqliteDb } from '../../scripts/node-sqlite.mjs'
 import { resetIdsOf } from '../../../frontend/src/lib/sync-merge.js'
 import { createSqliteFinishedWorkouts } from '../session/finished-workouts.js'
 import { createSqliteWeighIns } from '../body/weigh-ins.js'
+import { createSqliteMeasurements } from '../body/measurement-store.js'
+import { measurementSaveArgs, putMeasurement } from '../body/measurement-screen.js'
 import { createSqliteHealthStore } from '../health/health-store.js'
-import { createSqliteRoutineEdits } from '../plan/routine-edits.js'
+import { createSqlitePendingEdits } from './pending-edits.js'
 import { createCredentials } from './credentials.js'
 import { buildPush } from './outbox.js'
 import { createSqliteServerCopy, createSqliteSyncMeta } from './server-copy.js'
@@ -32,6 +34,7 @@ const initialDoc = () => ({
   _wid: 'wid-3',
   _wids: ['wid-1', 'wid-2'],
 })
+const isMap = v => !!v && typeof v === 'object' && !Array.isArray(v)
 // The API's test for an entry changed beyond its stamps (sync-stamps.js sameEntry).
 const sameEntry = (a, b) => JSON.stringify({ ...a, _ts: 0, _f: 0, _u: 0 }) === JSON.stringify({ ...b, _ts: 0, _f: 0, _u: 0 })
 const phone = (id, d = '2026-11-08') => ({ id, d, start: T0, end: T0 + 60_000, name: 'Push', entries: [{ id: 'bench', sets: [{ w: 60, r: 5, done: true }] }], vol: 300 })
@@ -87,9 +90,34 @@ function fakeServer(doc = initialDoc()) {
     srv.write(s)
   }
   srv.routine = rid => srv.doc.routines.find(r => r.id === rid)
+  // The web stamps a nutrition day it changes itself, and a setting through `edited`.
+  srv.webEditsDay = (d, change) => {
+    const s = clone(srv.doc)
+    s.nutritionDays = { ...s.nutritionDays, [d]: { ...change(s.nutritionDays?.[d]), _ts: ++srv.lastStamp } }
+    srv.write(s)
+  }
+  srv.webEditsSetting = (k, value) => {
+    const s = clone(srv.doc)
+    s[k] = value
+    s.edited = { ...s.edited, [k]: ++srv.lastStamp }
+    srv.write(s)
+  }
   srv.webAdds = w => {
     const s = clone(srv.doc)
     s.workouts = [...(s.workouts ?? []), w]
+    srv.write(s)
+  }
+  // The web logs or edits a day's measurements (the entry carries its own t), or deletes the day
+  // with a removal record, as a stamped writer does.
+  srv.webWritesMeasurement = e => {
+    const s = clone(srv.doc)
+    s.measurements = [...(s.measurements ?? []).filter(x => x.d !== e.d), e]
+    srv.write(s)
+  }
+  srv.webDeletesMeasurement = (d, at) => {
+    const s = clone(srv.doc)
+    s.measurements = (s.measurements ?? []).filter(x => x.d !== d)
+    s.deleted = { ...s.deleted, measurements: { ...s.deleted?.measurements, [d]: at } }
     srv.write(s)
   }
   const hook = async (name, args) => {
@@ -147,6 +175,22 @@ function fakeServer(doc = initialDoc()) {
         const old = before.get(r.id)
         if (old ? !sameEntry(old, r) : r._ts == null) r._ts = ++srv.lastStamp
       }
+      // A nutrition day the push changed gets a new _ts, and a changed setting moves its stamp in
+      // `edited` (sync-stamps.js stampPut and stampUnstamped, for a writer that does not stamp).
+      const heldDays = isMap(srv.doc.nutritionDays) ? srv.doc.nutritionDays : {}
+      for (const [d, day] of Object.entries(isMap(state.nutritionDays) ? state.nutritionDays : {})) {
+        if (isMap(day) && !sameEntry(heldDays[d], day)) day._ts = ++srv.lastStamp
+      }
+      for (const k of ['nutritionTargets', 'supplements']) {
+        if (state[k] !== undefined && JSON.stringify(state[k]) !== JSON.stringify(srv.doc[k])) state.edited = { ...state.edited, [k]: ++srv.lastStamp }
+      }
+      // A measurement day the push left out is recorded as removed, after the entry's own t
+      // (sync-stamps.js stampUnstamped, for a writer that does not stamp).
+      const sentDays = new Set((Array.isArray(state.measurements) ? state.measurements : []).map(e => e?.d))
+      for (const e of Array.isArray(srv.doc.measurements) ? srv.doc.measurements : []) {
+        if (e?.d == null || sentDays.has(e.d)) continue
+        state.deleted = { ...state.deleted, measurements: { ...state.deleted?.measurements, [e.d]: Math.max(++srv.lastStamp, (Number(e.t) || 0) + 1) } }
+      }
       const next = srv.write(state)
       return { ok: true, ts: null, rev: next._rev, wid: next._wid }
     },
@@ -162,7 +206,8 @@ async function setup({ server = fakeServer(), paired = true, local = [] } = {}) 
   const meta = createSqliteSyncMeta(db)
   const workouts = createSqliteFinishedWorkouts(db)
   const weighIns = createSqliteWeighIns(db)
-  const routineEdits = createSqliteRoutineEdits(db)
+  const edits = createSqlitePendingEdits(db)
+  const measurements = createSqliteMeasurements(db)
   let clock = T0
   const now = () => clock
   for (const w of local) await workouts.put(w)
@@ -171,11 +216,11 @@ async function setup({ server = fakeServer(), paired = true, local = [] } = {}) 
     await meta.set('server', BASE)
     await meta.set('profile', 'Mo')
   }
-  const sync = createSync({ client: server.client, credentials, copy, workouts, weighIns, routineEdits, meta, now })
+  const sync = createSync({ client: server.client, credentials, copy, workouts, weighIns, edits, measurements, meta, now })
   const pendingIds = async () => (await workouts.listPending()).map(w => w.id)
   const serverIds = () => server.doc.workouts.map(w => w.id)
   const fresh = () => { server.calls.length = 0 }
-  return { sync, server, db, keychain, credentials, copy, meta, workouts, weighIns, routineEdits, now, pendingIds, serverIds, fresh, tick: ms => { clock += ms } }
+  return { sync, server, db, keychain, credentials, copy, meta, workouts, weighIns, edits, measurements, now, pendingIds, serverIds, fresh, tick: ms => { clock += ms } }
 }
 
 function gate() {
@@ -198,7 +243,7 @@ describe('syncNow', () => {
     const r = await t.sync.syncNow()
     expect(t.server.calls).toEqual(['me', 'rev', 'pull'])
     expect(await t.copy.get()).toEqual({ state: initialDoc(), rev: 3, wid: 'wid-3' })
-    expect(r).toEqual({ paired: true, state: 'idle', lastSyncedAt: iso(T0), pending: 0, pendingWeighIns: 0, pendingRoutineEdits: 0, copyKey: '3|wid-3', server: BASE, profile: 'Mo' })
+    expect(r).toEqual({ paired: true, state: 'idle', lastSyncedAt: iso(T0), pending: 0, pendingWeighIns: 0, pendingEdits: 0, pendingMeasurements: 0, copyKey: '3|wid-3', server: BASE, profile: 'Mo' })
     expect(t.server.pushes).toEqual([])
   })
 
@@ -689,7 +734,7 @@ describe('pair', () => {
     expect(await t.meta.get('profile')).toBe('Mo')
     expect(t.serverIds()).toEqual(['web-1', 'p1', 'p2'])
     expect((await t.copy.get()).state).toEqual(t.server.doc)
-    expect(await t.sync.status()).toEqual({ paired: true, state: 'idle', lastSyncedAt: iso(T0), pending: 0, pendingWeighIns: 0, pendingRoutineEdits: 0, copyKey: '4|wid-s1', server: BASE, profile: 'Mo' })
+    expect(await t.sync.status()).toEqual({ paired: true, state: 'idle', lastSyncedAt: iso(T0), pending: 0, pendingWeighIns: 0, pendingEdits: 0, pendingMeasurements: 0, copyKey: '4|wid-s1', server: BASE, profile: 'Mo' })
   })
 
   test('the old token is removed before the new address is written, and the new token is written last', async () => {
@@ -753,7 +798,7 @@ describe('pair', () => {
     expect(await t.copy.get()).toBeNull()
     expect((await t.workouts.list()).map(w => w.id)).toEqual(['p1', 'p2'])
     expect(await t.pendingIds()).toEqual(['p2'])
-    expect(await t.sync.status()).toEqual({ paired: false, state: 'unpaired', pending: 1, pendingWeighIns: 0, pendingRoutineEdits: 0 })
+    expect(await t.sync.status()).toEqual({ paired: false, state: 'unpaired', pending: 1, pendingWeighIns: 0, pendingEdits: 0, pendingMeasurements: 0 })
   })
 
   test('refusing a kilogram profile leaves the current pairing as it was', async () => {
@@ -820,13 +865,13 @@ describe('forget', () => {
     const t = await setup({ local: [phone('p1')] })
     await t.sync.syncNow()
     expect(await t.pendingIds()).toEqual([])
-    expect(await t.sync.forget()).toEqual({ paired: false, state: 'unpaired', pending: 1, pendingWeighIns: 0, pendingRoutineEdits: 0 })
+    expect(await t.sync.forget()).toEqual({ paired: false, state: 'unpaired', pending: 1, pendingWeighIns: 0, pendingEdits: 0, pendingMeasurements: 0 })
     expect(t.keychain.m.size).toBe(0)
     expect(await t.copy.get()).toBeNull()
     for (const k of ['server', 'profile', 'lastSyncedAt', 'problem', 'lastRenewedAt']) expect(await t.meta.get(k)).toBeNull()
     expect((await t.workouts.list()).map(w => w.id)).toEqual(['p1'])
     expect(await t.pendingIds()).toEqual(['p1'])
-    expect(await t.sync.status()).toEqual({ paired: false, state: 'unpaired', pending: 1, pendingWeighIns: 0, pendingRoutineEdits: 0 })
+    expect(await t.sync.status()).toEqual({ paired: false, state: 'unpaired', pending: 1, pendingWeighIns: 0, pendingEdits: 0, pendingMeasurements: 0 })
   })
 
   test('waits for a running sync, so the sync cannot write a copy back afterwards', async () => {
@@ -847,10 +892,10 @@ describe('forget', () => {
 describe('status', () => {
   test('says paired, server, profile, last sync and the pending count', async () => {
     const t = await setup({ local: [phone('p1')] })
-    expect(await t.sync.status()).toEqual({ paired: true, state: 'idle', pending: 1, pendingWeighIns: 0, pendingRoutineEdits: 0, server: BASE, profile: 'Mo' })
+    expect(await t.sync.status()).toEqual({ paired: true, state: 'idle', pending: 1, pendingWeighIns: 0, pendingEdits: 0, pendingMeasurements: 0, server: BASE, profile: 'Mo' })
     t.server.once.rev = [OFFLINE]
     await t.sync.syncNow()
-    expect(await t.sync.status()).toEqual({ paired: true, state: 'waiting', pending: 1, pendingWeighIns: 0, pendingRoutineEdits: 0, server: BASE, profile: 'Mo' })
+    expect(await t.sync.status()).toEqual({ paired: true, state: 'waiting', pending: 1, pendingWeighIns: 0, pendingEdits: 0, pendingMeasurements: 0, server: BASE, profile: 'Mo' })
   })
 })
 
@@ -1031,7 +1076,7 @@ describe('weigh-ins', () => {
     const t = await setup({ paired: false, local: [phone('p1')] })
     await t.weighIns.put(typed('2026-11-08', 181.2, 5))
     await t.weighIns.put(typed('2026-11-09', 181, 6))
-    expect(await t.sync.status()).toEqual({ paired: false, state: 'unpaired', pending: 1, pendingWeighIns: 2, pendingRoutineEdits: 0 })
+    expect(await t.sync.status()).toEqual({ paired: false, state: 'unpaired', pending: 1, pendingWeighIns: 2, pendingEdits: 0, pendingMeasurements: 0 })
   })
 })
 
@@ -1114,7 +1159,7 @@ describe('weigh-ins and the server record', () => {
   })
 
   test('createSync refuses to be built without a weigh-in store', () => {
-    expect(() => createSync({ client: {}, credentials: {}, copy: {}, workouts: {}, routineEdits: {}, meta: {}, now: Date.now })).toThrow(/weighIns/)
+    expect(() => createSync({ client: {}, credentials: {}, copy: {}, workouts: {}, edits: {}, meta: {}, now: Date.now })).toThrow(/weighIns/)
   })
 })
 
@@ -1127,7 +1172,7 @@ const planDoc = () => ({
   ],
 })
 // What the Plan screen saves: the copy's routine as edited, on that routine's _ts.
-const routineEdit = (base, change, t) => ({ rid: base.id, baseTs: base._ts ?? null, routine: change(clone(base)), t })
+const routineEdit = (base, change, t) => ({ kind: 'routine', key: base.id, baseTs: base._ts ?? null, value: change(clone(base)), t })
 const setsOn = n => r => ({ ...r, ex: r.ex.map((s, i) => (i === 0 ? { ...s, sets: n } : s)) })
 const swapped = r => ({ ...r, ex: [r.ex[1], r.ex[0]] })
 const content = r => { const { _ts, _f, _u, ...rest } = r; return rest }
@@ -1139,7 +1184,7 @@ async function planSetup(doc = planDoc()) {
   const edit = async (rid, change, at = T0 + 1) => {
     const base = (await t.copy.get()).state.routines.find(r => r.id === rid)
     const e = routineEdit(base, change, at)
-    await t.routineEdits.put(e)
+    await t.edits.put(e)
     return e
   }
   return { ...t, edit }
@@ -1153,16 +1198,16 @@ describe('routine edits', () => {
     expect(t.server.calls).toEqual(['rev', 'push', 'pull'])
     const sent = t.server.pushes[0]
     expect(sent.baseRev).toBe(3)
-    expect(sent.state).toEqual({ ...planDoc(), routines: [mine.routine, planDoc().routines[1]] })
+    expect(sent.state).toEqual({ ...planDoc(), routines: [mine.value, planDoc().routines[1]] })
     // the server stamped it; the stored copy is the server's, with every key on its own slot
     expect(t.server.routine('r1')._ts).toBeGreaterThan(1000)
-    expect(content(t.server.routine('r1'))).toEqual(content(mine.routine))
+    expect(content(t.server.routine('r1'))).toEqual(content(mine.value))
     expect((await t.copy.get()).state).toEqual(t.server.doc)
-    expect(await t.routineEdits.listPending()).toEqual([])
-    expect(await t.db.getAll('SELECT rid, acked_at, superseded_at FROM routine_edits')).toEqual([{ rid: 'r1', acked_at: iso(T0), superseded_at: null }])
-    expect((await t.routineEdits.get('r1')).sent).toEqual(mine.routine)
-    expect(await t.routineEdits.listNotices()).toEqual([])
-    expect(r).toMatchObject({ state: 'idle', pending: 0, pendingWeighIns: 0, pendingRoutineEdits: 0 })
+    expect(await t.edits.listPending()).toEqual([])
+    expect(await t.db.getAll('SELECT key, acked_at, superseded_at FROM pending_edits')).toEqual([{ key: 'r1', acked_at: iso(T0), superseded_at: null }])
+    expect((await t.edits.get('routine', 'r1')).sent).toEqual(mine.value)
+    expect(await t.edits.listNotices()).toEqual([])
+    expect(r).toMatchObject({ state: 'idle', pending: 0, pendingWeighIns: 0, pendingEdits: 0 })
 
     t.fresh()
     await t.sync.syncNow()
@@ -1179,25 +1224,25 @@ describe('routine edits', () => {
       second = await t.edit('r1', setsOn(5), T0 + 2)
       return undefined
     }]
-    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 1 })
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 1 })
     expect(t.server.calls).toEqual(['rev', 'push', 'pull'])
-    expect(content(t.server.routine('r1'))).toEqual(content(first.routine))
+    expect(content(t.server.routine('r1'))).toEqual(content(first.value))
     const landed = t.server.routine('r1')._ts
     expect(landed).toBeGreaterThan(1000)
-    expect(await t.routineEdits.listPending()).toEqual([{ rid: 'r1', baseTs: landed, routine: second.routine, sent: null, t: T0 + 2 }])
-    expect(await t.routineEdits.listNotices()).toEqual([])
+    expect(await t.edits.listPending()).toEqual([{ kind: 'routine', key: 'r1', baseTs: landed, value: second.value, sent: null, t: T0 + 2 }])
+    expect(await t.edits.listNotices()).toEqual([])
 
     t.fresh()
-    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
     expect(t.server.calls).toEqual(['rev', 'push', 'pull'])
     expect(t.server.pushes[1].baseRev).toBe(4)
     // the second routine, on the stamps of the landed push it goes on top of
-    expect(t.server.pushes[1].state.routines[0]).toEqual({ ...second.routine, _ts: landed })
-    expect(second.routine._ts).toBe(1000)
-    expect(content(t.server.routine('r1'))).toEqual(content(second.routine))
+    expect(t.server.pushes[1].state.routines[0]).toEqual({ ...second.value, _ts: landed })
+    expect(second.value._ts).toBe(1000)
+    expect(content(t.server.routine('r1'))).toEqual(content(second.value))
     expect(t.server.routine('r1')._ts).toBeGreaterThan(landed)
-    expect(await t.routineEdits.listPending()).toEqual([])
-    expect(await t.routineEdits.listNotices()).toEqual([])
+    expect(await t.edits.listPending()).toEqual([])
+    expect(await t.edits.listNotices()).toEqual([])
   })
 
   test('a 409 whose document changed the same routine supersedes the edit, and no push carries it again', async () => {
@@ -1209,9 +1254,9 @@ describe('routine edits', () => {
     expect(t.server.calls).toEqual(['rev', 'push'])
     expect(t.server.routine('r1')).toMatchObject({ name: 'Push A', ex: planDoc().routines[0].ex })
     expect((await t.copy.get()).state).toEqual(t.server.doc)
-    expect(await t.routineEdits.listPending()).toEqual([])
-    expect(await t.routineEdits.listNotices()).toEqual([{ rid: 'r1', name: 'Push', kind: 'changed', at: iso(T0) }])
-    expect(r).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+    expect(await t.edits.listPending()).toEqual([])
+    expect(await t.edits.listNotices()).toEqual([{ kind: 'routine', key: 'r1', name: 'Push', reason: 'changed', at: iso(T0) }])
+    expect(r).toMatchObject({ state: 'idle', pendingEdits: 0 })
     expect(r.problem).toBeUndefined()
 
     t.fresh()
@@ -1222,22 +1267,22 @@ describe('routine edits', () => {
   test('a 409 that changed another routine still pushes the edit, on top of it, marked sent before each attempt', async () => {
     const t = await planSetup()
     const mine = await t.edit('r1', setsOn(4))
-    const markSent = t.routineEdits.markSent
-    t.routineEdits.markSent = async items => {
-      t.server.calls.push(`markSent ${items.map(i => `${i.rid}@${i.t}`).join(',')}`)
+    const markSent = t.edits.markSent
+    t.edits.markSent = async items => {
+      t.server.calls.push(`markSent ${items.map(i => `${i.key}@${i.t}`).join(',')}`)
       return markSent(items)
     }
     t.server.once.push = [async () => { t.server.webEditsRoutine('r2', r => ({ ...r, name: 'Pull A' })) }]
     const r = await t.sync.syncNow()
     expect(t.server.calls).toEqual(['rev', `markSent r1@${T0 + 1}`, 'push', `markSent r1@${T0 + 1}`, 'push', 'pull'])
     expect(t.server.pushes[1].baseRev).toBe(4)
-    expect(t.server.pushes[1].state.routines[0]).toEqual(mine.routine)
+    expect(t.server.pushes[1].state.routines[0]).toEqual(mine.value)
     expect(t.server.pushes[1].state.routines[1]).toMatchObject({ name: 'Pull A' })
-    expect(content(t.server.routine('r1'))).toEqual(content(mine.routine))
+    expect(content(t.server.routine('r1'))).toEqual(content(mine.value))
     expect(t.server.routine('r2').name).toBe('Pull A')
-    expect(await t.routineEdits.listPending()).toEqual([])
-    expect(await t.routineEdits.listNotices()).toEqual([])
-    expect(r).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+    expect(await t.edits.listPending()).toEqual([])
+    expect(await t.edits.listNotices()).toEqual([])
+    expect(r).toMatchObject({ state: 'idle', pendingEdits: 0 })
   })
 
   test('a routine deleted on the web supersedes the edit as deleted, and it is not pushed back', async () => {
@@ -1248,22 +1293,22 @@ describe('routine edits', () => {
     expect(t.server.calls).toEqual(['rev', 'pull'])
     expect(t.server.pushes).toEqual([])
     expect(t.server.doc.routines.map(x => x.id)).toEqual(['r2'])
-    expect(await t.routineEdits.listPending()).toEqual([])
-    expect(await t.routineEdits.listNotices()).toEqual([{ rid: 'r1', name: 'Push', kind: 'deleted', at: iso(T0) }])
-    expect(r).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+    expect(await t.edits.listPending()).toEqual([])
+    expect(await t.edits.listNotices()).toEqual([{ kind: 'routine', key: 'r1', name: 'Push', reason: 'deleted', at: iso(T0) }])
+    expect(r).toMatchObject({ state: 'idle', pendingEdits: 0 })
   })
 
   test('a push whose follow-up pull fails keeps the edit pending; the next sync acks it without sending it again', async () => {
     const t = await planSetup()
     const mine = await t.edit('r1', setsOn(4))
     t.server.once.pull = [OFFLINE]
-    expect(await t.sync.syncNow()).toMatchObject({ state: 'waiting', pendingRoutineEdits: 1 })
-    expect((await t.routineEdits.get('r1')).sent).toEqual(mine.routine)
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'waiting', pendingEdits: 1 })
+    expect((await t.edits.get('routine', 'r1')).sent).toEqual(mine.value)
     t.fresh()
-    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
     expect(t.server.calls).toEqual(['rev', 'pull'])
     expect(t.server.pushes).toHaveLength(1)
-    expect(await t.routineEdits.listNotices()).toEqual([])
+    expect(await t.edits.listNotices()).toEqual([])
   })
 
   test('an edit rides in the same push as a workout and a weigh-in', async () => {
@@ -1275,48 +1320,48 @@ describe('routine edits', () => {
     expect(t.server.pushes).toHaveLength(1)
     expect(t.serverIds()).toEqual(['web-1', 'p1'])
     expect(t.server.doc.bodyweight).toHaveLength(1)
-    expect(content(t.server.routine('r1'))).toEqual(content(mine.routine))
-    expect(await t.sync.status()).toMatchObject({ pending: 0, pendingWeighIns: 0, pendingRoutineEdits: 0 })
+    expect(content(t.server.routine('r1'))).toEqual(content(mine.value))
+    expect(await t.sync.status()).toMatchObject({ pending: 0, pendingWeighIns: 0, pendingEdits: 0 })
   })
 
   test('status counts routine edits waiting, paired or not', async () => {
     const t = await setup({ paired: false })
-    await t.routineEdits.put(routineEdit(planDoc().routines[0], setsOn(4), 1))
-    await t.routineEdits.put(routineEdit(planDoc().routines[1], setsOn(4), 2))
-    expect(await t.sync.status()).toEqual({ paired: false, state: 'unpaired', pending: 0, pendingWeighIns: 0, pendingRoutineEdits: 2 })
+    await t.edits.put(routineEdit(planDoc().routines[0], setsOn(4), 1))
+    await t.edits.put(routineEdit(planDoc().routines[1], setsOn(4), 2))
+    expect(await t.sync.status()).toEqual({ paired: false, state: 'unpaired', pending: 0, pendingWeighIns: 0, pendingEdits: 2, pendingMeasurements: 0 })
   })
 
   test('an acked edit stays acked across forget and pair: a later web change brings no notice and nothing is sent', async () => {
     const t = await planSetup()
     await t.edit('r1', setsOn(4))
     await t.sync.syncNow()
-    expect(await t.routineEdits.listPending()).toEqual([])
+    expect(await t.edits.listPending()).toEqual([])
     t.server.webEditsRoutine('r1', r => ({ ...r, name: 'Push (web, later)' }))
-    expect(await t.sync.forget()).toMatchObject({ pendingRoutineEdits: 0 })
-    expect(await t.routineEdits.listPending()).toEqual([])
+    expect(await t.sync.forget()).toMatchObject({ pendingEdits: 0 })
+    expect(await t.edits.listPending()).toEqual([])
     t.server.pushes.length = 0
     expect((await t.sync.pair(BASE, 'GOODCODE')).ok).toBe(true)
     expect(t.server.pushes).toEqual([])
     expect(t.server.routine('r1').name).toBe('Push (web, later)')
-    expect(await t.routineEdits.listPending()).toEqual([])
-    expect(await t.routineEdits.listNotices()).toEqual([])
-    expect(await t.db.getAll('SELECT rid, acked_at, superseded_at FROM routine_edits')).toEqual([{ rid: 'r1', acked_at: iso(T0), superseded_at: null }])
-    expect(await t.sync.status()).toMatchObject({ pendingRoutineEdits: 0 })
+    expect(await t.edits.listPending()).toEqual([])
+    expect(await t.edits.listNotices()).toEqual([])
+    expect(await t.db.getAll('SELECT key, acked_at, superseded_at FROM pending_edits')).toEqual([{ key: 'r1', acked_at: iso(T0), superseded_at: null }])
+    expect(await t.sync.status()).toMatchObject({ pendingEdits: 0 })
   })
 
   test('resendAll after the server went back to a backup from before the edit puts it back', async () => {
     const t = await planSetup()
     const mine = await t.edit('r1', setsOn(4))
     await t.sync.syncNow()
-    expect(await t.routineEdits.listPending()).toEqual([])
+    expect(await t.edits.listPending()).toEqual([])
     t.server.doc = clone(planDoc())
     t.server.doc._wids = ['other']
     t.server.webAdds(web('web-9'))
     expect(await t.sync.syncNow()).toMatchObject({ state: 'problem', problem: 'server-older' })
-    expect(await t.sync.resendAll()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
-    expect(content(t.server.routine('r1'))).toEqual(content(mine.routine))
-    expect(await t.routineEdits.listPending()).toEqual([])
-    expect(await t.routineEdits.listNotices()).toEqual([])
+    expect(await t.sync.resendAll()).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    expect(content(t.server.routine('r1'))).toEqual(content(mine.value))
+    expect(await t.edits.listPending()).toEqual([])
+    expect(await t.edits.listNotices()).toEqual([])
   })
 
   test('resendAll: an edit acked long ago, of a routine the web changed since, is settled with no notice and not sent', async () => {
@@ -1329,61 +1374,61 @@ describe('routine edits', () => {
     expect(await t.sync.syncNow()).toMatchObject({ state: 'problem', problem: 'server-older' })
     const before = clone(t.server.routine('r1'))
     t.server.pushes.length = 0
-    expect(await t.sync.resendAll()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+    expect(await t.sync.resendAll()).toMatchObject({ state: 'idle', pendingEdits: 0 })
     expect(t.server.pushes).toEqual([])
     expect(t.server.routine('r1')).toEqual(before)
-    expect(await t.routineEdits.listPending()).toEqual([])
-    expect(await t.routineEdits.listNotices()).toEqual([])
+    expect(await t.edits.listPending()).toEqual([])
+    expect(await t.edits.listNotices()).toEqual([])
   })
 
   test('a save landing between the push reading the edits and markSent: the pull rebases it, no notice, and the next sync sends it', async () => {
     const t = await planSetup()
     const first = await t.edit('r1', setsOn(4))
-    const markSent = t.routineEdits.markSent
+    const markSent = t.edits.markSent
     let second
-    t.routineEdits.markSent = async items => {
+    t.edits.markSent = async items => {
       if (!second) second = await t.edit('r1', setsOn(5), T0 + 2)
       return markSent(items)
     }
-    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 1 })
-    expect(t.server.pushes[0].state.routines[0]).toEqual(first.routine)
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 1 })
+    expect(t.server.pushes[0].state.routines[0]).toEqual(first.value)
     const landed = t.server.routine('r1')._ts
-    expect(await t.routineEdits.listPending()).toEqual([{ rid: 'r1', baseTs: landed, routine: second.routine, sent: null, t: T0 + 2 }])
-    expect(await t.routineEdits.listNotices()).toEqual([])
+    expect(await t.edits.listPending()).toEqual([{ kind: 'routine', key: 'r1', baseTs: landed, value: second.value, sent: null, t: T0 + 2 }])
+    expect(await t.edits.listNotices()).toEqual([])
 
     t.fresh()
-    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
     expect(t.server.calls).toEqual(['rev', 'push', 'pull'])
-    expect(content(t.server.routine('r1'))).toEqual(content(second.routine))
-    expect(await t.routineEdits.listPending()).toEqual([])
-    expect(await t.routineEdits.listNotices()).toEqual([])
+    expect(content(t.server.routine('r1'))).toEqual(content(second.value))
+    expect(await t.edits.listPending()).toEqual([])
+    expect(await t.edits.listNotices()).toEqual([])
   })
 
   test('a save made on the copy from before the pull, landing just after markAcked, is pushed by the next sync with no notice', async () => {
     const t = await planSetup()
     const first = await t.edit('r1', setsOn(4))
     const before = (await t.copy.get()).state.routines[0] // what the Plan screen read
-    const markAcked = t.routineEdits.markAcked
+    const markAcked = t.edits.markAcked
     let second
-    t.routineEdits.markAcked = async (items, at) => {
+    t.edits.markAcked = async (items, at) => {
       const r = await markAcked(items, at)
       if (!second) {
         second = routineEdit(before, setsOn(5), T0 + 2)
-        await t.routineEdits.put(second)
+        await t.edits.put(second)
       }
       return r
     }
-    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 1 })
-    expect(content(t.server.routine('r1'))).toEqual(content(first.routine))
-    expect(await t.routineEdits.get('r1')).toEqual({ rid: 'r1', baseTs: 1000, routine: second.routine, sent: first.routine, t: T0 + 2 })
-    expect(await t.routineEdits.listNotices()).toEqual([])
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 1 })
+    expect(content(t.server.routine('r1'))).toEqual(content(first.value))
+    expect(await t.edits.get('routine', 'r1')).toEqual({ kind: 'routine', key: 'r1', baseTs: 1000, value: second.value, sent: first.value, t: T0 + 2 })
+    expect(await t.edits.listNotices()).toEqual([])
 
     t.fresh()
-    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
     expect(t.server.calls).toEqual(['rev', 'push', 'pull'])
-    expect(content(t.server.routine('r1'))).toEqual(content(second.routine))
-    expect(await t.routineEdits.listPending()).toEqual([])
-    expect(await t.routineEdits.listNotices()).toEqual([])
+    expect(content(t.server.routine('r1'))).toEqual(content(second.value))
+    expect(await t.edits.listPending()).toEqual([])
+    expect(await t.edits.listNotices()).toEqual([])
   })
 
   test('a move in a routine holding the same exercise twice is never sent: superseded as unsafe, the server untouched', async () => {
@@ -1394,20 +1439,20 @@ describe('routine edits', () => {
     expect(t.server.calls).toEqual(['rev'])
     expect(t.server.pushes).toEqual([])
     expect(t.server.routine('r3')).toEqual(twins)
-    expect(await t.routineEdits.listPending()).toEqual([])
-    expect(await t.routineEdits.listNotices()).toEqual([{ rid: 'r3', name: 'Bench day', kind: 'unsafe', at: iso(T0) }])
-    expect(r).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+    expect(await t.edits.listPending()).toEqual([])
+    expect(await t.edits.listNotices()).toEqual([{ kind: 'routine', key: 'r3', name: 'Bench day', reason: 'unsafe', at: iso(T0) }])
+    expect(r).toMatchObject({ state: 'idle', pendingEdits: 0 })
 
     // a sets-only edit of the same routine goes
     await t.edit('r3', setsOn(4), T0 + 5)
     await t.sync.syncNow()
     expect(t.server.pushes).toHaveLength(1)
     expect(t.server.routine('r3').ex).toEqual([{ ...twins.ex[0], sets: 4 }, twins.ex[1]])
-    expect(await t.routineEdits.listPending()).toEqual([])
+    expect(await t.edits.listPending()).toEqual([])
   })
 
-  test('createSync refuses to be built without a routine edits store', () => {
-    expect(() => createSync({ client: {}, credentials: {}, copy: {}, workouts: {}, weighIns: {}, meta: {}, now: Date.now })).toThrow(/routineEdits/)
+  test('createSync refuses to be built without an edits store', () => {
+    expect(() => createSync({ client: {}, credentials: {}, copy: {}, workouts: {}, weighIns: {}, meta: {}, now: Date.now })).toThrow(/edits/)
   })
 })
 
@@ -1420,10 +1465,10 @@ const webChangedR1 = (extra = {}) => ({ ...initialDoc(), routines: [{ ...clone(S
 // What the routine screen saves: the routine it shows, edited, on the base its source gives.
 async function screenEdit(t, change, at) {
   const bundled = snapshotDoc()
-  const src = await readScreenSource({ finished: t.workouts, serverCopy: t.copy, bundled, routineEdits: t.routineEdits })
+  const src = await readScreenSource({ finished: t.workouts, serverCopy: t.copy, bundled, edits: t.edits })
   const shown = findRoutine(src.state, 'r1')
   const { base, fresh } = editBase({ copy: src.copy, bundled }, 'r1')
-  await t.routineEdits.put({ rid: 'r1', baseTs: base?._ts ?? null, routine: change(clone(shown)), t: at, fresh })
+  await t.edits.put({ kind: 'routine', key: 'r1', baseTs: base?._ts ?? null, value: change(clone(shown)), t: at, fresh })
   return { shown }
 }
 
@@ -1438,10 +1483,10 @@ describe('routine edits made on the bundled snapshot', () => {
     const { shown } = await screenEdit(t, setsOn(4), T0 + 1)
     expect(shown.ex[0].reps).toBe(8) // the screen showed the snapshot
     t.fresh()
-    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingRoutineEdits: 0 })
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
     expect(t.server.pushes).toEqual([])
     expect(t.server.routine('r1')).toEqual(before)
-    expect(await t.routineEdits.listNotices()).toEqual([{ rid: 'r1', name: 'Push', kind: 'changed', at: iso(T0) }])
+    expect(await t.edits.listNotices()).toEqual([{ kind: 'routine', key: 'r1', name: 'Push', reason: 'changed', at: iso(T0) }])
   })
 
   // Forget, then an edit on the snapshot, then pairing the same server again (as changing the
@@ -1452,7 +1497,7 @@ describe('routine edits made on the bundled snapshot', () => {
     await t.sync.syncNow()
     await screenEdit(t, setsOn(4), T0 + 1)
     await t.sync.syncNow()
-    expect(await t.routineEdits.listPending()).toEqual([])
+    expect(await t.edits.listPending()).toEqual([])
     expect(t.server.routine('r1').ex[0]).toMatchObject({ sets: 4, reps: 6 })
 
     await t.sync.forget()
@@ -1463,8 +1508,8 @@ describe('routine edits made on the bundled snapshot', () => {
     expect((await t.sync.pair(BASE, 'GOODCODE')).ok).toBe(true)
     expect(t.server.pushes).toEqual([])
     expect(t.server.routine('r1')).toEqual(before)
-    expect(await t.routineEdits.listPending()).toEqual([])
-    expect(await t.routineEdits.listNotices()).toEqual([{ rid: 'r1', name: 'Push', kind: 'changed', at: iso(T0) }])
+    expect(await t.edits.listPending()).toEqual([])
+    expect(await t.edits.listNotices()).toEqual([{ kind: 'routine', key: 'r1', name: 'Push', reason: 'changed', at: iso(T0) }])
   })
 
   test('an edit still pending at forget, an unpaired edit, re-pair: the web\'s change since the snapshot stands, with a notice', async () => {
@@ -1479,7 +1524,7 @@ describe('routine edits made on the bundled snapshot', () => {
     expect((await t.sync.pair(BASE, 'GOODCODE')).ok).toBe(true)
     expect(t.server.pushes).toEqual([])
     expect(t.server.routine('r1')).toEqual(before)
-    expect(await t.routineEdits.listNotices()).toEqual([{ rid: 'r1', name: 'Push', kind: 'changed', at: iso(T0) }])
+    expect(await t.edits.listNotices()).toEqual([{ kind: 'routine', key: 'r1', name: 'Push', reason: 'changed', at: iso(T0) }])
   })
 
   // A save on the snapshot (the copy turned unbuildable for the screens) lands between the push
@@ -1489,23 +1534,23 @@ describe('routine edits made on the bundled snapshot', () => {
     const t = await setup({ server: fakeServer(webChangedR1()) })
     await t.sync.syncNow()
     const base = (await t.copy.get()).state.routines[0]
-    await t.routineEdits.put(routineEdit(base, setsOn(4), T0 + 1))
-    const markSent = t.routineEdits.markSent
+    await t.edits.put(routineEdit(base, setsOn(4), T0 + 1))
+    const markSent = t.edits.markSent
     let saved = false
-    t.routineEdits.markSent = async items => {
+    t.edits.markSent = async items => {
       if (!saved) {
         saved = true
-        await t.routineEdits.put({ rid: 'r1', baseTs: SNAP_R1._ts, routine: setsOn(5)(clone(SNAP_R1)), t: T0 + 2, fresh: true })
+        await t.edits.put({ kind: 'routine', key: 'r1', baseTs: SNAP_R1._ts, value: setsOn(5)(clone(SNAP_R1)), t: T0 + 2, fresh: true })
       }
       return markSent(items)
     }
     await t.sync.syncNow()
-    t.routineEdits.markSent = markSent
+    t.edits.markSent = markSent
     t.fresh()
     await t.sync.syncNow()
     expect(t.server.routine('r1').ex[0]).toMatchObject({ sets: 4, reps: 6 })
-    expect(await t.routineEdits.listPending()).toEqual([])
-    expect(await t.routineEdits.listNotices()).toEqual([{ rid: 'r1', name: 'Push', kind: 'changed', at: iso(T0) }])
+    expect(await t.edits.listPending()).toEqual([])
+    expect(await t.edits.listNotices()).toEqual([{ kind: 'routine', key: 'r1', name: 'Push', reason: 'changed', at: iso(T0) }])
   })
 
   test('an unpaired edit of a routine unchanged since the snapshot goes on pairing, over an older pending one', async () => {
@@ -1518,7 +1563,561 @@ describe('routine edits made on the bundled snapshot', () => {
     await screenEdit(t, setsOn(5), T0 + 2)
     expect((await t.sync.pair(BASE, 'GOODCODE')).ok).toBe(true)
     expect(content(t.server.routine('r1'))).toEqual({ ...content(SNAP_R1), ex: [{ ...SNAP_R1.ex[0], sets: 5 }] })
-    expect(await t.routineEdits.listPending()).toEqual([])
-    expect(await t.routineEdits.listNotices()).toEqual([])
+    expect(await t.edits.listPending()).toEqual([])
+    expect(await t.edits.listNotices()).toEqual([])
+  })
+})
+
+// Nutrition days and the two settings ride the same pending edits as routines.
+const nutritionDoc = () => ({
+  ...initialDoc(),
+  nutritionDays: { '2026-11-07': { kcal: 2000, protein: 150, carbs: 200, fat: 60, fiber: 25, dayType: 'rest', supps: ['s1'], _ts: 1000 } },
+  nutritionTargets: { training: { kcal: 2400, protein: 170, fiber: 30 }, rest: { kcal: 2000, protein: 160, fiber: 30 } },
+  supplements: [{ id: 's1', name: 'Creatine' }],
+  edited: { ...initialDoc().edited, nutritionTargets: 1000 },
+})
+const DAY = { kcal: 2100, protein: 160, carbs: 220, fat: 70, fiber: 30, dayType: 'training' }
+const TARGETS = { training: { kcal: 2600, protein: 180, fiber: 32 }, rest: { kcal: 2000, protein: 160, fiber: 30 } }
+
+async function nutritionSetup(doc = nutritionDoc()) {
+  const t = await setup({ server: fakeServer(doc) })
+  await t.sync.syncNow()
+  t.fresh()
+  // What the Nutrition screen saves: the value, on the base the copy gives (null when it has none).
+  const day = async (d, value, at = T0 + 1) => {
+    const held = (await t.copy.get()).state.nutritionDays?.[d]
+    const e = { kind: 'nutritionDay', key: d, baseTs: held?._ts ?? null, value, t: at }
+    await t.edits.put(e)
+    return e
+  }
+  const setting = async (k, value, at = T0 + 1) => {
+    const e = { kind: 'setting', key: k, baseTs: (await t.copy.get()).state.edited?.[k] ?? null, value, t: at }
+    await t.edits.put(e)
+    return e
+  }
+  const rows = () => t.db.getAll('SELECT kind, key, acked_at, superseded_at FROM pending_edits ORDER BY kind, key')
+  return { ...t, day, setting, rows }
+}
+
+describe('nutrition days and settings', () => {
+  test('a nutrition day edit is pushed, stamped by the server, and acked once the pulled copy holds it', async () => {
+    const t = await nutritionSetup()
+    await t.day('2026-11-08', DAY)
+    const r = await t.sync.syncNow()
+    expect(t.server.calls).toEqual(['rev', 'push', 'pull'])
+    expect(t.server.pushes[0].state).toEqual({ ...nutritionDoc(), nutritionDays: { ...nutritionDoc().nutritionDays, '2026-11-08': DAY } })
+    expect(t.server.doc.nutritionDays['2026-11-08']).toEqual({ ...DAY, _ts: expect.any(Number) })
+    expect(t.server.doc.nutritionDays['2026-11-08']._ts).toBeGreaterThan(5000)
+    expect(t.server.doc.nutritionDays['2026-11-07']).toEqual(nutritionDoc().nutritionDays['2026-11-07'])
+    expect((await t.copy.get()).state).toEqual(t.server.doc)
+    expect(await t.edits.listPending()).toEqual([])
+    expect(await t.rows()).toEqual([{ kind: 'nutritionDay', key: '2026-11-08', acked_at: iso(T0), superseded_at: null }])
+    expect(await t.edits.listNotices()).toEqual([])
+    expect(r).toMatchObject({ state: 'idle', pendingEdits: 0 })
+
+    t.fresh()
+    await t.sync.syncNow()
+    expect(t.server.calls).toEqual(['rev'])
+    expect(t.server.pushes).toHaveLength(1)
+  })
+
+  // Clearing a day writes what stays of it, never a delete: {} with no ticks, { supps } with them.
+  // The server stamps it as { _ts } or { supps, _ts }, and the pull must read that as the phone's
+  // own value: done, not changed on the web.
+  test.each([
+    ['with no ticks, as {}', {}],
+    ['with its ticks kept, as { supps }', { supps: ['s1'] }],
+  ])('a day cleared %s is pushed, stamped by the server, and acked with no notice and no second push', async (_name, cleared) => {
+    const t = await nutritionSetup()
+    await t.day('2026-11-07', cleared)
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    expect(t.server.calls).toEqual(['rev', 'push', 'pull'])
+    expect(t.server.pushes[0].state.nutritionDays['2026-11-07']).toEqual({ ...cleared, _ts: 1000 })
+    expect(t.server.doc.nutritionDays['2026-11-07']).toEqual({ ...cleared, _ts: expect.any(Number) })
+    expect(t.server.doc.nutritionDays['2026-11-07']._ts).toBeGreaterThan(5000)
+    expect((await t.copy.get()).state).toEqual(t.server.doc)
+    expect(await t.rows()).toEqual([{ kind: 'nutritionDay', key: '2026-11-07', acked_at: iso(T0), superseded_at: null }])
+    expect(await t.edits.listNotices()).toEqual([])
+
+    t.fresh()
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    expect(t.server.calls).toEqual(['rev'])
+    expect(t.server.pushes).toHaveLength(1)
+  })
+
+  test('a day edited again while its push is in flight is rebased on the landed one, not superseded, and the next sync sends it', async () => {
+    const t = await nutritionSetup()
+    const first = await t.day('2026-11-08', DAY)
+    let second
+    t.server.once.pull = [async () => {
+      second = await t.day('2026-11-08', { ...DAY, kcal: 2200 }, T0 + 2)
+      return undefined
+    }]
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 1 })
+    expect(t.server.calls).toEqual(['rev', 'push', 'pull'])
+    expect(t.server.doc.nutritionDays['2026-11-08']).toEqual({ ...first.value, _ts: expect.any(Number) })
+    const landed = t.server.doc.nutritionDays['2026-11-08']._ts
+    expect(await t.edits.listPending()).toEqual([{ kind: 'nutritionDay', key: '2026-11-08', baseTs: landed, value: second.value, sent: null, t: T0 + 2 }])
+    expect(await t.edits.listNotices()).toEqual([])
+
+    t.fresh()
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    expect(t.server.calls).toEqual(['rev', 'push', 'pull'])
+    expect(t.server.pushes[1].baseRev).toBe(4)
+    expect(t.server.pushes[1].state.nutritionDays['2026-11-08']).toEqual({ ...second.value, _ts: landed })
+    expect(t.server.doc.nutritionDays['2026-11-08']).toEqual({ ...second.value, _ts: expect.any(Number) })
+    expect(t.server.doc.nutritionDays['2026-11-08']._ts).toBeGreaterThan(landed)
+    expect(await t.edits.listPending()).toEqual([])
+    expect(await t.edits.listNotices()).toEqual([])
+  })
+
+  test('the web changing the same day first supersedes the edit as changed: nothing is pushed, the web\'s day stands', async () => {
+    const t = await nutritionSetup()
+    await t.day('2026-11-07', { ...DAY, dayType: 'rest', supps: ['s1'] })
+    t.server.webEditsDay('2026-11-07', d => ({ ...d, kcal: 1900 }))
+    const web = clone(t.server.doc.nutritionDays['2026-11-07'])
+    const r = await t.sync.syncNow()
+    expect(t.server.calls).toEqual(['rev', 'pull'])
+    expect(t.server.pushes).toEqual([])
+    expect(t.server.doc.nutritionDays['2026-11-07']).toEqual(web)
+    expect(await t.edits.listPending()).toEqual([])
+    expect(await t.edits.listNotices()).toEqual([{ kind: 'nutritionDay', key: '2026-11-07', name: '2026-11-07', reason: 'changed', at: iso(T0) }])
+    expect(r).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    expect(r.problem).toBeUndefined()
+  })
+
+  test('a 409 whose document logged the same new day supersedes the phone\'s, and no push carries it again', async () => {
+    const t = await nutritionSetup()
+    await t.day('2026-11-08', DAY)
+    t.server.once.push = [async () => { t.server.webEditsDay('2026-11-08', () => ({ ...DAY, kcal: 1800 })) }]
+    const r = await t.sync.syncNow()
+    expect(t.server.calls).toEqual(['rev', 'push'])
+    expect(t.server.pushes).toHaveLength(1)
+    expect(t.server.doc.nutritionDays['2026-11-08'].kcal).toBe(1800)
+    expect((await t.copy.get()).state).toEqual(t.server.doc)
+    expect(await t.edits.listNotices()).toEqual([{ kind: 'nutritionDay', key: '2026-11-08', name: '2026-11-08', reason: 'changed', at: iso(T0) }])
+    expect(r).toMatchObject({ state: 'idle', pendingEdits: 0 })
+
+    t.fresh()
+    await t.sync.syncNow()
+    expect(t.server.calls).toEqual(['rev'])
+  })
+
+  test('a 409 that changed another day still pushes the edit, on top of it, and both days stand', async () => {
+    const t = await nutritionSetup()
+    await t.day('2026-11-08', DAY)
+    t.server.once.push = [async () => { t.server.webEditsDay('2026-11-07', d => ({ ...d, kcal: 1900 })) }]
+    const r = await t.sync.syncNow()
+    expect(t.server.calls).toEqual(['rev', 'push', 'push', 'pull'])
+    expect(t.server.pushes[1].baseRev).toBe(4)
+    expect(t.server.doc.nutritionDays['2026-11-07'].kcal).toBe(1900)
+    expect(t.server.doc.nutritionDays['2026-11-08']).toEqual({ ...DAY, _ts: expect.any(Number) })
+    expect(await t.edits.listPending()).toEqual([])
+    expect(await t.edits.listNotices()).toEqual([])
+    expect(r).toMatchObject({ state: 'idle', pendingEdits: 0 })
+  })
+
+  test('a targets edit goes with `edited` as the copy had it; the server moves the stamp and the pull acks it', async () => {
+    const t = await nutritionSetup()
+    await t.setting('nutritionTargets', TARGETS)
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    expect(t.server.pushes[0].state).toEqual({ ...nutritionDoc(), nutritionTargets: TARGETS })
+    expect(t.server.doc.nutritionTargets).toEqual(TARGETS)
+    expect(t.server.doc.edited.nutritionTargets).toBeGreaterThan(1000)
+    expect(await t.rows()).toEqual([{ kind: 'setting', key: 'nutritionTargets', acked_at: iso(T0), superseded_at: null }])
+    expect(await t.edits.listNotices()).toEqual([])
+  })
+
+  test('targets edited again while their push is in flight are rebased on the stamp the server moved, not superseded', async () => {
+    const t = await nutritionSetup()
+    const first = await t.setting('nutritionTargets', TARGETS)
+    let second
+    t.server.once.pull = [async () => {
+      second = await t.setting('nutritionTargets', { ...TARGETS, rest: { kcal: 1900, protein: 150, fiber: 28 } }, T0 + 2)
+      return undefined
+    }]
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 1 })
+    expect(t.server.doc.nutritionTargets).toEqual(first.value)
+    const landed = t.server.doc.edited.nutritionTargets
+    expect(landed).toBeGreaterThan(1000)
+    expect(await t.edits.listPending()).toEqual([{ kind: 'setting', key: 'nutritionTargets', baseTs: landed, value: second.value, sent: null, t: T0 + 2 }])
+    expect(await t.edits.listNotices()).toEqual([])
+
+    t.fresh()
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    expect(t.server.calls).toEqual(['rev', 'push', 'pull'])
+    expect(t.server.pushes[1].state.edited.nutritionTargets).toBe(landed)
+    expect(t.server.doc.nutritionTargets).toEqual(second.value)
+    expect(t.server.doc.edited.nutritionTargets).toBeGreaterThan(landed)
+    expect(await t.edits.listPending()).toEqual([])
+    expect(await t.edits.listNotices()).toEqual([])
+  })
+
+  test('a setting the web changed first is superseded as changed, and the web\'s value stands', async () => {
+    const t = await nutritionSetup()
+    await t.setting('nutritionTargets', TARGETS)
+    await t.setting('supplements', [{ id: 's1', name: 'Creatine' }, { id: 's2', name: 'Fish oil' }])
+    t.server.webEditsSetting('supplements', [])
+    await t.sync.syncNow()
+    expect(t.server.doc.supplements).toEqual([])
+    expect(t.server.doc.nutritionTargets).toEqual(TARGETS) // the other setting still went
+    expect(await t.edits.listNotices()).toEqual([{ kind: 'setting', key: 'supplements', name: 'supplements', reason: 'changed', at: iso(T0) }])
+    expect(await t.edits.listPending()).toEqual([])
+  })
+
+  test('every kind rides one push, and one pull settles them all', async () => {
+    const t = await nutritionSetup()
+    const base = (await t.copy.get()).state.routines[0]
+    await t.edits.put(routineEdit(base, r => ({ ...r, name: 'Push A' }), T0 + 1))
+    await t.day('2026-11-08', DAY, T0 + 2)
+    await t.setting('nutritionTargets', TARGETS, T0 + 3)
+    await t.setting('supplements', [], T0 + 4)
+    await t.day('2026-11-07', { supps: ['s1'] }, T0 + 5) // a cleared day the web changes below: superseded in the same pull that settles the rest
+    t.server.webEditsDay('2026-11-07', d => ({ ...d, note: 'web' }))
+    const markSent = t.edits.markSent
+    t.edits.markSent = async items => {
+      t.server.calls.push(`markSent ${items.map(i => `${i.kind}:${i.key}@${i.baseTs}`).join(',')}`)
+      return markSent(items)
+    }
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    expect(t.server.calls).toEqual(['rev', 'pull', 'markSent routine:r1@null,nutritionDay:2026-11-08@null,setting:nutritionTargets@1000,setting:supplements@null', 'push', 'pull'])
+    expect(t.server.pushes).toHaveLength(1)
+    expect(t.server.routine('r1').name).toBe('Push A')
+    expect(t.server.doc.nutritionDays['2026-11-08']).toEqual({ ...DAY, _ts: expect.any(Number) })
+    expect(t.server.doc.nutritionDays['2026-11-07'].note).toBe('web')
+    expect(t.server.doc.nutritionTargets).toEqual(TARGETS)
+    expect(t.server.doc.supplements).toEqual([])
+    expect(await t.rows()).toEqual([
+      { kind: 'nutritionDay', key: '2026-11-07', acked_at: null, superseded_at: iso(T0) },
+      { kind: 'nutritionDay', key: '2026-11-08', acked_at: iso(T0), superseded_at: null },
+      { kind: 'routine', key: 'r1', acked_at: iso(T0), superseded_at: null },
+      { kind: 'setting', key: 'nutritionTargets', acked_at: iso(T0), superseded_at: null },
+      { kind: 'setting', key: 'supplements', acked_at: iso(T0), superseded_at: null },
+    ])
+    expect((await t.edits.listNotices()).map(n => [n.kind, n.key, n.reason])).toEqual([['nutritionDay', '2026-11-07', 'changed']])
+  })
+
+  test('status counts pending edits of every kind, paired or not', async () => {
+    const t = await setup({ paired: false })
+    await t.edits.put(routineEdit(planDoc().routines[0], setsOn(4), 1))
+    await t.edits.put({ kind: 'nutritionDay', key: '2026-11-08', baseTs: null, value: DAY, t: 2 })
+    await t.edits.put({ kind: 'setting', key: 'nutritionTargets', baseTs: null, value: TARGETS, t: 3 })
+    await t.edits.put({ kind: 'setting', key: 'supplements', baseTs: null, value: [], t: 4 })
+    expect(await t.sync.status()).toEqual({ paired: false, state: 'unpaired', pending: 0, pendingWeighIns: 0, pendingEdits: 4, pendingMeasurements: 0 })
+  })
+
+  test('acked days and settings stay acked across forget and pair: a later web change brings no notice and nothing is sent', async () => {
+    const t = await nutritionSetup()
+    await t.day('2026-11-08', DAY)
+    await t.setting('nutritionTargets', TARGETS)
+    await t.sync.syncNow()
+    expect(await t.edits.listPending()).toEqual([])
+    t.server.webEditsDay('2026-11-08', d => ({ ...d, kcal: 1500 }))
+    t.server.webEditsSetting('nutritionTargets', nutritionDoc().nutritionTargets)
+    expect(await t.sync.forget()).toMatchObject({ pendingEdits: 0 })
+    t.server.pushes.length = 0
+    expect((await t.sync.pair(BASE, 'GOODCODE')).ok).toBe(true)
+    expect(t.server.pushes).toEqual([])
+    expect(t.server.doc.nutritionDays['2026-11-08'].kcal).toBe(1500)
+    expect(t.server.doc.nutritionTargets).toEqual(nutritionDoc().nutritionTargets)
+    expect(await t.edits.listPending()).toEqual([])
+    expect(await t.edits.listNotices()).toEqual([])
+    expect(await t.rows()).toEqual([
+      { kind: 'nutritionDay', key: '2026-11-08', acked_at: iso(T0), superseded_at: null },
+      { kind: 'setting', key: 'nutritionTargets', acked_at: iso(T0), superseded_at: null },
+    ])
+  })
+
+  test('resendAll after the server went back to a backup from before the edits puts the day and the targets back', async () => {
+    const t = await nutritionSetup()
+    await t.day('2026-11-08', DAY)
+    await t.setting('nutritionTargets', TARGETS)
+    await t.sync.syncNow()
+    expect(await t.edits.listPending()).toEqual([])
+    t.server.doc = clone(nutritionDoc())
+    t.server.doc._wids = ['other']
+    t.server.webAdds(web('web-9'))
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'problem', problem: 'server-older' })
+    expect(await t.sync.resendAll()).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    expect(t.server.doc.nutritionDays['2026-11-08']).toEqual({ ...DAY, _ts: expect.any(Number) })
+    expect(t.server.doc.nutritionTargets).toEqual(TARGETS)
+    expect(await t.edits.listPending()).toEqual([])
+    expect(await t.edits.listNotices()).toEqual([])
+  })
+})
+
+// Body measurements (measurement-store.js): by day under the weigh-in typed guard
+// (measurement-ops.js). A later web edit wins with no notice, as a weigh-in's does.
+const mEntry = (d, t, fields = {}) => ({ d, t, waist: 81.28, chest: 101.6, neck: null, other: [{ id: 'c1', name: 'Calf', value: 38.1 }], futureKey: { x: [1] }, ...fields })
+const mSet = e => ({ d: e.d, op: 'set', entry: e, t: e.t })
+const measuredServer = list => fakeServer({ ...initialDoc(), measurements: list })
+
+describe('measurements', () => {
+  test('a pending measurement is pushed as it is, then acked once the pulled copy holds it; the next sync sends nothing', async () => {
+    const t = await setup()
+    const mine = mEntry('2026-11-08', T0 - 5)
+    await t.measurements.put(mSet(mine))
+    expect(await t.sync.status()).toMatchObject({ pendingMeasurements: 1 })
+    const r = await t.sync.syncNow()
+    expect(t.server.calls).toEqual(['me', 'rev', 'pull', 'push', 'pull'])
+    expect(t.server.pushes[0].state.measurements).toEqual([mine])
+    expect(JSON.stringify(t.server.doc.measurements)).toBe(JSON.stringify([mine]))
+    expect(t.server.doc.workouts).toEqual(initialDoc().workouts)
+    expect((await t.copy.get()).state.measurements).toEqual([mine])
+    expect(await t.measurements.listPending()).toEqual([])
+    expect(r).toMatchObject({ state: 'idle', pending: 0, pendingMeasurements: 0 })
+    t.fresh()
+    await t.sync.syncNow()
+    expect(t.server.calls).toEqual(['rev'])
+  })
+
+  test('a measurement the server already holds is acked without a push', async () => {
+    const held = mEntry('2026-11-08', 7)
+    const t = await setup({ server: measuredServer([held]) })
+    await t.measurements.put(mSet(structuredClone(held)))
+    await t.sync.syncNow()
+    expect(t.server.pushes).toEqual([])
+    expect(await t.measurements.listPending()).toEqual([])
+  })
+
+  test('a later web edit of the day wins silently: nothing is pushed, the row is acked, there is no notice', async () => {
+    const webs = mEntry('2026-11-08', T0 + 50, { waist: 79 })
+    for (const op of [mSet(mEntry('2026-11-08', T0 - 5)), { d: '2026-11-08', op: 'remove', t: T0 - 5, baseT: T0 - 50 }]) {
+      const t = await setup({ server: measuredServer([webs]) })
+      await t.measurements.put(op)
+      expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingMeasurements: 0 })
+      expect(t.server.pushes).toEqual([])
+      expect(t.server.doc.measurements).toEqual([webs])
+      expect(await t.measurements.listPending()).toEqual([])
+      expect(await t.edits.listNotices()).toEqual([])
+    }
+  })
+
+  test('a later web edit arriving in a 409 wins silently too, for a set and for a remove of the entry the phone saw', async () => {
+    const seen = mEntry('2026-11-08', T0 - 50)
+    const webs = mEntry('2026-11-08', T0 + 50, { waist: 79 })
+    for (const op of [mSet(mEntry('2026-11-08', T0 - 5)), { d: '2026-11-08', op: 'remove', t: T0 - 5, baseT: T0 - 50 }]) {
+      const t = await setup({ server: measuredServer([seen]) })
+      await t.sync.syncNow()
+      await t.measurements.put(op)
+      t.server.once.push = [async () => { t.server.webWritesMeasurement(webs) }]
+      expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingMeasurements: 0 })
+      expect(t.server.pushes).toHaveLength(1) // the refused attempt; nothing after the 409
+      expect(t.server.doc.measurements).toEqual([webs])
+      expect(await t.measurements.listPending()).toEqual([])
+      expect(await t.edits.listNotices()).toEqual([])
+    }
+  })
+
+  test('a 409 that changed another day still pushes the measurement, on top of it', async () => {
+    const t = await setup()
+    await t.sync.syncNow()
+    const mine = mEntry('2026-11-08', T0 - 5)
+    const webs = mEntry('2026-11-07', T0 + 50)
+    await t.measurements.put(mSet(mine))
+    t.server.once.push = [async () => { t.server.webWritesMeasurement(webs) }]
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingMeasurements: 0 })
+    expect(t.server.doc.measurements).toEqual([webs, mine])
+  })
+
+  test('a remove takes the day out and the server records it; forget and pair again bring nothing back', async () => {
+    const seen = mEntry('2026-11-08', T0 - 50)
+    const t = await setup({ server: measuredServer([seen, mEntry('2026-11-09', T0 - 40)]) })
+    await t.sync.syncNow()
+    await t.measurements.put({ d: '2026-11-08', op: 'remove', t: T0, baseT: T0 - 50 })
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingMeasurements: 0 })
+    expect(t.server.doc.measurements).toEqual([mEntry('2026-11-09', T0 - 40)])
+    expect(t.server.doc.deleted.measurements['2026-11-08']).toBeGreaterThan(T0 - 50)
+    expect(await t.measurements.listPending()).toEqual([])
+    await t.sync.forget()
+    expect(await t.sync.status()).toMatchObject({ pendingMeasurements: 1 })
+    t.server.pushes.length = 0
+    expect((await t.sync.pair(BASE, 'GOODCODE')).ok).toBe(true)
+    expect(t.server.pushes).toEqual([])
+    expect(t.server.doc.measurements).toEqual([mEntry('2026-11-09', T0 - 40)])
+    expect(await t.measurements.listPending()).toEqual([])
+  })
+
+  test('forget then pair after a web deletion: the day is not pushed back, the op is acked', async () => {
+    const t = await setup()
+    await t.measurements.put(mSet(mEntry('2026-11-08', T0 - 5)))
+    await t.sync.syncNow()
+    t.server.webDeletesMeasurement('2026-11-08', T0 + 1000)
+    await t.sync.forget()
+    t.server.pushes.length = 0
+    expect((await t.sync.pair(BASE, 'GOODCODE')).ok).toBe(true)
+    expect(t.server.pushes).toEqual([])
+    expect(t.server.doc.measurements).toEqual([])
+    expect(t.server.doc.deleted.measurements).toEqual({ '2026-11-08': T0 + 1000 })
+    expect(await t.measurements.listPending()).toEqual([])
+  })
+
+  test('push ok but the pull fails, the web deletes the day: the next sync does not re-add it', async () => {
+    const t = await setup()
+    await t.sync.syncNow()
+    await t.measurements.put(mSet(mEntry('2026-11-08', T0 - 5)))
+    t.server.once.pull = [OFFLINE]
+    expect((await t.sync.syncNow()).state).toBe('waiting')
+    expect(t.server.doc.measurements).toHaveLength(1)
+    expect(await t.measurements.listPending()).toHaveLength(1) // not acked until a stored copy holds it
+    t.server.webDeletesMeasurement('2026-11-08', T0 + 1000)
+    t.server.pushes.length = 0
+    await t.sync.syncNow()
+    expect(t.server.pushes).toEqual([])
+    expect(t.server.doc.measurements).toEqual([])
+    expect(await t.measurements.listPending()).toEqual([])
+  })
+
+  // Fix round 1. The delete names the copy's entry for the day (Task 6), or none; the store adds
+  // the phone's own set times (ownTs).
+  test('push ok, pull failed, then the owner deletes the day: the next sync removes it, on the server and the copy', async () => {
+    for (const before of [[], [mEntry('2026-11-08', 5)]]) {
+      const t = await setup({ server: measuredServer(before) })
+      await t.sync.syncNow()
+      await t.measurements.put(mSet(mEntry('2026-11-08', 10)))
+      t.server.once.pull = [OFFLINE]
+      expect((await t.sync.syncNow()).state).toBe('waiting')
+      expect(t.server.doc.measurements).toEqual([mEntry('2026-11-08', 10)])
+      const held = (await t.copy.get()).state.measurements.find(e => e.d === '2026-11-08')
+      await t.measurements.put({ d: '2026-11-08', op: 'remove', t: 20, ...(held ? { baseT: held.t } : {}) })
+      expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingMeasurements: 0 })
+      expect(t.server.doc.measurements).toEqual([])
+      expect(t.server.doc.deleted.measurements['2026-11-08']).toBeGreaterThan(10)
+      expect((await t.copy.get()).state.measurements).toEqual([])
+      expect(await t.measurements.listPending()).toEqual([])
+      // and it stays gone: forget and pair again send nothing
+      await t.sync.forget()
+      t.server.pushes.length = 0
+      expect((await t.sync.pair(BASE, 'GOODCODE')).ok).toBe(true)
+      expect(t.server.pushes).toEqual([])
+      expect(t.server.doc.measurements).toEqual([])
+    }
+  })
+
+  test('an unsent set over a web entry, then a delete naming that entry: the push takes the day out', async () => {
+    const t = await setup({ server: measuredServer([mEntry('2026-11-08', 5)]) })
+    await t.sync.syncNow()
+    await t.measurements.put(mSet(mEntry('2026-11-08', 10)))
+    await t.measurements.put({ d: '2026-11-08', op: 'remove', t: 20, baseT: 5 })
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingMeasurements: 0 })
+    expect(t.server.pushes).toHaveLength(1)
+    expect(t.server.pushes[0].state.measurements).toEqual([])
+    expect(t.server.doc.measurements).toEqual([])
+  })
+
+  test('push ok, pull failed, the web edits the day, then the owner deletes it: the web\'s later edit stands', async () => {
+    const t = await setup({ server: measuredServer([]) })
+    await t.sync.syncNow()
+    await t.measurements.put(mSet(mEntry('2026-11-08', 10)))
+    t.server.once.pull = [OFFLINE]
+    await t.sync.syncNow()
+    const webs = mEntry('2026-11-08', 15, { waist: 79 })
+    t.server.webWritesMeasurement(webs)
+    await t.measurements.put({ d: '2026-11-08', op: 'remove', t: 20 })
+    t.server.pushes.length = 0
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingMeasurements: 0 })
+    expect(t.server.pushes).toEqual([])
+    expect(t.server.doc.measurements).toEqual([webs])
+  })
+
+  // Task 6 fix round 1 (the reviewer's probe): the owner logs a day, then taps Delete; the sync
+  // pushes the set and acks it while the confirm is up. The remove, built on the copy the screen
+  // held at the tap (before the set) or on the copy read right before the put (putMeasurement),
+  // still takes the day out: the acked set's t rides on in ownTs.
+  const ownSetAckedThenDelete = async ({ webAfter = null, readAtPut }) => {
+    const older = mEntry('2026-11-01', 5)
+    const t = await setup({ server: measuredServer([older]) })
+    await t.sync.syncNow()
+    const tapCopy = await t.copy.get()
+    const mine = mEntry('2026-11-09', T0 - 5000)
+    await t.measurements.put(mSet(mine))
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingMeasurements: 0 })
+    expect(t.server.doc.measurements).toEqual([older, mine])
+    if (webAfter) t.server.webWritesMeasurement(webAfter)
+    if (readAtPut) await putMeasurement({ measurements: t.measurements, serverCopy: t.copy, bundled: {} }, { op: 'remove', d: mine.d }, { now: T0 })
+    else await t.measurements.put(measurementSaveArgs({ copy: tapCopy, bundled: {} }, { op: 'remove', d: mine.d }, { now: T0 }))
+    expect((await t.measurements.listPending())[0]).toMatchObject({ d: mine.d, op: 'remove', ownTs: [mine.t] })
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingMeasurements: 0 })
+    expect(await t.measurements.listPending()).toEqual([])
+    expect(await t.edits.listNotices()).toEqual([])
+    return t
+  }
+
+  test('the owner\'s own set, acked before the delete is put: the delete takes the day out (copy at the tap, or read at the put)', async () => {
+    for (const readAtPut of [false, true]) {
+      const t = await ownSetAckedThenDelete({ readAtPut })
+      expect(t.server.doc.measurements).toEqual([mEntry('2026-11-01', 5)])
+      expect(t.server.doc.deleted.measurements['2026-11-09']).toBeGreaterThan(T0 - 5000)
+      expect((await t.copy.get()).state.measurements).toEqual([mEntry('2026-11-01', 5)])
+    }
+  })
+
+  test('the same, with a web edit of the day after the ack (another t): the delete is superseded and the web wins', async () => {
+    const webs = mEntry('2026-11-09', T0 + 50, { waist: 79 })
+    for (const readAtPut of [false, true]) {
+      const t = await ownSetAckedThenDelete({ webAfter: webs, readAtPut })
+      expect(t.server.doc.measurements).toEqual([mEntry('2026-11-01', 5), webs])
+      expect((await t.copy.get()).state.measurements).toEqual([mEntry('2026-11-01', 5), webs])
+    }
+  })
+
+  test('pair and forget make every measurement pending again, as weigh-ins', async () => {
+    const t = await setup()
+    const mine = mEntry('2026-11-08', 5)
+    await t.measurements.put(mSet(mine))
+    await t.sync.syncNow()
+    expect(await t.measurements.listPending()).toEqual([])
+    await t.sync.forget()
+    expect((await t.measurements.listPending()).map(o => o.d)).toEqual(['2026-11-08'])
+    await t.measurements.markAcked([{ d: '2026-11-08', t: 5 }], iso(T0))
+    t.server.doc = clone(initialDoc()) // a server that never had it
+    expect((await t.sync.pair(BASE, 'GOODCODE')).ok).toBe(true)
+    expect(t.server.doc.measurements).toEqual([mine])
+    expect(await t.measurements.listPending()).toEqual([])
+  })
+
+  test('resendAll after the server went back to a backup puts an acked measurement on it again', async () => {
+    const t = await setup()
+    const backup = clone(t.server.doc)
+    const mine = mEntry('2026-11-08', T0 - 5)
+    await t.measurements.put(mSet(mine))
+    await t.sync.syncNow()
+    expect(await t.measurements.listPending()).toEqual([])
+    t.server.doc = clone(backup)
+    t.server.webAdds(web('web-9'))
+    t.server.doc._wids = ['other']
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'problem', problem: 'server-older' })
+    expect(await t.sync.resendAll()).toMatchObject({ state: 'idle', pendingMeasurements: 0 })
+    expect(t.server.doc.measurements).toEqual([mine])
+    expect(await t.measurements.listPending()).toEqual([])
+  })
+
+  test('a workout, a weigh-in and a measurement ride one push, and one pull settles them all', async () => {
+    const t = await setup({ local: [phone('p1')] })
+    await t.weighIns.put(typed('2026-11-08', 181.2, 5))
+    await t.measurements.put(mSet(mEntry('2026-11-08', 5)))
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pending: 0, pendingWeighIns: 0, pendingMeasurements: 0 })
+    expect(t.server.pushes).toHaveLength(1)
+    expect(t.serverIds()).toEqual(['web-1', 'p1'])
+    expect(t.server.doc.bodyweight).toHaveLength(1)
+    expect(t.server.doc.measurements).toEqual([mEntry('2026-11-08', 5)])
+  })
+
+  test('status counts measurement days on their own, paired or not', async () => {
+    const t = await setup({ paired: false, local: [phone('p1')] })
+    await t.measurements.put(mSet(mEntry('2026-11-08', 5)))
+    await t.measurements.put({ d: '2026-11-09', op: 'remove', t: 6, baseT: 1 })
+    await t.weighIns.put(typed('2026-11-08', 181.2, 5))
+    expect(await t.sync.status()).toEqual({ paired: false, state: 'unpaired', pending: 1, pendingWeighIns: 1, pendingEdits: 0, pendingMeasurements: 2 })
+  })
+
+  test('a store that fails is an error problem, and the fallback status counts no measurements', async () => {
+    const t = await setup()
+    t.measurements.listPending = async () => { throw new Error('disk I/O error') }
+    expect(await t.sync.syncNow()).toEqual({ paired: false, state: 'problem', problem: 'error', pending: 0, pendingWeighIns: 0, pendingEdits: 0, pendingMeasurements: 0 })
+  })
+
+  test('createSync refuses to be built without a measurements store', () => {
+    expect(() => createSync({ client: {}, credentials: {}, copy: {}, workouts: {}, weighIns: {}, edits: {}, meta: {}, now: Date.now })).toThrow(/measurements/)
   })
 })

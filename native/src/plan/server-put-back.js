@@ -70,7 +70,7 @@ export function serverPutBack(copy, edit) {
   return out
 }
 
-// Whether the API would store something other than `edit`: then it is not sent (routine-guard.js).
+// Whether the API would store something other than `edit`: then it is not sent (sync/edit-guard.js).
 export function putBackChanges(copy, edit) {
   return !same(serverPutBack(copy, edit), edit)
 }

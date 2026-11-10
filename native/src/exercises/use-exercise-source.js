@@ -4,7 +4,7 @@ import { openAppDatabase } from '../storage/database'
 import { coalesced } from '../body/coalesce'
 import { createSqliteFinishedWorkouts } from '../session/finished-workouts'
 import { createSqliteServerCopy, createSqliteSyncMeta } from '../sync/server-copy'
-import { createSqliteRoutineEdits } from '../plan/routine-edits'
+import { createSqlitePendingEdits } from '../sync/pending-edits'
 import { readScreenSource } from '../sync/source'
 import { keyed, readSourceKey } from '../sync/source-key'
 import { useFocusReload } from '../sync/use-focus-reload'
@@ -21,8 +21,8 @@ export function useExerciseSource() {
   const [source, setSource] = useState(LOADING)
 
   const [reload] = useState(() => {
-    const load = keyed(async s => `${await readSourceKey(s)}|${(await s.meta.get('server')) || ''}`, async ({ finished, serverCopy, routineEdits, meta }) => {
-      const { state } = await readScreenSource({ finished, serverCopy, routineEdits, bundled: snapshot })
+    const load = keyed(async s => `${await readSourceKey(s)}|${(await s.meta.get('server')) || ''}`, async ({ finished, serverCopy, edits, meta }) => {
+      const { state } = await readScreenSource({ finished, serverCopy, edits, bundled: snapshot })
       const server = (await meta.get('server')) || null
       return { status: 'ready', state, server, error: null }
     })
@@ -32,7 +32,7 @@ export function useExerciseSource() {
         setSource(await load({
           finished: createSqliteFinishedWorkouts(db),
           serverCopy: createSqliteServerCopy(db),
-          routineEdits: createSqliteRoutineEdits(db),
+          edits: createSqlitePendingEdits(db),
           meta: createSqliteSyncMeta(db),
           now: Date.now(),
         }))

@@ -51,13 +51,16 @@ export function canPair({ address, code, busy }) {
 export function serverLines(status) {
   const n = status?.pending ?? 0
   const days = status?.pendingWeighIns ?? 0
-  const edits = status?.pendingRoutineEdits ?? 0
+  const measured = status?.pendingMeasurements ?? 0
+  const edits = status?.pendingEdits ?? 0
   return {
     host: hostOf(status?.server) || 'Your server',
     profile: status?.profile ? status.profile : null,
     pending: n > 0 ? `${n} workout${n === 1 ? '' : 's'} waiting` : null,
     weighIns: days > 0 ? (days === 1 ? '1 weigh-in waiting' : `${days} weigh-ins waiting`) : null,
-    routineEdits: edits > 0 ? `${edits} routine edit${edits === 1 ? '' : 's'} waiting` : null,
+    measurements: measured > 0 ? (measured === 1 ? '1 measurement waiting' : `${measured} measurements waiting`) : null,
+    // routines, nutrition days and the nutrition settings, together
+    edits: edits > 0 ? `${edits} plan or nutrition edit${edits === 1 ? '' : 's'} waiting to send` : null,
     canResend: status?.problem === 'server-older',
     // Diagnostics' "Last synced" line, unless the status line already says when.
     lastSynced: !statusText(status).startsWith('Synced to '),

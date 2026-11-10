@@ -1,4 +1,5 @@
-// The Progress tab's data from one read of the server copy: the Workout tab's screen source and
+// The Progress tab's data from one read of the server copy: the Workout tab's screen source, the
+// copy as read (null when none; a save's base is read from it, never from the overlaid state) and
 // the effective weigh-in list (the copy's, or the snapshot's when unpaired, with this phone's
 // pending weigh-ins laid over it). Pure apart from the injected stores.
 import { effectiveBodyweight } from '../body/effective-bodyweight.js'
@@ -13,6 +14,6 @@ export function progressLoader() {
     // Pending rows before the copy: a sync stores the copy, then acks the rows.
     const pending = await stores.weighIns.listPending()
     const { state, copy } = await loadState(stores)
-    return { state, bodyweight: effectiveBodyweight({ copy, snapshot: stores.bundled?.state?.bodyweight, pending }) }
+    return { state, copy, bodyweight: effectiveBodyweight({ copy, snapshot: stores.bundled?.state?.bodyweight, pending }) }
   }
 }

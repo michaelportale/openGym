@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
 import { createMemoryWeighIns } from '../body/weigh-ins.js'
-import { createMemoryRoutineEdits } from '../plan/routine-edits.js'
+import { createMemoryPendingEdits } from '../sync/pending-edits.js'
 import { createMemoryFinishedWorkouts } from '../session/finished-workouts.js'
 import { progressLoader } from './progress-source.js'
 
@@ -26,6 +26,8 @@ test('paired: one read of the copy gives the state and the weigh-ins, pending on
   expect(out.state.workouts.map(w => w.id)).toEqual(['c1', 'p1'])
   expect(out.state.targetW).toBe(175)
   expect(out.bodyweight.map(e => [e.d, e.w])).toEqual([['2026-11-07', 181], ['2026-11-09', 180.4]])
+  // The copy as read, without the overlay: what a save's base is read from (Nutrition).
+  expect(out.copy).toBe(copyDoc)
 })
 
 test('unpaired: the snapshot stands in for the copy, for workouts and weigh-ins', async () => {
@@ -34,6 +36,7 @@ test('unpaired: the snapshot stands in for the copy, for workouts and weigh-ins'
   expect(log).toEqual(['copy'])
   expect(out.bodyweight).toEqual(bundled.state.bodyweight)
   expect(out.state.workouts).toEqual([])
+  expect(out.copy).toBeNull()
 })
 
 test('a weigh-in alone keeps the same state object, and changes the weigh-ins', async () => {
@@ -51,11 +54,11 @@ test('a weigh-in alone keeps the same state object, and changes the weigh-ins', 
 
 test('a pending routine edit reaches the state, and moves its key', async () => {
   const doc = { ...copyDoc, state: { ...copyDoc.state, routines: [{ id: 'r', name: 'R', ex: [] }] } }
-  const routineEdits = createMemoryRoutineEdits()
-  const stores = { finished: createMemoryFinishedWorkouts(), serverCopy: counted(doc, []), weighIns: createMemoryWeighIns(), routineEdits, bundled, now: Date.UTC(2026, 10, 9, 12) }
+  const edits = createMemoryPendingEdits()
+  const stores = { finished: createMemoryFinishedWorkouts(), serverCopy: counted(doc, []), weighIns: createMemoryWeighIns(), edits, bundled, now: Date.UTC(2026, 10, 9, 12) }
   const load = progressLoader()
   const first = await load(stores)
-  await routineEdits.put({ rid: 'r', baseTs: null, routine: { id: 'r', name: 'Mine', ex: [] }, t: 5 })
+  await edits.put({ kind: 'routine', key: 'r', baseTs: null, value: { id: 'r', name: 'Mine', ex: [] }, t: 5 })
   const second = await load(stores)
   expect(first.state.routines[0].name).toBe('R')
   expect(second.state.routines[0].name).toBe('Mine')

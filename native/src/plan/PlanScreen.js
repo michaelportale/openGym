@@ -6,7 +6,7 @@ import { color, radius, size, space, touch } from '../theme/tokens'
 import AppText from '../ui/AppText'
 import Card from '../ui/Card'
 import NativeSymbol from '../ui/NativeSymbol'
-import ScaleButton from '../ui/ScaleButton'
+import Notices from '../ui/Notices'
 import ScreenHeader from '../ui/ScreenHeader'
 import { usePushLock } from '../ui/use-push-lock'
 import { nextRoutineId } from '../workout/next-up'
@@ -14,24 +14,6 @@ import { planView } from './plan-view'
 import { usePlan } from './use-plan'
 
 const exercises = n => (n === 1 ? '1 exercise' : `${n} exercises`)
-
-// The edits that were not sent, each with Dismiss (labelled with the routine). `lines` from noticeLines.
-export function Notices({ lines, onDismiss }) {
-  return lines.map(n => (
-    <Card key={n.rid} style={styles.notice}>
-      <AppText variant="body">{n.text}</AppText>
-      <ScaleButton
-        accessibilityLabel={n.dismissLabel}
-        accessibilityHint="Hides this notice."
-        onPress={() => onDismiss(n.rid)}
-        style={styles.dismiss}
-        faceStyle={styles.dismissFace}
-      >
-        <AppText variant="label" color={color.accent}>Dismiss</AppText>
-      </ScaleButton>
-    </Card>
-  ))
-}
 
 function Schedule({ schedule }) {
   if (!schedule) return null
@@ -114,9 +96,6 @@ const styles = StyleSheet.create({
   content: { paddingBottom: space.xl },
   pad: { marginHorizontal: space.lg },
   card: { marginHorizontal: space.lg, marginBottom: space.lg, padding: space.lg, gap: space.sm },
-  notice: { marginHorizontal: space.lg, marginBottom: space.lg, padding: space.lg, gap: space.sm },
-  dismiss: { minHeight: touch.min, alignSelf: 'flex-start', justifyContent: 'center' },
-  dismissFace: { paddingHorizontal: space.sm, marginLeft: -space.sm },
   line: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   order: { minWidth: 20 },
   grow: { flexShrink: 1, flexGrow: 1 },

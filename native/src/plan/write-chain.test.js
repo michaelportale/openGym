@@ -51,7 +51,7 @@ test('the base is taken when a chain starts and kept when a newer one arrives mi
   expect(chain.from(stored('W', 'T2'))).toEqual({ routine: 'W', base: 'T2' })
 })
 
-// Routines as the store holds them: objects, compared by content (routine-guard.js sameRoutine).
+// Routines as the store holds them: objects, compared by content (sync/edit-guard.js sameRoutine).
 const R = (sets, extra = {}) => ({ id: 'a', name: 'Push', ex: [{ id: 'bench', sets }], ...extra })
 
 test('ahead stays while writes are queued, and after the last one lands until the screen renders a stored routine that holds it', async () => {

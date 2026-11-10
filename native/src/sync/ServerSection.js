@@ -64,7 +64,8 @@ export default function ServerSection({ sync, onPair }) {
             {lines.lastSynced ? <AppText variant="body" color={color.textSecondary}>{lastSyncedLine(status)}</AppText> : null}
             {lines.pending ? <AppText variant="body" color={color.textSecondary}>{lines.pending}</AppText> : null}
             {lines.weighIns ? <AppText variant="body" color={color.textSecondary}>{lines.weighIns}</AppText> : null}
-            {lines.routineEdits ? <AppText variant="body" color={color.textSecondary}>{lines.routineEdits}</AppText> : null}
+            {lines.measurements ? <AppText variant="body" color={color.textSecondary}>{lines.measurements}</AppText> : null}
+            {lines.edits ? <AppText variant="body" color={color.textSecondary}>{lines.edits}</AppText> : null}
           </Card>
           <PrimaryButton
             label={syncing ? 'Syncing…' : 'Sync now'}

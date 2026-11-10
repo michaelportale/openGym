@@ -3,7 +3,8 @@
 import { readCopy } from './server-copy.js'
 import { exercises } from '../shared/training.js'
 import { sessionState } from '../workout/history-state.js'
-import { applyRoutineEdits } from '../plan/routine-guard.js'
+import { applyEdits } from './edit-guard.js'
+import { applyMeasurementOps } from '../body/measurement-ops.js'
 
 export const cap = s => (s ? s[0].toUpperCase() + s.slice(1) : '')
 
@@ -50,25 +51,35 @@ function readable(state) {
   }
 }
 
-// Routine edits waiting to sync, laid over the routines the screen would otherwise show: the
-// guard's own `next`, so the screens show exactly what the push would send. The state it is given
-// is never changed; with no edit to show it comes back as it was.
-function withRoutineEdits(state, routineEdits) {
-  if (!routineEdits?.length) return state
-  const { next } = applyRoutineEdits(state.routines, routineEdits)
-  return next === state.routines ? state : { ...state, routines: next }
+// Edits waiting to sync (routines, nutrition days, settings), laid over the state the screen would
+// otherwise show: the guard's own document, so the screens show exactly what the push would send.
+// Unpaired, a day starts nutritionDays on the snapshot, which has none. The state it is given is
+// never changed; with no edit to show it comes back as it was.
+function withEdits(state, edits) {
+  if (!edits?.length) return state
+  return applyEdits(state, edits).state
+}
+
+// Body measurements waiting to sync (measurement-store.js ops), laid over the state's list by day
+// with its own removal records, through the push's guard (measurement-ops.js). Unpaired, a pending
+// day starts the list on the snapshot, which has none. With no op to show, the state comes back
+// as it was.
+function withMeasurements(state, ops) {
+  if (!ops?.length) return state
+  return { ...state, measurements: applyMeasurementOps(state.measurements, ops, state.deleted?.measurements).next }
 }
 
 // `example`: whether the screen shows the example snapshot, and so its banner. Never over the copy.
-export function screenSource({ copy, bundled, pending, routineEdits }) {
+// `measurements`: the pending measurement ops (may be left out: none).
+export function screenSource({ copy, bundled, pending, edits, measurements }) {
   if (!copy) {
-    const state = withRoutineEdits(sessionState(bundled, pending), routineEdits)
+    const state = withMeasurements(withEdits(sessionState(bundled, pending), edits), measurements)
     return { state, names: { ...namesFor(state), ...bundled.names }, example: bundled.example === true }
   }
   const doc = readable(copy.state)
   // Acked workouts are in the copy and it wins; only unsent ones are added.
   const held = new Set((doc.workouts ?? []).map(w => w.id))
-  const state = withRoutineEdits(sessionState({ state: doc }, (pending ?? []).filter(w => !held.has(w.id))), routineEdits)
+  const state = withMeasurements(withEdits(sessionState({ state: doc }, (pending ?? []).filter(w => !held.has(w.id))), edits), measurements)
   return { state, names: namesFor(state), example: false }
 }
 
@@ -78,20 +89,23 @@ export function screenSource({ copy, bundled, pending, routineEdits }) {
 // `copy` is the copy as read (null when there is none or it is corrupt), so nothing reads it twice.
 // A copy the screen still cannot build from reads as no copy, as a corrupt one does: `copy` is null
 // then too, since the screens show the snapshot and an edit made there is on the snapshot's base.
-// Routine edits not yet sent show over the routines (routineEdits may be left out: none).
-// The unsent workouts and routine edits are read before the copy: the sync engine stores a copy before it acks the
-// workouts that copy holds, so a sync landing between the two reads leaves each workout in one.
-export async function readScreenSource({ finished, serverCopy, bundled, routineEdits = null }) {
-  const edits = routineEdits ? await routineEdits.listPending() : []
+// Edits not yet sent, of every kind, show over the state (`edits`, the pending-edits.js
+// store, may be left out: none), and so do body measurements not yet sent (`measurements`, the
+// measurement-store.js store, may be left out: none). The unsent workouts, edits and measurements
+// are read before the copy: the sync engine stores a copy before it acks the workouts that copy
+// holds, so a sync landing between the two reads leaves each workout in one.
+export async function readScreenSource({ finished, serverCopy, bundled, edits = null, measurements = null }) {
+  const pendingEdits = edits ? await edits.listPending() : []
+  const measured = measurements ? await measurements.listPending() : []
   const workouts = await finished.list()
   const pending = await finished.listPending()
   const copy = await readCopy(serverCopy)
   if (copy) {
     try {
-      return { ...screenSource({ copy, bundled, pending, routineEdits: edits }), workouts, copy }
+      return { ...screenSource({ copy, bundled, pending, edits: pendingEdits, measurements: measured }), workouts, copy }
     } catch {
       // falls through to the bundled snapshot
     }
   }
-  return { ...screenSource({ copy: null, bundled, pending: workouts, routineEdits: edits }), workouts, copy: null }
+  return { ...screenSource({ copy: null, bundled, pending: workouts, edits: pendingEdits, measurements: measured }), workouts, copy: null }
 }

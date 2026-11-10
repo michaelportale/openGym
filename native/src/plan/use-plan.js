@@ -9,7 +9,7 @@ import { keyed, readSourceKey } from '../sync/source-key'
 import { syncAfterFinish } from '../sync/use-sync'
 import { useFocusReload } from '../sync/use-focus-reload'
 import { editBase } from './plan-view'
-import { createSqliteRoutineEdits } from './routine-edits'
+import { createSqlitePendingEdits } from '../sync/pending-edits'
 
 const LOADING = { status: 'loading', state: null, names: null, copy: null, notices: [], error: null }
 
@@ -19,7 +19,7 @@ const LOADING = { status: 'loading', state: null, names: null, copy: null, notic
 // Throws when the write fails.
 export async function savePlanEdit({ rid, routine, copyRoutine, fresh = false }) {
   const db = await openAppDatabase()
-  await createSqliteRoutineEdits(db).put({ rid, baseTs: copyRoutine?._ts ?? null, routine, t: Date.now(), fresh })
+  await createSqlitePendingEdits(db).put({ kind: 'routine', key: rid, baseTs: copyRoutine?._ts ?? null, value: routine, t: Date.now(), fresh })
   syncAfterFinish()
 }
 
@@ -40,12 +40,12 @@ export function usePlan() {
     return coalesced(async () => {
       try {
         const db = await openAppDatabase()
-        const routineEdits = createSqliteRoutineEdits(db)
-        const notices = await routineEdits.listNotices()
+        const edits = createSqlitePendingEdits(db)
+        const notices = await edits.listNotices({ kind: 'routine' })
         const built = await load({
           finished: createSqliteFinishedWorkouts(db),
           serverCopy: createSqliteServerCopy(db),
-          routineEdits,
+          edits,
           now: Date.now(),
         })
         setSource({ status: 'ready', ...built, notices, error: null })
@@ -71,7 +71,7 @@ export function usePlan() {
   const dismiss = useCallback(async rid => {
     try {
       const db = await openAppDatabase()
-      await createSqliteRoutineEdits(db).dismiss(rid)
+      await createSqlitePendingEdits(db).dismiss('routine', rid)
     } catch {
       return { ok: false }
     }

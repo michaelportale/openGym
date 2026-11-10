@@ -3,6 +3,7 @@ import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleShee
 import { color, radius, space, touch } from '../theme/tokens'
 import AppText from '../ui/AppText'
 import PrimaryButton from '../ui/PrimaryButton'
+import { SAVE_FAILED } from '../ui/messages'
 import { parseWeight, sheetButtons } from './weigh-in-view'
 
 function SecondaryButton({ label, accessibilityLabel, accessibilityHint, disabled, onPress }) {
@@ -49,7 +50,7 @@ export default function LogWeightSheet({ visible, canRemove, onSave, onRemove, o
       setText('')
       onClose()
     } else {
-      setError(result?.error ?? "Couldn't save. Try again.")
+      setError(result?.error ?? SAVE_FAILED)
     }
   }
 

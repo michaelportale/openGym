@@ -5,20 +5,18 @@ import { applyDayOps } from './day-ops'
 import { coalesced } from './coalesce'
 import { readCopy, createSqliteServerCopy } from '../sync/server-copy'
 import { keyed, readSourceKey } from '../sync/source-key'
-import { localDate } from '../session/timing'
 import { healthAfterFinish } from '../health/use-health'
 import { syncAfterFinish } from '../sync/use-sync'
 import { useFocusReload } from '../sync/use-focus-reload'
+import { todayIso } from '../ui/dates'
 import { afterWeighIn, canRemove, saveOp, todayLine } from './weigh-in-view'
 
 const CHANGED = "That weight changed. Check today's weight and try again."
 
-const today = () => localDate(Date.now(), Intl.DateTimeFormat().resolvedOptions().timeZone)
-
 // Today's effective entry (the server copy with this phone's pending ops laid over it) and
 // this phone's row for today. Today is resolved at the moment of the read.
 async function readToday(db) {
-  const d = today()
+  const d = todayIso()
   const weighIns = createSqliteWeighIns(db)
   // This phone's rows before the copy: a sync lands as store the copy, then ack the rows.
   const pending = await weighIns.listPending()
