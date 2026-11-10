@@ -249,7 +249,7 @@ proxies the API and serves exercise media, so its replacement is planned before 
 | 6 | Code done; the owner's device checklist is pending | PRs #117 and #118 |
 | 7 | Phase 7 code done, with the device checklist pending | PR #119, PR #120, PR #121 and PR #122 |
 | 8 | Code done; the owner's WHOOP setup is pending | PR #123 |
-| 9 | Prepared; the owner's TestFlight run and gym session are pending (results in [the acceptance log](2026-11-native-device-acceptance.md)) | the Phase 9 prep PR |
+| 9 | Prepared; the owner's TestFlight run and gym session are pending (results in [the acceptance log](2026-11-native-device-acceptance.md)) | PR #124 |
 | 10 | Not started | |
 
 Phase 9's device acceptance and the real gym sessions are the owner's to run, in [the acceptance log](2026-11-native-device-acceptance.md) after the checklist. The checklist is
