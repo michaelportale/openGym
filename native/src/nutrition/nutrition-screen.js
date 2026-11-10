@@ -3,6 +3,7 @@
 // Task 4 models (nutrition-view.js) and the web's lib/nutrition.js; the wording and layout are the
 // web's Nutrition.jsx and NutritionWeek.jsx, in English.
 import { nutrition } from '../shared/training.js'
+import { stampOf } from '../sync/edit-guard.js'
 import { addDays, dayLabel, shortDate } from '../ui/dates.js'
 import { num, numberText, parseNumberText } from '../ui/number-text.js'
 import { DAY_TYPE_NAME, NAME, amount, applyTargets, dayForm, recentDays, targetsForm, todayCard, weekView } from './nutrition-view.js'
@@ -10,7 +11,6 @@ import { DAY_TYPE_NAME, NAME, amount, applyTargets, dayForm, recentDays, targets
 const { NUTRIENTS, TARGET_KEYS, DAY_TYPES, nutritionDayOf, readSupplements } = nutrition
 
 const isMap = v => !!v && typeof v === 'object' && !Array.isArray(v)
-const own = (map, key) => (isMap(map) && Object.hasOwn(map, key) ? map[key] : undefined)
 const MACROS = NUTRIENTS.filter(k => k !== 'kcal')
 
 /**
@@ -157,21 +157,13 @@ export function nutritionNotices(notices, { now }) {
 
 /**
  * What a nutrition save puts in the pending-edit store (pending-edits.js put). The base is the stamp
- * the push's guard will read (edit-guard.js), from the server copy the edit was made on, or the
- * bundled snapshot when no copy is held, never from the screen's overlaid state: a day's `_ts`, a
- * setting's `edited[key]`, null when there is none. With no copy the edit is `fresh` (plan-view.js
- * editBase): made on the snapshot, it must not keep a base or sent value from an earlier paired row.
+ * the push's guard will read, read by the guard's own reader (edit-guard.js stampOf: a day's `_ts`,
+ * a setting's `edited[key]`, null when there is none), from the server copy the edit was made on, or
+ * the bundled snapshot when no copy is held, never from the screen's overlaid state. With no copy
+ * the edit is `fresh` (plan-view.js editBase): made on the snapshot, it must not keep a base or sent
+ * value from an earlier paired row.
  */
 export function nutritionSaveArgs({ copy, bundled }, { kind, key, value }, { t }) {
-  const base = copy ? copy.state : bundled?.state
-  let baseTs
-  if (kind === 'nutritionDay') {
-    const day = own(base?.nutritionDays, key)
-    baseTs = (isMap(day) ? day._ts : null) ?? null
-  } else if (kind === 'setting') {
-    baseTs = own(base?.edited, key) ?? null
-  } else {
-    throw new Error(`nutritionSaveArgs: not a nutrition kind: ${kind}`)
-  }
-  return { kind, key, baseTs, value, t, fresh: !copy }
+  if (kind !== 'nutritionDay' && kind !== 'setting') throw new Error(`nutritionSaveArgs: not a nutrition kind: ${kind}`)
+  return { kind, key, baseTs: stampOf(copy ? copy.state : bundled?.state, kind, key), value, t, fresh: !copy }
 }

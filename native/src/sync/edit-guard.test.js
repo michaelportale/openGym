@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { applyEdits, routineContent, sameRoutine } from './edit-guard.js'
+import { applyEdits, routineContent, sameRoutine, stampOf } from './edit-guard.js'
 
 // The routine edits among `edits` over a routines list (a non-array reads as empty), in 7C's shape:
 // { next, done, rebased, applied, superseded }, next being the list itself when nothing applies or
@@ -404,4 +404,19 @@ test('unsafe is the routine\'s alone: applyRoutineEdits sees only routine edits'
   const r = applyRoutineEdits(list, [pending('nutritionDay', 'a', day(2000)), pending('routine', 'a', routine('a', 'Mine'), { baseTs: 3 })])
   expect(r.applied).toEqual([{ kind: 'routine', key: 'a', t: 1 }])
   expect(r.next).toEqual([{ ...routine('a', 'Mine'), _ts: 3 }])
+})
+
+test('stampOf is the stamp the guard compares a base with, null when there is none', () => {
+  const state = { routines: [{ id: 'r', _ts: 3 }, { id: 's' }], nutritionDays: { '2026-11-09': { kcal: 1, _ts: 7 }, '2026-11-08': { kcal: 1 } }, edited: { supplements: 9 } }
+  expect(stampOf(state, 'routine', 'r')).toBe(3)
+  expect(stampOf(state, 'routine', 's')).toBeNull()
+  expect(stampOf(state, 'nutritionDay', '2026-11-09')).toBe(7)
+  expect(stampOf(state, 'nutritionDay', '2026-11-08')).toBeNull()
+  expect(stampOf(state, 'setting', 'supplements')).toBe(9)
+  expect(stampOf(state, 'setting', 'nutritionTargets')).toBeNull()
+  for (const junk of [undefined, null, [], 'x']) expect(stampOf(junk, 'nutritionDay', '2026-11-09')).toBeNull()
+  expect(stampOf(state, 'nope', 'r')).toBeNull()
+  // the same stamp the guard applies an edit on
+  const edit = { kind: 'nutritionDay', key: '2026-11-09', baseTs: stampOf(state, 'nutritionDay', '2026-11-09'), value: { kcal: 2 }, sent: null, t: 1 }
+  expect(applyEdits(state, [edit]).applied).toEqual([{ kind: 'nutritionDay', key: '2026-11-09', t: 1 }])
 })

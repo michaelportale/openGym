@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { applyEdits } from '../sync/edit-guard.js'
+import { applyEdits, stampOf } from '../sync/edit-guard.js'
 import { createMemoryPendingEdits } from '../sync/pending-edits.js'
 import {
   canAct, dayDraft, dayRows, dayValues, nutritionNotices, nutritionSaveArgs, supplementChecks,
@@ -282,6 +282,20 @@ describe('nutritionSaveArgs: the base comes from the copy (or the snapshot) with
 
   test('an unknown kind is a programming error', () => {
     expect(() => nutritionSaveArgs({ copy, bundled }, { kind: 'routine', key: 'r', value: {} }, { t: 1 })).toThrow()
+  })
+
+  // One reader for the stamp, the guard's: if the save read it another way, every edit would be
+  // superseded as changed on the web first, and no test on either side would fail (ponytail review 2).
+  test("the base is the guard's own stamp reader (edit-guard.js stampOf), for a day and a setting", () => {
+    const copies = [copy, { state: {} }, { state: { nutritionDays: [], edited: 5 } }, { state: { nutritionDays: { [TODAY]: { ...full } }, edited: {} } }]
+    for (const [kind, key] of [['nutritionDay', TODAY], ['nutritionDay', '2026-11-08'], ['setting', 'nutritionTargets'], ['setting', 'supplements']]) {
+      for (const c of copies) {
+        expect(nutritionSaveArgs({ copy: c, bundled }, { kind, key, value: {} }, { t: 1 }).baseTs).toBe(stampOf(c.state, kind, key))
+      }
+      expect(nutritionSaveArgs({ copy: null, bundled }, { kind, key, value: {} }, { t: 1 }).baseTs).toBe(stampOf(bundled.state, kind, key))
+    }
+    expect(stampOf(copy.state, 'nutritionDay', TODAY)).toBe(100)
+    expect(stampOf(copy.state, 'setting', 'supplements')).toBe(41)
   })
 
   // The base must be the stamp the guard reads, or the push supersedes the phone's own edit (a

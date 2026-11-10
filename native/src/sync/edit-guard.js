@@ -136,6 +136,14 @@ export function applyEdits(state, edits) {
   return { state: next, done, rebased, applied, superseded }
 }
 
+// The stamp the guard compares an edit's baseTs with, for one kind and key of a document (null when
+// it holds none, or for a kind with no adapter). A save takes its base from here, so the two can
+// never read the stamp differently.
+export function stampOf(state, kind, key) {
+  if (!Object.hasOwn(ADAPTERS, kind)) return null
+  return ADAPTERS[kind].read(isMap(state) ? state : {}, key)?.stamp ?? null
+}
+
 // What a document holds for one edit's kind and key, as the adapter reads it (undefined when it
 // holds none): after applyEdits, the value as it goes, on the copy's stamps.
 export function entryValue(state, kind, key) {
