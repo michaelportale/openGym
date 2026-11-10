@@ -248,7 +248,7 @@ proxies the API and serves exercise media, so its replacement is planned before 
 | 5 | Code done; the owner's device checklist is pending | PR #116 |
 | 6 | Code done; the owner's device checklist is pending | PRs #117 and #118 |
 | 7 | Phase 7 code done, with the device checklist pending | PR #119, PR #120, PR #121 and PR #122 |
-| 8 | Code done; the owner's WHOOP setup is pending | the Phase 8 PR |
+| 8 | Code done; the owner's WHOOP setup is pending | PR #123 |
 | 9-10 | Not started | |
 
 Phase 9's device acceptance and the real gym sessions are the owner's to run. The checklist is
