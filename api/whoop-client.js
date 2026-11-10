@@ -22,6 +22,7 @@
 
 export const WHOOP_BASE = 'https://api.prod.whoop.com';
 export const SCOPES = ['read:recovery', 'read:cycles', 'read:sleep', 'read:workout', 'offline'];
+const COLLECTIONS = new Set(['cycle', 'recovery', 'activity/sleep', 'activity/workout']);
 const REFRESH_EARLY_MS = 60_000;
 const TIMEOUT_MS = 20_000;
 const PAGE_LIMIT = '25';
@@ -64,35 +65,44 @@ export function createWhoopClient({ base = WHOOP_BASE, clientId, clientSecret, r
   }
   const discard = r => { r.body?.cancel().catch(() => {}); };
 
-  function complete(t) {
-    return typeof t?.access_token === 'string' && t.access_token !== ''
-      && typeof t.refresh_token === 'string' && t.refresh_token !== ''
-      && Number.isFinite(t.expires_in) && t.expires_in > 0
-      && typeof t.token_type === 'string' && t.token_type.toLowerCase() === 'bearer'
-      && typeof t.scope === 'string' && SCOPES.every(s => t.scope.split(' ').includes(s));
-  }
+  const usable = t => typeof t?.access_token === 'string' && t.access_token !== ''
+    && typeof t.refresh_token === 'string' && t.refresh_token !== ''
+    && Number.isFinite(t.expires_in) && t.expires_in > 0
+    && typeof t.token_type === 'string' && t.token_type.toLowerCase() === 'bearer';
+  const granted = t => typeof t.scope === 'string' && SCOPES.every(s => t.scope.split(' ').includes(s));
 
   /** A token grant; the validated pair is saved before its access token is returned. Callers
    * hold the uid's queue. */
   async function grant(uid, params) {
+    const refreshing = params.grant_type === 'refresh_token';
     const r = await send(tokenUrl, {
       method: 'POST',
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret, ...params }),
     });
     if (!r.ok) {
-      discard(r);
+      // The body is read only for RFC 6749 §5.2's `error`, and none of it goes further.
+      let error;
+      if (r.status === 401) { try { error = (await r.json())?.error; } catch { /* no usable body */ } }
+      else discard(r);
       if (r.status === 400 || r.status === 401) {
-        // A refused refresh token is dead for good: forget it. A refused code leaves any
-        // existing connection alone.
-        if (params.grant_type === 'refresh_token') vault.remove(uid);
+        if (refreshing) {
+          // invalid_client is this server's credentials (a wrong or rotated WHOOP_CLIENT_SECRET),
+          // not the user's grant: keep the tokens, so fixing .env recovers without a reconnect.
+          if (error === 'invalid_client') throw new WhoopError('unavailable');
+          // Anything else refused the refresh token, which is dead for good: forget it.
+          vault.remove(uid);
+        }
+        // A refused code leaves any existing connection alone.
         throw new WhoopError('reconnect');
       }
       throw new WhoopError(r.status === 429 ? 'rate_limited' : 'unavailable');
     }
     let t;
     try { t = await r.json(); } catch { throw new WhoopError('incomplete'); }
-    if (!complete(t)) throw new WhoopError('incomplete');
+    // A connection must grant every scope. A refresh is saved even with fewer: WHOOP has already
+    // killed the old refresh token, so dropping the new pair would only strand the user.
+    if (!usable(t) || (!refreshing && !granted(t))) throw new WhoopError('incomplete');
     const pair = { access_token: t.access_token, refresh_token: t.refresh_token, expires_at: now() + t.expires_in * 1000, scope: t.scope };
     vault.save(uid, pair);
     return pair.access_token;
@@ -146,6 +156,7 @@ export function createWhoopClient({ base = WHOOP_BASE, clientId, clientSecret, r
     /** Every record of a v2 collection ('cycle', 'recovery', 'activity/sleep',
      * 'activity/workout') from `start` (ISO date-time) on, following next_token. */
     async get(uid, path, { start } = {}) {
+      if (!COLLECTIONS.has(path)) throw new Error('unknown WHOOP collection');
       const records = [];
       const seen = new Set();
       let next;

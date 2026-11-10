@@ -16,18 +16,18 @@ const SECRET = 'c'.repeat(64);
 const START = '2026-10-24T00:00:00.000Z';
 const COLLECTIONS = ['cycle', 'recovery', 'activity/sleep', 'activity/workout'];
 
-async function setup(t, { wrapVault = v => v, fetch } = {}) {
+async function setup(t, { wrapVault = v => v, fetch, clientSecret } = {}) {
   const fake = await startFakeWhoop();
   t.after(() => fake.close());
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'whoop-client-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const vault = createWhoopVault({ dir, secret: SECRET });
   const clock = { t: 1_800_000_000_000 };
-  const client = createWhoopClient({
-    base: fake.url, clientId: fake.clientId, clientSecret: fake.clientSecret, redirectUri: fake.redirectUri,
+  const make = (secret = fake.clientSecret) => createWhoopClient({
+    base: fake.url, clientId: fake.clientId, clientSecret: secret, redirectUri: fake.redirectUri,
     vault: wrapVault(vault), now: () => clock.t, ...(fetch ? { fetch } : {}),
   });
-  return { fake, vault, client, clock, dir };
+  return { fake, vault, client: make(clientSecret), make, clock, dir };
 }
 
 /** A live pair in the vault for `uid`, expiring `ms` from the clock's now. */
@@ -249,11 +249,16 @@ test('no tokens at all is reconnect, without calling WHOOP', async t => {
 
 // ---- refresh failures ------------------------------------------------------------------------
 
-for (const status of [400, 401]) {
-  test(`a ${status} on refresh removes the vault entry and throws reconnect`, async t => {
+for (const [label, force] of [
+  ['400', 400],
+  ['401 with another error', 401],
+  ['401 without a body', { status: 401, body: '' }],
+  ['401 with an unparsable body', { status: 401, body: 'not json' }],
+]) {
+  test(`a ${label} on refresh removes the vault entry and throws reconnect`, async t => {
     const ctx = await setup(t);
     seed(ctx, 'u1', 0);
-    ctx.fake.force('token', status);
+    ctx.fake.force('token', force);
     await rejectsWith(ctx, ctx.client.get('u1', 'cycle'), 'reconnect');
     assert.equal(fs.existsSync(whoopFile(ctx.dir, 'u1')), false);
     assert.equal(ctx.client.connected('u1'), false);
@@ -278,12 +283,40 @@ for (const [force, code] of [[503, 'unavailable'], [500, 'unavailable'], [429, '
   });
 }
 
-test('an incomplete refresh response saves nothing', async t => {
+test('a 401 invalid_client on refresh is our misconfiguration: unavailable, tokens kept, and fixing .env recovers', async t => {
+  const ctx = await setup(t, { clientSecret: 'a-rotated-secret-the-env-still-has' });
+  const old = seed(ctx, 'u1', 0);
+  await rejectsWith(ctx, ctx.client.get('u1', 'cycle'), 'unavailable');
+  assert.equal(ctx.fake.log.find(r => r.route === 'token').form.grant_type, 'refresh_token');
+  assert.deepEqual(ctx.vault.read('u1'), old);
+  const fixed = ctx.make();
+  assert.deepEqual(await fixed.get('u1', 'cycle'), []);
+  assert.equal(ctx.fake.count.refresh_token, 2);
+  assert.notEqual(ctx.vault.read('u1').refresh_token, old.refresh_token);
+});
+
+test('a refresh that grants fewer scopes is still saved and used: the old refresh token is dead', async t => {
   const ctx = await setup(t);
   const old = seed(ctx, 'u1', 0);
   ctx.fake.override = { scope: 'offline' };
-  await rejectsWith(ctx, ctx.client.get('u1', 'cycle'), 'incomplete');
-  assert.deepEqual(ctx.vault.read('u1'), old);
+  await ctx.client.get('u1', 'cycle');
+  const saved = ctx.vault.read('u1');
+  assert.notEqual(saved.refresh_token, old.refresh_token);
+  assert.equal(saved.scope, 'offline');
+  await ctx.client.get('u1', 'recovery');
+  assert.equal(ctx.fake.count.refresh_token, 1);
+  const auths = ctx.fake.log.filter(r => r.method === 'GET').map(r => r.auth);
+  assert.deepEqual(auths, [`Bearer ${saved.access_token}`, `Bearer ${saved.access_token}`]);
+});
+
+test('a refresh response without usable token fields saves nothing', async t => {
+  const ctx = await setup(t);
+  for (const override of [{ refresh_token: undefined }, { access_token: '' }, { expires_in: 0 }, { token_type: 'mac' }, 'not json']) {
+    const old = seed(ctx, 'u1', 0);
+    ctx.fake.override = override;
+    await rejectsWith(ctx, ctx.client.get('u1', 'cycle'), 'incomplete');
+    assert.deepEqual(ctx.vault.read('u1'), old, `changed despite ${JSON.stringify(override)}`);
+  }
 });
 
 // ---- paging ----------------------------------------------------------------------------------
@@ -331,6 +364,16 @@ test('a repeated or non-string next_token throws', async t => {
   ctx.fake.page = () => ({ records: [], next_token: 7 });
   await rejectsWith(ctx, ctx.client.get('u1', 'cycle'), 'unavailable');
   assert.equal(ctx.fake.count.data, 3);
+});
+
+test('get reads only the four collections; anything else is a plain Error and no request', async t => {
+  const ctx = await setup(t);
+  seed(ctx, 'u1');
+  for (const bad of ['user/access', 'user/profile/basic', '../oauth/oauth2/token', 'cycle?limit=1', 'activity', '', undefined]) {
+    await assert.rejects(ctx.client.get('u1', bad), e => !(e instanceof WhoopError) && /collection/.test(e.message));
+  }
+  assert.equal(ctx.fake.log.length, 0);
+  for (const c of COLLECTIONS) assert.deepEqual(await ctx.client.get('u1', c), []);
 });
 
 test('a body without a records array, or not JSON, is unavailable', async t => {

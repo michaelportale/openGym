@@ -8,7 +8,8 @@
  *
  * Switches: `force(route, ...entries)` queues what the next requests on a route ('token',
  * 'data', 'revoke') get instead of the normal answer: a status number (its body carries
- * BODY_SECRET, so a test can see a client never repeats a body), 302 (a redirect to the same
+ * BODY_SECRET, so a test can see a client never repeats a body), `{ status, body }` (that status
+ * with that body; a string is sent as is, '' for none), 302 (a redirect to the same
  * collection), 'hang' (never answers), 'drop' (the socket is destroyed), or a function, which is
  * awaited and then the request is served normally (a gate). `override` replaces fields of the
  * next token response (a string replaces the whole body); `page(path, query)` replaces the
@@ -74,6 +75,7 @@ export async function startFakeWhoop({
     if (f === 'hang') return true;
     if (f === 'drop') { req.socket.destroy(); return true; }
     if (f === 302) { res.writeHead(302, { location: `${url.pathname}?redirected=1` }); res.end(); return true; }
+    if (typeof f === 'object') { send(res, f.status, f.body); return true; }
     send(res, f, { error: 'forced', detail: BODY_SECRET });
     return true;
   }
