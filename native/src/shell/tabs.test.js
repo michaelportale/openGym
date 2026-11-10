@@ -69,12 +69,13 @@ test('the app opens on Workout: the launch route is the Workout tab, and Home is
   expect(TABS.find(tab => tab.label === 'Workout').name).toBe('index')
   const read = file => readFileSync(new URL(`../app/(tabs)/${file}`, import.meta.url), 'utf8')
   expect(read('index.js')).toContain('useWorkoutHome')
-  expect(read('home.js')).toContain("destinationCopy('home')")
+  expect(read('home.js')).toContain('HomeScreen')
+  expect(read('home.js')).not.toContain('UnbuiltScreen')
 })
 
-test('plan, workout, progress and exercises are ready and home is unbuilt', () => {
-  expect(TABS.filter(tab => tab.availability === 'ready').map(tab => tab.label)).toEqual(['Plan', 'Workout', 'Progress', 'Exercises'])
-  expect(TABS.filter(tab => tab.availability === 'unbuilt').map(tab => tab.label)).toEqual(['Home'])
+test('every tab is ready', () => {
+  expect(TABS.filter(tab => tab.availability === 'ready').map(tab => tab.label)).toEqual(['Home', 'Plan', 'Workout', 'Progress', 'Exercises'])
+  expect(TABS.filter(tab => tab.availability === 'unbuilt')).toEqual([])
   expect(TABS.some(tab => tab.availability === 'preview')).toBe(false)
 })
 

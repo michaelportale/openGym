@@ -1,8 +1,5 @@
-import { destinationCopy } from '../../shell/destinations'
-import UnbuiltScreen from '../../ui/UnbuiltScreen'
-
-const copy = destinationCopy('home')
+import HomeScreen from '../../home/HomeScreen'
 
 export default function Home() {
-  return <UnbuiltScreen title={copy.title} phaseLabel={copy.phaseLabel} summary={copy.summary} status={copy.status} />
+  return <HomeScreen />
 }

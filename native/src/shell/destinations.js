@@ -1,10 +1,6 @@
-const destinations = {
-  home: {
-    title: 'Home',
-    phase: null,
-    summary: 'Workouts are logged in the Workout tab. A summary of your next session and the nutrition summary are not built here yet. Nothing on this screen is logged, saved, or synced.'
-  }
-}
+// Every tab is built, so there is no placeholder destination left. An id here would be shown by
+// UnbuiltScreen with its "Not built yet" copy.
+const destinations = {}
 
 export function destinationCopy(id) {
   if (!Object.hasOwn(destinations, id)) throw new Error(`Unknown destination: ${id}`)
