@@ -78,5 +78,27 @@ export function createApiClient({ fetch, timeoutMs = 15000 }) {
         })
       return shaped(r, j => ({ ok: true, ts: j.ts, rev: j.rev, wid: j.wid }))
     },
+    // WHOOP, read-only (api/openapi.yaml, tag whoop). The read is the server's normalised numbers;
+    // only its known fields are kept, so nothing else the body might carry is ever stored.
+    async getWhoop(base, token) {
+      const r = await call(base, '/api/whoop', { token })
+      return shaped(r, j => {
+        if (typeof j.configured !== 'boolean' || typeof j.connected !== 'boolean' || !Array.isArray(j.days) || !Array.isArray(j.workouts)) return null
+        const whoop = { configured: j.configured, connected: j.connected, fetchedAt: typeof j.fetchedAt === 'string' ? j.fetchedAt : null, stale: j.stale === true, days: j.days, workouts: j.workouts }
+        if (typeof j.error === 'string' && j.error) whoop.error = j.error
+        return { ok: true, whoop }
+      })
+    },
+    // A one-use link to open in the browser; 503 is the server with no WHOOP app set up. No body.
+    async whoopConnectLink(base, token) {
+      const r = await call(base, '/api/whoop/connect-link', { method: 'POST', token },
+        status => (status === 503 ? { ok: false, kind: 'unconfigured' } : null))
+      return shaped(r, j => (typeof j.url === 'string' && j.url ? { ok: true, url: j.url } : null))
+    },
+    // revoked: WHOOP was told; wasConnected: there was something to disconnect. No body.
+    async whoopDisconnect(base, token) {
+      const r = await call(base, '/api/whoop/disconnect', { method: 'POST', token })
+      return shaped(r, j => (j.ok === true ? { ok: true, revoked: j.revoked === true, wasConnected: j.wasConnected === true } : null))
+    },
   }
 }

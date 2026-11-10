@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test, vi } from 'vitest'
 import { createApiClient } from './api-client.js'
 
 const BASE = 'https://gym.example.com'
@@ -168,6 +168,98 @@ describe('failure handling', () => {
         expect(JSON.stringify(r)).not.toContain(TOKEN)
       }
       for (const c of calls) expect(c.url).not.toContain(TOKEN)
+    }
+  })
+})
+
+describe('WHOOP', () => {
+  const whoop = {
+    configured: true, connected: true, fetchedAt: '2026-11-09T12:00:00.000Z', stale: false,
+    days: [{ d: '2026-11-09', recovery: 67, hrv: 55.5, rhr: 52, calibrating: false, strain: 12.34 }],
+    workouts: [{ d: '2026-11-09', sport: 'running', start: '2026-11-09T07:00:00.000Z', minutes: 60, strain: 8.1, avgHr: 140, kcal: 500 }],
+  }
+
+  test('getWhoop GETs /api/whoop with the bearer and returns the read', async () => {
+    const { client, calls } = make(() => res(200, whoop))
+    expect(await client.getWhoop(BASE, TOKEN)).toEqual({ ok: true, whoop })
+    expect(calls[0].url).toBe(`${BASE}/api/whoop`)
+    expect(calls[0].init.method).toBe('GET')
+    expect(calls[0].init.headers.Authorization).toBe(`Bearer ${TOKEN}`)
+    expect(calls[0].init.body).toBeUndefined()
+  })
+
+  test('getWhoop keeps only the fields of the read, and the error when there is one', async () => {
+    const extra = { ...whoop, error: 'unavailable', access_token: 'NOT FOR THE PHONE', debug: { x: 1 } }
+    const r = await make(() => res(200, extra)).client.getWhoop(BASE, TOKEN)
+    expect(r).toEqual({ ok: true, whoop: { ...whoop, error: 'unavailable' } })
+    const plain = await make(() => res(200, { configured: false, connected: false, fetchedAt: null, stale: false, days: [], workouts: [] })).client.getWhoop(BASE, TOKEN)
+    expect(plain).toEqual({ ok: true, whoop: { configured: false, connected: false, fetchedAt: null, stale: false, days: [], workouts: [] } })
+  })
+
+  test('a getWhoop body of the wrong shape is a server error', async () => {
+    for (const body of [{}, { ...whoop, days: null }, { ...whoop, workouts: {} }, { ...whoop, configured: 'yes' }, { ...whoop, connected: 1 }, []]) {
+      expect(await make(() => res(200, body)).client.getWhoop(BASE, TOKEN)).toEqual({ ok: false, kind: 'server', status: 200 })
+    }
+  })
+
+  test('whoopConnectLink POSTs with the bearer and no body, and returns the link', async () => {
+    const url = `${BASE}/api/whoop/connect?c=abc`
+    const { client, calls } = make(() => res(200, { url }))
+    expect(await client.whoopConnectLink(BASE, TOKEN)).toEqual({ ok: true, url })
+    expect(calls[0].url).toBe(`${BASE}/api/whoop/connect-link`)
+    expect(calls[0].init.method).toBe('POST')
+    expect(calls[0].init.headers.Authorization).toBe(`Bearer ${TOKEN}`)
+    expect(calls[0].init.body).toBeUndefined()
+    expect(calls[0].init.headers['Content-Type']).toBeUndefined()
+  })
+
+  test('whoopConnectLink: 503 is not set up; a body with no link is a server error', async () => {
+    expect(await make(() => res(503, { error: 'WHOOP is not set up on this server' })).client.whoopConnectLink(BASE, TOKEN)).toEqual({ ok: false, kind: 'unconfigured' })
+    expect(await make(() => res(200, {})).client.whoopConnectLink(BASE, TOKEN)).toEqual({ ok: false, kind: 'server', status: 200 })
+    expect(await make(() => res(200, { url: '' })).client.whoopConnectLink(BASE, TOKEN)).toEqual({ ok: false, kind: 'server', status: 200 })
+  })
+
+  test('whoopDisconnect POSTs with the bearer and no body, and says what happened', async () => {
+    const { client, calls } = make(() => res(200, { ok: true, revoked: false, wasConnected: true }))
+    expect(await client.whoopDisconnect(BASE, TOKEN)).toEqual({ ok: true, revoked: false, wasConnected: true })
+    expect(calls[0].url).toBe(`${BASE}/api/whoop/disconnect`)
+    expect(calls[0].init.method).toBe('POST')
+    expect(calls[0].init.headers.Authorization).toBe(`Bearer ${TOKEN}`)
+    expect(calls[0].init.body).toBeUndefined()
+    expect(await make(() => res(200, { ok: true, revoked: true, wasConnected: true })).client.whoopDisconnect(BASE, TOKEN)).toEqual({ ok: true, revoked: true, wasConnected: true })
+    expect(await make(() => res(200, { revoked: true })).client.whoopDisconnect(BASE, TOKEN)).toEqual({ ok: false, kind: 'server', status: 200 })
+  })
+
+  test('the three calls fail the way every call does: 401, offline, 5xx, a refusal', async () => {
+    const calls = c => [c.getWhoop(BASE, TOKEN), c.whoopConnectLink(BASE, TOKEN), c.whoopDisconnect(BASE, TOKEN)]
+    for (const r of await Promise.all(calls(make(() => res(401, { error: 'not signed in' })).client))) expect(r).toEqual({ ok: false, kind: 'unauthorized' })
+    for (const r of await Promise.all(calls(make(() => { throw new TypeError('Network request failed') }).client))) expect(r).toEqual({ ok: false, kind: 'offline' })
+    for (const r of await Promise.all(calls(make(() => res(500, {})).client))) expect(r).toEqual({ ok: false, kind: 'server', status: 500 })
+    for (const r of await Promise.all(calls(make(() => res(404, { error: 'not found' })).client))) expect(r).toEqual({ ok: false, kind: 'refused', status: 404 })
+  })
+
+  test('never logs a body, a link or the token, and the token is in no result or URL', async () => {
+    const spies = ['log', 'info', 'warn', 'error', 'debug'].map(m => vi.spyOn(console, m).mockImplementation(() => {}))
+    try {
+      const marker = { ...whoop, url: `${BASE}/api/whoop/connect?c=MARK`, ok: true, revoked: true, wasConnected: true, error: TOKEN }
+      const handlers = [
+        () => res(200, marker),
+        () => res(401, { error: TOKEN }),
+        () => res(500, { error: TOKEN }),
+        () => res(503, { error: TOKEN }),
+        () => res(200, undefined),
+        () => { throw new Error(`boom Bearer ${TOKEN}`) },
+      ]
+      for (const h of handlers) {
+        const { client, calls } = make(h)
+        for (const r of [await client.getWhoop(BASE, TOKEN), await client.whoopConnectLink(BASE, TOKEN), await client.whoopDisconnect(BASE, TOKEN)]) {
+          if (!r.ok) expect(JSON.stringify(r)).not.toContain(TOKEN)
+        }
+        for (const c of calls) expect(c.url).not.toContain(TOKEN)
+      }
+      for (const spy of spies) expect(spy).not.toHaveBeenCalled()
+    } finally {
+      vi.restoreAllMocks()
     }
   })
 })
