@@ -2282,7 +2282,7 @@ paths:
         signed in, and only in the browser that pressed Continue (its `gymwhoop` cookie).
         The state is used up before anything else is checked, so a replay never reaches
         WHOOP. Every permission has to be granted. Every answer expires the `gymwhoop`
-        cookie. A connection is written to the audit log as `whoop.connect`.
+        cookie. A connection is written to the audit log as `auth.whoop.connect`.
       security: []
       parameters:
         - { name: state, in: query, required: true, schema: { type: string } }
@@ -2304,7 +2304,7 @@ paths:
         read whatever WHOOP answered, and voids its unused connect links. `revoked` is false
         when WHOOP could not be told (the owner can revoke in the WHOOP app);
         `wasConnected` is false when there was nothing to disconnect. Written to the audit
-        log as `whoop.disconnect`. No request body.
+        log as `auth.whoop.disconnect`. No request body.
       responses:
         '200':
           description: Disconnected.

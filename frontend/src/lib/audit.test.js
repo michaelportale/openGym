@@ -74,6 +74,12 @@ describe('auditLine', () => {
     expect(auditLine({ ev: 'auth.pair.ok', ok: true, name: 'Verifier' })).toEqual({ title: 'Paired a phone', sub: 'Verifier' })
   })
 
+  it('reads the WHOOP events, which carry no msg', () => {
+    expect(EVENTS).toEqual(expect.arrayContaining(['auth.whoop.connect', 'auth.whoop.disconnect']))
+    expect(auditLine({ ev: 'auth.whoop.connect', ok: true, name: 'Ann' })).toEqual({ title: 'Connected WHOOP', sub: 'Ann' })
+    expect(auditLine({ ev: 'auth.whoop.disconnect', ok: true, name: 'Ann' })).toEqual({ title: 'Disconnected WHOOP', sub: 'Ann' })
+  })
+
   it('reads the passkey and device-code events, including the refusals passed on from passkeys-store.js (#95)', () => {
     expect(EVENTS).toEqual(expect.arrayContaining(['auth.passkey.add', 'auth.passkey.remove', 'auth.link.create', 'auth.link.ok', 'auth.link.fail']))
     expect(auditLine({ ev: 'auth.link.fail', ok: false, msg: 'link-invalid' })).toEqual({ title: 'Adding a device with a code failed', sub: 'unknown caller · wrong, used or expired device code' })

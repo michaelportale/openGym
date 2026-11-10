@@ -49,6 +49,9 @@ const LABELS = {
   'auth.link.create': 'Made a one-time code for another device',
   'auth.link.ok': 'Added a device with a one-time code',
   'auth.link.fail': 'Adding a device with a code failed',
+  // WHOOP on the iPhone app's card: connected when WHOOP's sign-in comes back, or disconnected. No `msg`.
+  'auth.whoop.connect': 'Connected WHOOP',
+  'auth.whoop.disconnect': 'Disconnected WHOOP',
   // The owner's proof (current password or a passkey) for one of the changes below was refused.
   'auth.proof.fail': 'Confirming a change failed',
   // The password throttle paused an address; `msg` says for what (password, signup).

@@ -2133,7 +2133,7 @@ const whoopRoutes = {
       return whoopFailed(res, e.code === 'reconnect' || e.code === 'incomplete' ? 'refused' : 'unreachable');
     }
     whoopForget(s.uid);
-    audit(req, 'whoop.connect', { user });
+    audit(req, 'auth.whoop.connect', { user });
     whoopSay(res, 200, 'WHOOP is connected. You can close this tab and go back to openGym.');
   },
 
@@ -2151,7 +2151,7 @@ const whoopRoutes = {
       whoopVault.remove(user.id);
     }
     whoopForget(user.id);
-    audit(req, 'whoop.disconnect', { user });
+    audit(req, 'auth.whoop.disconnect', { user });
     json(res, 200, { ok: true, revoked: result.revoked, wasConnected: result.wasConnected });
   },
 };

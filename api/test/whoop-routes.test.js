@@ -853,7 +853,7 @@ test('connecting and disconnecting are in the audit log, with no token, link cod
   const h = await boot(t, { fake, env: { AUDIT_LOG: '1' } });
   const auditText = () => { try { return fs.readFileSync(path.join(h.dataDir, 'audit.log'), 'utf8'); } catch { return ''; } };
   const rows = () => auditText().split('\n').filter(Boolean).map(l => JSON.parse(l));
-  const whoopRows = () => rows().filter(r => r.ev.startsWith('whoop.')).map(r => [r.ev, r.ok, r.uid, r.name]);
+  const whoopRows = () => rows().filter(r => r.ev.startsWith('auth.whoop.')).map(r => [r.ev, r.ok, r.uid, r.name]);
 
   // A refused connect is not a connection.
   const refused = await h.stateFor(A);
@@ -864,9 +864,9 @@ test('connecting and disconnecting are in the audit log, with no token, link cod
   const state = new URL((await h.confirm(c)).headers.get('location')).searchParams.get('state');
   const code = fake.issueCode();
   assert.equal(pageText((await h.callback(state, { code })).text), SUCCESS);
-  assert.deepEqual(whoopRows(), [['whoop.connect', true, A, 'Ann']]);
+  assert.deepEqual(whoopRows(), [['auth.whoop.connect', true, A, 'Ann']]);
   assert.equal((await h.req('POST', '/api/whoop/disconnect', { as: A })).status, 200);
-  assert.deepEqual(whoopRows(), [['whoop.connect', true, A, 'Ann'], ['whoop.disconnect', true, A, 'Ann']]);
+  assert.deepEqual(whoopRows(), [['auth.whoop.connect', true, A, 'Ann'], ['auth.whoop.disconnect', true, A, 'Ann']]);
   for (const v of [c, state, code, refused]) assert.ok(!auditText().includes(v), 'no link code, state or code');
 
   // Deleting a profile is logged once, as the delete it is.
@@ -874,6 +874,6 @@ test('connecting and disconnecting are in the audit log, with no token, link cod
   const del = await h.req('POST', '/api/admin/user/delete', { headers: { Cookie: `gymsid=${token(ADMIN, 'c')}`, Origin: ORIGIN }, body: { id: B } });
   assert.equal(del.status, 200, del.text);
   assert.equal(rows().filter(r => r.ev === 'admin.user.delete').length, 1);
-  assert.deepEqual(whoopRows().filter(([, , uid]) => uid === B), [['whoop.connect', true, B, 'Bea']]);
+  assert.deepEqual(whoopRows().filter(([, , uid]) => uid === B), [['auth.whoop.connect', true, B, 'Bea']]);
   h.assertNoLeak(); // every token and the client secret, in every file under DATA_DIR: audit.log too
 });
