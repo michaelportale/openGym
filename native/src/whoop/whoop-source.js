@@ -1,8 +1,11 @@
-// When the WHOOP card asks the server, and what it shows when it can't. Only while paired, at most
-// every 10 minutes per pairing (an attempt counts, so a failed one waits too), and at once after a
-// Disconnect. After Connect every read asks until one comes back connected, for as long as the
-// link lasts (10 minutes): a read made while Safari opens must not use up the one that matters,
-// back from Safari. A good read is kept in the cache; offline, on a server error or while
+// When the WHOOP card asks the server, and what it shows when it can't. Only while paired, and per
+// pairing: a good read is held until the server's copy (its fetchedAt) is 10 minutes old, when the
+// server's own cache lapses, but at least a minute and at most 10 minutes from the read; a
+// failure, WHOOP unavailable or a stale read waits a minute; not connected or not set up is never
+// held (the server asks WHOOP nothing for it). At once after a Disconnect. After Connect every
+// read asks until one comes back connected, for as long as the link lasts (10 minutes): a read
+// made while Safari opens must not use up the one that matters, back from Safari. A good read is
+// kept in the cache; offline, on a server error or while
 // WHOOP is unavailable, the cached read for this pairing is shown instead, marked `cached` with
 // its `savedAt`. A read that says not connected or not set up clears the cache. A pairing is its
 // server and profile id (names need not be unique). A read that a Disconnect, a Forget or a new
@@ -11,6 +14,18 @@
 // (resolves { base, token, profileId } or null) and `now`. Every method resolves; none throws.
 
 export const WHOOP_EVERY_MS = 10 * 60 * 1000
+export const WHOOP_RETRY_MS = 60 * 1000
+
+// When the read that `r` answered at `t` lets the next one ask again (see the top).
+function nextAsk(t, r) {
+  if (!r?.ok) return t + WHOOP_RETRY_MS
+  const w = r.whoop
+  if (!w.configured || !w.connected) return t
+  if (w.error || w.stale) return t + WHOOP_RETRY_MS
+  const fetched = typeof w.fetchedAt === 'string' ? Date.parse(w.fetchedAt) : NaN
+  if (Number.isNaN(fetched)) return t + WHOOP_EVERY_MS
+  return Math.min(Math.max(fetched + WHOOP_EVERY_MS, t + WHOOP_RETRY_MS), t + WHOOP_EVERY_MS)
+}
 
 const UNPAIRED = Object.freeze({ paired: false, payload: null, cached: false })
 
@@ -43,7 +58,7 @@ export function isGoodRead(shown) {
 }
 
 export function createWhoopSource({ client, cache, pairing, now }) {
-  let last = null // { key, at, shown }: the last attempt, for which pairing, and what it showed
+  let last = null // { key, at, until, shown }: the last attempt, for which pairing, when the next may ask, what it showed
   let due = false // the next read asks whatever the time
   let connecting = 0 // after Connect, until this time, every read asks until one is connected
   let shownKey // the pairing whose read the caller was last given (null: unpaired)
@@ -89,7 +104,8 @@ export function createWhoopSource({ client, cache, pairing, now }) {
     const key = keyOf(p)
     const t = now()
     const mine = last && last.key === key ? last : null
-    if (!due && t >= connecting && mine && t >= mine.at && t - mine.at < WHOOP_EVERY_MS) {
+    // A clock set back since (t < at) asks: it must not hold the card for the difference.
+    if (!due && t >= connecting && mine && t >= mine.at && t < mine.until) {
       shownKey = key
       return mine.shown
     }
@@ -124,7 +140,7 @@ export function createWhoopSource({ client, cache, pairing, now }) {
       if (wrote) await quiet(() => cache.clear())
       return read({ onCached })
     }
-    last = { key, at: t, shown }
+    last = { key, at: t, until: nextAsk(t, r), shown }
     shownKey = key
     return shown
   }

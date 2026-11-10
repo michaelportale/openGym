@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { createMemoryWhoopCache } from './whoop-cache.js'
-import { createWhoopSource, isGoodRead, isServerLink, WHOOP_EVERY_MS } from './whoop-source.js'
+import { createWhoopSource, isGoodRead, isServerLink, WHOOP_EVERY_MS, WHOOP_RETRY_MS } from './whoop-source.js'
 
 const BASE = 'https://gym.example.com'
 const TOKEN = 'SECRET.TOKEN.VALUE'
@@ -78,13 +78,75 @@ describe('read', () => {
     expect(WHOOP_EVERY_MS).toBe(10 * 60 * 1000)
   })
 
-  test('a failed attempt also waits out the window', async () => {
+  test("a good read is held until the server's copy is 10 minutes old, not 10 minutes after the attempt", async () => {
     const { fake, clock, source } = setup()
-    fake.answer('getWhoop', offline, ok(read1))
-    await source.read()
-    clock.t += 60_000
-    await source.read()
+    // The server answered from its own cache, fetched from WHOOP 4 minutes ago.
+    const older = { ...read1, fetchedAt: new Date(clock.t - 4 * 60_000).toISOString() }
+    fake.answer('getWhoop', ok(older), ok(read2))
+    const first = await source.read()
+    clock.t += 6 * 60_000 - 1
+    expect(await source.read()).toBe(first)
     expect(fake.count('getWhoop')).toBe(1)
+    clock.t += 1
+    expect((await source.read()).payload).toEqual(read2)
+    expect(fake.count('getWhoop')).toBe(2)
+  })
+
+  test('a good read is held at least a minute, and at most 10 minutes from the attempt', async () => {
+    for (const [ago, heldMs] of [
+      [15 * 60_000, WHOOP_RETRY_MS], // already older than 10 minutes: a minute
+      [-30 * 60_000, WHOOP_EVERY_MS], // fetched "in the future" (the phone's clock behind): 10 minutes
+    ]) {
+      const { fake, clock, source } = setup()
+      fake.answer('getWhoop', ok({ ...read1, fetchedAt: new Date(clock.t - ago).toISOString() }))
+      await source.read()
+      clock.t += heldMs - 1
+      await source.read()
+      expect(fake.count('getWhoop'), String(ago)).toBe(1)
+      clock.t += 1
+      await source.read()
+      expect(fake.count('getWhoop'), String(ago)).toBe(2)
+    }
+    expect(WHOOP_RETRY_MS).toBe(60 * 1000)
+  })
+
+  test('a good read whose fetchedAt cannot be read is held 10 minutes from the attempt', async () => {
+    for (const fetchedAt of [null, 'not a date', 1_000]) {
+      const { fake, clock, source } = setup()
+      fake.answer('getWhoop', ok({ ...read1, fetchedAt }))
+      await source.read()
+      clock.t += WHOOP_EVERY_MS - 1
+      await source.read()
+      expect(fake.count('getWhoop'), String(fetchedAt)).toBe(1)
+      clock.t += 1
+      await source.read()
+      expect(fake.count('getWhoop'), String(fetchedAt)).toBe(2)
+    }
+  })
+
+  test('not connected, or not set up, is never held: the next read asks again', async () => {
+    for (const shape of [notConnected, unconfigured]) {
+      const { fake, clock, source } = setup()
+      fake.answer('getWhoop', ok(shape), ok(read1))
+      await source.read()
+      clock.t += 1000
+      expect((await source.read()).payload).toEqual(read1)
+      expect(fake.count('getWhoop')).toBe(2)
+    }
+  })
+
+  test('a failure, WHOOP unavailable or a stale read waits a minute, then asks', async () => {
+    for (const answer of [offline, { ok: false, kind: 'server', status: 503 }, ok(unavailable), ok({ ...read1, stale: true })]) {
+      const { fake, clock, source } = setup()
+      fake.answer('getWhoop', answer, ok(read2))
+      await source.read()
+      clock.t += WHOOP_RETRY_MS - 1
+      await source.read()
+      expect(fake.count('getWhoop')).toBe(1)
+      clock.t += 1
+      expect((await source.read()).payload).toEqual(read2)
+      expect(fake.count('getWhoop')).toBe(2)
+    }
   })
 
   test('a clock set back does not stall the card for the difference', async () => {
@@ -254,12 +316,13 @@ describe('the pairing', () => {
   })
 
   test('re-paired to the same profile inside the 10 minutes: its read again, and no blank when it next reads', async () => {
-    const { fake, clock, state, source } = setup({ pairing: A })
-    fake.answer('getWhoop', ok(notConnected))
+    const { fake, cache, clock, state, source } = setup({ pairing: A })
+    fake.answer('getWhoop', ok(read1))
     const first = await source.read({ onCached: () => {} })
     state.pairing = null
     await source.read({ onCached: () => {} })
     state.pairing = A
+    await cache.clear() // what the sync engine's pair() does
     clock.t += 1000
     expect(await source.read({ onCached: () => {} })).toBe(first)
     clock.t += WHOOP_EVERY_MS
@@ -423,20 +486,22 @@ describe('connect', () => {
     expect(fake.count('getWhoop')).toBe(4)
   })
 
-  test('the Connect window lasts as long as the link, then the 10 minutes apply again', async () => {
+  test('the Connect window lasts as long as the link, then the usual wait applies again', async () => {
     const { fake, clock, source } = setup()
     fake.answer('whoopConnectLink', { ok: true, url: `${BASE}/api/whoop/connect?c=abc` })
     await source.connectLink()
     const at = clock.t
-    fake.answer('getWhoop', ok(notConnected))
+    fake.answer('getWhoop', offline) // each failure would wait a minute, but for the window
     clock.t = at + 1000
+    await source.read()
+    clock.t = at + 2000
     await source.read()
     clock.t = at + WHOOP_EVERY_MS - 1
     await source.read()
-    expect(fake.count('getWhoop')).toBe(2)
+    expect(fake.count('getWhoop')).toBe(3)
     clock.t = at + WHOOP_EVERY_MS
     await source.read()
-    expect(fake.count('getWhoop')).toBe(2)
+    expect(fake.count('getWhoop')).toBe(3)
   })
 
   test('a disconnect ends the Connect window', async () => {
@@ -445,7 +510,7 @@ describe('connect', () => {
     await source.connectLink()
     fake.answer('whoopDisconnect', { ok: true, revoked: false, wasConnected: false })
     await source.disconnect()
-    fake.answer('getWhoop', ok(notConnected))
+    fake.answer('getWhoop', offline)
     clock.t += 1000
     await source.read()
     clock.t += 1000
@@ -455,7 +520,7 @@ describe('connect', () => {
 
   test('a link to anywhere but the paired server is refused, naming the host it is on', async () => {
     const { fake, clock, source } = setup()
-    fake.answer('getWhoop', ok(notConnected))
+    fake.answer('getWhoop', offline)
     await source.read()
     for (const [url, elsewhere] of [
       ['https://evil.example.com/api/whoop/connect?c=abc', 'evil.example.com'],
@@ -465,7 +530,7 @@ describe('connect', () => {
       fake.answer('whoopConnectLink', { ok: true, url })
       expect(await source.connectLink()).toEqual({ ok: false, elsewhere })
     }
-    // Nothing was opened, so the 10 minutes still apply.
+    // Nothing was opened, so no Connect window: the minute's wait after a failure still applies.
     clock.t += 1000
     await source.read()
     expect(fake.count('getWhoop')).toBe(1)
@@ -481,12 +546,13 @@ describe('connect', () => {
 
   test('not set up on the server says so, and the next read asks at once', async () => {
     const { fake, clock, source } = setup()
-    fake.answer('getWhoop', ok(notConnected), ok(unconfigured))
-    await source.read()
+    fake.answer('getWhoop', offline, ok(unconfigured))
+    await source.read() // a failure: it would wait a minute
     fake.answer('whoopConnectLink', { ok: false, kind: 'unconfigured' })
     expect(await source.connectLink()).toEqual({ ok: false, unconfigured: true })
     clock.t += 1000
     expect((await source.read()).payload).toEqual(unconfigured)
+    expect(fake.count('getWhoop')).toBe(2)
   })
 
   test('offline, or unpaired, is a plain failure', async () => {
@@ -559,9 +625,11 @@ describe('disconnect', () => {
     await source.disconnect()
     releasePut()
     expect(await inFlight).toEqual({ paired: true, payload: notConnected, cached: false })
-    t += 1000
-    expect(await source.read()).toEqual({ paired: true, payload: notConnected, cached: false })
     expect(fake.count('getWhoop')).toBe(2)
+    t += 1000
+    // Not connected is never held, so it asks again, and still no read1 comes back.
+    expect(await source.read()).toEqual({ paired: true, payload: notConnected, cached: false })
+    expect(fake.count('getWhoop')).toBe(3)
   })
 
   test('a read still out across a disconnect that answers not connected shows that', async () => {
