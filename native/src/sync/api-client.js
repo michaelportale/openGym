@@ -78,8 +78,9 @@ export function createApiClient({ fetch, timeoutMs = 15000 }) {
         })
       return shaped(r, j => ({ ok: true, ts: j.ts, rev: j.rev, wid: j.wid }))
     },
-    // WHOOP, read-only (api/openapi.yaml, tag whoop). The read is the server's normalised numbers;
-    // only its known fields are kept, so nothing else the body might carry is ever stored.
+    // WHOOP, read-only (api/openapi.yaml, tag whoop). The read is the server's normalised numbers.
+    // Only its known top-level fields are kept; the day and workout entries are kept, and cached,
+    // whole, as the server sent them (whoop-view.js reads only the fields it shows).
     async getWhoop(base, token) {
       const r = await call(base, '/api/whoop', { token })
       return shaped(r, j => {
