@@ -6,17 +6,16 @@ import NumberRow from '../ui/NumberRow'
 import PrimaryButton from '../ui/PrimaryButton'
 import ScaleButton from '../ui/ScaleButton'
 import TextButton from '../ui/TextButton'
+import { SAVE_FAILED } from '../ui/messages'
+import { SPOKEN_UNIT } from '../ui/number-text'
 import { announce } from '../plan/announce'
 import { nutrition } from '../shared/training'
-import { NAME, addSupplement, removeSupplement } from './nutrition-view'
+import { NAME, addSupplement, removeSupplement, unitOf } from './nutrition-view'
 import { supplementsSection, targetsDraft, targetsSave } from './nutrition-screen'
 import { newSupplementId } from './use-nutrition'
 
 const { DAY_TYPES, TARGET_KEYS, SUPPLEMENT_NAME_MAX } = nutrition
-const FAILED = "Couldn't save. Try again."
 const TYPE = { training: { title: 'Training day targets', name: 'Training day' }, rest: { title: 'Rest day targets', name: 'Rest day' } }
-const unitOf = k => (k === 'kcal' ? 'kcal' : 'g')
-const SPOKEN_UNIT = { kcal: 'kilocalories', g: 'grams' }
 
 // Targets and supplements (Nutrition.jsx TargetsAndSupplements). Mounted per open (the caller keys
 // it). `source` is the screen's { state, copy } as it is now. A supplement added or removed is saved
@@ -48,7 +47,7 @@ export default function TargetsSheet({ visible, source, onSave, onClose }) {
     setMessage(null)
     const result = await onSave({ kind: 'setting', key, value, copy })
     setBusy(false)
-    if (!result?.ok) say(FAILED)
+    if (!result?.ok) say(SAVE_FAILED)
     return !!result?.ok
   }
 

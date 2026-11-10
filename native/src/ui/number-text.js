@@ -10,5 +10,12 @@ export function parseNumberText(text, { decimal = true } = {}) {
   return whole === '' || whole === '.' ? null : Math.max(0, parseFloat(whole))
 }
 
+// A number as the web's fmtNum shows it, in English: one decimal at most, thousands separators
+// (format.js:58).
+export const num = n => (Math.round(n * 10) / 10).toLocaleString('en-US', { maximumFractionDigits: 1 })
+
+// What VoiceOver says for the unit after a number field (NumberRow).
+export const SPOKEN_UNIT = { kcal: 'kilocalories', g: 'grams', in: 'inches', '%': 'percent' }
+
 // A stored number as a field shows it to edit: as is, or empty for none.
 export const numberText = n => (typeof n === 'number' && Number.isFinite(n) ? String(n) : '')

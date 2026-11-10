@@ -1,10 +1,27 @@
 import { describe, it, expect } from 'vitest'
-import { addDays, dayLabel, isoDay, sheetDate, shortDate } from './dates.js'
+import { addDays, dayLabel, isoDay, sheetDate, shortDate, stepDay, todayIso } from './dates.js'
 
 describe('isoDay', () => {
   it("is the local calendar day of a time, zero-padded", () => {
     expect(isoDay(new Date(2026, 10, 9, 0, 1).getTime())).toBe('2026-11-09')
     expect(isoDay(new Date(2026, 0, 2, 23, 59).getTime())).toBe('2026-01-02')
+  })
+})
+
+describe('todayIso', () => {
+  it("is the day on this phone of the time given, or of now", () => {
+    expect(todayIso(new Date(2026, 10, 9, 12).getTime())).toBe('2026-11-09')
+    expect(todayIso()).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+  })
+})
+
+describe("stepDay (a day sheet's date: today or earlier)", () => {
+  it('steps back any day, forward up to today and not past it', () => {
+    const TODAY = '2026-11-09'
+    expect(stepDay(TODAY, -1, TODAY)).toBe('2026-11-08')
+    expect(stepDay('2026-11-08', 1, TODAY)).toBe(TODAY)
+    expect(stepDay(TODAY, 1, TODAY)).toBeNull()
+    expect(stepDay('bad', -1, TODAY)).toBeNull()
   })
 })
 

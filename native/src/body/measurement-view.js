@@ -3,7 +3,7 @@
 // measurements.js; the logging rules that live only in views/Measurements.jsx are restated here.
 // No I/O, no React, no clock: `now` is always passed in.
 import { measurements as M } from '../shared/training.js'
-import { dayLabel } from '../ui/dates.js'
+import { dayLabel, isoDay } from '../ui/dates.js'
 import { hasTime } from './measurement-ops.js'
 
 const UNIT = 'lb' // pounds only: measurements show in inches
@@ -124,12 +124,6 @@ export function logForm(state, d) {
   return { d, editing: Boolean(entry), fields, values }
 }
 
-const localToday = now => {
-  const t = new Date(now)
-  const p = n => String(n).padStart(2, '0')
-  return `${t.getFullYear()}-${p(t.getMonth() + 1)}-${p(t.getDate())}`
-}
-
 // The form's number for a field: 0.1-rounded, or null when empty, zero or not a number.
 const typed = v => (v == null || v === '' || !(Number(v) > 0) || !Number.isFinite(Number(v)) ? null : round1(Number(v)))
 
@@ -141,7 +135,7 @@ const typed = v => (v == null || v === '' || !(Number(v) > 0) || !Number.isFinit
 export function applyLogForm(state, d, form, { now } = {}) {
   needNow('applyLogForm', now)
   const fail = error => ({ entry: null, error })
-  if (!DAY.test(d || '') || d > localToday(now)) return fail('Choose a valid date')
+  if (!DAY.test(d || '') || d > isoDay(now)) return fail('Choose a valid date')
   const s = displayState(state)
   const shown = s.measurements.find(e => e.d === d) || null
   if (!form?.editing && shown) return fail('That date already has measurements. Edit it instead.')

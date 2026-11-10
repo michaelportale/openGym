@@ -6,16 +6,11 @@ import DayStepper from '../ui/DayStepper'
 import NumberRow from '../ui/NumberRow'
 import PrimaryButton from '../ui/PrimaryButton'
 import SecondaryButton from '../ui/SecondaryButton'
-import { sheetDate } from '../ui/dates'
+import { sheetDate, stepDay, todayIso } from '../ui/dates'
+import { SAVE_FAILED } from '../ui/messages'
+import { SPOKEN_UNIT } from '../ui/number-text'
 import { announce } from '../plan/announce'
-import { stepDay } from '../nutrition/nutrition-screen'
-import { localDate } from '../session/timing'
 import { logDraft, logSave } from './measurement-screen'
-
-const FAILED = "Couldn't save. Try again."
-const SPOKEN_UNIT = { in: 'inches', '%': 'percent' }
-// Today on this phone, read when it is asked for, as the weigh-in sheet reads it.
-const todayIso = () => localDate(Date.now(), Intl.DateTimeFormat().resolvedOptions().timeZone)
 
 // Log or edit one day's measurements (Measurements.jsx MeasurementLog), in inches; body fat in
 // percent. Mounted per open (the caller keys it). `edit` opens on day `initialDate` with its values
@@ -62,7 +57,7 @@ export default function MeasurementSheet({ visible, source, initialDate, edit, o
     if (result?.ok) {
       announce('Measurements saved')
       onClose()
-    } else say(FAILED)
+    } else say(SAVE_FAILED)
   }
 
   return (

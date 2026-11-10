@@ -7,18 +7,18 @@ import AppText from '../ui/AppText'
 import Card from '../ui/Card'
 import IconButton from '../ui/IconButton'
 import NativeSymbol from '../ui/NativeSymbol'
+import Notices from '../ui/Notices'
 import ScaleButton from '../ui/ScaleButton'
 import SecondaryButton from '../ui/SecondaryButton'
 import TextButton from '../ui/TextButton'
-import { Notices } from '../plan/PlanScreen'
+import { todayIso } from '../ui/dates'
+import { SAVE_FAILED } from '../ui/messages'
 import { announce } from '../plan/announce'
 import DaySheet from './DaySheet'
 import TargetsSheet from './TargetsSheet'
 import { clearDayValue, toggleSupplement } from './nutrition-view'
 import { canAct, dayRows, nutritionNotices, supplementChecks, todayView, weekCard } from './nutrition-screen'
-import { todayIso, useNutrition } from './use-nutrition'
-
-const FAILED = "Couldn't save. Try again."
+import { useNutrition } from './use-nutrition'
 
 function WeekStep({ label, glyph, disabled, onPress }) {
   return (
@@ -70,7 +70,7 @@ export default function NutritionScreen() {
     setMessage(null)
     const result = await n.save({ kind: 'nutritionDay', key: iso, value, copy })
     setBusy(false)
-    if (!result.ok) say(FAILED)
+    if (!result.ok) say(SAVE_FAILED)
     else if (done) announce(done)
   }
 

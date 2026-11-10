@@ -6,10 +6,11 @@ import { color, radius, space, touch } from '../../theme/tokens'
 import AppText from '../../ui/AppText'
 import Card from '../../ui/Card'
 import IconButton from '../../ui/IconButton'
+import { SAVE_FAILED } from '../../ui/messages'
+import Notices from '../../ui/Notices'
 import ScaleButton from '../../ui/ScaleButton'
 import { usePushLock } from '../../ui/use-push-lock'
 import { routeId } from '../../exercises/route-id'
-import { Notices } from '../../plan/PlanScreen'
 import SlotSheet from '../../plan/SlotSheet'
 import { announce } from '../../plan/announce'
 import { waitForPick } from '../../plan/pick-relay'
@@ -17,8 +18,6 @@ import { createWriteChain } from '../../plan/write-chain'
 import { MISSING_ROUTINE, UNSAFE_EDIT, findRoutine, indexOfKey, movedText, noticeLines, routineView, savedRoutine } from '../../plan/plan-view'
 import { moveSlot, stepInvalid, swapSlot } from '../../plan/slot-edit'
 import { usePlan } from '../../plan/use-plan'
-
-const FAILED = "Couldn't save. Try again."
 
 const slotAt = (routine, index) => {
   const slot = Array.isArray(routine?.ex) ? routine.ex[index] : null
@@ -88,8 +87,8 @@ export default function RoutineScreen() {
     announce(text)
   }
   const landed = r => {
-    if (r.ok) setMessage(m => (m === FAILED ? null : m))
-    else say(FAILED)
+    if (r.ok) setMessage(m => (m === SAVE_FAILED ? null : m))
+    else say(SAVE_FAILED)
   }
 
   // Saved at once; an unsafe result is never saved. The row's buttons carry its slot's key, and the
@@ -153,10 +152,10 @@ export default function RoutineScreen() {
     const result = await chain.commit({ routine: next, base: sheet.base, fresh: sheet.fresh })
     if (result.ok) {
       patch({ busy: false, open: false })
-      setMessage(m => (m === FAILED ? null : m))
+      setMessage(m => (m === SAVE_FAILED ? null : m))
     } else {
-      patch({ busy: false, message: FAILED })
-      announce(FAILED)
+      patch({ busy: false, message: SAVE_FAILED })
+      announce(SAVE_FAILED)
     }
   }
 

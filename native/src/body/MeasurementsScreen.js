@@ -10,16 +10,14 @@ import LineChart from '../ui/LineChart'
 import NativeSymbol from '../ui/NativeSymbol'
 import SecondaryButton from '../ui/SecondaryButton'
 import TextButton from '../ui/TextButton'
+import { todayIso } from '../ui/dates'
+import { SAVE_FAILED } from '../ui/messages'
 import { announce } from '../plan/announce'
 import { RANGES } from '../progress/chart-label'
-import { localDate } from '../session/timing'
 import MeasurementSheet from './MeasurementSheet'
 import { fieldChoices, fieldView } from './measurement-view'
 import { historyList, latestView, measurementChartLabel, pickField } from './measurement-screen'
 import { useMeasurements } from './use-measurements'
-
-const FAILED = "Couldn't save. Try again."
-const todayIso = () => localDate(Date.now(), Intl.DateTimeFormat().resolvedOptions().timeZone)
 
 // Which field the card shows (the web's SelectRow sheet): every offered field, the shown one ticked.
 function FieldSheet({ visible, choices, selected, onPick, onClose }) {
@@ -96,8 +94,8 @@ export default function MeasurementsScreen() {
           setBusy(false)
           if (result.ok) announce('Measurements deleted')
           else {
-            setMessage(FAILED)
-            announce(FAILED)
+            setMessage(SAVE_FAILED)
+            announce(SAVE_FAILED)
           }
         },
       },

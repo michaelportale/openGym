@@ -5,7 +5,6 @@ import { coalesced } from '../body/coalesce'
 import { createSqliteWeighIns } from '../body/weigh-ins'
 import { progressLoader } from '../progress/progress-source'
 import { createSqliteFinishedWorkouts } from '../session/finished-workouts'
-import { localDate } from '../session/timing'
 import { createSqlitePendingEdits } from '../sync/pending-edits'
 import { createSqliteServerCopy } from '../sync/server-copy'
 import { keyed, readSourceKey } from '../sync/source-key'
@@ -14,9 +13,6 @@ import { syncAfterFinish } from '../sync/use-sync'
 import { nutritionSaveArgs } from './nutrition-screen'
 
 const LOADING = { status: 'loading', state: null, copy: null, bodyweight: [], notices: [], error: null }
-
-// Today on this phone, read when it is asked for (a tap just after midnight lands on the new day).
-export const todayIso = () => localDate(Date.now(), Intl.DateTimeFormat().resolvedOptions().timeZone)
 
 // A new supplement's id, made the way the web makes one (format.js uid).
 export const newSupplementId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7)

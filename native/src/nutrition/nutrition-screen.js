@@ -4,8 +4,8 @@
 // web's Nutrition.jsx and NutritionWeek.jsx, in English.
 import { nutrition } from '../shared/training.js'
 import { addDays, dayLabel, shortDate } from '../ui/dates.js'
-import { numberText, parseNumberText } from '../ui/number-text.js'
-import { DAY_TYPE_NAME, NAME, amount, applyTargets, dayForm, num, recentDays, targetsForm, todayCard, weekView } from './nutrition-view.js'
+import { num, numberText, parseNumberText } from '../ui/number-text.js'
+import { DAY_TYPE_NAME, NAME, amount, applyTargets, dayForm, recentDays, targetsForm, todayCard, weekView } from './nutrition-view.js'
 
 const { NUTRIENTS, TARGET_KEYS, DAY_TYPES, nutritionDayOf, readSupplements } = nutrition
 
@@ -106,12 +106,6 @@ export function dayValues(draft) {
   const out = { dayType: draft?.dayType, note: draft?.note }
   for (const k of NUTRIENTS) out[k] = parseNumberText(draft?.text?.[k], { decimal: k !== 'kcal' })
   return out
-}
-
-/** The day sheet's date a step of n days on, or null past today (the web's max today) or for a bad date. */
-export function stepDay(iso, n, today) {
-  const next = addDays(iso, n)
-  return next && next <= today ? next : null
 }
 
 /** The targets fields as text: { training: { kcal, protein, fiber }, rest: { … } }, empty where unset. */

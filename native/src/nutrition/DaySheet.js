@@ -7,17 +7,15 @@ import NativeSymbol from '../ui/NativeSymbol'
 import NumberRow from '../ui/NumberRow'
 import PrimaryButton from '../ui/PrimaryButton'
 import SecondaryButton from '../ui/SecondaryButton'
-import { sheetDate } from '../ui/dates'
+import { sheetDate, stepDay, todayIso } from '../ui/dates'
+import { SAVE_FAILED } from '../ui/messages'
+import { SPOKEN_UNIT } from '../ui/number-text'
 import { announce } from '../plan/announce'
 import { nutrition } from '../shared/training'
-import { DAY_TYPE_NAME, NAME, applyDayForm } from './nutrition-view'
-import { dayDraft, dayValues, stepDay } from './nutrition-screen'
-import { todayIso } from './use-nutrition'
+import { DAY_TYPE_NAME, NAME, applyDayForm, unitOf } from './nutrition-view'
+import { dayDraft, dayValues } from './nutrition-screen'
 
 const { NUTRIENTS, DAY_TYPES, NOTE_MAX } = nutrition
-const FAILED = "Couldn't save. Try again."
-const SPOKEN_UNIT = { kcal: 'kilocalories', g: 'grams' }
-const unitOf = k => (k === 'kcal' ? 'kcal' : 'g')
 
 // Log or edit one day's totals (Nutrition.jsx DayLog). Mounted per open (the caller keys it).
 // `source` is the screen's { state, copy } as it is now; the draft and the copy it was made on are
@@ -64,7 +62,7 @@ export default function DaySheet({ visible, source, initialDate, onSave, onClose
     if (result?.ok) {
       announce('Day saved')
       onClose()
-    } else say(FAILED)
+    } else say(SAVE_FAILED)
   }
 
   return (

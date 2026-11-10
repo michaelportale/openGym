@@ -9,10 +9,11 @@ import NativeSymbol from '../ui/NativeSymbol'
 import PrimaryButton from '../ui/PrimaryButton'
 import ScreenHeader from '../ui/ScreenHeader'
 import TextButton from '../ui/TextButton'
+import { todayIso } from '../ui/dates'
 import { usePushLock } from '../ui/use-push-lock'
 import DaySheet from '../nutrition/DaySheet'
 import { canAct } from '../nutrition/nutrition-screen'
-import { todayIso, useNutrition } from '../nutrition/use-nutrition'
+import { useNutrition } from '../nutrition/use-nutrition'
 import { HOME_EMPTY, homeView, nutritionNoticeLink } from './home-view'
 
 // Home: the session the Workout tab would start, and today's nutrition. Next only switches to the

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { numberText, parseNumberText } from './number-text.js'
+import { num, numberText, parseNumberText } from './number-text.js'
 
 // The web's NumberField commit (frontend/src/components/ui.jsx NumberField, nullable), which every
 // nutrition and measurement field on the web goes through.
@@ -37,5 +37,16 @@ describe('numberText', () => {
     expect(numberText(null)).toBe('')
     expect(numberText(undefined)).toBe('')
     expect(numberText(NaN)).toBe('')
+  })
+})
+
+// The web's fmtNum (format.js), in English: what every nutrition and measurement value reads as.
+describe('num', () => {
+  test('one decimal at most, no stray zeros, thousands separators, a plain minus', () => {
+    expect(num(2500)).toBe('2,500')
+    expect(num(150.5)).toBe('150.5')
+    expect(num(150.04)).toBe('150')
+    expect(num(1234.56)).toBe('1,234.6')
+    expect(num(-0.47)).toBe('-0.5')
   })
 })

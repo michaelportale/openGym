@@ -4,11 +4,9 @@
 // English, with lengths in inches.
 import { readCopy } from '../sync/server-copy.js'
 import { dayLabel } from '../ui/dates.js'
-import { numberText, parseNumberText } from '../ui/number-text.js'
+import { num, numberText, parseNumberText } from '../ui/number-text.js'
 import { applyLogForm, historyRows, logForm, removeOp } from './measurement-view.js'
 
-// The web's fmtNum in English: one decimal at most, thousands separators (format.js:58).
-const num = n => (Math.round(n * 10) / 10).toLocaleString('en-US', { maximumFractionDigits: 1 })
 const valueText = (value, unit) => `${num(value)} ${unit}`
 
 /** The field the screen shows: the one chosen while it is offered, else waist, else the first (Measurements.jsx). */

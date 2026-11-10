@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest'
 import { applyEdits } from '../sync/edit-guard.js'
 import { createMemoryPendingEdits } from '../sync/pending-edits.js'
 import {
-  canAct, dayDraft, dayRows, dayValues, nutritionNotices, nutritionSaveArgs, stepDay, supplementChecks,
+  canAct, dayDraft, dayRows, dayValues, nutritionNotices, nutritionSaveArgs, supplementChecks,
   supplementsSection, targetsDraft, targetsSave, todayView, weekCard,
 } from './nutrition-screen.js'
 
@@ -158,15 +158,6 @@ describe('dayDraft / dayValues (Nutrition.jsx DayLog)', () => {
   test('the typed text back to the values applyDayForm reads: whole calories, decimal grams, empty is null', () => {
     const v = dayValues({ dayType: 'rest', note: ' hi ', text: { kcal: '2500.6', protein: '150,5', carbs: '', fat: 'x', fiber: '30' } })
     expect(v).toEqual({ dayType: 'rest', note: ' hi ', kcal: 2500, protein: 150.5, carbs: null, fat: null, fiber: 30 })
-  })
-})
-
-describe('stepDay (the day sheet\'s date: today or earlier)', () => {
-  test('back any day, forward up to today and not past it', () => {
-    expect(stepDay(TODAY, -1, TODAY)).toBe('2026-11-08')
-    expect(stepDay('2026-11-08', 1, TODAY)).toBe(TODAY)
-    expect(stepDay(TODAY, 1, TODAY)).toBeNull()
-    expect(stepDay('bad', -1, TODAY)).toBeNull()
   })
 })
 

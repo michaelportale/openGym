@@ -7,10 +7,10 @@ import Card from '../ui/Card'
 import LineChart from '../ui/LineChart'
 import ScaleButton from '../ui/ScaleButton'
 import { afterPaint } from '../ui/after-paint'
+import { todayIso } from '../ui/dates'
 import { usePushLock } from '../ui/use-push-lock'
 import WhySheet from '../workout/WhySheet'
 import { whyEntry } from '../workout/why-entry'
-import { localDate } from '../session/timing'
 import NativeSymbol from '../ui/NativeSymbol'
 import { bodyweightCard } from './bodyweight-card'
 import { chartLabel, RANGES } from './chart-label'
@@ -56,7 +56,7 @@ export default function ProgressBody({ children }) {
   const links = useMemo(() => {
     if (!state) return null
     const now = Date.now()
-    const today = localDate(now, Intl.DateTimeFormat().resolvedOptions().timeZone)
+    const today = todayIso(now)
     return { nutrition: nutritionRow(state, { today }), measurements: measurementsRow(state, { now }) }
   }, [state])
 

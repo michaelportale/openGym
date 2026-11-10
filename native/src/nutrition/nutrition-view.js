@@ -8,6 +8,7 @@
 // and any key this app doesn't know ride along untouched. Settings (`nutritionTargets`,
 // `supplements`) are whole keys: the setting models return the whole new value, or `{ error }`.
 import { nutrition } from '../shared/training.js'
+import { num } from '../ui/number-text.js'
 
 const {
   NUTRIENTS, TARGET_KEYS, canLogNutrition, isLoggedDay, nutritionDayOf, nutritionHistory,
@@ -24,9 +25,8 @@ const isMap = v => !!v && typeof v === 'object' && !Array.isArray(v)
 const rawDay = (state, iso) => (isMap(state?.nutritionDays) && isMap(state.nutritionDays[iso]) ? state.nutritionDays[iso] : null)
 const KNOWN = new Set([...NUTRIENTS, 'dayType', 'note', 'supps', '_ts'])
 
-// The web's fmtNum in English: one decimal at most, thousands separators (format.js:58).
-export const num = n => (Math.round(n * 10) / 10).toLocaleString('en-US', { maximumFractionDigits: 1 })
-export const amount = (k, v) => `${num(v)} ${k === 'kcal' ? 'kcal' : 'g'}` // Nutrition.jsx:22,29
+export const unitOf = k => (k === 'kcal' ? 'kcal' : 'g') // Nutrition.jsx:22
+export const amount = (k, v) => `${num(v)} ${unitOf(k)}` // Nutrition.jsx:29
 const line = (k, v) => `${NAME[k]} ${amount(k, v)}`
 
 // The keys of the stored day this app doesn't own, plus its stored stamp. Never a new stamp.

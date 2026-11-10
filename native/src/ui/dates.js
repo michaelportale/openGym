@@ -1,3 +1,5 @@
+import { localDate } from '../session/timing.js'
+
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 // 'YYYY-MM-DD' -> 'Nov 9, 2026' (or 'Nov 9' with year: false), from the parts so no time zone can shift the day.
@@ -24,6 +26,16 @@ export function addDays(d, n) {
   if (x.getFullYear() !== +m[1] || x.getMonth() !== +m[2] - 1 || x.getDate() !== +m[3]) return null
   x.setDate(x.getDate() + n)
   return isoDay(x.getTime())
+}
+
+// Today on this phone as 'YYYY-MM-DD', in the device's time zone, read when it is asked for (a tap
+// just after midnight lands on the new day). `now` for a caller that has already read the clock.
+export const todayIso = (now = Date.now()) => localDate(now, Intl.DateTimeFormat().resolvedOptions().timeZone)
+
+// A day sheet's date a step of n days on, or null past today (the web's max today) or for a bad date.
+export function stepDay(iso, n, today) {
+  const next = addDays(iso, n)
+  return next && next <= today ? next : null
 }
 
 // A sheet's day: the full date, marked when it is today.

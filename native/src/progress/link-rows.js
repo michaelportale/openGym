@@ -1,8 +1,9 @@
 // The two rows under Your lifts on the Progress tab, each opening its screen. Pure; `today` and
 // `now` come from the caller. Over the nutrition and measurement models.
 import { fieldChoices, fieldView } from '../body/measurement-view.js'
-import { amount, num, todayCard } from '../nutrition/nutrition-view.js'
+import { amount, todayCard } from '../nutrition/nutrition-view.js'
 import { dayLabel } from '../ui/dates.js'
+import { num } from '../ui/number-text.js'
 
 const row = (title, line) => ({ title, line, a11y: `${title}, ${line}` })
 
