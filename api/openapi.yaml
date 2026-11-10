@@ -2247,6 +2247,11 @@ paths:
         up here and becomes a one-use state (32 random bytes, 10 minutes, bound to the same
         profile), and the browser is sent to WHOOP's sign-in. Same-origin only: the CSRF
         check refuses another site's submit, and a Bearer does not exempt it.
+
+        The state is also bound to this browser: the 302 sets a fresh random cookie
+        (`gymwhoop`, `__Host-gymwhoop` on an https ORIGIN; HttpOnly, SameSite=Lax, 10
+        minutes), and the callback succeeds only with it. So WHOOP's sign-in URL, sent to
+        someone else, cannot connect their WHOOP to this profile.
       security: []
       parameters:
         - { name: c, in: query, required: true, schema: { type: string }, description: The link code. }
@@ -2255,6 +2260,7 @@ paths:
           description: To WHOOP's authorize page, with the state.
           headers:
             Location: { schema: { type: string } }
+            Set-Cookie: { schema: { type: string }, description: The browser binding for this state. }
         '400': { $ref: '#/components/responses/WhoopPage' }
         '403':
           description: Not submitted from this origin.
@@ -2269,9 +2275,10 @@ paths:
       operationId: whoopCallback
       summary: Where WHOOP sends the browser back
       description: |
-        No session: the tokens are stored for the profile the state was made for, whoever's
-        browser lands here. The state is used up before the code is exchanged, so a replay
-        never reaches WHOOP. Every permission has to be granted.
+        No session: the tokens are stored for the profile the state was made for, whoever is
+        signed in, and only in the browser that pressed Continue (its `gymwhoop` cookie).
+        The state is used up before anything else is checked, so a replay never reaches
+        WHOOP. Every permission has to be granted.
       security: []
       parameters:
         - { name: state, in: query, required: true, schema: { type: string } }
@@ -3179,8 +3186,9 @@ components:
         go back to openGym." A failure says "WHOOP wasn't connected: <reason>. Go back to
         openGym and try again.", where the reason is `the link expired` (400: unknown,
         expired, or the instance is not configured), `the link was already used` (400),
-        `WHOOP said no` (400: consent refused, the code refused, or a permission left out) or
-        `WHOOP couldn't be reached` (502).
+        `WHOOP said no` (400: consent refused, the code refused, or a permission left out),
+        `it didn't come back to the browser it started in` (400: the callback came without
+        the cookie Continue set) or `WHOOP couldn't be reached` (502).
       content:
         text/html:
           schema: { type: string }

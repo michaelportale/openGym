@@ -1919,12 +1919,12 @@ function whoopPurge(table) {
   const now = Date.now();
   for (const [k, v] of table) if (v.exp <= now) table.delete(k);
 }
-function whoopMint(table, uid) {
+function whoopMint(table, uid, extra) {
   whoopPurge(table);
   const mine = [...table].filter(([, v]) => v.uid === uid);
   for (const [k] of mine.slice(0, Math.max(0, mine.length - WHOOP_LINKS_PER_UID + 1))) table.delete(k);
   const key = crypto.randomBytes(32).toString('base64url');
-  table.set(key, { uid, exp: Date.now() + WHOOP_LINK_MS, used: false });
+  table.set(key, { ...extra, uid, exp: Date.now() + WHOOP_LINK_MS, used: false });
   return key;
 }
 // The entry; or 'used' for one already taken (kept, marked, until it expires, so the page can say
@@ -1941,6 +1941,20 @@ function whoopTake(table, key) {
   return e;
 }
 const whoopDrop = uid => { for (const t of [whoopCodes, whoopStates]) for (const [k, v] of t) if (v.uid === uid) t.delete(k); };
+// The state is also bound to the browser that pressed Continue (RFC 6749 §10.12): Continue sets a
+// fresh random value in a cookie and keeps it with the state, and the callback wants it back.
+// Without that, whoever holds a link could press Continue themselves (no browser needed), send
+// the WHOOP sign-in URL it redirects to to someone else, and get that person's WHOOP on their own
+// profile, the confirmation page never shown. HttpOnly, ten minutes, Lax (WHOOP's redirect back
+// is a top-level GET, which Lax sends it on), and __Host- where the cookie is Secure, like the
+// session cookie, so a sibling subdomain cannot plant one.
+const WHOOP_COOKIE = SECURE ? '__Host-gymwhoop' : 'gymwhoop';
+function whoopSameBrowser(req, nonce) {
+  const vals = cookieValues(req, WHOOP_COOKIE);
+  if (!vals.length || vals.some(v => v !== vals[0])) return false;
+  const a = Buffer.from(vals[0]), b = Buffer.from(nonce);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
 
 // The last good read per profile, { payload, fetchedAt }, fresh for ten minutes and served stale
 // after that while WHOOP is rate-limiting or down; and the one fetch in flight per profile.
@@ -2002,6 +2016,7 @@ function whoopFetch(uid) {
 const WHOOP_REASONS = {
   expired: 'the link expired', used: 'the link was already used',
   refused: 'WHOOP said no', unreachable: "WHOOP couldn't be reached",
+  browser: "it didn't come back to the browser it started in",
 };
 const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const WHOOP_STYLE = 'body{font:18px/1.45 system-ui,sans-serif;margin:2.5rem 1.25rem;max-width:32rem}button{font:inherit;padding:.6rem 1.5rem}';
@@ -2071,17 +2086,24 @@ const whoopRoutes = {
     const c = whoopTake(whoopCodes, new URL(req.url, 'http://x').searchParams.get('c'));
     if (typeof c === 'string') return whoopFailed(res, c);
     if (!whoop || !activeUser(c.uid)) return whoopFailed(res, 'expired');
-    res.writeHead(302, { Location: whoop.authorizeUrl(whoopMint(whoopStates, c.uid)), 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' });
+    // Fresh every time, never one already in the browser: a planted value is replaced, not adopted.
+    const nonce = crypto.randomBytes(32).toString('base64url');
+    res.writeHead(302, {
+      Location: whoop.authorizeUrl(whoopMint(whoopStates, c.uid, { nonce })), 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer',
+      'Set-Cookie': `${WHOOP_COOKIE}=${nonce}; Path=/; Max-Age=${WHOOP_LINK_MS / 1000}; HttpOnly;${SECURE} SameSite=Lax`,
+    });
     res.end();
   },
 
-  // No session either: whoever's browser lands here, the tokens go to the state's uid. The state
-  // is used up before the code is exchanged, so a replay never reaches WHOOP.
+  // No session either: the tokens go to the state's uid, whoever is signed in here, and only in
+  // the browser that pressed Continue. The state is used up before anything else is checked, so
+  // a replay never reaches WHOOP.
   'GET /api/whoop/callback': async (req, res) => {
     const q = new URL(req.url, 'http://x').searchParams;
     const s = whoopTake(whoopStates, q.get('state'));
     if (typeof s === 'string') return whoopFailed(res, s);
     if (!whoop || !activeUser(s.uid)) return whoopFailed(res, 'expired');
+    if (!whoopSameBrowser(req, s.nonce)) return whoopFailed(res, 'browser');
     const code = q.get('code');
     if (q.has('error') || !code) return whoopFailed(res, 'refused');
     try {

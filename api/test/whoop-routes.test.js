@@ -123,16 +123,27 @@ async function boot(t, { fake, env: extra = {} } = {}) {
     },
     /** The page the link opens. */
     page: c => h.req('GET', `/api/whoop/connect?c=${encodeURIComponent(c)}`),
-    /** Continue on that page, as the browser submits its form. */
-    confirm: (c, headers = SAME_ORIGIN) => h.req('POST', `/api/whoop/connect?c=${encodeURIComponent(c)}`, { form: true, headers }),
+    /** The cookie Continue last set: the one browser most tests walk the flow in. */
+    jar: '',
+    /** Continue on that page, as the browser submits its form; keeps the cookie it sets. */
+    async confirm(c, headers = SAME_ORIGIN) {
+      const r = await h.req('POST', `/api/whoop/connect?c=${encodeURIComponent(c)}`, { form: true, headers });
+      const set = r.headers.get('set-cookie');
+      if (set) h.jar = set.split(';')[0];
+      return r;
+    },
     /** The state in the WHOOP URL that Continue sends the browser to. */
     async stateFor(uid) {
       const r = await h.confirm(await h.link(uid));
       assert.equal(r.status, 302, r.text);
       return new URL(r.headers.get('location')).searchParams.get('state');
     },
-    callback: (state, { code = fake.issueCode(), headers } = {}) =>
-      h.req('GET', `/api/whoop/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`, { headers }),
+    /** WHOOP sending the browser back: by default the browser that pressed Continue (`jar`). */
+    callback: (state, { code = fake.issueCode(), headers = {}, jar = h.jar, query } = {}) => {
+      const cookie = [jar, headers.Cookie].filter(Boolean).join('; ');
+      return h.req('GET', `/api/whoop/callback?${query ?? `code=${encodeURIComponent(code)}`}&state=${encodeURIComponent(state)}`,
+        { headers: { ...headers, ...(cookie ? { Cookie: cookie } : {}) } });
+    },
     /** Link, page, Continue and callback for `uid`, as Safari would walk it. */
     async connect(uid) {
       const c = await h.link(uid);
@@ -293,6 +304,52 @@ test('Continue: refused from another site, a redirect to WHOOP from the page its
   h.assertNoLeak();
 });
 
+test("WHOOP's URL alone is not enough: the callback must come back to the browser that pressed Continue", async t => {
+  const fake = await whoopFake(t);
+  const h = await boot(t, { fake });
+  const BROWSER = failed("it didn't come back to the browser it started in");
+
+  // Someone presses Continue on their own link (curl will do) and sends the WHOOP URL it
+  // redirects to to someone else, who signs in at WHOOP: their browser never pressed Continue.
+  const go = await h.confirm(await h.link(A));
+  const set = go.headers.get('set-cookie');
+  assert.match(set, /^gymwhoop=[A-Za-z0-9_-]{43}; Path=\/; Max-Age=600; HttpOnly; SameSite=Lax$/, set);
+  const state = new URL(go.headers.get('location')).searchParams.get('state');
+  const other = await h.callback(state, { jar: '' });
+  assert.equal(other.status, 400);
+  assert.equal(pageText(other.text), BROWSER);
+  assert.equal(fake.count.authorization_code, 0, 'never exchanged');
+  assert.equal(fs.existsSync(h.file(A)), false, 'nothing stored for the sender');
+  assert.equal(pageText((await h.callback(state)).text), USED, 'and the state is gone, even for the right browser');
+
+  // A different browser's cookie, or two of them, will not do either.
+  for (const jar of [`gymwhoop=${crypto.randomBytes(32).toString('base64url')}`, 'gymwhoop=short', '']) {
+    const s = await h.stateFor(A);
+    const right = h.jar;
+    const wrong = jar === '' ? `${right}; gymwhoop=${crypto.randomBytes(32).toString('base64url')}` : jar;
+    assert.equal(pageText((await h.callback(s, { jar: wrong })).text), BROWSER, wrong);
+  }
+  assert.equal(fake.count.authorization_code, 0);
+
+  // The browser that pressed Continue connects.
+  const s = await h.stateFor(A);
+  assert.equal(pageText((await h.callback(s)).text), SUCCESS);
+
+  // Each Continue sets a fresh value: a cookie planted before it is replaced, not adopted.
+  const planted = `gymwhoop=${crypto.randomBytes(32).toString('base64url')}`;
+  const again = await h.confirm(await h.link(B), { ...SAME_ORIGIN, Cookie: planted });
+  assert.notEqual(again.headers.get('set-cookie').split(';')[0], planted);
+  h.assertNoLeak();
+});
+
+test('on an https ORIGIN the browser cookie is __Host- and Secure', async t => {
+  const fake = await whoopFake(t);
+  const h = await boot(t, { fake, env: { ORIGIN: 'https://gym.test', RP_ID: 'gym.test' } });
+  const go = await h.confirm(await h.link(A), { Origin: 'https://gym.test', 'Sec-Fetch-Site': 'same-origin' });
+  assert.equal(go.status, 302, go.text);
+  assert.match(go.headers.get('set-cookie'), /^__Host-gymwhoop=[A-Za-z0-9_-]{43}; Path=\/; Max-Age=600; HttpOnly; Secure; SameSite=Lax$/);
+});
+
 test('a state is good once, unknown values expire, and nothing from the query is echoed', async t => {
   const fake = await whoopFake(t);
   const h = await boot(t, { fake });
@@ -339,7 +396,7 @@ test('the callback: WHOOP refusing, a denied consent and WHOOP down each give th
 
   // The person said no at WHOOP: WHOOP comes back with error=access_denied and no code.
   let state = await h.stateFor(A);
-  let r = await h.req('GET', `/api/whoop/callback?error=access_denied&error_description=nope&state=${state}`);
+  let r = await h.callback(state, { query: 'error=access_denied&error_description=nope' });
   assert.equal(r.status, 400);
   assert.equal(pageText(r.text), SAID_NO);
   assert.equal(pageText((await h.callback(state)).text), USED, 'the state went with the refusal');
