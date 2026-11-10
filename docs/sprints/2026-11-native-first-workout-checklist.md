@@ -178,7 +178,7 @@ Phase 7C. Do it before the wipe, with the Release build. The phone is unpaired h
 
 ## 14. Nutrition, Measurements and Home
 
-Phase 7D. Do it before the wipe, with the Release build. The phone is unpaired here, and the bundled snapshot carries no nutrition and no measurements, so both start empty and nothing reaches a server; the checks that sync them to the web come after the cutover, in step 16. What you log here stays on the phone, waiting to sync, until the wipe in step 16 deletes the app and discards it, so do not pair the real server before the wipe: pairing would send it. Open the Progress tab.
+Phase 7D. Do it before the wipe, with the Release build. Installing the 7D build discards any Plan edits made on an earlier build and not yet sent: the Plan tab stops showing them and they are never sent. That is harmless here, because they were unpaired test edits, and nothing migrates them. The phone is unpaired here, and the bundled snapshot carries no nutrition and no measurements, so both start empty and nothing reaches a server; the checks that sync them to the web come after the cutover, in step 16. What you log here stays on the phone, waiting to sync, until the wipe in step 16 deletes the app and discards it, so do not pair the real server before the wipe: pairing would send it. Open the Progress tab.
 
 Two limits to know before you start. The day sheets (Nutrition and Measurements) step one day at a time with the ‹ and › buttons: there is no date picker, so logging a day weeks back takes many taps. And editing a measurement keeps its date; to move one to another day, delete it and log it again.
 
