@@ -64,7 +64,7 @@ invite-only and give yourself an admin dashboard; see
 ### How do I update?
 
 `git pull --ff-only && docker compose up -d --build`. Your data is untouched. See
-[updating](SELF_HOSTING.md#8-updating).
+[updating](SELF_HOSTING.md#9-updating).
 
 Then update the app on every device that syncs. A phone still on v1.3.9 or older keeps syncing,
 and the server looks after what that phone doesn't know about, but it can't always tell what the

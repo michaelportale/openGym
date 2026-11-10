@@ -13,6 +13,7 @@ import { createSqliteServerCopy, createSqliteSyncMeta } from './server-copy.js'
 import { readScreenSource, screenSource } from './source.js'
 import { editBase, findRoutine } from '../plan/plan-view.js'
 import { SERVER_WID_KEEP, createSync } from './sync-engine.js'
+import { createSqliteWhoopCache } from '../whoop/whoop-cache.js'
 
 const BASE = 'https://gym.example.com'
 const T0 = Date.parse('2026-11-09T09:14:00.000Z')
@@ -208,6 +209,7 @@ async function setup({ server = fakeServer(), paired = true, local = [] } = {}) 
   const weighIns = createSqliteWeighIns(db)
   const edits = createSqlitePendingEdits(db)
   const measurements = createSqliteMeasurements(db)
+  const whoopCache = createSqliteWhoopCache(db)
   let clock = T0
   const now = () => clock
   for (const w of local) await workouts.put(w)
@@ -216,12 +218,15 @@ async function setup({ server = fakeServer(), paired = true, local = [] } = {}) 
     await meta.set('server', BASE)
     await meta.set('profile', 'Mo')
   }
-  const sync = createSync({ client: server.client, credentials, copy, workouts, weighIns, edits, measurements, meta, now })
+  const sync = createSync({ client: server.client, credentials, copy, workouts, weighIns, edits, measurements, whoopCache, meta, now })
   const pendingIds = async () => (await workouts.listPending()).map(w => w.id)
   const serverIds = () => server.doc.workouts.map(w => w.id)
   const fresh = () => { server.calls.length = 0 }
-  return { sync, server, db, keychain, credentials, copy, meta, workouts, weighIns, edits, measurements, now, pendingIds, serverIds, fresh, tick: ms => { clock += ms } }
+  return { sync, server, db, keychain, credentials, copy, meta, workouts, weighIns, edits, measurements, whoopCache, now, pendingIds, serverIds, fresh, tick: ms => { clock += ms } }
 }
+
+// A WHOOP read the card kept for the current pairing (whoop-cache.js).
+const WHOOP_ROW = { server: BASE, profileId: 'u1', savedAt: T0, payload: { configured: true, connected: true, fetchedAt: iso(T0), stale: false, days: [{ d: '2026-11-09', recovery: 67, hrv: 55, rhr: 52, calibrating: false, strain: 12 }], workouts: [] } }
 
 function gate() {
   let open
@@ -336,6 +341,7 @@ describe('syncNow', () => {
     await t.sync.syncNow()
     await t.workouts.put(phone('p2'))
     const before = await t.copy.get()
+    await t.whoopCache.put(WHOOP_ROW)
     if (method === 'rev') t.server.tokens.clear()
     else t.server.once.push = [UNAUTHORIZED]
 
@@ -346,6 +352,8 @@ describe('syncNow', () => {
     expect((await t.workouts.list()).map(w => w.id)).toEqual(['p1', 'p2'])
     expect(await t.pendingIds()).toEqual(['p2'])
     expect(await t.copy.get()).toEqual(before)
+    // Only the token goes: the WHOOP read stays, as the copy does, until a Forget or a new pairing.
+    expect(await t.whoopCache.get()).toEqual(WHOOP_ROW)
 
     t.fresh()
     expect(await t.sync.syncNow()).toMatchObject({ state: 'unpaired', problem: 'unpaired' })
@@ -716,6 +724,34 @@ describe('pair', () => {
     expect(await t.pendingIds()).toEqual([])
   })
 
+  test('pairing clears the WHOOP read the phone kept, and stores the profile id beside its name', async () => {
+    const t = await setup({ local: [phone('p1')] })
+    await t.sync.syncNow()
+    await t.whoopCache.put(WHOOP_ROW)
+    expect(await t.sync.pair('gym.example.com', 'GOODCODE')).toEqual({ ok: true })
+    expect(await t.whoopCache.get()).toBeNull()
+    expect(await t.meta.get('profileId')).toBe('u1')
+    expect(await t.meta.get('profile')).toBe('Mo')
+  })
+
+  test('a pairing that fails before anything is stored keeps the WHOOP read', async () => {
+    const t = await setup({ local: [phone('p1')] })
+    await t.sync.syncNow()
+    await t.whoopCache.put(WHOOP_ROW)
+    t.server.once.redeem = [{ ok: false, kind: 'invalid-code' }]
+    expect((await t.sync.pair('gym.example.com', 'NEWCODE')).ok).toBe(false)
+    expect(await t.whoopCache.get()).toEqual(WHOOP_ROW)
+  })
+
+  test('a WHOOP read that cannot be cleared fails the pairing, as a copy that cannot be cleared does', async () => {
+    const t = await setup({ paired: false })
+    await t.whoopCache.put(WHOOP_ROW)
+    t.db.failNext(/DELETE FROM whoop_cache/, new Error('disk'))
+    const r = await t.sync.pair('gym.example.com', 'GOODCODE')
+    expect(r.ok).toBe(false)
+    expect(t.keychain.m.size).toBe(0)
+  })
+
   test('pairing stores the token, server and profile, forgets the old server, resends every workout, then syncs', async () => {
     const t = await setup({ paired: false, local: [phone('p1'), phone('p2')] })
     // left over from an earlier server
@@ -752,6 +788,7 @@ describe('pair', () => {
     expect(at('token.clear')).toBeLessThan(at('meta.set server'))
     expect(at('meta.set server')).toBeLessThan(at('token.set'))
     expect(at('meta.set profile')).toBeLessThan(at('token.set'))
+    expect(at('meta.set profileId')).toBeLessThan(at('token.set'))
   })
 
   test('pairing while a sync runs still syncs with the new pairing afterwards', async () => {
@@ -861,6 +898,15 @@ describe('forget', () => {
     expect(await health.state.get('on')).toBe('1')
   })
 
+  test('clears the WHOOP read the phone kept, so no recovery or HRV stays after unpairing', async () => {
+    const t = await setup({ local: [phone('p1')] })
+    await t.sync.syncNow()
+    await t.whoopCache.put(WHOOP_ROW)
+    await t.sync.forget()
+    expect(await t.whoopCache.get()).toBeNull()
+    expect(await t.db.getAll('SELECT COUNT(*) AS n FROM whoop_cache')).toEqual([{ n: 0 }])
+  })
+
   test('clears the token, the copy and the meta, makes every workout pending, and keeps them all', async () => {
     const t = await setup({ local: [phone('p1')] })
     await t.sync.syncNow()
@@ -868,7 +914,7 @@ describe('forget', () => {
     expect(await t.sync.forget()).toEqual({ paired: false, state: 'unpaired', pending: 1, pendingWeighIns: 0, pendingEdits: 0, pendingMeasurements: 0 })
     expect(t.keychain.m.size).toBe(0)
     expect(await t.copy.get()).toBeNull()
-    for (const k of ['server', 'profile', 'lastSyncedAt', 'problem', 'lastRenewedAt']) expect(await t.meta.get(k)).toBeNull()
+    for (const k of ['server', 'profile', 'profileId', 'lastSyncedAt', 'problem', 'lastRenewedAt']) expect(await t.meta.get(k)).toBeNull()
     expect((await t.workouts.list()).map(w => w.id)).toEqual(['p1'])
     expect(await t.pendingIds()).toEqual(['p1'])
     expect(await t.sync.status()).toEqual({ paired: false, state: 'unpaired', pending: 1, pendingWeighIns: 0, pendingEdits: 0, pendingMeasurements: 0 })
@@ -1156,6 +1202,10 @@ describe('weigh-ins and the server record', () => {
     }]
     expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingWeighIns: 0 })
     expect(t.server.doc.bodyweight).toEqual([{ d: '2026-11-08', w: 178, t: T0 - 2 }])
+  })
+
+  test('createSync refuses to be built without the WHOOP cache', () => {
+    expect(() => createSync({ client: {}, credentials: {}, copy: {}, workouts: {}, weighIns: {}, edits: {}, measurements: {}, meta: {}, now: Date.now })).toThrow(/whoopCache/)
   })
 
   test('createSync refuses to be built without a weigh-in store', () => {

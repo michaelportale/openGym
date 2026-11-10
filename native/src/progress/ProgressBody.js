@@ -17,6 +17,7 @@ import { chartLabel, RANGES } from './chart-label'
 import { measurementsRow, nutritionRow } from './link-rows'
 import { liftRows, liftsCard, strengthRows } from './lifts-view'
 import { useProgress } from './use-progress'
+import WhoopCard from '../whoop/WhoopCard'
 
 const BW_WHY = whyEntry('bodyweight-trend')
 const E1RM_WHY = whyEntry('e1rm-formula')
@@ -35,8 +36,9 @@ const LINKS = [
   { key: 'measurements', title: 'Measurements', href: '/measurements', hint: 'Opens Body measurements.' },
 ]
 
-// The Progress tab's cards, under the header, then the Nutrition and Measurements rows. `children`
-// is the Today line and Log weight button, which sit at the top of the Body weight card.
+// The Progress tab's cards, under the header, then the Nutrition and Measurements rows, then the
+// WHOOP card. `children` is the Today line and Log weight button, which sit at the top of the Body
+// weight card.
 export default function ProgressBody({ children }) {
   const router = useRouter()
   const guard = usePushLock()
@@ -169,6 +171,8 @@ export default function ProgressBody({ children }) {
           )
         })}
       </Card>
+
+      <WhoopCard />
 
       <WhySheet visible={why === 'bw'} entry={BW_WHY} onClose={() => setWhy(null)} />
       <WhySheet visible={why === 'e1rm'} entry={E1RM_WHY} onClose={() => setWhy(null)} />

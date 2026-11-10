@@ -9,6 +9,7 @@ import { activeSessionController } from '../session/use-active-session.js'
 import { createCredentials } from './credentials.js'
 import { createSqliteServerCopy, createSqliteSyncMeta } from './server-copy.js'
 import { createSync } from './sync-engine.js'
+import { createMemoryWhoopCache } from '../whoop/whoop-cache.js'
 
 const T0 = Date.parse('2026-11-07T15:00:00.000Z')
 const BASE = 'https://gym.example.com'
@@ -51,7 +52,7 @@ test.each(SQLITE_DRIVERS)('%s: a sync that runs mid-session leaves the journal a
   }
   const finished = createSqliteFinishedWorkouts(db)
   await finished.put({ id: 'old-1', d: '2026-11-01', start: T0, end: T0 + 1000, name: 'Pull', entries: [], vol: 0 })
-  const sync = createSync({ client, credentials, copy: createSqliteServerCopy(db), workouts: finished, weighIns: createMemoryWeighIns(), edits: createMemoryPendingEdits(), measurements: createMemoryMeasurements(), meta, now: () => T0 + 120_000 })
+  const sync = createSync({ client, credentials, copy: createSqliteServerCopy(db), workouts: finished, weighIns: createMemoryWeighIns(), edits: createMemoryPendingEdits(), measurements: createMemoryMeasurements(), whoopCache: createMemoryWhoopCache(), meta, now: () => T0 + 120_000 })
 
   const status = await sync.syncNow()
   expect(status).toMatchObject({ paired: true, state: 'idle' })

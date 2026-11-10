@@ -65,8 +65,9 @@ info:
     comes back in the body, never as a cookie), and any request a Bearer token
     authenticates by itself: a valid session token, with no session cookie beside it, on
     any route but the sign-in ones — the four passkey routes, the password and reset-code
-    routes and the two device-link routes, which act on the credential in the body, never
-    on a Bearer. A cross-origin request whose Bearer does not buy the exemption is refused
+    routes, the two device-link routes and the WHOOP connect page's Continue
+    (`POST /api/whoop/connect`), which act on the credential in the request, never on a
+    Bearer. A cross-origin request whose Bearer does not buy the exemption is refused
     before any handler runs: `401 {"error":"not signed in"}` when that Bearer does not
     verify and is the only credential (a paired app whose token was revoked or expired),
     the 403 otherwise.
@@ -101,11 +102,16 @@ info:
       `MEDIA_VIDEO_MAX_SEC` (60), `MEDIA_GC_GRACE_DAYS` (14), `MEDIA_UPLOADS_PER_HOUR` (600
       per profile), `MEDIA_MIN_FREE_MB` (512, `0` = no floor): photos and videos of custom
       exercises (tag `media`). Every MB here is 2^20 bytes.
+    - `WHOOP_CLIENT_ID` and `WHOOP_CLIENT_SECRET` (both unset by default): the instance's
+      WHOOP app (tag `whoop`). Its redirect URI is `<ORIGIN>/api/whoop/callback`. With
+      either unset, `GET /api/whoop` says `configured: false`.
 
     ### Conventions
-    - Every response body is JSON with `Cache-Control: no-store`. The one exception is
+    - Every response body is JSON with `Cache-Control: no-store`. The exceptions are
       `GET /api/media/{hash}`, which answers with the stored file itself
-      (`Cache-Control: private, no-store`).
+      (`Cache-Control: private, no-store`), and the two pages a browser opens to connect
+      WHOOP (`/api/whoop/connect`, `GET /api/whoop/callback`): a redirect or a small
+      HTML page, also `no-store`.
     - Errors are always `{"error": "<human-readable message>"}`. The `password`, throttle and
       `media` routes add a stable `code` for the client to word in its own language.
     - Unknown method+path pairs return `404 {"error":"not found"}`; an unhandled
@@ -168,6 +174,11 @@ tags:
     description: >-
       AI Coach: plans, reviews and debriefs. Every route here answers 503 unless the
       instance has the Coach switched on and a provider connected.
+  - name: whoop
+    description: >-
+      WHOOP, read-only: connect a profile's WHOOP account (OAuth, run by the server) and read
+      its recovery, strain and recent workouts. The tokens stay on the server, encrypted;
+      a client only ever gets the normalised numbers.
 
 security:
   - cookieAuth: []
@@ -2135,6 +2146,179 @@ paths:
               schema: { $ref: '#/components/schemas/Ok' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
+  /api/whoop:
+    get:
+      tags: [whoop]
+      operationId: getWhoop
+      summary: The signed-in profile's WHOOP recovery, strain and recent workouts
+      description: |
+        The server reads WHOOP (cycles, recoveries, sleeps and workouts from 16 days back)
+        with the profile's own tokens and answers with the normalised numbers only: no
+        token ever reaches the client. A read is cached per profile for 10 minutes, and two
+        requests at once share one fetch.
+
+        - Not configured (`WHOOP_CLIENT_ID` or `WHOOP_CLIENT_SECRET` unset): `configured: false`.
+        - Not connected, or WHOOP has dropped the grant: `connected: false`.
+        - WHOOP rate-limiting, failing or unreachable: the last good read with `stale: true`
+          and its own `fetchedAt`; with nothing cached, `error: "unavailable"` and empty lists.
+        - After any failed fetch WHOOP is not asked again for a minute: reads in that minute
+          get the last good read with `stale: true` (or the error) without a call. That holds
+          after the server's own failure too (a `500`), and when WHOOP refuses even a freshly
+          refreshed token, which is kept: then the minute answers `connected: false`, like the
+          read that failed. Disconnecting or connecting again ends the wait.
+      responses:
+        '200':
+          description: The read, or the reason there is none.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WhoopRead' }
+              examples:
+                connected:
+                  value:
+                    configured: true
+                    connected: true
+                    fetchedAt: "2026-11-09T12:00:00.000Z"
+                    stale: false
+                    days:
+                      - { d: "2026-11-09", recovery: 67, hrv: 55.5, rhr: 52, calibrating: false, strain: 12.3 }
+                    workouts:
+                      - { d: "2026-11-09", sport: running, start: "2026-11-09T07:00:00.000Z", minutes: 60, strain: 8.1, avgHr: 140, kcal: 500 }
+                notConnected:
+                  value: { configured: true, connected: false, fetchedAt: null, stale: false, days: [], workouts: [] }
+                unavailable:
+                  value: { configured: true, connected: true, fetchedAt: null, stale: false, error: unavailable, days: [], workouts: [] }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/whoop/connect-link:
+    post:
+      tags: [whoop]
+      operationId: whoopConnectLink
+      summary: A one-use link that connects WHOOP to this profile
+      description: |
+        For the paired phone, which opens the link in the browser. The code in it is 32
+        random bytes, good once, for 10 minutes, and bound to this profile; at most five
+        are live per profile (a sixth retires the oldest). No request body.
+      responses:
+        '200':
+          description: The link.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                    description: '`<ORIGIN>/api/whoop/connect?c=<code>`.'
+              example: { url: "https://gym.example.com/api/whoop/connect?c=Qk3w…" }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '503':
+          description: WHOOP is not set up on this instance.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: "WHOOP is not set up on this server" }
+
+  /api/whoop/connect:
+    get:
+      tags: [whoop]
+      operationId: whoopConnectPage
+      summary: The page a connect link opens, naming the profile it connects
+      description: |
+        Opened by the browser, so no session: the code is the credential. Uses nothing up.
+        A good code gets a page that asks "Connect WHOOP to the openGym profile <name>?",
+        says "Only continue if you opened this link yourself from the openGym app." and has
+        a Continue button: a form that POSTs to this same URL. A code that is unknown, used or
+        expired gets the failure page. The page cannot be framed (`frame-ancestors 'none'`,
+        `X-Frame-Options: DENY`) and runs no script.
+      security: []
+      parameters:
+        - { name: c, in: query, required: true, schema: { type: string }, description: The link code. }
+      responses:
+        '200':
+          description: The confirmation page (HTML, `no-store`).
+          content:
+            text/html:
+              schema: { type: string }
+        '400': { $ref: '#/components/responses/WhoopPage' }
+    post:
+      tags: [whoop]
+      operationId: whoopConnect
+      summary: "Continue: swap the link code for an OAuth state and go to WHOOP"
+      description: |
+        The confirmation page's own form submit. The code rides in the query (the form sends
+        an empty `application/x-www-form-urlencoded` body, which is not read). It is used
+        up here and becomes a one-use state (32 random bytes, 10 minutes, bound to the same
+        profile), and the browser is sent to WHOOP's sign-in. Same-origin only: the CSRF
+        check refuses another site's submit, and a Bearer does not exempt it.
+
+        The state is also bound to this browser: the 302 sets a fresh random cookie
+        (`gymwhoop`, `__Host-gymwhoop` on an https ORIGIN; HttpOnly, SameSite=Lax, 10
+        minutes), and the callback succeeds only with it. So WHOOP's sign-in URL, sent to
+        someone else, cannot connect their WHOOP to this profile.
+      security: []
+      parameters:
+        - { name: c, in: query, required: true, schema: { type: string }, description: The link code. }
+      responses:
+        '302':
+          description: To WHOOP's authorize page, with the state.
+          headers:
+            Location: { schema: { type: string } }
+            Set-Cookie: { schema: { type: string }, description: The browser binding for this state. }
+        '400': { $ref: '#/components/responses/WhoopPage' }
+        '403':
+          description: Not submitted from this origin.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: "cross-origin request refused" }
+
+  /api/whoop/callback:
+    get:
+      tags: [whoop]
+      operationId: whoopCallback
+      summary: Where WHOOP sends the browser back
+      description: |
+        No session: the tokens are stored for the profile the state was made for, whoever is
+        signed in, and only in the browser that pressed Continue (its `gymwhoop` cookie).
+        The state is used up before anything else is checked, so a replay never reaches
+        WHOOP. Every permission has to be granted. Every answer expires the `gymwhoop`
+        cookie. A connection is written to the audit log as `auth.whoop.connect`.
+      security: []
+      parameters:
+        - { name: state, in: query, required: true, schema: { type: string } }
+        - { name: code, in: query, schema: { type: string } }
+        - { name: error, in: query, schema: { type: string }, description: Set by WHOOP when the person said no. }
+      responses:
+        '200': { $ref: '#/components/responses/WhoopPage' }
+        '400': { $ref: '#/components/responses/WhoopPage' }
+        '500': { $ref: '#/components/responses/WhoopPage' }
+        '502': { $ref: '#/components/responses/WhoopPage' }
+
+  /api/whoop/disconnect:
+    post:
+      tags: [whoop]
+      operationId: whoopDisconnect
+      summary: Revoke WHOOP's access and forget the tokens
+      description: |
+        Asks WHOOP to drop this app's access, then deletes the profile's tokens and cached
+        read whatever WHOOP answered, and voids its unused connect links. `revoked` is false
+        when WHOOP could not be told (the owner can revoke in the WHOOP app);
+        `wasConnected` is false when there was nothing to disconnect. Written to the audit
+        log as `auth.whoop.disconnect` when there was. No request body.
+      responses:
+        '200':
+          description: Disconnected.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, const: true }
+                  revoked: { type: boolean }
+                  wasConnected: { type: boolean }
+              example: { ok: true, revoked: true, wasConnected: true }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
   /api/admin/users:
     get:
       tags: [admin]
@@ -3001,6 +3185,20 @@ components:
         skip the CSRF origin check; a browser never attaches this header on its own.
 
   responses:
+    WhoopPage:
+      description: >-
+        A small HTML page (`Cache-Control: no-store`, no script, cannot be framed) with fixed copy only; nothing
+        from the query is put on it. 200 says "WHOOP is connected. You can close this tab and
+        go back to openGym." A failure says "WHOOP wasn't connected: <reason>. Go back to
+        openGym and try again.", where the reason is `the link expired` (400: unknown,
+        expired, or the instance is not configured), `the link was already used` (400),
+        `WHOOP said no` (400: consent refused, the code refused, or a permission left out),
+        `it didn't come back to the browser it started in` (400: the callback came without
+        the cookie Continue set), `WHOOP couldn't be reached` (502) or `your server couldn't
+        save the WHOOP connection` (500: the token file could not be written).
+      content:
+        text/html:
+          schema: { type: string }
     Unauthorized:
       description: No session, expired/revoked session, or a disabled account.
       content:
@@ -3148,6 +3346,49 @@ components:
       type: object
       properties:
         ok: { type: boolean, const: true }
+
+    WhoopRead:
+      type: object
+      required: [configured, connected, fetchedAt, stale, days, workouts]
+      properties:
+        configured: { type: boolean, description: Both WHOOP variables are set on this instance. }
+        connected: { type: boolean, description: This profile has a WHOOP grant the server can use. }
+        fetchedAt:
+          type: [string, 'null']
+          format: date-time
+          description: When this read was fetched from WHOOP; null with no read.
+        stale: { type: boolean, description: WHOOP could not be read just now; this is the last good read. }
+        error:
+          type: string
+          enum: [unavailable]
+          description: Only when WHOOP could not be read and nothing good was cached.
+        days:
+          type: array
+          description: >-
+            The last 14 local days, newest first, one row each. A day is the local wake date of
+            its main sleep. Only scored records give values; a missing one is null, never 0.
+          items:
+            type: object
+            properties:
+              d: { type: string, format: date }
+              recovery: { type: [number, 'null'], description: Recovery %. }
+              hrv: { type: [number, 'null'], description: "HRV (RMSSD), ms." }
+              rhr: { type: [number, 'null'], description: "Resting heart rate, bpm." }
+              calibrating: { type: boolean }
+              strain: { type: [number, 'null'], description: "The cycle's day strain, 0–21." }
+        workouts:
+          type: array
+          description: WHOOP workouts in those 14 days, newest first.
+          items:
+            type: object
+            properties:
+              d: { type: string, format: date }
+              sport: { type: string }
+              start: { type: string, format: date-time }
+              minutes: { type: [integer, 'null'] }
+              strain: { type: [number, 'null'] }
+              avgHr: { type: [number, 'null'] }
+              kcal: { type: [integer, 'null'], description: "kJ / 4.184, rounded." }
 
     PasskeyList:
       type: object

@@ -12,7 +12,8 @@ This guide takes you from "just cloned it" to "using it from my phone over the i
 5. [Fitting into an existing stack](#5-fitting-it-into-an-existing-stack) — ports, subpaths, media uploads
 6. [Backups](#6-backups)
 7. [Notifications](#7-notifications)
-8. [Updating](#8-updating)
+8. [WHOOP (optional)](#8-whoop-optional) — recovery, strain and cardio on the iPhone app's Progress tab
+9. [Updating](#9-updating)
 - [Passkeys fail even though `RP_ID` looks right](#passkeys-fail-even-though-rp_id-looks-right)
 - [Which passkey providers work](#which-passkey-providers-work)
 - [Troubleshooting](#troubleshooting)
@@ -681,7 +682,114 @@ ALLOWED_PRIVATE_IPS=10.0.0.0/8, 192.168.1.50, 172.16.0.1-172.16.0.9, fd00::/8
 - The default is empty: every private address stays blocked. Keep the list as small as you can —
   each address you allow is an address that a signed-in user can make the server connect to.
 
-## 8. Updating
+## 8. WHOOP (optional)
+
+The iPhone app can show your WHOOP recovery, strain and recent cardio on its Progress tab,
+read-only. Your server does the work: it signs in to WHOOP once, keeps the tokens, fetches the
+numbers and hands the phone only the finished values. Nothing is written back to WHOOP and
+nothing changes your training. It is off until you set it up, and it needs the iPhone app paired
+with your server.
+
+### Register the WHOOP app
+
+In the [WHOOP developer dashboard](https://developer.whoop.com) create an app for openGym. Make
+it a new app, separate from any other WHOOP app you run (a local dashboard, say): two grants on
+one app and one account are unverified.
+
+- **Redirect URI:** `https://<your host>/api/whoop/callback`, registered exactly. It is your
+  `ORIGIN` plus `/api/whoop/callback`, with no trailing slash and no extra path.
+- **Scopes:** `read:recovery read:cycles read:sleep read:workout offline`. Sleep is read only to
+  date each day the way WHOOP's own app does; it is not shown.
+
+### Set the two variables
+
+Put the app's client id and secret in `.env`, then apply them:
+
+```
+WHOOP_CLIENT_ID=...
+WHOOP_CLIENT_SECRET=...
+```
+
+```bash
+docker compose up -d
+```
+
+- Set both, or neither. With only one of the two, WHOOP stays off and the api logs a warning at
+  boot: `WHOOP needs both WHOOP_CLIENT_ID and WHOOP_CLIENT_SECRET; it stays off`.
+- If you start compose with `docker compose --env-file other.env`, compose reads the
+  `${WHOOP_CLIENT_ID:-}` and `${WHOOP_CLIENT_SECRET:-}` lines in `docker-compose.yml` from that
+  file, not from `.env`. An empty or missing value there turns WHOOP off even though `.env` sets
+  it. Put the two variables in the file you pass, or export them in the shell that runs compose.
+- The secret never goes in `./data`.
+
+### Connect from the phone
+
+1. The phone must be paired with your server, and paired at the server's `ORIGIN` address
+   (Diagnostics, "Pair with your server"). Connect refuses a link on any other origin: a phone
+   paired over a LAN or Tailscale address while `ORIGIN` is the https host cannot connect. Forget
+   the server and pair again at the `ORIGIN` address.
+2. Open **Progress**, find the **WHOOP** card and tap **Connect WHOOP**. Safari opens a page from
+   your server that names your openGym profile ("Connect WHOOP to the openGym profile <name>?").
+   Only tap **Continue** if you opened the link yourself from the app.
+3. Sign in at WHOOP and allow every permission. The server's page then says "WHOOP is connected.
+   You can close this tab and go back to openGym." Go back to the app; the card fills in.
+
+The sign-in has to finish in the same Safari it started in. If WHOOP hands off to its own app and
+the page says "WHOOP wasn't connected: it didn't come back to the browser it started in", start
+again and finish the sign-in in Safari. A link works once and expires after 10 minutes; if the
+page says the link expired or was already used, tap Connect WHOOP again.
+
+### Disconnect
+
+On the card, tap **Disconnect** and confirm "Disconnect WHOOP?". The server asks WHOOP to remove
+openGym's access, then deletes the tokens, even if WHOOP can't be reached. In that case the app
+says "WHOOP is disconnected here, but WHOOP couldn't be told. Remove openGym's access in the WHOOP
+app." and you should do exactly that. You can connect again afterwards.
+
+### What is stored, and how it is protected
+
+- The tokens live per profile in `DATA_DIR/whoop-<id>.json` (`./data/` in the compose setup),
+  encrypted (AES-256-GCM) with a key derived from `DATA_DIR/secret`, in a file with mode 0600.
+  A file that won't decrypt reads as not connected.
+- A copy of `data/` **without** `secret` can't use them. The rehearsal copy in the native app's device
+  checklist (the Phase 5 pairing rehearsal) deletes its `secret`, so it cannot spend or rotate your real tokens.
+- Never boot a second api on a copy of `data/` that still has its `secret` while WHOOP is set up
+  there: its first token refresh rotates the token at WHOOP, and your real server loses the grant
+  (its card then asks you to connect again). Delete the copy's `secret` first.
+- A full backup that **includes** `secret` can decrypt them. That is the same exposure as the
+  session secret. If a backup like that leaks, Disconnect: it revokes at WHOOP.
+- Deleting a profile revokes its WHOOP and removes its token file.
+- The client secret and the tokens never reach the phone, a log line or a response body.
+
+### Freshness and limits
+
+- When you open Progress the numbers are at most about 10 minutes old: the server keeps what it
+  reads from WHOOP for 10 minutes per profile, and the phone asks again once that copy has
+  expired. After a failed read from WHOOP the server waits a minute before asking again.
+- WHOOP allows 100 requests a minute and 10,000 a day per app. A refresh takes about five requests.
+- When WHOOP can't be reached, the card keeps the last good numbers and shows "As of <time>".
+- Root deployments only: the redirect URI and the connect link don't include a subpath, so WHOOP
+  does not work under [a subpath](#serving-opengym-under-a-subpath).
+- The server's confirmation page sends no `form-action` directive on purpose. A reverse proxy that
+  adds `form-action 'self'` to every response breaks its Continue button, because the browser then
+  refuses the redirect to WHOOP. Exempt `/api/whoop/` from that header.
+
+### Troubleshooting
+
+| You see | What it means |
+|---|---|
+| "WHOOP isn't set up on your server yet." | The api has no client id and secret. Check both variables are in the `.env` that compose reads (see the `--env-file` note above), run `docker compose up -d`, and look for the boot warning in `docker compose logs api`. |
+| "Connect WHOOP to see recovery, strain and cardio here." after it worked before | The grant expired or was revoked at WHOOP, so the server forgot the tokens. Tap **Connect WHOOP** to connect again. |
+| "WHOOP wasn't connected: WHOOP said no" | You declined, or left a permission out. Connect again and allow every permission, and check the app's scopes in the dashboard. Or WHOOP refused the server itself: check `WHOOP_CLIENT_ID` and `WHOOP_CLIENT_SECRET` in `.env` against the WHOOP developer dashboard (a typo in the secret ends here too), run `docker compose up -d`, and connect again. |
+| "WHOOP wasn't connected: WHOOP couldn't be reached" | The server couldn't reach WHOOP to finish. Try again later. |
+| "WHOOP wasn't connected: your server couldn't save the WHOOP connection" | The server couldn't write the token file in `./data` (a full disk, say). `docker compose logs api` has a line starting `whoop: could not save the connection of`. Fix that, then tap **Connect WHOOP** again. |
+| WHOOP's own error page about the redirect URI (an invalid or mismatched `redirect_uri`), after you tap Continue | The Redirect URI registered on your WHOOP app is not exactly your `ORIGIN` plus `/api/whoop/callback`. Make it match exactly (scheme, host, any port, no trailing slash) in the WHOOP developer dashboard, then tap **Connect WHOOP** again. If `ORIGIN` is what's wrong, fix it in `.env` and run `docker compose up -d` first. |
+| "Couldn't open WHOOP's sign-in. Try again." | The phone couldn't get a connect link from your server, or Safari couldn't open it: the phone is offline or can't reach the server, the server answered with an error, or the server signed this phone out. Check the phone is online and that Diagnostics shows it synced (if Diagnostics says the server signed this phone out, pair again), look in `docker compose logs api`, then tap **Connect WHOOP** again. A phone paired at another address than `ORIGIN` gets the next line instead. |
+| "Connect works when this phone is paired with <address>. Forget the server and pair again at that address." | The phone is paired at an address that is not the server's `ORIGIN` (a LAN or Tailscale address, say, or `http` where `ORIGIN` is `https`). Do what it says: Forget the server in Diagnostics and pair again at that address. |
+| "Couldn't reach your server. Try again later." on the card | The card's read got no usable answer from your server, and the phone has no earlier WHOOP numbers for this pairing to show instead: the phone is offline, the server is down or answered with an error, the server signed this phone out, or the server is older than the WHOOP card (update it: see [Updating](#9-updating)). Check the phone is online and Diagnostics shows it synced, and look in `docker compose logs api`. The card asks again when you open Progress a minute later. |
+| "Couldn't reach WHOOP. Try again later." | WHOOP is failing or rate-limiting. The server retries after a minute. If it never clears (or the card's "As of" time stops moving on), check `WHOOP_CLIENT_ID` and `WHOOP_CLIENT_SECRET` in `.env` against the WHOOP developer dashboard (a secret changed there looks like this once the current access token runs out), then run `docker compose up -d`. The server keeps the tokens meanwhile, so you shouldn't need to connect again, as long as `WHOOP_CLIENT_ID` is still the same WHOOP app. |
+
+## 9. Updating
 
 Running prebuilt images:
 

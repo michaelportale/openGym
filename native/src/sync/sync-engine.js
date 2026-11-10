@@ -8,8 +8,10 @@
 // Everything is injected: `client` (api-client.js), `credentials` (the Keychain token),
 // `copy` and `meta` (server-copy.js), `workouts` (the finished-workout store), `weighIns` (the
 // weigh-in day operations), `edits` (the pending-edits.js store: it syncs every kind of
-// row), `measurements` (the body-measurement day operations, measurement-store.js) and `now` (ms
-// since epoch). It never touches the session journal and logs nothing.
+// row), `measurements` (the body-measurement day operations, measurement-store.js), `whoopCache`
+// (the WHOOP card's last read, whoop-cache.js: it belongs to the pairing, so Forget and a new
+// pairing clear it; a 401 does not, as it keeps the copy) and `now` (ms since epoch). It never
+// touches the session journal and logs nothing.
 
 import { applyDayOps } from '../body/day-ops.js'
 import { applyMeasurementOps } from '../body/measurement-ops.js'
@@ -63,10 +65,11 @@ function pairError(result, base) {
   return `${host} answered, but not like an openGym server. Check the address.`
 }
 
-export function createSync({ client, credentials, copy, workouts, weighIns, edits, measurements, meta, now }) {
+export function createSync({ client, credentials, copy, workouts, weighIns, edits, measurements, whoopCache, meta, now }) {
   if (!weighIns) throw new Error('createSync needs a weighIns store')
   if (!edits) throw new Error('createSync needs an edits store')
   if (!measurements) throw new Error('createSync needs a measurements store')
+  if (!whoopCache) throw new Error('createSync needs a whoopCache store')
   const iso = () => new Date(now()).toISOString()
 
   // pair, forget, resendAll and a sync never interleave.
@@ -324,6 +327,7 @@ export function createSync({ client, credentials, copy, workouts, weighIns, edit
         // the phone unpaired, never holding one server's token beside another's address.
         await credentials.clear()
         await copy.clear()
+        await whoopCache.clear()
         await meta.clear()
         // Every workout on this phone goes to this server; it keeps one copy per id. A pending
         // edit's ack stays (routine, day or setting): it belongs to the server that took it, and
@@ -333,6 +337,8 @@ export function createSync({ client, credentials, copy, workouts, weighIns, edit
         await measurements.resetAcked()
         await meta.set('server', address.base)
         await meta.set('profile', typeof r.user?.name === 'string' ? r.user.name : '')
+        // The id, not the name, says which profile this is: names need not be unique.
+        await meta.set('profileId', typeof r.user?.id === 'string' ? r.user.id : '')
         await credentials.set({ token: r.token })
         outcome = null
       })
@@ -351,6 +357,7 @@ export function createSync({ client, credentials, copy, workouts, weighIns, edit
       await exclusive(async () => {
         await credentials.clear()
         await copy.clear()
+        await whoopCache.clear()
         await meta.clear()
         await workouts.resetAcked()
         await weighIns.resetAcked()

@@ -24,6 +24,10 @@ services:
       # X-Forwarded-For / X-Real-IP with the real peer — so the sign-in throttle may count
       # requests by those headers instead of lumping everyone in as "the web container".
       - TRUST_PROXY=${TRUST_PROXY:-1}
+      # The WHOOP app's credentials (.env.example), from .env or from the shell that runs
+      # compose, so the secret need not sit in a file. Unset leaves WHOOP off. Never in ./data.
+      - WHOOP_CLIENT_ID=${WHOOP_CLIENT_ID:-}
+      - WHOOP_CLIENT_SECRET=${WHOOP_CLIENT_SECRET:-}
     volumes:
       - ./data:/data         # users, passkeys, per-user state, session secret — BACK THIS UP
                              # (and uploads/: the photos and videos of custom exercises)

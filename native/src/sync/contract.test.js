@@ -22,6 +22,8 @@ import { createApiClient } from './api-client.js'
 import { createCredentials } from './credentials.js'
 import { createSqliteServerCopy, createSqliteSyncMeta } from './server-copy.js'
 import { createSync } from './sync-engine.js'
+import { createSqliteWhoopCache } from '../whoop/whoop-cache.js'
+import { createWhoopSource, isServerLink } from '../whoop/whoop-source.js'
 
 const API = fileURLToPath(new URL('../../../api/', import.meta.url))
 const HAS_API_DEPS = existsSync(join(API, 'node_modules'))
@@ -89,8 +91,8 @@ function fakeKeychain() {
   }
 }
 
-// `state: null` starts a profile with no document at all, as a new one is.
-async function startServer({ state = fixture() } = {}) {
+// `state: null` starts a profile with no document at all, as a new one is. `env` adds settings.
+async function startServer({ state = fixture(), env = {} } = {}) {
   const dataDir = mkdtempSync(join(tmpdir(), 'opengym-contract-'))
   writeFileSync(join(dataDir, 'secret'), SECRET, { mode: 0o600 })
   writeFileSync(join(dataDir, 'db.json'), JSON.stringify({ users: [{ id: UID, name: 'Owner', created: new Date(T0).toISOString() }], creds: [], subs: [], invites: [] }))
@@ -98,7 +100,7 @@ async function startServer({ state = fixture() } = {}) {
   const child = spawn(process.execPath, ['server.js'], {
     cwd: API,
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, PORT: '0', DATA_DIR: dataDir, ORIGIN: 'http://localhost:8080', RP_ID: 'localhost' },
+    env: { ...process.env, PORT: '0', DATA_DIR: dataDir, ORIGIN: 'http://localhost:8080', RP_ID: 'localhost', ...env },
   })
   let log = ''
   child.stdout.on('data', d => { log += d })
@@ -163,8 +165,9 @@ function phoneApp(db, { keychain = fakeKeychain(), client = createApiClient({ fe
   const weighIns = createSqliteWeighIns(db)
   const edits = createSqlitePendingEdits(db)
   const measurements = createSqliteMeasurements(db)
-  const sync = createSync({ client, credentials: createCredentials(keychain), copy, workouts, weighIns, edits, measurements, meta, now: () => T0 })
-  return { sync, workouts, weighIns, edits, measurements, copy, meta, keychain, client }
+  const whoopCache = createSqliteWhoopCache(db)
+  const sync = createSync({ client, credentials: createCredentials(keychain), copy, workouts, weighIns, edits, measurements, whoopCache, meta, now: () => T0 })
+  return { sync, workouts, weighIns, edits, measurements, whoopCache, copy, meta, keychain, client }
 }
 
 async function paired(server, db = createRealDb(), options) {
@@ -866,5 +869,44 @@ describe.skipIf(!HAS_API_DEPS)(TITLE, { timeout: 30_000 }, () => {
     expect((await app.workouts.list()).map(w => w.id)).toEqual([p1.id, p2.id])
     expect(await app.copy.get()).toEqual(before)
     expect(server.file().workouts.some(w => w.id === p2.id)).toBe(false)
+  })
+
+  // WHOOP, read-only: the phone's three calls against the real routes, with the paired bearer and
+  // no body. Nothing here reaches WHOOP: no profile is connected, and the base is a dead loopback.
+  const WHOOP_OFF = { WHOOP_CLIENT_ID: '', WHOOP_CLIENT_SECRET: '' }
+  const WHOOP_ON = { WHOOP_CLIENT_ID: 'contract-client', WHOOP_CLIENT_SECRET: 'contract-secret', WHOOP_BASE_URL: 'http://127.0.0.1:9' }
+
+  test('WHOOP not set up on the server: the read says so, Connect is refused as not set up, Disconnect is a no-op', async () => {
+    const server = await startServer({ env: WHOOP_OFF })
+    const app = await paired(server)
+    const token = (await createCredentials(app.keychain).get()).token
+    expect(await app.client.getWhoop(server.api, token)).toEqual({ ok: true, whoop: { configured: false, connected: false, fetchedAt: null, stale: false, days: [], workouts: [] } })
+    expect(await app.client.whoopConnectLink(server.api, token)).toEqual({ ok: false, kind: 'unconfigured' })
+    expect(await app.client.whoopDisconnect(server.api, token)).toEqual({ ok: true, revoked: false, wasConnected: false })
+    expect(await app.client.getWhoop(server.api, 'not-a-token')).toEqual({ ok: false, kind: 'unauthorized' })
+  })
+
+  test('WHOOP set up, not connected: the read, a one-use link on ORIGIN, and the source refusing it on another origin', async () => {
+    const server = await startServer({ env: WHOOP_ON })
+    const app = await paired(server)
+    // Pairing keeps the profile's id from the redeem, which keys the WHOOP card's reads.
+    expect(await app.meta.get('profileId')).toBe(UID)
+    const token = (await createCredentials(app.keychain).get()).token
+    expect(await app.client.getWhoop(server.api, token)).toEqual({ ok: true, whoop: { configured: true, connected: false, fetchedAt: null, stale: false, days: [], workouts: [] } })
+    const link = await app.client.whoopConnectLink(server.api, token)
+    expect(link.ok).toBe(true)
+    expect(link.url).toMatch(/^http:\/\/localhost:8080\/api\/whoop\/connect\?c=[A-Za-z0-9_-]{43}$/)
+    expect(link.url).not.toContain(token)
+    expect(isServerLink(link.url, 'http://localhost:8080')).toBe(true)
+    // Paired at another address than the server's ORIGIN: the source will not open it.
+    const source = createWhoopSource({
+      client: app.client,
+      cache: app.whoopCache,
+      pairing: async () => ({ base: await app.meta.get('server'), token, profileId: await app.meta.get('profileId') }),
+      now: () => T0,
+    })
+    expect(await source.connectLink()).toEqual({ ok: false, elsewhere: 'localhost:8080' })
+    expect(await source.read()).toEqual({ paired: true, payload: { configured: true, connected: false, fetchedAt: null, stale: false, days: [], workouts: [] }, cached: false })
+    expect(await app.client.whoopDisconnect(server.api, token)).toEqual({ ok: true, revoked: false, wasConnected: false })
   })
 })
