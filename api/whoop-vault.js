@@ -18,6 +18,9 @@ import { atomicWrite } from './durable.js';
 
 const UID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const INFO = 'opengym whoop tokens v1';
+// The full GCM tag, pinned both ways: GCM checks only as many bytes as it is handed, so a file
+// with a cut-down tag would otherwise still decrypt. Any other length reads as unreadable.
+const GCM = { authTagLength: 16 };
 
 function checkUid(uid) {
   if (typeof uid !== 'string' || !UID_RE.test(uid)) throw new Error('invalid uid');
@@ -43,8 +46,10 @@ export function createWhoopVault({ dir, secret, write = atomicWrite }) {
     try {
       const f = JSON.parse(fs.readFileSync(file, 'utf8'));
       if (!f || f.v !== 1) return null;
-      const decipher = crypto.createDecipheriv('aes-256-gcm', key, unb64(f.iv));
-      decipher.setAuthTag(unb64(f.tag));
+      const tag = unb64(f.tag);
+      if (tag.length !== GCM.authTagLength) return null;
+      const decipher = crypto.createDecipheriv('aes-256-gcm', key, unb64(f.iv), GCM);
+      decipher.setAuthTag(tag);
       const plain = Buffer.concat([decipher.update(unb64(f.data)), decipher.final()]).toString('utf8');
       const t = JSON.parse(plain);
       if (typeof t?.access_token !== 'string' || typeof t.refresh_token !== 'string') return null;
@@ -59,7 +64,7 @@ export function createWhoopVault({ dir, secret, write = atomicWrite }) {
     }
     const { access_token, refresh_token, expires_at, scope } = tokens;
     const iv = crypto.randomBytes(12);
-    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv, GCM);
     const data = Buffer.concat([cipher.update(JSON.stringify({ access_token, refresh_token, expires_at, scope }), 'utf8'), cipher.final()]);
     write(file, JSON.stringify({ v: 1, iv: b64(iv), tag: b64(cipher.getAuthTag()), data: b64(data) }), 0o600);
   }

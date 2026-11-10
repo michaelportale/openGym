@@ -101,3 +101,21 @@ test('a save refuses tokens without the fields', () => {
   assert.throws(() => v.save('user1', { access_token: 'x' }), /tokens/);
   assert.throws(() => v.save('user1', null), /tokens/);
 });
+
+test('a tag that is not the full 16 bytes reads as null, even a truncated real one', () => {
+  const dir = tmp();
+  const v = createWhoopVault({ dir, secret: SECRET });
+  v.save('user1', tokens);
+  const f = JSON.parse(fs.readFileSync(whoopFile(dir, 'user1'), 'utf8'));
+  const tag = Buffer.from(f.tag, 'base64url');
+  assert.equal(tag.length, 16, 'saved with a 16-byte tag');
+  // GCM checks only as many bytes as it is given, so a cut-down real tag would otherwise pass.
+  for (const n of [4, 8, 12, 15]) {
+    fs.writeFileSync(whoopFile(dir, 'user1'), JSON.stringify({ ...f, tag: tag.subarray(0, n).toString('base64url') }));
+    assert.equal(v.read('user1'), null, `${n}-byte tag`);
+  }
+  fs.writeFileSync(whoopFile(dir, 'user1'), JSON.stringify({ ...f, tag: Buffer.concat([tag, Buffer.alloc(1)]).toString('base64url') }));
+  assert.equal(v.read('user1'), null, '17-byte tag');
+  fs.writeFileSync(whoopFile(dir, 'user1'), JSON.stringify(f));
+  assert.deepEqual(v.read('user1'), tokens, 'the untouched file still reads');
+});
