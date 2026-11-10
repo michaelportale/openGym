@@ -3,10 +3,10 @@
 // supplement rules. Where a rule lives only in the web's Nutrition.jsx it is restated here with a
 // test naming the line.
 //
-// The phone never mints a nutrition stamp. Every day value returned here carries no `_ts` of its
-// own: the sync writes the stored copy's `_ts` back on push and the server stamps. A stored `_ts`
-// and any key this app doesn't know ride along untouched. Settings (`nutritionTargets`,
-// `supplements`) are whole keys: the setting models return the whole new value, or `{ error }`.
+// The phone never mints a nutrition stamp. Every day value returned here carries no `_ts`: the
+// guard writes the stored copy's `_ts` on push (edit-guard.js) and the server stamps. Any key this
+// app doesn't know rides along untouched. Settings (`nutritionTargets`, `supplements`) are whole
+// keys: the setting models return the whole new value, or `{ error }`.
 import { nutrition } from '../shared/training.js'
 import { num } from '../ui/number-text.js'
 
@@ -29,15 +29,11 @@ export const unitOf = k => (k === 'kcal' ? 'kcal' : 'g') // Nutrition.jsx:22
 export const amount = (k, v) => `${num(v)} ${unitOf(k)}` // Nutrition.jsx:29
 const line = (k, v) => `${NAME[k]} ${amount(k, v)}`
 
-// The keys of the stored day this app doesn't own, plus its stored stamp. Never a new stamp.
+// The keys of the stored day this app doesn't own. Never a stamp.
 function carried(raw) {
   const out = {}
   if (raw) for (const k of Object.keys(raw)) if (!KNOWN.has(k)) out[k] = raw[k]
   return out
-}
-const withStoredStamp = (value, raw) => {
-  if (raw && '_ts' in raw) value._ts = raw._ts
-  return value
 }
 
 /** The Today card: totals only when the day counts as logged, targets for its day type. */
@@ -101,14 +97,14 @@ export function applyDayForm(state, iso, form, { today }) {
   const raw = rawDay(state, iso)
   const made = withNutritionDay({ [iso]: raw }, iso, form, 0)[iso]
   const { _ts: _drop, ...web } = made
-  return { value: withStoredStamp({ ...carried(raw), ...web }, raw) }
+  return { value: { ...carried(raw), ...web } }
 }
 
 /** The day value after Clear: the totals and note gone, the ticks kept. Never a delete. */
 export function clearDayValue(state, iso) {
   const raw = rawDay(state, iso)
   const { _ts: _drop, ...web } = clearNutritionDay({ [iso]: raw }, iso, 0)[iso]
-  return withStoredStamp({ ...carried(raw), ...web }, raw)
+  return { ...carried(raw), ...web }
 }
 
 /** The day value with supplement `suppId` flipped (ticked <-> unticked). Throws as the web does on a bad date or id. */
@@ -116,7 +112,7 @@ export function toggleSupplement(state, iso, suppId) {
   const raw = rawDay(state, iso)
   const on = !nutritionDayOf(state, iso)?.supps.includes(suppId)
   const { _ts: _drop, ...web } = withSupplementTick({ [iso]: raw }, iso, suppId, on, 0)[iso]
-  return withStoredStamp(web, raw)
+  return web
 }
 
 /** The targets sheet's fields: { training: { kcal, protein, fiber }, rest: { … } }, null where unset. */

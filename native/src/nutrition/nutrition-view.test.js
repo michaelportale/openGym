@@ -171,12 +171,14 @@ describe('applyDayForm', () => {
     expect(applyDayForm(state, TODAY, form, { today: TODAY }).value.supps).toEqual(['a', 'b'])
   })
 
-  test("a key the app doesn't know survives byte for byte, and the stored stamp rides along, never a new one (ruling 1)", () => {
+  // The guard writes the copy's _ts on push and the server stamps, so the value carries none, not
+  // even the stored one (ponytail review 3).
+  test("a key the app doesn't know survives byte for byte; the value carries no stamp, not even the stored one (ruling 1)", () => {
     const state = { nutritionDays: { [TODAY]: { kcal: 1, extra: { deep: [1, 2] }, other: 'x', _ts: 123 } } }
     const v = applyDayForm(state, TODAY, form, { today: TODAY }).value
     expect(v.extra).toEqual({ deep: [1, 2] })
     expect(v.other).toBe('x')
-    expect(v._ts).toBe(123)
+    expect('_ts' in v).toBe(false)
     expect(v.kcal).toBe(2500)
   })
 
@@ -191,7 +193,7 @@ describe('applyDayForm', () => {
 describe('clearDayValue', () => {
   test('clear keeps the ticks and drops totals, type and note: never a delete (nutrition.js clearNutritionDay, Nutrition.jsx:155)', () => {
     const state = { nutritionDays: { [TODAY]: { ...full, note: 'n', supps: ['a'], _ts: 4 } } }
-    expect(clearDayValue(state, TODAY)).toEqual({ supps: ['a'], _ts: 4 })
+    expect(clearDayValue(state, TODAY)).toEqual({ supps: ['a'] })
   })
 
   test('with no ticks it is an empty object (nutrition.js clearNutritionDay)', () => {
@@ -199,8 +201,8 @@ describe('clearDayValue', () => {
     expect(clearDayValue({}, TODAY)).toEqual({})
   })
 
-  test('mints no stamp, keeps unknown keys (ruling 1)', () => {
-    const v = clearDayValue({ nutritionDays: { [TODAY]: { ...full, supps: ['a'], extra: 7 } } }, TODAY)
+  test('carries no stamp, not even the stored one, and keeps unknown keys (ruling 1)', () => {
+    const v = clearDayValue({ nutritionDays: { [TODAY]: { ...full, supps: ['a'], extra: 7, _ts: 4 } } }, TODAY)
     expect(v).toEqual({ supps: ['a'], extra: 7 })
     expect('_ts' in v).toBe(false)
   })
@@ -209,8 +211,8 @@ describe('clearDayValue', () => {
 describe('toggleSupplement', () => {
   test('ticks an unticked supplement and unticks a ticked one, totals kept (nutrition.js withSupplementTick, Nutrition.jsx:251)', () => {
     const state = { nutritionDays: { [TODAY]: { ...full, supps: ['a'], _ts: 2 } } }
-    expect(toggleSupplement(state, TODAY, 'b')).toEqual({ ...full, supps: ['a', 'b'], _ts: 2 })
-    expect(toggleSupplement(state, TODAY, 'a')).toEqual({ ...full, _ts: 2 })
+    expect(toggleSupplement(state, TODAY, 'b')).toEqual({ ...full, supps: ['a', 'b'] })
+    expect(toggleSupplement(state, TODAY, 'a')).toEqual({ ...full })
   })
 
   test('on an empty day it creates a day holding just the tick, with no stamp (nutrition.js withSupplementTick, ruling 1)', () => {
@@ -219,8 +221,9 @@ describe('toggleSupplement', () => {
     expect('_ts' in v).toBe(false)
   })
 
-  test('keeps unknown keys', () => {
+  test('keeps unknown keys, and carries no stamp, not even the stored one', () => {
     expect(toggleSupplement({ nutritionDays: { [TODAY]: { extra: 1 } } }, TODAY, 'a')).toEqual({ extra: 1, supps: ['a'] })
+    expect(toggleSupplement({ nutritionDays: { [TODAY]: { extra: 1, _ts: 5 } } }, TODAY, 'a')).toEqual({ extra: 1, supps: ['a'] })
   })
 
   test('a day holds at most 50 ticks: a 51st is not added, unticking still works (nutrition.js withSupplementTick, SUPPLEMENTS_MAX)', () => {
