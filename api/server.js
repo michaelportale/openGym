@@ -1958,9 +1958,11 @@ function whoopSameBrowser(req, nonce) {
 
 // The last good read per profile, { payload, fetchedAt }, fresh for ten minutes and served stale
 // after that while WHOOP is rate-limiting or down; and the one fetch in flight per profile.
-// After a failed fetch WHOOP is left alone for a minute (whoopRetryAt): reads in between get the
-// stale read or the error without a call, so a client polling a WHOOP outage cannot spend the
-// rate limit.
+// After any failed fetch WHOOP is left alone for a minute (whoopRetryAt, { at, refused }): reads
+// in between get the stale read or the error without a call, so a client polling a WHOOP outage
+// cannot spend the rate limit. `refused`: WHOOP turned down even a freshly refreshed token, which
+// is kept (WHOOP may be wrong for a moment), so the minute answers "not connected" like the read
+// that failed.
 const WHOOP_FRESH_MS = 10 * 60000;
 const WHOOP_RETRY_MS = 60000;
 const WHOOP_WINDOW_MS = 16 * 86400000;
@@ -1992,8 +1994,9 @@ function whoopFetch(uid) {
       if (whoopInflight.get(uid) === p) { whoopCache.set(uid, { payload, fetchedAt }); whoopRetryAt.delete(uid); }
       return payload;
     } catch (e) {
-      // A lost grant is not WHOOP being down: that read says "not connected" and has nothing to wait for.
-      if (e instanceof WhoopError && e.code !== 'reconnect' && whoopInflight.get(uid) === p) whoopRetryAt.set(uid, Date.now() + WHOOP_RETRY_MS);
+      // Any failure, the server's own (a disk write, the normaliser) included. A lost grant (the
+      // tokens gone) needs no wait: the next read finds it not connected without asking WHOOP.
+      if (whoopInflight.get(uid) === p) whoopRetryAt.set(uid, { at: Date.now() + WHOOP_RETRY_MS, refused: e instanceof WhoopError && e.code === 'reconnect' });
       throw e;
     }
   })();
@@ -2048,13 +2051,20 @@ const whoopRoutes = {
     if (!whoop.connected(user.id)) { whoopForget(user.id); return json(res, 200, whoopNone(true)); }
     const hit = whoopCache.get(user.id);
     if (hit && Date.now() - hit.fetchedAt < WHOOP_FRESH_MS) return json(res, 200, hit.payload);
-    if (Date.now() < (whoopRetryAt.get(user.id) || 0)) return json(res, 200, whoopLastGood(user.id));
+    const wait = whoopRetryAt.get(user.id);
+    if (wait && Date.now() < wait.at) return json(res, 200, wait.refused ? whoopNone(true) : whoopLastGood(user.id));
     try {
       json(res, 200, await whoopFetch(user.id));
     } catch (e) {
       // Anything but a WhoopError (the vault's disk write) is the server's own failure: a 500.
       if (!(e instanceof WhoopError)) throw e;
-      if (e.code === 'reconnect') { whoopForget(user.id); return json(res, 200, whoopNone(true)); }
+      if (e.code === 'reconnect') {
+        // The grant is gone: forget it all. WHOOP refused a fresh token but it is kept: drop the
+        // old read, and keep the minute's wait whoopFetch set.
+        if (!whoop.connected(user.id)) whoopForget(user.id);
+        else whoopCache.delete(user.id);
+        return json(res, 200, whoopNone(true));
+      }
       json(res, 200, whoopLastGood(user.id));
     }
   },

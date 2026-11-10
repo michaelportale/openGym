@@ -2161,8 +2161,11 @@ paths:
         - Not connected, or WHOOP has dropped the grant: `connected: false`.
         - WHOOP rate-limiting, failing or unreachable: the last good read with `stale: true`
           and its own `fetchedAt`; with nothing cached, `error: "unavailable"` and empty lists.
-          After such a failure WHOOP is not asked again for a minute: reads in that minute get
-          the same answer without a call. Disconnecting or connecting again ends the wait.
+        - After any failed fetch WHOOP is not asked again for a minute: reads in that minute
+          get the last good read with `stale: true` (or the error) without a call. That holds
+          after the server's own failure too (a `500`), and when WHOOP refuses even a freshly
+          refreshed token, which is kept: then the minute answers `connected: false`, like the
+          read that failed. Disconnecting or connecting again ends the wait.
       responses:
         '200':
           description: The read, or the reason there is none.

@@ -733,3 +733,66 @@ test('deleting a profile revokes its WHOOP grant and removes its token file', as
   assert.equal(fs.existsSync(h.file(B)), true, "B's connection is untouched");
   h.assertNoLeak();
 });
+
+test('any failed read leaves WHOOP alone for a minute, the server failing on its own side too', async t => {
+  const fake = await whoopFake(t);
+  const h = await boot(t, { fake });
+  await h.connect(A);
+  await h.whoop(A);
+
+  // The normaliser throws on a record it cannot read: the server's own failure, a 500.
+  const T1 = T0 + 11 * MIN;
+  await h.at(T1);
+  fake.page = p => ({ records: p === 'recovery' ? [null] : fake.records[p], next_token: null });
+  assert.equal((await h.whoop(A)).status, 500);
+  fake.page = null;
+  let data = fake.count.data;
+  await h.at(T1 + MIN - 1);
+  const held = (await h.whoop(A)).json();
+  assert.equal(held.stale, true, 'the last good read, marked stale');
+  assert.equal(held.fetchedAt, iso(T0));
+  assert.equal(fake.count.data, data, 'WHOOP left alone for the minute');
+  await h.at(T1 + MIN);
+  assert.equal((await h.whoop(A)).json().fetchedAt, iso(T1 + MIN), 'asked again after it');
+  assert.equal(fake.count.data, data + 4);
+
+  // The vault cannot save a refreshed pair (past the access token's hour, so the read refreshes
+  // first): a 500 again, and again a minute with no refresh and no read.
+  const T2 = T0 + 70 * MIN;
+  await h.at(T2);
+  fs.mkdirSync(`${h.file(A)}.tmp`);
+  assert.equal((await h.whoop(A)).status, 500);
+  const refreshes = fake.count.refresh_token;
+  data = fake.count.data;
+  await h.at(T2 + MIN - 1);
+  assert.equal((await h.whoop(A)).json().stale, true);
+  assert.equal(fake.count.refresh_token, refreshes, 'no second refresh inside the minute');
+  assert.equal(fake.count.data, data);
+  h.assertNoLeak();
+});
+
+test('WHOOP refusing even a fresh token: not connected, the pair kept, and WHOOP left alone for a minute', async t => {
+  const fake = await whoopFake(t);
+  const h = await boot(t, { fake });
+  await h.connect(A);
+  await h.whoop(A);
+
+  const T1 = T0 + 11 * MIN;
+  await h.at(T1);
+  fake.force('data', ...Array(8).fill(401)); // each collection, before and after the refresh
+  assert.deepEqual((await h.whoop(A)).json(), NOT_CONNECTED);
+  while (fake.count.data < 12) await sleep(5); // the other three collections finish their two tries
+  assert.equal(fake.count.refresh_token, 1);
+  assert.equal(fs.existsSync(h.file(A)), true, 'the refreshed pair is kept');
+
+  await h.at(T1 + MIN - 1);
+  assert.deepEqual((await h.whoop(A)).json(), NOT_CONNECTED, 'the same answer, without asking WHOOP');
+  assert.equal(fake.count.data, 12);
+  assert.equal(fake.count.refresh_token, 1);
+  await h.at(T1 + MIN);
+  const back = (await h.whoop(A)).json();
+  assert.equal(fake.count.data, 16, 'asked again after the minute');
+  assert.equal(back.connected, true, 'and WHOOP took the kept token this time');
+  assert.equal(back.stale, false);
+  h.assertNoLeak();
+});
