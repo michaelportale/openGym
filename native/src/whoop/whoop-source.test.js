@@ -579,6 +579,10 @@ describe('connect', () => {
       ['https://evil.example.com/api/whoop/connect?c=abc', 'evil.example.com'],
       ['https://Gym.Example.org:443/api/whoop/connect?c=abc', 'gym.example.org'],
       ['http://localhost:8080/api/whoop/connect?c=abc', 'localhost:8080'],
+      ['https://gym.example.com:8443/api/whoop/connect?c=abc', 'gym.example.com:8443'],
+      // Only the scheme differs: the host alone would name the address it is already paired at.
+      ['http://gym.example.com/api/whoop/connect?c=abc', 'http://gym.example.com'],
+      ['HTTP://Gym.Example.com:80/api/whoop/connect?c=abc', 'http://gym.example.com'],
     ]) {
       fake.answer('whoopConnectLink', { ok: true, url })
       expect(await source.connectLink()).toEqual({ ok: false, elsewhere })

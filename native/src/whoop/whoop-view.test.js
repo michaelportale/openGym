@@ -49,6 +49,7 @@ describe('the state of every server shape', () => {
 
   test('a Connect link on another address than the paired one says where to pair', () => {
     expect(WHOOP_TEXT.pairedElsewhere('gym.example.com')).toBe('Connect works when this phone is paired with gym.example.com. Forget the server and pair again at that address.')
+    expect(WHOOP_TEXT.pairedElsewhere('https://gym.example.com')).toBe('Connect works when this phone is paired with https://gym.example.com. Forget the server and pair again at that address.')
   })
 
   test('connected with nothing scored: 14 empty days and no workouts is empty, with Disconnect', () => {

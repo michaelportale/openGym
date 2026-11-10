@@ -167,9 +167,9 @@ export function createWhoopSource({ client, cache, pairing, now }) {
   }
 
   // { ok: true, url } to open in the browser, or { ok: false }: with `unconfigured` when the server
-  // has no WHOOP app, and with `elsewhere` (the link's host) when the link is on another origin than
-  // the paired address, which is then refused: the phone is paired at an address that is not the
-  // server's ORIGIN.
+  // has no WHOOP app, and with `elsewhere` (the link's host, with its scheme when only the scheme
+  // differs) when the link is on another origin than the paired address, which is then refused:
+  // the phone is paired at an address that is not the server's ORIGIN.
   async function connectLink() {
     const p = await paired()
     if (!p) return { ok: false }
@@ -181,7 +181,10 @@ export function createWhoopSource({ client, cache, pairing, now }) {
     }
     if (!isServerLink(r.url, p.base)) {
       const origin = originOf(r.url)
-      return origin ? { ok: false, elsewhere: origin.replace(/^https?:\/\//, '') } : { ok: false }
+      if (!origin) return { ok: false }
+      const host = o => o.replace(/^https?:\/\//, '')
+      const pairedAt = originOf(p.base)
+      return { ok: false, elsewhere: pairedAt && host(pairedAt) === host(origin) ? origin : host(origin) }
     }
     connecting = now() + WHOOP_EVERY_MS
     return { ok: true, url: r.url }
