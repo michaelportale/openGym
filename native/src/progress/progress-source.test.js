@@ -54,11 +54,11 @@ test('a weigh-in alone keeps the same state object, and changes the weigh-ins', 
 
 test('a pending routine edit reaches the state, and moves its key', async () => {
   const doc = { ...copyDoc, state: { ...copyDoc.state, routines: [{ id: 'r', name: 'R', ex: [] }] } }
-  const routineEdits = createMemoryPendingEdits()
-  const stores = { finished: createMemoryFinishedWorkouts(), serverCopy: counted(doc, []), weighIns: createMemoryWeighIns(), routineEdits, bundled, now: Date.UTC(2026, 10, 9, 12) }
+  const edits = createMemoryPendingEdits()
+  const stores = { finished: createMemoryFinishedWorkouts(), serverCopy: counted(doc, []), weighIns: createMemoryWeighIns(), edits, bundled, now: Date.UTC(2026, 10, 9, 12) }
   const load = progressLoader()
   const first = await load(stores)
-  await routineEdits.put({ kind: 'routine', key: 'r', baseTs: null, value: { id: 'r', name: 'Mine', ex: [] }, t: 5 })
+  await edits.put({ kind: 'routine', key: 'r', baseTs: null, value: { id: 'r', name: 'Mine', ex: [] }, t: 5 })
   const second = await load(stores)
   expect(first.state.routines[0].name).toBe('R')
   expect(second.state.routines[0].name).toBe('Mine')

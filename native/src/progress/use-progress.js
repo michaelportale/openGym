@@ -32,7 +32,7 @@ export function useProgress() {
           finished: createSqliteFinishedWorkouts(db),
           serverCopy: createSqliteServerCopy(db),
           weighIns: createSqliteWeighIns(db),
-          routineEdits: createSqlitePendingEdits(db),
+          edits: createSqlitePendingEdits(db),
           measurements: createSqliteMeasurements(db),
           bundled: snapshot,
           now: Date.now(),

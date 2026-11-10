@@ -31,7 +31,7 @@ export function getSync() {
           meta: createSqliteSyncMeta(db),
           workouts: createSqliteFinishedWorkouts(db),
           weighIns: createSqliteWeighIns(db),
-          routineEdits: createSqlitePendingEdits(db),
+          edits: createSqlitePendingEdits(db),
           measurements: createSqliteMeasurements(db),
           now: Date.now,
         })

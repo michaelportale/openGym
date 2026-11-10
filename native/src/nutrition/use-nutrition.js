@@ -53,13 +53,13 @@ export function useNutrition() {
     return coalesced(async () => {
       try {
         const db = await openAppDatabase()
-        const routineEdits = createSqlitePendingEdits(db)
-        const notices = await readNotices(routineEdits)
+        const edits = createSqlitePendingEdits(db)
+        const notices = await readNotices(edits)
         const built = await load({
           finished: createSqliteFinishedWorkouts(db),
           serverCopy: createSqliteServerCopy(db),
           weighIns: createSqliteWeighIns(db),
-          routineEdits,
+          edits,
           bundled: snapshot,
           now: Date.now(),
         })

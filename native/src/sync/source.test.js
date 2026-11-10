@@ -195,7 +195,7 @@ const edit = (rid, routine, extra = {}) => ({ kind: 'routine', key: rid, baseTs:
 
 test('routine edits: unpaired, a pending edit to a snapshot routine shows, and the bundle is untouched', () => {
   const before = JSON.stringify(bundled)
-  const out = screenSource({ copy: null, bundled, pending: [], routineEdits: [edit('r', { id: 'r', name: 'Mine', ex: [] })] })
+  const out = screenSource({ copy: null, bundled, pending: [], edits: [edit('r', { id: 'r', name: 'Mine', ex: [] })] })
   expect(out.state.routines).toEqual([{ id: 'r', name: 'Mine', ex: [] }])
   expect(out.state.workouts.map(x => x.id)).toEqual(['b1'])
   expect(JSON.stringify(bundled)).toBe(before)
@@ -204,19 +204,19 @@ test('routine edits: unpaired, a pending edit to a snapshot routine shows, and t
 test('routine edits: paired, the edit shows over the copy on the copy\'s stamps, and the copy stays as stored', () => {
   const copy = { state: { routines: [{ id: 'r', name: 'R', _ts: 4, ex: [] }, { id: 's', name: 'S', ex: [] }], workouts: [] }, rev: 2, wid: 'x' }
   const before = JSON.stringify(copy)
-  const out = screenSource({ copy, bundled, pending: [], routineEdits: [edit('r', { id: 'r', name: 'Mine', ex: [] }, { baseTs: 4 })] })
+  const out = screenSource({ copy, bundled, pending: [], edits: [edit('r', { id: 'r', name: 'Mine', ex: [] }, { baseTs: 4 })] })
   expect(out.state.routines).toEqual([{ id: 'r', name: 'Mine', ex: [], _ts: 4 }, { id: 's', name: 'S', ex: [] }])
   expect(JSON.stringify(copy)).toBe(before)
 })
 
 test('routine edits: a superseded edit does not show', () => {
   const copy = { state: { routines: [{ id: 'r', name: 'Web', _ts: 9, ex: [] }], workouts: [] }, rev: 2, wid: 'x' }
-  const out = screenSource({ copy, bundled, pending: [], routineEdits: [edit('r', { id: 'r', name: 'Mine', ex: [] }, { baseTs: 4 })] })
+  const out = screenSource({ copy, bundled, pending: [], edits: [edit('r', { id: 'r', name: 'Mine', ex: [] }, { baseTs: 4 })] })
   expect(out.state.routines[0].name).toBe('Web')
 })
 
 test('routine edits: none leaves the routines and the state as they were', () => {
-  const out = screenSource({ copy: null, bundled, pending: [], routineEdits: [] })
+  const out = screenSource({ copy: null, bundled, pending: [], edits: [] })
   expect(out.state).toEqual(sessionState(bundled, []))
   expect(out.state.routines).toBe(bundled.state.routines)
 })
@@ -225,7 +225,7 @@ test('routine edits: the next routine still follows the loop', () => {
   const rs = [{ id: 'a', name: 'A', ex: [] }, { id: 'b', name: 'B', ex: [] }]
   const base = { version: 1, example: false, state: { unit: 'lb', routines: rs, workouts: [] }, names: {} }
   const plain = screenSource({ copy: null, bundled: base, pending: [] })
-  const edited = screenSource({ copy: null, bundled: base, pending: [], routineEdits: [edit('b', { id: 'b', name: 'B2', ex: [] })] })
+  const edited = screenSource({ copy: null, bundled: base, pending: [], edits: [edit('b', { id: 'b', name: 'B2', ex: [] })] })
   expect(edited.state.routines.map(r => r.id)).toEqual(['a', 'b'])
   expect(nextRoutineId(edited.state, 1e12)).toBe(nextRoutineId(plain.state, 1e12))
 })
@@ -233,27 +233,27 @@ test('routine edits: the next routine still follows the loop', () => {
 test('readScreenSource reads the routine edits before the copy and applies them, paired or not', async () => {
   const s = stores({ copy: { state: { routines: [{ id: 'r', name: 'R', ex: [] }], workouts: [] }, rev: 1, wid: 'x' }, all: [], pending: [] })
   const log = s.log
-  const routineEdits = { listPending: async () => { log.push('edits'); return [edit('r', { id: 'r', name: 'Mine', ex: [] })] } }
-  const paired = await readScreenSource({ ...s, routineEdits, bundled })
+  const edits = { listPending: async () => { log.push('edits'); return [edit('r', { id: 'r', name: 'Mine', ex: [] })] } }
+  const paired = await readScreenSource({ ...s, edits, bundled })
   expect(paired.state.routines[0].name).toBe('Mine')
   expect(log.indexOf('edits')).toBeLessThan(log.indexOf('copy'))
-  const unpaired = await readScreenSource({ ...stores({ copy: null, all: [], pending: [] }), routineEdits, bundled })
+  const unpaired = await readScreenSource({ ...stores({ copy: null, all: [], pending: [] }), edits, bundled })
   expect(unpaired.state.routines[0].name).toBe('Mine')
   expect((await readScreenSource({ ...s, bundled })).state.routines[0].name).toBe('R')
 })
 
 test('readScreenSource over the real store: an edit shows, and goes once acked', async () => {
-  const routineEdits = createMemoryPendingEdits()
-  await routineEdits.put(edit('r', { id: 'r', name: 'Mine', ex: [] }))
+  const edits = createMemoryPendingEdits()
+  await edits.put(edit('r', { id: 'r', name: 'Mine', ex: [] }))
   const s = stores({ copy: null, all: [], pending: [] })
-  expect((await readScreenSource({ ...s, routineEdits, bundled })).state.routines[0].name).toBe('Mine')
-  await routineEdits.markAcked([{ kind: 'routine', key: 'r', t: 5 }], 'now')
-  expect((await readScreenSource({ ...s, routineEdits, bundled })).state.routines[0].name).toBe('R')
+  expect((await readScreenSource({ ...s, edits, bundled })).state.routines[0].name).toBe('Mine')
+  await edits.markAcked([{ kind: 'routine', key: 'r', t: 5 }], 'now')
+  expect((await readScreenSource({ ...s, edits, bundled })).state.routines[0].name).toBe('R')
 })
 
 test('routine edits: unpaired, a swapped-in built-in exercise gets its catalogue name and the snapshot names stay', () => {
   const before = JSON.stringify(bundled.names)
-  const out = screenSource({ copy: null, bundled, pending: [], routineEdits: [edit('r', { id: 'r', name: 'R', ex: [{ id: builtIn.id }] })] })
+  const out = screenSource({ copy: null, bundled, pending: [], edits: [edit('r', { id: 'r', name: 'R', ex: [{ id: builtIn.id }] })] })
   expect(out.names[builtIn.id].name).toBe(cap(builtIn.n))
   expect(out.names.snap).toEqual(bundled.names.snap)
   expect(JSON.stringify(bundled.names)).toBe(before)
@@ -267,7 +267,7 @@ const settingEdit = (key, value, extra = {}) => ({ kind: 'setting', key, baseTs:
 test('nutrition: unpaired, a pending day shows on the snapshot state, which has no nutritionDays, and the bundle is untouched', () => {
   expect(bundled.state).not.toHaveProperty('nutritionDays')
   const before = JSON.stringify(bundled)
-  const out = screenSource({ copy: null, bundled, pending: [], routineEdits: [dayEdit('2026-11-09', DAY), settingEdit('supplements', [{ id: 's1', name: 'Creatine' }])] })
+  const out = screenSource({ copy: null, bundled, pending: [], edits: [dayEdit('2026-11-09', DAY), settingEdit('supplements', [{ id: 's1', name: 'Creatine' }])] })
   expect(out.state.nutritionDays).toEqual({ '2026-11-09': DAY })
   expect(out.state.supplements).toEqual([{ id: 's1', name: 'Creatine' }])
   expect(out.state.routines).toBe(bundled.state.routines)
@@ -288,7 +288,7 @@ test('nutrition: paired, a pending day and targets show over the copy on its sta
   }
   const before = JSON.stringify(copy)
   const targets = { training: { kcal: 2600 } }
-  const out = screenSource({ copy, bundled, pending: [], routineEdits: [dayEdit('2026-11-08', { ...DAY, kcal: 2500 }, { baseTs: 4 }), settingEdit('nutritionTargets', targets, { baseTs: 8 })] })
+  const out = screenSource({ copy, bundled, pending: [], edits: [dayEdit('2026-11-08', { ...DAY, kcal: 2500 }, { baseTs: 4 }), settingEdit('nutritionTargets', targets, { baseTs: 8 })] })
   expect(out.state.nutritionDays).toEqual({ '2026-11-08': { ...DAY, kcal: 2500, _ts: 4 }, '2026-11-07': other })
   expect(out.state.nutritionDays['2026-11-07']).toBe(copy.state.nutritionDays['2026-11-07'])
   expect(out.state.nutritionTargets).toEqual(targets)
@@ -298,7 +298,7 @@ test('nutrition: paired, a pending day and targets show over the copy on its sta
 
 test('nutrition: a day or setting the web changed first does not show; the web\'s does', () => {
   const copy = { state: { routines: [], workouts: [], nutritionDays: { '2026-11-08': { ...DAY, kcal: 1800, _ts: 9 } }, supplements: [], edited: { supplements: 9 } }, rev: 2, wid: 'x' }
-  const out = screenSource({ copy, bundled, pending: [], routineEdits: [dayEdit('2026-11-08', DAY, { baseTs: 4 }), settingEdit('supplements', [{ id: 's1', name: 'Creatine' }], { baseTs: 4 })] })
+  const out = screenSource({ copy, bundled, pending: [], edits: [dayEdit('2026-11-08', DAY, { baseTs: 4 }), settingEdit('supplements', [{ id: 's1', name: 'Creatine' }], { baseTs: 4 })] })
   expect(out.state.nutritionDays['2026-11-08'].kcal).toBe(1800)
   expect(out.state.supplements).toEqual([])
 })
@@ -307,15 +307,15 @@ test('readScreenSource over the real store shows every kind, paired or not, and 
   const edits = createMemoryPendingEdits()
   await edits.put(dayEdit('2026-11-09', DAY))
   await edits.put(settingEdit('nutritionTargets', { training: { kcal: 2600 } }))
-  const unpaired = await readScreenSource({ ...stores({ copy: null, all: [], pending: [] }), routineEdits: edits, bundled })
+  const unpaired = await readScreenSource({ ...stores({ copy: null, all: [], pending: [] }), edits, bundled })
   expect(unpaired.state.nutritionDays).toEqual({ '2026-11-09': DAY })
   expect(unpaired.state.nutritionTargets).toEqual({ training: { kcal: 2600 } })
   const s = stores({ copy: { state: { routines: [], workouts: [] }, rev: 1, wid: 'x' }, all: [], pending: [] })
-  const paired = await readScreenSource({ ...s, routineEdits: edits, bundled })
+  const paired = await readScreenSource({ ...s, edits, bundled })
   expect(paired.state.nutritionDays).toEqual({ '2026-11-09': DAY })
   expect(paired.state.nutritionTargets).toEqual({ training: { kcal: 2600 } })
   await edits.markAcked([{ kind: 'nutritionDay', key: '2026-11-09', t: 6 }, { kind: 'setting', key: 'nutritionTargets', t: 7 }], 'now')
-  const after = await readScreenSource({ ...s, routineEdits: edits, bundled })
+  const after = await readScreenSource({ ...s, edits, bundled })
   expect(after.state).not.toHaveProperty('nutritionDays')
   expect(after.state).not.toHaveProperty('nutritionTargets')
 })

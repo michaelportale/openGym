@@ -15,12 +15,12 @@ const localDay = now => {
   return `${x.getFullYear()}-${x.getMonth() + 1}-${x.getDate()}`
 }
 
-export function sourceKey({ copyKey, workouts, weighIns, routineEdits, measurements, now }) {
+export function sourceKey({ copyKey, workouts, weighIns, edits, measurements, now }) {
   return JSON.stringify([
     copyKey ? [copyKey.rev ?? null, copyKey.wid ?? null] : null,
     (workouts ?? []).map(w => w?.id ?? null),
     (weighIns ?? []).map(r => [r.d, r.t, r.op]),
-    (routineEdits ?? []).map(e => [e.kind, e.key, e.t]),
+    (edits ?? []).map(e => [e.kind, e.key, e.t]),
     (measurements ?? []).map(r => [r.d, r.t, r.op]),
     localDay(now),
   ])
@@ -29,13 +29,13 @@ export function sourceKey({ copyKey, workouts, weighIns, routineEdits, measureme
 // Read from the stores: `weighIns` and `measurements` may be null for a screen that shows none.
 // The pending rows come before the copy's key, as every reader here reads them (a sync stores the
 // copy, then acks).
-export async function readSourceKey({ finished, serverCopy, weighIns = null, routineEdits = null, measurements = null, now }) {
+export async function readSourceKey({ finished, serverCopy, weighIns = null, edits = null, measurements = null, now }) {
   const pendingWeighIns = weighIns ? await weighIns.listPending() : []
-  const pendingEdits = routineEdits ? await routineEdits.listPending() : []
+  const pendingEdits = edits ? await edits.listPending() : []
   const pendingMeasurements = measurements ? await measurements.listPending() : []
   const workouts = finished ? await finished.listPending() : []
   const copyKey = await serverCopy.key()
-  return sourceKey({ copyKey, workouts, weighIns: pendingWeighIns, routineEdits: pendingEdits, measurements: pendingMeasurements, now })
+  return sourceKey({ copyKey, workouts, weighIns: pendingWeighIns, edits: pendingEdits, measurements: pendingMeasurements, now })
 }
 
 // A load that hands back its last result while readKey(...args) gives the same key, and runs

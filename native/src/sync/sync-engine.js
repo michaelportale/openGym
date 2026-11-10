@@ -7,7 +7,7 @@
 //
 // Everything is injected: `client` (api-client.js), `credentials` (the Keychain token),
 // `copy` and `meta` (server-copy.js), `workouts` (the finished-workout store), `weighIns` (the
-// weigh-in day operations), `routineEdits` (the pending-edits.js store: it syncs every kind of
+// weigh-in day operations), `edits` (the pending-edits.js store: it syncs every kind of
 // row), `measurements` (the body-measurement day operations, measurement-store.js) and `now` (ms
 // since epoch). It never touches the session journal and logs nothing.
 
@@ -63,9 +63,9 @@ function pairError(result, base) {
   return `${host} answered, but not like an openGym server. Check the address.`
 }
 
-export function createSync({ client, credentials, copy, workouts, weighIns, routineEdits, measurements, meta, now }) {
+export function createSync({ client, credentials, copy, workouts, weighIns, edits, measurements, meta, now }) {
   if (!weighIns) throw new Error('createSync needs a weighIns store')
-  if (!routineEdits) throw new Error('createSync needs a routineEdits store')
+  if (!edits) throw new Error('createSync needs an edits store')
   if (!measurements) throw new Error('createSync needs a measurements store')
   const iso = () => new Date(now()).toISOString()
 
@@ -120,11 +120,11 @@ export function createSync({ client, credentials, copy, workouts, weighIns, rout
     // the web changed (or deleted) that routine, day or setting first: the store lists its notice by
     // kind (the Plan tab shows the routine ones). Rebased: the copy holds what this phone sent while
     // a newer edit waited, so the newer one now stands on the copy's stamp.
-    const edits = applyEdits(state, await routineEdits.listPending())
+    const guarded = applyEdits(state, await edits.listPending())
     const at = iso()
-    if (edits.done.length) await routineEdits.markAcked(edits.done, at)
-    if (edits.rebased.length) await routineEdits.rebase(edits.rebased)
-    if (edits.superseded.length) await routineEdits.markSuperseded(edits.superseded, at)
+    if (guarded.done.length) await edits.markAcked(guarded.done, at)
+    if (guarded.rebased.length) await edits.rebase(guarded.rebased)
+    if (guarded.superseded.length) await edits.markSuperseded(guarded.superseded, at)
   }
 
   async function store(state, rev) {
@@ -214,12 +214,12 @@ export function createSync({ client, credentials, copy, workouts, weighIns, rout
     }
 
     for (let tries = 0; ; tries++) {
-      const plan = buildPush(held, await workouts.listPending(), await weighIns.listPending(), await routineEdits.listPending(), await measurements.listPending())
+      const plan = buildPush(held, await workouts.listPending(), await weighIns.listPending(), await edits.listPending(), await measurements.listPending())
       if (!plan) return synced()
       if (tries === 2) return stuck('conflict')
       // What this attempt sends for each routine, day or setting, so the pull that finds it there
       // knows it as the phone's own push, even with a newer edit saved meanwhile (reconcile's rebase).
-      if (plan.edits.length) await routineEdits.markSent(plan.edits)
+      if (plan.edits.length) await edits.markSent(plan.edits)
       const res = await client.push(ctx.base, ctx.token, { state: plan.state, baseRev: plan.baseRev, baseWid: plan.baseWid })
       if (res.ok) {
         // Not acked yet: until a stored copy holds them, the pending rows are what shows them.
@@ -246,7 +246,7 @@ export function createSync({ client, credentials, copy, workouts, weighIns, rout
     const httpStatus = Number(await meta.get('httpStatus')) || null
     const pending = (await workouts.listPending()).length
     const pendingWeighIns = (await weighIns.listPending()).length
-    const pendingEdits = (await routineEdits.listPending()).length
+    const pendingEdits = (await edits.listPending()).length
     const pendingMeasurements = (await measurements.listPending()).length
     // The rev and wid alone: this runs on every state change, and the body can be megabytes.
     const held = await copy.key().catch(() => null)
@@ -383,7 +383,7 @@ export function createSync({ client, credentials, copy, workouts, weighIns, rout
           await workouts.resetAcked()
           await weighIns.resetAcked()
           await measurements.resetAcked()
-          await routineEdits.resetAcked()
+          await edits.resetAcked()
           await store(p.state, p.rev)
           await meta.set('problem', null)
           outcome = null

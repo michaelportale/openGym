@@ -43,7 +43,7 @@ export function useMeasurements() {
         const built = await load({
           finished: createSqliteFinishedWorkouts(db),
           serverCopy: createSqliteServerCopy(db),
-          routineEdits: createSqlitePendingEdits(db),
+          edits: createSqlitePendingEdits(db),
           measurements: createSqliteMeasurements(db),
           now: Date.now(),
         })

@@ -21,7 +21,7 @@ const LOADING = { status: 'loading', error: null, db: null, state: null, workout
 const sourceStores = db => ({
   finished: createSqliteFinishedWorkouts(db),
   serverCopy: createSqliteServerCopy(db),
-  routineEdits: createSqlitePendingEdits(db),
+  edits: createSqlitePendingEdits(db),
 })
 
 // What the Workout tab opens on. An open journal always wins ('session', openBase null: the

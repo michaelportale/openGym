@@ -40,12 +40,12 @@ export function usePlan() {
     return coalesced(async () => {
       try {
         const db = await openAppDatabase()
-        const routineEdits = createSqlitePendingEdits(db)
-        const notices = await routineEdits.listNotices({ kind: 'routine' })
+        const edits = createSqlitePendingEdits(db)
+        const notices = await edits.listNotices({ kind: 'routine' })
         const built = await load({
           finished: createSqliteFinishedWorkouts(db),
           serverCopy: createSqliteServerCopy(db),
-          routineEdits,
+          edits,
           now: Date.now(),
         })
         setSource({ status: 'ready', ...built, notices, error: null })
