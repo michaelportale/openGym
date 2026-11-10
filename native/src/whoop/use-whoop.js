@@ -10,11 +10,11 @@ import { createCredentials } from '../sync/credentials'
 import { createSqliteSyncMeta } from '../sync/server-copy'
 import { useFocusReload } from '../sync/use-focus-reload'
 import { createSqliteWhoopCache } from './whoop-cache'
-import { createWhoopSource, isGoodRead } from './whoop-source'
+import { createWhoopSource, isGoodRead, pairingFrom } from './whoop-source'
 import { WHOOP_TEXT } from './whoop-view'
 
-// The one WHOOP source for the app, so its 10-minute window outlives the screen. A failed build
-// is not remembered: the next call tries again.
+// The one WHOOP source for the app, so the read it holds and its Connect window outlive the
+// screen. A failed build is not remembered: the next call tries again.
 let source = null
 
 function getWhoopSource() {
@@ -26,13 +26,7 @@ function getWhoopSource() {
         return createWhoopSource({
           client: createApiClient({ fetch: (...args) => fetch(...args) }),
           cache: createSqliteWhoopCache(db),
-          // Paired as the sync engine counts it: a token in the Keychain and a server address. The
-          // profile id (stored at pairing) tells same-named profiles apart.
-          pairing: async () => {
-            const auth = await credentials.get()
-            const base = await meta.get('server')
-            return auth && base ? { base, token: auth.token, profileId: (await meta.get('profileId')) ?? '' } : null
-          },
+          pairing: pairingFrom({ credentials, meta }),
           now: Date.now,
         })
       })

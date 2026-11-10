@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { createMemoryWhoopCache } from './whoop-cache.js'
-import { createWhoopSource, isGoodRead, isServerLink, WHOOP_EVERY_MS, WHOOP_RETRY_MS } from './whoop-source.js'
+import { createWhoopSource, isGoodRead, isServerLink, pairingFrom, WHOOP_EVERY_MS, WHOOP_RETRY_MS } from './whoop-source.js'
 
 const BASE = 'https://gym.example.com'
 const TOKEN = 'SECRET.TOKEN.VALUE'
@@ -434,6 +434,59 @@ describe('the pairing', () => {
     releasePut()
     expect(await inFlight).toEqual({ paired: true, payload: null, cached: false })
     expect(await memory.get()).toBeNull()
+  })
+})
+
+describe('pairingFrom: the Keychain token and the paired server, read as one', () => {
+  // sync_meta as a map, and a Keychain whose read can run code meanwhile (a pair() or forget()
+  // landing between the reads, as the sync engine's exclusive block does not cover this one).
+  function stores({ server = BASE, profileId = 'u_mo', token = 'TOKEN-A' } = {}) {
+    const rows = new Map(Object.entries({ server, profileId }).filter(([, v]) => v != null))
+    const meta = { get: async k => rows.get(k) ?? null }
+    const keychain = { token, during: [] }
+    const credentials = {
+      get: async () => {
+        const held = keychain.token
+        keychain.during.shift()?.(rows, keychain)
+        return held ? { token: held } : null
+      },
+    }
+    return { rows, keychain, pairing: pairingFrom({ credentials, meta }) }
+  }
+  // What pair() does, in its order: the old token goes, the address and id change, the new token comes.
+  const repair = (base, profileId, token) => (rows, keychain) => {
+    keychain.token = null
+    rows.set('server', base)
+    rows.set('profileId', profileId)
+    keychain.token = token
+  }
+
+  test('paired: the server, the token and the profile id', async () => {
+    expect(await stores().pairing()).toEqual({ base: BASE, token: 'TOKEN-A', profileId: 'u_mo' })
+  })
+
+  test('no token, or no server, is unpaired; a pairing from before profile ids keys on ""', async () => {
+    expect(await stores({ token: null }).pairing()).toBeNull()
+    expect(await stores({ server: null }).pairing()).toBeNull()
+    expect(await stores({ profileId: null }).pairing()).toEqual({ base: BASE, token: 'TOKEN-A', profileId: '' })
+  })
+
+  test("a pairing that moves to another server during the Keychain read never pairs one's token with the other's address", async () => {
+    const { keychain, pairing } = stores()
+    keychain.during.push(repair('https://other.example.com', 'u_mo', 'TOKEN-B'))
+    expect(await pairing()).toEqual({ base: 'https://other.example.com', token: 'TOKEN-B', profileId: 'u_mo' })
+  })
+
+  test('a pairing that moves to another profile on the same server during the read is read again too', async () => {
+    const { keychain, pairing } = stores()
+    keychain.during.push(repair(BASE, 'u_ann', 'TOKEN-C'))
+    expect(await pairing()).toEqual({ base: BASE, token: 'TOKEN-C', profileId: 'u_ann' })
+  })
+
+  test('a pairing still moving on the second read counts as unpaired for now', async () => {
+    const { keychain, pairing } = stores()
+    keychain.during.push(repair('https://other.example.com', 'u_mo', 'TOKEN-B'), repair('https://third.example.com', 'u_mo', 'TOKEN-D'))
+    expect(await pairing()).toBeNull()
   })
 })
 

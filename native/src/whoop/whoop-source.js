@@ -51,6 +51,27 @@ export function isServerLink(url, base) {
   return origin !== null && origin === originOf(base)
 }
 
+/** The `pairing` for createWhoopSource, read as the sync engine counts a pairing: a token in the
+ * Keychain (`credentials`) and a server address in `meta`. The profile id (stored at pairing)
+ * tells same-named profiles apart. These reads are outside the engine's exclusive block, so the
+ * address and id are read before and after the token: a pair() or forget() that moved them in
+ * between could leave one pairing's token beside another's address. Such a read is made once
+ * more, and if the pairing is still moving it counts as unpaired for now (the engine emits when
+ * it settles, and the card reads again). */
+export function pairingFrom({ credentials, meta }) {
+  const where = async () => [await meta.get('server'), (await meta.get('profileId')) ?? '']
+  return async () => {
+    for (let tries = 0; tries < 2; tries++) {
+      const [base, profileId] = await where()
+      const auth = await credentials.get()
+      const [baseAfter, profileIdAfter] = await where()
+      if (base !== baseAfter || profileId !== profileIdAfter) continue
+      return auth && base ? { base, token: auth.token, profileId } : null
+    }
+    return null
+  }
+}
+
 /** A fresh answer from the server (not the phone's cache, not a failure): it clears a failure line. */
 export function isGoodRead(shown) {
   const p = shown?.payload
