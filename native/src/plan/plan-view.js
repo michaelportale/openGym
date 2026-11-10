@@ -4,7 +4,8 @@
 import { history, progression, queue, repRange, rotation } from '../shared/training.js'
 import { findExercise } from '../exercises/detail-view.js'
 import { cap } from '../sync/source.js'
-import { sameRoutine } from '../sync/edit-guard.js'
+import { ROUTINE_DELETED, isRoutineDeleted, sameRoutine, stampOf } from '../sync/edit-guard.js'
+import { routinesMoved } from './routine-edit.js'
 import { applySlotForm, failureOnPick, formRanged, moveSlot, policyChoices, stepInvalid } from './slot-edit.js'
 
 export const UNSAFE_EDIT = 'This move or swap has to be made on the web.'
@@ -52,30 +53,100 @@ function scheduleOf(state, nextId) {
   return days.some(d => d.names) ? { kind: 'week', days } : null
 }
 
-const NOTICE = {
+// A notice's sentence by what the edit was (planNotices `op`) and why it was not sent (the guard's
+// reason). An unknown reason reads as 'changed', as 7C's do. A create superseded as 'changed' had
+// landed (its id is on the server): what was lost is a change made after, so it is worded as an
+// edit. A delete is superseded only as 'changed' and an order only as 'changed' (edit-guard.js: a
+// routine the copy lacks is a done delete, a delete is never unsafe, an order is never absent).
+const EDIT_NOTICE = {
   changed: name => `Your change to ${name} wasn't sent: it was changed on the web first. This shows the web's version.`,
   deleted: name => `Your change to ${name} wasn't sent: it was deleted on the web.`,
   unsafe: name => `Your change to ${name} wasn't sent: this move or swap has to be made on the web.`,
 }
+const NOTICE = {
+  edit: EDIT_NOTICE,
+  create: {
+    changed: EDIT_NOTICE.changed,
+    deleted: (name, Name) => `${Name} wasn't added: a routine with that id was deleted on your server.`,
+    unsafe: (name, Name) => `${Name} wasn't added: it couldn't be sent safely. Try adding it again.`,
+  },
+  delete: {
+    changed: (name, Name) => `${Name} changed on the web, so it wasn't deleted.`,
+  },
+  order: {
+    changed: () => "Your routine order wasn't sent: it changed on the web first.",
+  },
+}
 
-const noticeName = name => (typeof name === 'string' && name.trim() ? name : 'this routine')
+const named = name => typeof name === 'string' && name.trim()
+const noticeName = name => (named(name) ? name : 'this routine')
+// The same name opening a sentence.
+const NoticeName = name => (named(name) ? name : 'This routine')
 
-// Routine rows of pending-edits.js listNotices() as the lines the screens show, each with its
-// Dismiss button's VoiceOver label.
+// The Plan's rows of pending-edits.js listNotices() (its routine and routineOrder notices) as the
+// lines the screens show, each with its Dismiss button's VoiceOver label. `op` (planNotices) picks
+// the wording; a notice without one is an edit's. The order's line is dismissed as its own kind
+// (`kind`); a routine's line carries none.
 export function noticeLines(notices) {
   return (notices ?? []).map(n => {
+    if (n.kind === 'routineOrder') {
+      const text = (NOTICE.order[n.reason] ?? NOTICE.order.changed)()
+      return { rid: n.key, kind: n.kind, text, dismissLabel: 'Dismiss notice about your routine order' }
+    }
+    const lines = NOTICE[n.op] ?? NOTICE.edit
     const name = noticeName(n.name)
-    return { rid: n.key, text: (NOTICE[n.reason] ?? NOTICE.changed)(name), dismissLabel: `Dismiss notice about ${name}` }
+    return { rid: n.key, text: (lines[n.reason] ?? lines.changed)(name, NoticeName(n.name)), dismissLabel: `Dismiss notice about ${name}` }
   })
 }
 
-export function planView(state, { nextId = null, notices = [] } = {}) {
+const isPlanNotice = n => n?.kind === 'routine' || n?.kind === 'routineOrder'
+
+// The Plan's notices (pending-edits.js listNotices: its routine and routineOrder rows, in the
+// store's order), each with what the edit was, read from its stored row (pending-edits.js get,
+// matched by kind and key; `rows` may hold nulls): `op` is 'order', 'delete' (ROUTINE_DELETED),
+// 'create' (a routine row on base 0) or 'edit'. A delete's marker has no name, so it is named from
+// `state`, the screen's, where the routine the web kept still is.
+export function planNotices(notices, rows, state) {
+  const stored = (Array.isArray(rows) ? rows : []).filter(isObj)
+  return (Array.isArray(notices) ? notices : []).filter(isPlanNotice).map(n => {
+    if (n.kind === 'routineOrder') return { ...n, op: 'order' }
+    const row = stored.find(r => r.kind === n.kind && r.key === n.key)
+    if (row && isRoutineDeleted(row.value)) return { ...n, op: 'delete', name: nameOf(findRoutine(state, n.key) ?? {}) || n.name }
+    return { ...n, op: row?.baseTs === 0 ? 'create' : 'edit' }
+  })
+}
+
+// `canAuthor`: whether New and the routines' Move up / Move down are offered. Adding, deleting and
+// reordering need a server copy (PAIR_TO_AUTHOR): made on the snapshot, they would be sent into
+// the real record at pairing.
+export function planView(state, { nextId = null, notices = [], copy = null } = {}) {
   return {
     schedule: scheduleOf(state, nextId),
     routines: routinesOf(state).map(r => ({ id: r.id, name: nameOf(r), count: exOf(r).length })),
     notices: noticeLines(notices),
+    canAuthor: copy != null,
   }
 }
+
+// The order a Move up (-1) or Move down (+1) on routine `id` saves: every id of `routines` (the
+// Plan's rows, as on screen) with that one moved a place. Null at an edge, for an id not listed,
+// and for a list whose ids are not all distinct strings: the store holds string ids only, and a
+// tap finds its routine by id.
+export function orderMoved(routines, id, dir) {
+  const list = Array.isArray(routines) ? routines : []
+  const ids = list.map(r => r?.id)
+  if (!ids.every(x => typeof x === 'string') || new Set(ids).size !== ids.length) return null
+  return routinesMoved(list, ids.indexOf(id), dir)
+}
+
+// What the Plan's authoring saves put in the pending-edits store, without the time. A create is
+// the routine on base 0, which the guard adds only while the server has no routine with its id and
+// never deleted one. A delete is ROUTINE_DELETED on the copy's routine's _ts (over a create still
+// pending, the store keeps base 0, and the guard reads it as done: nothing is sent). An order is
+// every routine id, on the stamp the guard reads (edited.routineOrder).
+export const routineCreateEdit = routine => ({ kind: 'routine', key: routine.id, baseTs: 0, value: routine })
+export const routineDeleteEdit = (rid, copyRoutine) => ({ kind: 'routine', key: rid, baseTs: copyRoutine?._ts ?? null, value: ROUTINE_DELETED })
+export const routineOrderEdit = (ids, copy) => ({ kind: 'routineOrder', key: 'routineOrder', baseTs: stampOf(copy?.state, 'routineOrder', 'routineOrder'), value: ids })
 
 // The web's speedUnitOf for a pounds profile: mph unless the profile chose km/h.
 const speedUnitOf = state => (state?.speedUnit === 'kmh' ? 'kmh' : 'mph')

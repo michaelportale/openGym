@@ -1,8 +1,11 @@
 import { describe, expect, test } from 'vitest'
 import {
   MISSING_ROUTINE, UNSAFE_EDIT, baseRoutine, draftChanged, editBase, findRoutine, indexOfKey, movedText, noticeLines, planView, routineView, savedRoutine, sheetView, stepForm, withProg,
+  PAIR_TO_AUTHOR, orderMoved, planNotices, routineCreateEdit, routineDeleteEdit, routineOrderEdit,
 } from './plan-view.js'
 import { slotForm } from './slot-edit.js'
+import { ROUTINE_DELETED, applyEdits } from '../sync/edit-guard.js'
+import { createMemoryPendingEdits } from '../sync/pending-edits.js'
 
 const push = { id: 'a', name: 'Push A', ex: [{ id: 'bench', sets: 3, reps: 10 }, { id: 'ohp', sets: 3, reps: 8 }] }
 const pull = { id: 'b', name: 'Pull B', ex: [{ id: 'row', sets: 3, reps: 10 }] }
@@ -310,5 +313,204 @@ describe('withProg: switching the rule', () => {
   test("follow the routine takes the routine's rule", () => {
     const r = { ...routine, prog: 'double' }
     expect(withProg(slotForm({ ...slot, prog: 'linear' }, r), '', slot, r)).toMatchObject({ prog: '', ranged: true })
+  })
+})
+
+describe('7E-A: notices for every routine edit that was not sent', () => {
+  const line = (rid, text, name) => ({ rid, text, dismissLabel: `Dismiss notice about ${name}` })
+  test('a create the server refused: deleted, unsafe, and changed (it landed, and a later change lost)', () => {
+    expect(noticeLines([
+      { kind: 'routine', key: 'n1', name: 'Legs', reason: 'deleted', op: 'create' },
+      { kind: 'routine', key: 'n2', name: 'Arms', reason: 'unsafe', op: 'create' },
+      { kind: 'routine', key: 'n3', name: 'Core', reason: 'changed', op: 'create' },
+    ])).toEqual([
+      line('n1', "Legs wasn't added: a routine with that id was deleted on your server.", 'Legs'),
+      line('n2', "Arms wasn't added: it couldn't be sent safely. Try adding it again.", 'Arms'),
+      line('n3', "Your change to Core wasn't sent: it was changed on the web first. This shows the web's version.", 'Core'),
+    ])
+  })
+  test('a delete the web overtook', () => {
+    expect(noticeLines([{ kind: 'routine', key: 'a', name: 'Push A', reason: 'changed', op: 'delete' }])).toEqual([
+      line('a', "Push A changed on the web, so it wasn't deleted.", 'Push A'),
+    ])
+  })
+  test('an order the web overtook: named "Your routine order", never its key, and dismissed as its own kind', () => {
+    expect(noticeLines([{ kind: 'routineOrder', key: 'routineOrder', name: 'routineOrder', reason: 'changed', op: 'order' }])).toEqual([
+      { rid: 'routineOrder', kind: 'routineOrder', text: "Your routine order wasn't sent: it changed on the web first.", dismissLabel: 'Dismiss notice about your routine order' },
+    ])
+  })
+  test('an order notice reads as one by its kind alone', () => {
+    expect(noticeLines([{ kind: 'routineOrder', key: 'routineOrder', name: 'routineOrder', reason: 'changed' }])[0].text)
+      .toBe("Your routine order wasn't sent: it changed on the web first.")
+  })
+  test('an edit keeps the 7C wording, op or none', () => {
+    expect(noticeLines([
+      { kind: 'routine', key: 'a', name: 'Push A', reason: 'changed', op: 'edit' },
+      { kind: 'routine', key: 'b', name: 'Pull B', reason: 'deleted', op: 'edit' },
+      { kind: 'routine', key: 'c', name: 'Legs', reason: 'unsafe', op: 'edit' },
+    ]).map(l => l.text)).toEqual([
+      "Your change to Push A wasn't sent: it was changed on the web first. This shows the web's version.",
+      "Your change to Pull B wasn't sent: it was deleted on the web.",
+      "Your change to Legs wasn't sent: this move or swap has to be made on the web.",
+    ])
+  })
+  test('a blank name opening a sentence reads as This routine', () => {
+    expect(noticeLines([
+      { kind: 'routine', key: 'n1', name: '', reason: 'deleted', op: 'create' },
+      { kind: 'routine', key: 'n2', name: ' ', reason: 'unsafe', op: 'create' },
+      { kind: 'routine', key: 'a', name: '', reason: 'changed', op: 'delete' },
+    ])).toEqual([
+      line('n1', "This routine wasn't added: a routine with that id was deleted on your server.", 'this routine'),
+      line('n2', "This routine wasn't added: it couldn't be sent safely. Try adding it again.", 'this routine'),
+      line('a', "This routine changed on the web, so it wasn't deleted.", 'this routine'),
+    ])
+  })
+})
+
+describe('planNotices: what each notice was, from its stored row', () => {
+  const state = { routines: [push, pull] }
+  const n = (kind, key, name, reason = 'changed') => ({ kind, key, name, reason, at: '1' })
+  test('a create is a routine row on base 0, a delete holds the marker, anything else is an edit', () => {
+    const notices = [n('routine', 'new', 'Legs', 'deleted'), n('routine', 'a', ''), n('routine', 'b', 'Pull B'), n('routine', 'seed', 'Seed')]
+    const rows = [
+      { kind: 'routine', key: 'new', baseTs: 0, value: { id: 'new', name: 'Legs', ex: [] } },
+      { kind: 'routine', key: 'a', baseTs: 5, value: JSON.parse(JSON.stringify(ROUTINE_DELETED)) },
+      { kind: 'routine', key: 'b', baseTs: 7, value: pull },
+      { kind: 'routine', key: 'seed', baseTs: null, value: { id: 'seed', name: 'Seed' } },
+    ]
+    expect(planNotices(notices, rows, state).map(x => [x.key, x.op, x.name])).toEqual([
+      ['new', 'create', 'Legs'], ['a', 'delete', 'Push A'], ['b', 'edit', 'Pull B'], ['seed', 'edit', 'Seed'],
+    ])
+  })
+  test('rows are matched by kind and key, not by place; a notice with no row reads as an edit', () => {
+    const notices = [n('routine', 'a', ''), n('routine', 'b', 'Pull B')]
+    const rows = [null, { kind: 'routine', key: 'a', baseTs: 5, value: ROUTINE_DELETED }]
+    expect(planNotices(notices, rows, state).map(x => [x.key, x.op])).toEqual([['a', 'delete'], ['b', 'edit']])
+  })
+  test('the order notice is an order; other kinds are not the Plan\'s; the store\'s order is kept', () => {
+    const notices = [n('routineOrder', 'routineOrder', 'routineOrder'), n('nutritionDay', '2026-11-01', '2026-11-01'), n('setting', 'supplements', 'supplements'), n('routine', 'b', 'Pull B')]
+    expect(planNotices(notices, [], state).map(x => [x.kind, x.op])).toEqual([['routineOrder', 'order'], ['routine', 'edit']])
+  })
+  test('a delete of a routine the state no longer holds keeps the store\'s name; an edit is never renamed', () => {
+    const rows = [{ kind: 'routine', key: 'gone', baseTs: 5, value: ROUTINE_DELETED }, { kind: 'routine', key: 'a', baseTs: 5, value: { id: 'a', name: '' } }]
+    expect(planNotices([n('routine', 'gone', ''), n('routine', 'a', '')], rows, state).map(x => x.name)).toEqual(['', ''])
+  })
+  test('none, or not a list, reads as none', () => {
+    expect(planNotices(null, null, state)).toEqual([])
+    expect(planNotices(undefined, [], null)).toEqual([])
+  })
+})
+
+describe('planView: who may add, delete or reorder', () => {
+  test('canAuthor only while a server copy is held', () => {
+    expect(planView({ routines: [push] }, { copy: { rev: 3, state: {} } }).canAuthor).toBe(true)
+    expect(planView({ routines: [push] }, { copy: null }).canAuthor).toBe(false)
+    expect(planView({ routines: [push] }, {}).canAuthor).toBe(false)
+  })
+  test('the sentence shown in their place', () => {
+    expect(PAIR_TO_AUTHOR).toBe('Pair with your server to add, delete or reorder routines.')
+  })
+})
+
+describe('orderMoved: the order a tap on Move up or Move down saves', () => {
+  const rows = planView({ routines: [push, null, pull, legs] }, {}).routines
+  test('every routine id as the Plan lists them, the one tapped moved one place', () => {
+    expect(orderMoved(rows, 'c', -1)).toEqual(['a', 'c', 'b'])
+    expect(orderMoved(rows, 'a', 1)).toEqual(['b', 'a', 'c'])
+    expect(orderMoved(rows, 'b', -1)).toEqual(['b', 'a', 'c'])
+  })
+  test('null at an edge, for a routine not listed, or a bad direction', () => {
+    expect(orderMoved(rows, 'a', -1)).toBeNull()
+    expect(orderMoved(rows, 'c', 1)).toBeNull()
+    expect(orderMoved(rows, 'gone', 1)).toBeNull()
+    expect(orderMoved(rows, 'b', 2)).toBeNull()
+  })
+  test('null for a list the store could not hold or a tap could not find: an id that is not a string, or one held twice', () => {
+    expect(orderMoved([{ id: 'a' }, { id: 7 }, { id: 'c' }], 'a', 1)).toBeNull()
+    expect(orderMoved([{ id: 'a' }, {}, { id: 'c' }], 'c', -1)).toBeNull()
+    expect(orderMoved([{ id: 'a' }, { id: 'b' }, { id: 'a' }], 'b', 1)).toBeNull()
+  })
+  test('the rows are left alone', () => {
+    const before = JSON.stringify(rows)
+    orderMoved(rows, 'b', 1)
+    expect(JSON.stringify(rows)).toBe(before)
+  })
+  test('none reads as none', () => {
+    expect(orderMoved(null, 'a', 1)).toBeNull()
+    expect(orderMoved([], 'a', 1)).toBeNull()
+  })
+})
+
+describe('what a create, a delete and an order put in the store', () => {
+  const copy = { rev: 4, state: { routines: [{ ...push, _ts: 5 }, { ...pull, _ts: 6 }], edited: { routineOrder: 9 } } }
+  test('a create: the routine on base 0', () => {
+    const r = { id: 'n1', name: 'Legs', emoji: 'figureStrength', ex: [] }
+    expect(routineCreateEdit(r)).toEqual({ kind: 'routine', key: 'n1', baseTs: 0, value: r })
+  })
+  test("a delete: the marker on the copy's routine _ts, or null with none", () => {
+    expect(routineDeleteEdit('a', copy.state.routines[0])).toEqual({ kind: 'routine', key: 'a', baseTs: 5, value: ROUTINE_DELETED })
+    expect(routineDeleteEdit('a', { ...push })).toMatchObject({ baseTs: null })
+    expect(routineDeleteEdit('a', null)).toMatchObject({ baseTs: null })
+  })
+  test("an order: every id on the copy's edited.routineOrder, or null with none", () => {
+    expect(routineOrderEdit(['b', 'a'], copy)).toEqual({ kind: 'routineOrder', key: 'routineOrder', baseTs: 9, value: ['b', 'a'] })
+    expect(routineOrderEdit(['b', 'a'], { state: { routines: [] } })).toMatchObject({ baseTs: null })
+    expect(routineOrderEdit(['b', 'a'], null)).toMatchObject({ baseTs: null })
+  })
+})
+
+describe('the Plan tab\'s edits through the store and the guard', () => {
+  const at = '2026-11-10T00:00:00.000Z'
+  const settle = async (edits, state) => {
+    const pending = await edits.listPending()
+    const result = applyEdits(state, pending)
+    await edits.markSuperseded(result.superseded, at)
+    return result
+  }
+  const linesOf = async (edits, state) => {
+    const listed = await edits.listNotices()
+    const rows = []
+    for (const x of listed) rows.push(await edits.get(x.kind, x.key))
+    return noticeLines(planNotices(listed, rows, state))
+  }
+
+  test('a create then a delete before any sync: base 0 kept, read as done, nothing sent', async () => {
+    const edits = createMemoryPendingEdits()
+    const r = { id: 'n1', name: 'Legs', ex: [] }
+    const copy = { routines: [{ ...push, _ts: 5 }] }
+    await edits.put({ ...routineCreateEdit(r), t: 1 })
+    await edits.put({ ...routineDeleteEdit('n1', null), t: 2 })
+    expect(await edits.get('routine', 'n1')).toMatchObject({ baseTs: 0 })
+    const result = await settle(edits, copy)
+    expect(result.done.map(d => d.key)).toEqual(['n1'])
+    expect(result.applied).toEqual([])
+    expect(result.state).toBe(copy)
+  })
+  test('a delete the web overtook names the routine the web kept', async () => {
+    const edits = createMemoryPendingEdits()
+    await edits.put({ ...routineDeleteEdit('a', { ...push, _ts: 5 }), t: 1 })
+    const web = { routines: [{ ...push, name: 'Push A (heavy)', _ts: 8 }, pull] }
+    await settle(edits, web)
+    expect(await linesOf(edits, web)).toEqual([
+      { rid: 'a', text: "Push A (heavy) changed on the web, so it wasn't deleted.", dismissLabel: 'Dismiss notice about Push A (heavy)' },
+    ])
+  })
+  test('a create of an id the server deleted', async () => {
+    const edits = createMemoryPendingEdits()
+    await edits.put({ ...routineCreateEdit({ id: 'n1', name: 'Legs', ex: [] }), t: 1 })
+    const web = { routines: [push], deleted: { routines: { n1: 12 } } }
+    await settle(edits, web)
+    expect((await linesOf(edits, web)).map(l => l.text)).toEqual(["Legs wasn't added: a routine with that id was deleted on your server."])
+  })
+  test('an order: applied on the base it saw, overtaken by a web reorder', async () => {
+    const copy = { routines: [push, pull, legs], edited: { routineOrder: 9 } }
+    const edits = createMemoryPendingEdits()
+    await edits.put({ ...routineOrderEdit(orderMoved(planView(copy, {}).routines, 'c', -1), { state: copy }), t: 1 })
+    expect(applyEdits(copy, await edits.listPending()).state.routines.map(r => r.id)).toEqual(['a', 'c', 'b'])
+    const web = { routines: [pull, push, legs], edited: { routineOrder: 11 } }
+    await settle(edits, web)
+    expect(await linesOf(edits, web)).toEqual([
+      { rid: 'routineOrder', kind: 'routineOrder', text: "Your routine order wasn't sent: it changed on the web first.", dismissLabel: 'Dismiss notice about your routine order' },
+    ])
   })
 })
