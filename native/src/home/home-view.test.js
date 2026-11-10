@@ -14,7 +14,7 @@ test('no routines: no next session, no NaN or undefined', () => {
   for (const state of [undefined, null, {}, { routines: [] }, { routines: 'x', nutritionDays: [] }]) {
     const v = homeView(state, { today: TODAY, now: NOW })
     expect(v.next).toBeNull()
-    expect(v.nutrition.logged).toBe(false)
+    expect(v.today.logged).toBe(false)
     expect(JSON.stringify(v)).not.toMatch(/NaN|undefined/)
   }
 })
@@ -29,16 +29,18 @@ test('a routine with no name still gives a next session with an empty-safe name'
   expect(homeView({ routines: [{ id: 'x' }] }, { today: TODAY, now: NOW }).next).toEqual({ id: 'x', name: 'Workout' })
 })
 
-test('no nutrition logged: an empty card', () => {
+test('no nutrition logged: an empty card, as the Nutrition screen draws it', () => {
   const v = homeView(plan, { today: TODAY, now: NOW })
-  expect(v.nutrition).toMatchObject({ logged: false, kcal: null, targets: null, lines: [] })
+  expect(v.today).toEqual(todayView(plan, { today: TODAY }))
+  expect(v.today).toMatchObject({ logged: false, label: 'Today', headline: null, target: null, lines: [], action: 'Log' })
 })
 
 test('a logged day with targets', () => {
   const state = { ...plan, nutritionDays: { [TODAY]: full }, nutritionTargets: { training: { kcal: 2600, protein: 190 } } }
   const v = homeView(state, { today: TODAY, now: NOW })
-  expect(v.nutrition).toMatchObject({ logged: true, kcal: 2500, protein: 180, dayType: 'training', targets: { kcal: 2600, protein: 190, fiber: null } })
-  expect(todayView(state, { today: TODAY })).toMatchObject({ headline: '2,500 kcal', target: 'Target 2,600 kcal', action: 'Edit' })
+  expect(v.today).toEqual(todayView(state, { today: TODAY }))
+  expect(v.today).toMatchObject({ logged: true, label: 'Today · Training day', headline: '2,500 kcal', target: 'Target 2,600 kcal', action: 'Edit' })
+  expect(v.today.lines).toEqual(['Protein 180 g of 190 g', 'Carbs 300 g', 'Fat 70 g', 'Fiber 30 g'])
 })
 
 test('the state is not changed', () => {

@@ -72,12 +72,6 @@ test('the app opens on Workout: the launch route is the Workout tab, and Home is
   expect(read('home.js')).toContain('HomeScreen')
 })
 
-test('every tab is ready', () => {
-  expect(TABS.filter(tab => tab.availability === 'ready').map(tab => tab.label)).toEqual(['Home', 'Plan', 'Workout', 'Progress', 'Exercises'])
-  expect(TABS.filter(tab => tab.availability === 'unbuilt')).toEqual([])
-  expect(TABS.some(tab => tab.availability === 'preview')).toBe(false)
-})
-
 test('the Progress tab renders its cards and the Nutrition and Measurements links', () => {
   const src = readFileSync(new URL('../app/(tabs)/progress.js', import.meta.url), 'utf8')
   expect(src).toContain('<ProgressBody')

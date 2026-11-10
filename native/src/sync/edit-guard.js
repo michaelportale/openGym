@@ -142,14 +142,3 @@ export function entryValue(state, kind, key) {
   if (!Object.hasOwn(ADAPTERS, kind)) return undefined
   return ADAPTERS[kind].read(isMap(state) ? state : {}, key)?.value
 }
-
-// The routine edits among `edits` over a routines list (a non-array reads as empty), in 7C's shape:
-// { next, done, rebased, applied, superseded }, next being the list itself when nothing applies or
-// rebases. The outbox, the engine and the screens now take every kind through applyEdits; the
-// routine guard tests still read the routine rules through this.
-export function applyRoutineEdits(routines, edits) {
-  const list = Array.isArray(routines) ? routines : []
-  const mine = (Array.isArray(edits) ? edits : []).filter((e) => e?.kind === 'routine')
-  const { state, ...settled } = applyEdits({ routines: list }, mine)
-  return { next: state.routines, ...settled }
-}

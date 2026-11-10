@@ -11,7 +11,7 @@ import ScreenHeader from '../ui/ScreenHeader'
 import TextButton from '../ui/TextButton'
 import { usePushLock } from '../ui/use-push-lock'
 import DaySheet from '../nutrition/DaySheet'
-import { canAct, todayView } from '../nutrition/nutrition-screen'
+import { canAct } from '../nutrition/nutrition-screen'
 import { todayIso, useNutrition } from '../nutrition/use-nutrition'
 import { HOME_EMPTY, homeView, nutritionNoticeLink } from './home-view'
 
@@ -30,7 +30,7 @@ export default function HomeScreen() {
   const view = useMemo(() => {
     if (!ready) return null
     const now = Date.now()
-    return { ...homeView(n.state, { today, now }), today: todayView(n.state, { today }), notice: nutritionNoticeLink(n.notices) }
+    return { ...homeView(n.state, { today, now }), notice: nutritionNoticeLink(n.notices) }
   }, [ready, n.state, n.notices, today])
 
   const opens = useRef(0)

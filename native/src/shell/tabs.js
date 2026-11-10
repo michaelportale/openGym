@@ -1,23 +1,21 @@
 import { color } from '../theme/tokens.js'
 
-// Fixed positions from the PRD. `availability` is the honesty flag for this phase. Expo Router 58
-// opens the app at '/', the index route, so Workout is the index route: every launch lands there.
+// Fixed positions from the PRD. Expo Router 58 opens the app at '/', the index route, so Workout
+// is the index route: every launch lands there.
 export const TABS = [
-  { name: 'home', label: 'Home', availability: 'ready', sf: { default: 'house', selected: 'house.fill' } },
-  { name: 'plan', label: 'Plan', availability: 'ready', sf: { default: 'calendar', selected: 'calendar' } },
+  { name: 'home', label: 'Home', sf: { default: 'house', selected: 'house.fill' } },
+  { name: 'plan', label: 'Plan', sf: { default: 'calendar', selected: 'calendar' } },
   {
     name: 'index',
     label: 'Workout',
-    availability: 'ready',
     sf: { default: 'dumbbell', selected: 'dumbbell.fill' },
     // The dock is pinned, so this screen applies its own safe-area insets.
     disableAutomaticContentInsets: true
   },
-  { name: 'progress', label: 'Progress', availability: 'ready', sf: { default: 'chart.bar', selected: 'chart.bar.fill' } },
+  { name: 'progress', label: 'Progress', sf: { default: 'chart.bar', selected: 'chart.bar.fill' } },
   {
     name: 'exercises',
     label: 'Exercises',
-    availability: 'ready',
     sf: { default: 'square.stack.3d.up', selected: 'square.stack.3d.up.fill' }
   }
 ]

@@ -1,5 +1,16 @@
 import { expect, test } from 'vitest'
-import { applyEdits, applyRoutineEdits, routineContent, sameRoutine } from './edit-guard.js'
+import { applyEdits, routineContent, sameRoutine } from './edit-guard.js'
+
+// The routine edits among `edits` over a routines list (a non-array reads as empty), in 7C's shape:
+// { next, done, rebased, applied, superseded }, next being the list itself when nothing applies or
+// rebases. Production takes every kind through applyEdits; the routine guard tests read the
+// routine rules through this.
+function applyRoutineEdits(routines, edits) {
+  const list = Array.isArray(routines) ? routines : []
+  const mine = (Array.isArray(edits) ? edits : []).filter((e) => e?.kind === 'routine')
+  const { state, ...settled } = applyEdits({ routines: list }, mine)
+  return { next: state.routines, ...settled }
+}
 
 const routine = (id, name, extra = {}) => ({ id, name, slots: [{ ex: 'bench', sets: 3 }], ...extra })
 const edit = (rid, routineValue, extra = {}) => ({ kind: 'routine', key: rid, baseTs: null, value: routineValue, sent: null, t: 1, ...extra })
