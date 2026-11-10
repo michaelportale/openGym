@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { createMemoryWhoopCache } from './whoop-cache.js'
-import { createWhoopSource, isGoodRead, isServerLink, pairingFrom, WHOOP_EVERY_MS, WHOOP_RETRY_MS } from './whoop-source.js'
+import { createWhoopSource, failureLine, isGoodRead, isServerLink, pairingFrom, WHOOP_EVERY_MS, WHOOP_RETRY_MS } from './whoop-source.js'
 
 const BASE = 'https://gym.example.com'
 const TOKEN = 'SECRET.TOKEN.VALUE'
@@ -233,6 +233,23 @@ describe('read', () => {
     expect(await source.read()).toEqual({ paired: true, payload: null, cached: false })
     t += WHOOP_EVERY_MS
     expect(await source.read()).toEqual({ paired: true, payload: notConnected, cached: false })
+  })
+
+  test('pairingShown names the pairing of the read last returned, null while unpaired', async () => {
+    const { fake, state, source } = setup()
+    fake.answer('getWhoop', ok(read1))
+    expect(source.pairingShown()).toBeNull()
+    await source.read()
+    const first = source.pairingShown()
+    expect(typeof first).toBe('string')
+    await source.read() // held: the same pairing
+    expect(source.pairingShown()).toBe(first)
+    state.pairing = { base: BASE, token: 'T2', profileId: 'u_ann' }
+    await source.read()
+    expect(source.pairingShown()).not.toBe(first)
+    state.pairing = null
+    await source.read()
+    expect(source.pairingShown()).toBeNull()
   })
 
   test('the cached read is offered before a first fetch, and only then', async () => {
@@ -487,6 +504,58 @@ describe('pairingFrom: the Keychain token and the paired server, read as one', (
     const { keychain, pairing } = stores()
     keychain.during.push(repair('https://other.example.com', 'u_mo', 'TOKEN-B'), repair('https://third.example.com', 'u_mo', 'TOKEN-D'))
     expect(await pairing()).toBeNull()
+  })
+})
+
+describe("failureLine: a failed Connect or Disconnect stays until the card moves on", () => {
+  const K = 'pairing-a'
+  const card = payload => ({ paired: true, payload, cached: false })
+  const said = (text, shown, key = K) => failureLine(null, { said: text, shown, key })
+  const PAIRED_ELSEWHERE = 'Connect works when this phone is paired with https://gym.example.com. Forget the server and pair again at that address.'
+
+  test('a re-read in the same state keeps it: not connected again, as on every focus or sync', () => {
+    const line = said(PAIRED_ELSEWHERE, card(notConnected))
+    expect(line.text).toBe(PAIRED_ELSEWHERE)
+    expect(failureLine(line, { read: card({ ...notConnected }), key: K })).toBe(line)
+    expect(failureLine(line, { read: card({ ...notConnected }), key: K })).toBe(line)
+    const disconnectFailed = said("Couldn't disconnect WHOOP. Try again.", card(read1))
+    expect(failureLine(disconnectFailed, { read: card(read2), key: K })).toBe(disconnectFailed)
+  })
+
+  test('not connected, then connected, clears it', () => {
+    expect(failureLine(said(PAIRED_ELSEWHERE, card(notConnected)), { read: card(read1), key: K })).toBeNull()
+    expect(failureLine(said(PAIRED_ELSEWHERE, card(notConnected)), { read: card(unconfigured), key: K })).toBeNull()
+  })
+
+  test('a read that is no fresh answer keeps it: offline, the cached read, WHOOP unavailable', () => {
+    const line = said(PAIRED_ELSEWHERE, card(notConnected))
+    for (const read of [card(null), { paired: true, payload: read1, cached: true, savedAt: 1 }, card(unavailable)]) {
+      expect(failureLine(line, { read, key: K })).toBe(line)
+    }
+  })
+
+  test('a good read after a stale or failed one still clears it', () => {
+    for (const before of [card({ ...read1, stale: true }), card(unavailable), { paired: true, payload: read1, cached: true, savedAt: 1 }, card(null)]) {
+      expect(failureLine(said("Couldn't disconnect WHOOP. Try again.", before), { read: card(read1), key: K })).toBeNull()
+    }
+  })
+
+  test('a pairing change clears it, whatever the new card says, unpaired included', () => {
+    const line = said(PAIRED_ELSEWHERE, card(notConnected))
+    expect(failureLine(line, { read: card(notConnected), key: 'pairing-b' })).toBeNull()
+    expect(failureLine(line, { read: { paired: false, payload: null, cached: false }, key: null })).toBeNull()
+  })
+
+  test('Connect or Disconnect tapped again: the new attempt clears it, and what it says replaces it', () => {
+    const first = said("Couldn't open WHOOP's sign-in. Try again.", card(notConnected))
+    expect(failureLine(first, { tapped: true })).toBeNull()
+    const second = failureLine(first, { said: PAIRED_ELSEWHERE, shown: card(notConnected), key: K })
+    expect(second.text).toBe(PAIRED_ELSEWHERE)
+    expect(failureLine(second, { read: card(notConnected), key: K })).toBe(second)
+  })
+
+  test('nothing said, nothing kept', () => {
+    expect(failureLine(null, { read: card(notConnected), key: K })).toBeNull()
   })
 })
 

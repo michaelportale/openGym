@@ -78,6 +78,36 @@ export function isGoodRead(shown) {
   return !!shown && shown.paired === true && !shown.cached && !!p && typeof p === 'object' && !p.error
 }
 
+// What the card is showing, as far as a failure line said on it goes: a fresh connected read is
+// another state than a stale, failed or cached one.
+function cardState(shown) {
+  const p = shown?.payload
+  if (!shown) return 'none'
+  if (!shown.paired) return 'unpaired'
+  if (!p || typeof p !== 'object') return 'unreachable'
+  if (shown.cached) return 'cached'
+  if (!p.configured) return 'unconfigured'
+  if (!p.connected) return 'disconnected'
+  if (p.error) return 'error'
+  return p.stale ? 'stale' : 'connected'
+}
+
+/**
+ * The card's failure line (a Connect or Disconnect that failed) across what happens next. `line`
+ * is null or { text, key, state }: what was said, and the pairing (pairingShown) and card it was
+ * said on. `{ said, shown, key }` makes a new line; `{ tapped: true }` (Connect or Disconnect
+ * again) clears it for the new attempt; `{ read, key }` keeps it unless the pairing changed or a
+ * fresh answer from the server (isGoodRead) puts the card in another state: not connected to
+ * connected, or stale, failed or cached to a good read. The same state again keeps it, so a
+ * re-read on a focus, a sync or a Health emit cannot wipe it before it is read.
+ */
+export function failureLine(line, event) {
+  if (typeof event.said === 'string') return { text: event.said, key: event.key ?? null, state: cardState(event.shown) }
+  if (event.tapped || !line) return null
+  if ((event.key ?? null) !== line.key) return null
+  return isGoodRead(event.read) && cardState(event.read) !== line.state ? null : line
+}
+
 export function createWhoopSource({ client, cache, pairing, now }) {
   let last = null // { key, at, until, shown }: the last attempt, for which pairing, when the next may ask, what it showed
   let due = false // the next read asks whatever the time
@@ -203,5 +233,9 @@ export function createWhoopSource({ client, cache, pairing, now }) {
     return { ok: true, revoked: r.revoked, wasConnected: r.wasConnected }
   }
 
-  return { read, connectLink, disconnect }
+  // The pairing of the read last returned (an opaque key), or null while unpaired: what a failure
+  // line is stamped with.
+  const pairingShown = () => shownKey ?? null
+
+  return { read, connectLink, disconnect, pairingShown }
 }

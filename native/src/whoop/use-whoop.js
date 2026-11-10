@@ -10,7 +10,7 @@ import { createCredentials } from '../sync/credentials'
 import { createSqliteSyncMeta } from '../sync/server-copy'
 import { useFocusReload } from '../sync/use-focus-reload'
 import { createSqliteWhoopCache } from './whoop-cache'
-import { createWhoopSource, isGoodRead, pairingFrom } from './whoop-source'
+import { createWhoopSource, failureLine, pairingFrom } from './whoop-source'
 import { WHOOP_TEXT } from './whoop-view'
 
 // The one WHOOP source for the app, so the read it holds and its Connect window outlive the
@@ -45,13 +45,15 @@ function getWhoopSource() {
 // (back from Safari after Connect); whoop-source.js decides whether that asks the server. Connect
 // opens the server's link in Safari, which keeps the whole sign-in in one browser (the server
 // binds it to that browser). Failures are shown on the card and said to VoiceOver, and the line
-// stays until the next fresh answer from the server. Never logs.
+// stays until the pairing changes, a fresh answer puts the card in another state, or Connect or
+// Disconnect is tapped again (whoop-source.js failureLine). Never logs.
 export function useWhoop() {
   const [shown, setShown] = useState(null)
   const [busy, setBusy] = useState(false)
-  const [message, setMessage] = useState(null)
+  const [line, setLine] = useState(null)
   const busyNow = useRef(false)
   const showing = useRef(null)
+  const pairingShown = useRef(null)
   const show = next => {
     showing.current = next
     setShown(next)
@@ -60,10 +62,10 @@ export function useWhoop() {
   const [reload] = useState(() => coalesced(async () => {
     try {
       const s = await getWhoopSource()
-      const before = showing.current
       const next = await s.read({ onCached: show })
-      // A new answer from the server, not the same read again: an earlier failure line is past.
-      if (next !== before && isGoodRead(next)) setMessage(null)
+      pairingShown.current = s.pairingShown()
+      const event = { read: next, key: pairingShown.current }
+      setLine(l => failureLine(l, event))
       show(next)
     } catch {
       // The app database would not open: nothing can be read or asked.
@@ -79,8 +81,10 @@ export function useWhoop() {
     return () => sub.remove()
   }, [reload]))
 
+  // Stamped with the card as it is now, so a re-read in the same state keeps it.
   const say = text => {
-    setMessage(text)
+    const event = { said: text, shown: showing.current, key: pairingShown.current }
+    setLine(l => failureLine(l, event))
     announce(text)
   }
 
@@ -89,7 +93,7 @@ export function useWhoop() {
     if (busyNow.current) return
     busyNow.current = true
     setBusy(true)
-    setMessage(null)
+    setLine(l => failureLine(l, { tapped: true }))
     try {
       await fn()
     } finally {
@@ -145,5 +149,5 @@ export function useWhoop() {
     ])
   }, [reload])
 
-  return { shown, busy, message, connect, disconnect }
+  return { shown, busy, message: line?.text ?? null, connect, disconnect }
 }
