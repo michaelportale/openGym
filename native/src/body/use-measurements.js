@@ -9,33 +9,33 @@ import { keyed, readSourceKey } from '../sync/source-key'
 import { useFocusReload } from '../sync/use-focus-reload'
 import { syncAfterFinish } from '../sync/use-sync'
 import { coalesced } from './coalesce'
-import { measurementSaveArgs } from './measurement-screen'
+import { putMeasurement } from './measurement-screen'
 import { createSqliteMeasurements } from './measurement-store'
 
-const LOADING = { status: 'loading', state: null, copy: null, error: null }
+const LOADING = { status: 'loading', state: null, error: null }
 
 // One measurement op: a set ({ op: 'set', entry }, the entry applyLogForm built) or a remove
-// ({ op: 'remove', d }) made on `copy` (the server copy the screen showed when Delete was tapped, or
-// null when none was held: the snapshot's then), through measurementSaveArgs. The sync is asked to
-// run, not awaited, as a weigh-in's is. Throws when the write fails.
-export async function saveMeasurement({ edit, copy }) {
+// ({ op: 'remove', d }), through putMeasurement: a remove's base is the stored copy read right
+// before the put (the snapshot's when none is held). The sync is asked to run, not awaited, as a
+// weigh-in's is. Throws when the write fails.
+export async function saveMeasurement(edit) {
   const db = await openAppDatabase()
-  await createSqliteMeasurements(db).put(measurementSaveArgs({ copy, bundled: snapshot }, edit, { now: Date.now() }))
+  await putMeasurement({ measurements: createSqliteMeasurements(db), serverCopy: createSqliteServerCopy(db), bundled: snapshot }, edit, { now: Date.now() })
   syncAfterFinish()
 }
 
-// { status: 'loading'|'ready'|'error', state, copy, error, save }. `state` is the screen source
-// with this phone's pending measurements (and edits) laid over it, `copy` the stored server copy
-// or null (a remove's base is read from it, never from `state`). Reloads on focus and on a Health
+// { status: 'loading'|'ready'|'error', state, error, save, remove }. `state` is the screen source
+// with this phone's pending measurements (and edits) laid over it. Reloads on focus and on a Health
 // pass or sync, coalesced; the source is keyed (sync/source-key.js), the pending measurements
-// included, so an unchanged one is not built again. save resolves { ok } and never throws.
+// included, so an unchanged one is not built again. save(entry) and remove(d) resolve { ok } and
+// never throw; remove reads its base from the stored copy itself (saveMeasurement).
 export function useMeasurements() {
   const [source, setSource] = useState(LOADING)
 
   const [reload] = useState(() => {
     const load = keyed(readSourceKey, async stores => {
-      const { state, copy } = await readScreenSource({ ...stores, bundled: snapshot })
-      return { state, copy }
+      const { state } = await readScreenSource({ ...stores, bundled: snapshot })
+      return { state }
     })
     return coalesced(async () => {
       try {
@@ -57,15 +57,17 @@ export function useMeasurements() {
 
   useFocusReload(reload)
 
-  const save = useCallback(async op => {
+  const write = useCallback(async edit => {
     try {
-      await saveMeasurement(op)
+      await saveMeasurement(edit)
     } catch {
       return { ok: false }
     }
     await reload()
     return { ok: true }
   }, [reload])
+  const save = useCallback(entry => write({ op: 'set', entry }), [write])
+  const remove = useCallback(d => write({ op: 'remove', d }), [write])
 
-  return { ...source, save }
+  return { ...source, save, remove }
 }

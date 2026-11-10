@@ -4,6 +4,7 @@ import { resetIdsOf } from '../../../frontend/src/lib/sync-merge.js'
 import { createSqliteFinishedWorkouts } from '../session/finished-workouts.js'
 import { createSqliteWeighIns } from '../body/weigh-ins.js'
 import { createSqliteMeasurements } from '../body/measurement-store.js'
+import { measurementSaveArgs, putMeasurement } from '../body/measurement-screen.js'
 import { createSqliteHealthStore } from '../health/health-store.js'
 import { createSqlitePendingEdits } from './pending-edits.js'
 import { createCredentials } from './credentials.js'
@@ -2017,6 +2018,47 @@ describe('measurements', () => {
     expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingMeasurements: 0 })
     expect(t.server.pushes).toEqual([])
     expect(t.server.doc.measurements).toEqual([webs])
+  })
+
+  // Task 6 fix round 1 (the reviewer's probe): the owner logs a day, then taps Delete; the sync
+  // pushes the set and acks it while the confirm is up. The remove, built on the copy the screen
+  // held at the tap (before the set) or on the copy read right before the put (putMeasurement),
+  // still takes the day out: the acked set's t rides on in ownTs.
+  const ownSetAckedThenDelete = async ({ webAfter = null, readAtPut }) => {
+    const older = mEntry('2026-11-01', 5)
+    const t = await setup({ server: measuredServer([older]) })
+    await t.sync.syncNow()
+    const tapCopy = await t.copy.get()
+    const mine = mEntry('2026-11-09', T0 - 5000)
+    await t.measurements.put(mSet(mine))
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingMeasurements: 0 })
+    expect(t.server.doc.measurements).toEqual([older, mine])
+    if (webAfter) t.server.webWritesMeasurement(webAfter)
+    if (readAtPut) await putMeasurement({ measurements: t.measurements, serverCopy: t.copy, bundled: {} }, { op: 'remove', d: mine.d }, { now: T0 })
+    else await t.measurements.put(measurementSaveArgs({ copy: tapCopy, bundled: {} }, { op: 'remove', d: mine.d }, { now: T0 }))
+    expect((await t.measurements.listPending())[0]).toMatchObject({ d: mine.d, op: 'remove', ownTs: [mine.t] })
+    expect(await t.sync.syncNow()).toMatchObject({ state: 'idle', pendingMeasurements: 0 })
+    expect(await t.measurements.listPending()).toEqual([])
+    expect(await t.routineEdits.listNotices()).toEqual([])
+    return t
+  }
+
+  test('the owner\'s own set, acked before the delete is put: the delete takes the day out (copy at the tap, or read at the put)', async () => {
+    for (const readAtPut of [false, true]) {
+      const t = await ownSetAckedThenDelete({ readAtPut })
+      expect(t.server.doc.measurements).toEqual([mEntry('2026-11-01', 5)])
+      expect(t.server.doc.deleted.measurements['2026-11-09']).toBeGreaterThan(T0 - 5000)
+      expect((await t.copy.get()).state.measurements).toEqual([mEntry('2026-11-01', 5)])
+    }
+  })
+
+  test('the same, with a web edit of the day after the ack (another t): the delete is superseded and the web wins', async () => {
+    const webs = mEntry('2026-11-09', T0 + 50, { waist: 79 })
+    for (const readAtPut of [false, true]) {
+      const t = await ownSetAckedThenDelete({ webAfter: webs, readAtPut })
+      expect(t.server.doc.measurements).toEqual([mEntry('2026-11-01', 5), webs])
+      expect((await t.copy.get()).state.measurements).toEqual([mEntry('2026-11-01', 5), webs])
+    }
   })
 
   test('pair and forget make every measurement pending again, as weigh-ins', async () => {

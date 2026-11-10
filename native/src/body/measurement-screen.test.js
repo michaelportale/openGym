@@ -3,7 +3,7 @@ import { applyMeasurementOps } from './measurement-ops.js'
 import { createMemoryMeasurements } from './measurement-store.js'
 import { applyLogForm, fieldChoices, fieldView } from './measurement-view.js'
 import {
-  historyList, latestView, logDraft, logValues, measurementChartLabel, measurementSaveArgs, pickField,
+  historyList, latestView, logDraft, logValues, measurementChartLabel, measurementSaveArgs, pickField, putMeasurement,
 } from './measurement-screen.js'
 
 const NOW = new Date(2026, 10, 9, 12).getTime()
@@ -163,5 +163,40 @@ describe('measurementSaveArgs: what a measurement save puts in the store', () =>
     const out = applyMeasurementOps(copy.state.measurements, pending, {})
     expect(out.applied).toEqual([{ d: TODAY, t: NOW + 1 }])
     expect(out.next).toEqual([])
+  })
+})
+
+// Task 6 fix round 1: a delete's base is the stored copy as it is right before the put, not the copy
+// the screen held at the Delete tap (a sync that landed while the confirm was up is in it).
+describe('putMeasurement: what a save puts, read from the stores', () => {
+  const copyOf = state => ({ get: async () => (state ? { state, rev: 1, wid: 'w' } : null) })
+
+  test('a remove reads the stored copy at the put: baseT is its entry t now', async () => {
+    const store = createMemoryMeasurements()
+    const serverCopy = copyOf({ measurements: [entry(TODAY, 77)] })
+    expect(await putMeasurement({ measurements: store, serverCopy, bundled: {} }, { op: 'remove', d: TODAY }, { now: NOW })).toMatchObject({ ok: true })
+    expect(await store.get(TODAY)).toEqual({ d: TODAY, op: 'remove', t: NOW, baseT: 77 })
+  })
+
+  test('no copy held, or one that cannot be read: the snapshot is the base', async () => {
+    const bundled = { state: { measurements: [entry(TODAY, 7)] } }
+    for (const serverCopy of [copyOf(null), { get: async () => { throw new Error('corrupt') } }]) {
+      const store = createMemoryMeasurements()
+      await putMeasurement({ measurements: store, serverCopy, bundled }, { op: 'remove', d: TODAY }, { now: NOW })
+      expect((await store.get(TODAY)).baseT).toBe(7)
+    }
+  })
+
+  test('a set puts its entry and does not read the copy', async () => {
+    const store = createMemoryMeasurements()
+    const serverCopy = { get: async () => { throw new Error('a set must not read the copy') } }
+    const e = entry(TODAY, 1234)
+    await putMeasurement({ measurements: store, serverCopy, bundled: {} }, { op: 'set', entry: e }, { now: NOW })
+    expect(await store.get(TODAY)).toEqual({ d: TODAY, op: 'set', entry: e, t: 1234 })
+  })
+
+  test('a failed put rejects, so the screen says the save failed', async () => {
+    const store = { put: async () => { throw new Error('disk') } }
+    await expect(putMeasurement({ measurements: store, serverCopy: copyOf(null), bundled: {} }, { op: 'remove', d: TODAY }, { now: NOW })).rejects.toThrow('disk')
   })
 })

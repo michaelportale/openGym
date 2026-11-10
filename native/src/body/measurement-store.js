@@ -2,10 +2,11 @@
 // path. One row per day holding what this phone last set or removed for that day: a set keeps the
 // whole entry (JSON, so every value goes back byte for byte), a remove the t of the copy's entry it
 // takes out (base_t). own_ts (ownTs) is the store's own: the t of every set this phone wrote for the
-// day since the row was last acked, so a remove also takes out a set of the phone's that reached the
-// server before the copy knew it (measurement-ops.js). acked_at is NULL until the push has settled
-// the row (the outbox is the rows still NULL); resetAcked keeps own_ts. The handle is injected. This
-// file does not import expo-sqlite and does not send anything.
+// day since the row was last acked, and the acked set's t when a put replaces one, so a remove also
+// takes out a set of the phone's that reached the server before the copy knew it (measurement-ops.js).
+// acked_at is NULL until the push has settled the row (the outbox is the rows still NULL);
+// resetAcked keeps own_ts. The handle is injected. This file does not import expo-sqlite and does
+// not send anything.
 // Ops are { d, op, entry (set only), t, baseT (when present), ownTs (when not empty) }.
 import { sameValue } from './measurement-ops.js'
 
@@ -59,9 +60,12 @@ function fromRow(row) {
 }
 
 // The ownTs a put starts with: an unacked row it replaces hands on its own, plus its t when it is
-// a set; an acked row, or none, hands on nothing.
+// a set. An acked set hands on its t alone: it is the server's entry for the day exactly while no
+// later edit (another t) replaced it, so a remove put after the ack, on a copy read before the
+// copy held the set, still takes it out. An acked remove, or no row, hands on nothing.
 function carried(previous, wasAcked) {
-  if (!previous || wasAcked) return []
+  if (!previous) return []
+  if (wasAcked) return previous.op === 'set' ? [previous.t] : []
   return [...new Set([...(previous.ownTs ?? []), ...(previous.op === 'set' ? [previous.t] : [])])]
 }
 

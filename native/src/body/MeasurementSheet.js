@@ -21,7 +21,7 @@ const todayIso = () => localDate(Date.now(), Intl.DateTimeFormat().resolvedOptio
 // Log or edit one day's measurements (Measurements.jsx MeasurementLog), in inches; body fat in
 // percent. Mounted per open (the caller keys it). `edit` opens on day `initialDate` with its values
 // and keeps that day; a new log starts empty and its day steps back from today. `source` is the
-// screen's { state, copy } as it is now: Save builds the day on it as it is then, writing only the
+// screen's { state } as it is now: Save builds the day on it as it is then, writing only the
 // fields typed to something other than they showed (measurement-screen.js logValues). onSave(entry)
 // resolves { ok }: a refusal or a failed save shows here, is said to VoiceOver and keeps the sheet
 // open with what was typed.

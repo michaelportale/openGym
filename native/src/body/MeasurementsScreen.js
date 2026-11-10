@@ -59,9 +59,6 @@ export default function MeasurementsScreen() {
   const [range, setRange] = useState(90)
   const [selected, setSelected] = useState(null)
   const [picking, setPicking] = useState(false)
-  // Read when a tap lands, not when the handler was made.
-  const live = useRef(null)
-  live.current = { state: m.state, copy: m.copy }
 
   const view = useMemo(() => {
     if (!ready) return null
@@ -83,10 +80,10 @@ export default function MeasurementsScreen() {
   const [message, setMessage] = useState(null)
   const [busy, setBusy] = useState(false)
 
-  // The day as the copy holds it when Delete is tapped; the confirm only says yes to that.
+  // The delete's base is read from the stored copy when it is put (use-measurements.js), not here:
+  // a sync can land while the confirm is up.
   const remove = row => {
     if (busy || !ready) return
-    const { copy } = live.current
     Alert.alert('Delete measurements?', `Deletes the measurements logged on ${row.label}.`, [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -95,7 +92,7 @@ export default function MeasurementsScreen() {
         onPress: async () => {
           setBusy(true)
           setMessage(null)
-          const result = await m.save({ edit: { op: 'remove', d: row.d }, copy })
+          const result = await m.remove(row.d)
           setBusy(false)
           if (result.ok) announce('Measurements deleted')
           else {
@@ -230,10 +227,10 @@ export default function MeasurementsScreen() {
         <MeasurementSheet
           key={sheet.no}
           visible={sheet.open}
-          source={{ state: m.state, copy: m.copy }}
+          source={{ state: m.state }}
           initialDate={sheet.d}
           edit={sheet.edit}
-          onSave={entry => m.save({ edit: { op: 'set', entry }, copy: m.copy })}
+          onSave={m.save}
           onClose={() => setSheet(s => (s ? { ...s, open: false } : s))}
         />
       ) : null}

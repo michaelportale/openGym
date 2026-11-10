@@ -2,6 +2,7 @@
 // sheet render what these return, and every save puts what measurementSaveArgs builds. They sit
 // over the Task 5 models (measurement-view.js); the wording is the web's Measurements.jsx, in
 // English, with lengths in inches.
+import { readCopy } from '../sync/server-copy.js'
 import { dayLabel } from '../ui/dates.js'
 import { numberText, parseNumberText } from '../ui/number-text.js'
 import { historyRows, logForm, removeOp } from './measurement-view.js'
@@ -74,12 +75,24 @@ export function logValues({ opened, text, latest }) {
 
 /**
  * What a measurement save puts in the store (measurement-store.js put). A set is the entry
- * applyLogForm built, under its own d and t. A remove is removeOp on the server copy the screen
- * showed (the bundled snapshot when no copy is held), never on the overlaid state: its baseT is the
- * copy's own entry t, and the store adds the t's this phone set itself (ownTs).
+ * applyLogForm built, under its own d and t. A remove is removeOp on the server copy (the bundled
+ * snapshot when no copy is held), never on the overlaid state: its baseT is the copy's own entry t,
+ * and the store adds the t's this phone set itself (ownTs).
  */
 export function measurementSaveArgs({ copy, bundled }, edit, { now }) {
   if (edit?.op === 'set') return { d: edit.entry.d, op: 'set', entry: edit.entry, t: edit.entry.t }
   if (edit?.op === 'remove') return removeOp(copy ? copy.state : bundled?.state, edit.d, { now })
   throw new Error(`measurementSaveArgs: not a set or remove: ${edit?.op}`)
+}
+
+/**
+ * A measurement save, from the stores: `measurements` (measurement-store.js), `serverCopy` and the
+ * bundled snapshot. A remove reads the stored copy right before its put, so its base is the copy as
+ * it is then, a sync that landed since Delete was tapped included; a copy that cannot be read counts
+ * as none (the snapshot's). A set reads no copy. Resolves with the store's answer; a failed write
+ * rejects.
+ */
+export async function putMeasurement({ measurements, serverCopy, bundled }, edit, { now }) {
+  const copy = edit?.op === 'remove' ? await readCopy(serverCopy) : null
+  return measurements.put(measurementSaveArgs({ copy, bundled }, edit, { now }))
 }
