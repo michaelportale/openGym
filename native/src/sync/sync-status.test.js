@@ -49,6 +49,22 @@ describe('statusText', () => {
       .toBe("Synced to gym.example.com at 9:14. gym.example.com isn't reachable right now.")
   })
 
+  test('a weigh-in waiting to send counts as something waiting', () => {
+    const words = 'Saved on this phone. It will sync when gym.example.com is reachable.'
+    expect(statusText(paired({ state: 'waiting', pendingWeighIns: 1, lastSyncedAt: AT }), opts)).toBe(words)
+    expect(statusText(paired({ state: 'idle', pendingWeighIns: 2, lastSyncedAt: AT }), opts)).toBe(words)
+    expect(statusText(paired({ state: 'waiting', pendingWeighIns: 0, lastSyncedAt: AT }), opts))
+      .toBe("Synced to gym.example.com at 9:14. gym.example.com isn't reachable right now.")
+  })
+
+  test('a measurement waiting to send counts as something waiting', () => {
+    const words = 'Saved on this phone. It will sync when gym.example.com is reachable.'
+    expect(statusText(paired({ state: 'waiting', pendingMeasurements: 1, lastSyncedAt: AT }), opts)).toBe(words)
+    expect(statusText(paired({ state: 'idle', pendingMeasurements: 2, lastSyncedAt: AT }), opts)).toBe(words)
+    expect(statusText(paired({ state: 'waiting', pendingMeasurements: 0, lastSyncedAt: AT }), opts))
+      .toBe("Synced to gym.example.com at 9:14. gym.example.com isn't reachable right now.")
+  })
+
   test('waiting with nothing pending does not claim anything is waiting', () => {
     expect(statusText(paired({ state: 'waiting', pending: 0, lastSyncedAt: AT }), opts))
       .toBe("Synced to gym.example.com at 9:14. gym.example.com isn't reachable right now.")
