@@ -10,7 +10,7 @@
 import { nutrition } from '../shared/training.js'
 
 const {
-  NUTRIENTS, DAY_TYPES, TARGET_KEYS, canLogNutrition, isLoggedDay, nutritionDayOf, nutritionHistory,
+  NUTRIENTS, TARGET_KEYS, canLogNutrition, isLoggedDay, nutritionDayOf, nutritionHistory,
   nutritionInputError, readSupplements, readTargets, weekSummary, withNutritionDay, withSupplement,
   withSupplementTick, withTarget, withoutSupplement, clearNutritionDay,
 } = nutrition

@@ -9,7 +9,7 @@ const full = { kcal: 2500, protein: 180, carbs: 300, fat: 70, fiber: 30, dayType
 const SUPPS = [{ id: 'a', name: 'Creatine' }, { id: 'b', name: 'Vitamin D' }]
 
 describe('todayCard', () => {
-  test('unpaired / missing keys read plainly: nothing logged, no targets, no NaN (Nutrition.jsx:235 empty line, nutrition.js:25-27 all start empty)', () => {
+  test('unpaired / missing keys read plainly: nothing logged, no targets, no NaN (Nutrition.jsx:235 empty line, nutrition.js readNutritionDay, readTargets: junk reads empty)', () => {
     for (const state of [undefined, null, {}, { nutritionDays: [], nutritionTargets: 5, supplements: 'x' }]) {
       const c = todayCard(state, { today: TODAY })
       expect(c).toEqual({ logged: false, kcal: null, protein: null, carbs: null, fat: null, fiber: null, dayType: null, targets: null, lines: [] })
@@ -23,14 +23,14 @@ describe('todayCard', () => {
     expect(c.lines).toEqual(['Protein 180 g', 'Carbs 300 g', 'Fat 70 g', 'Fiber 30 g'])
   })
 
-  test('a day missing a total is not logged (nutrition.js:84 isLoggedDay: all five and a type)', () => {
+  test('a day missing a total is not logged (nutrition.js isLoggedDay: all five and a type)', () => {
     const c = todayCard({ nutritionDays: { [TODAY]: { ...full, fat: undefined } } }, { today: TODAY })
     expect(c.logged).toBe(false)
     expect(c.kcal).toBeNull()
     expect(c.lines).toEqual([])
   })
 
-  test("targets are the day type's, null when that type has none or none are set (nutrition.js:185 readTargets, hasTargets)", () => {
+  test("targets are the day type's, null when that type has none or none are set (nutrition.js readTargets, hasTargets)", () => {
     const day = { [TODAY]: full }
     const nutritionTargets = { training: { kcal: 2600, protein: 190 }, rest: { kcal: 2200 } }
     expect(todayCard({ nutritionDays: day, nutritionTargets }, { today: TODAY }).targets).toEqual({ kcal: 2600, protein: 190, fiber: null })
@@ -47,13 +47,13 @@ describe('todayCard', () => {
 })
 
 describe('weekView / recentDays', () => {
-  test('an empty week reads zero logged, no averages, no weight (nutrition.js:221 weekSummary)', () => {
+  test('an empty week reads zero logged, no averages, no weight (nutrition.js weekSummary)', () => {
     const w = weekView({}, { today: TODAY, weekStart: 1 })
     expect(w).toMatchObject({ start: TODAY, logged: 0, avg: null, weight: null })
     expect(w.days).toHaveLength(7)
   })
 
-  test('a week counts logged days and averages them; Sunday start moves the week (nutrition.js:221, format.js:116)', () => {
+  test('a week counts logged days and averages them; Sunday start moves the week (nutrition.js weekSummary, format.js:116)', () => {
     const state = { nutritionDays: { '2026-11-09': full, '2026-11-10': { ...full, kcal: 2000 }, '2026-11-08': full } }
     const mon = weekView(state, { today: '2026-11-10', weekStart: 1 })
     expect(mon.start).toBe('2026-11-09')
@@ -69,7 +69,7 @@ describe('weekView / recentDays', () => {
     expect(weekView({}, { today: TODAY }).start).toBe(TODAY)
   })
 
-  test('recentDays is newest first, limited to 14, skips days with no log (Nutrition.jsx:217, nutrition.js:233)', () => {
+  test('recentDays is newest first, limited to 14, skips days with no log (Nutrition.jsx:217, nutrition.js nutritionHistory)', () => {
     const nutritionDays = { '2026-11-01': { _ts: 1 }, '2026-11-02': full }
     for (let i = 3; i <= 20; i++) nutritionDays['2026-10-' + String(i + 10).padStart(2, '0')] = full
     const rows = recentDays({ nutritionDays }, { limit: 14 })
@@ -124,21 +124,21 @@ describe('dayForm', () => {
 describe('applyDayForm', () => {
   const form = { ...full, note: '  ok  ' }
 
-  test('saves totals, type and a trimmed note, no stamp of its own (nutrition.js:101, ruling 1)', () => {
+  test('saves totals, type and a trimmed note, no stamp of its own (nutrition.js withNutritionDay, ruling 1)', () => {
     const r = applyDayForm({}, TODAY, form, { today: TODAY })
     expect(r.error).toBeUndefined()
     expect(r.value).toEqual({ ...full, note: 'ok' })
     expect('_ts' in r.value).toBe(false)
   })
 
-  test('a future day is refused with the web copy, before the totals are looked at (Nutrition.jsx:51, nutrition.js:92)', () => {
+  test('a future day is refused with the web copy, before the totals are looked at (Nutrition.jsx:51, nutrition.js canLogNutrition)', () => {
     expect(applyDayForm({}, '2026-11-10', form, { today: TODAY })).toEqual({ error: 'Choose a valid date' })
     expect(applyDayForm({}, '2026-02-30', form, { today: TODAY })).toEqual({ error: 'Choose a valid date' })
     expect(applyDayForm({}, 'nope', {}, { today: TODAY })).toEqual({ error: 'Choose a valid date' })
     expect(applyDayForm({}, TODAY, form, { today: TODAY }).error).toBeUndefined()
   })
 
-  test("the web's error strings, verbatim (nutrition.js:103-109 nutritionInputError)", () => {
+  test("the web's error strings, verbatim (nutrition.js nutritionInputError)", () => {
     const err = f => applyDayForm({}, TODAY, f, { today: TODAY }).error
     expect(err({ ...form, fat: null })).toBe('Fill in all five totals.')
     expect(err({ ...form, fat: '' })).toBe('Fill in all five totals.')
@@ -147,7 +147,7 @@ describe('applyDayForm', () => {
     expect(err({ ...form, dayType: null })).toBe('Choose training day or rest day.')
   })
 
-  test('limits: the maximum is allowed, one past is not (nutrition.js:31 NUTRIENT_MAX)', () => {
+  test('limits: the maximum is allowed, one past is not (nutrition.js NUTRIENT_MAX)', () => {
     const at = { kcal: 20000, protein: 2000, carbs: 2000, fat: 2000, fiber: 500, dayType: 'rest' }
     expect(applyDayForm({}, TODAY, at, { today: TODAY }).error).toBeUndefined()
     for (const [k, over] of [['kcal', 20001], ['protein', 2001], ['carbs', 2001], ['fat', 2001], ['fiber', 501]]) {
@@ -155,18 +155,18 @@ describe('applyDayForm', () => {
     }
   })
 
-  test('the note is cut at 500 and an empty one is not written (nutrition.js:32,101-102)', () => {
+  test('the note is cut at 500 and an empty one is not written (nutrition.js NOTE_MAX, withNutritionDay)', () => {
     expect(applyDayForm({}, TODAY, { ...full, note: 'x'.repeat(600) }, { today: TODAY }).value.note).toHaveLength(500)
     expect('note' in applyDayForm({}, TODAY, { ...full, note: '   ' }, { today: TODAY }).value).toBe(false)
   })
 
-  test('text fields are rounded like the web: kcal whole, grams to 0.1 (nutrition.js:46 round)', () => {
+  test('text fields are rounded like the web: kcal whole, grams to 0.1 (nutrition.js round, nutrientValue)', () => {
     const v = applyDayForm({}, TODAY, { ...full, kcal: '2500.6', protein: '180.26' }, { today: TODAY }).value
     expect(v.kcal).toBe(2501)
     expect(v.protein).toBe(180.3)
   })
 
-  test('the day keeps its ticks (nutrition.js:103 withNutritionDay keeps supps)', () => {
+  test('the day keeps its ticks (nutrition.js withNutritionDay keeps supps)', () => {
     const state = { nutritionDays: { [TODAY]: { supps: ['a', 'b'], _ts: 9 } } }
     expect(applyDayForm(state, TODAY, form, { today: TODAY }).value.supps).toEqual(['a', 'b'])
   })
@@ -189,12 +189,12 @@ describe('applyDayForm', () => {
 })
 
 describe('clearDayValue', () => {
-  test('clear keeps the ticks and drops totals, type and note: never a delete (nutrition.js:112, Nutrition.jsx:155)', () => {
+  test('clear keeps the ticks and drops totals, type and note: never a delete (nutrition.js clearNutritionDay, Nutrition.jsx:155)', () => {
     const state = { nutritionDays: { [TODAY]: { ...full, note: 'n', supps: ['a'], _ts: 4 } } }
     expect(clearDayValue(state, TODAY)).toEqual({ supps: ['a'], _ts: 4 })
   })
 
-  test('with no ticks it is an empty object (nutrition.js:112)', () => {
+  test('with no ticks it is an empty object (nutrition.js clearNutritionDay)', () => {
     expect(clearDayValue({ nutritionDays: { [TODAY]: full } }, TODAY)).toEqual({})
     expect(clearDayValue({}, TODAY)).toEqual({})
   })
@@ -207,13 +207,13 @@ describe('clearDayValue', () => {
 })
 
 describe('toggleSupplement', () => {
-  test('ticks an unticked supplement and unticks a ticked one, totals kept (nutrition.js:121, Nutrition.jsx:251)', () => {
+  test('ticks an unticked supplement and unticks a ticked one, totals kept (nutrition.js withSupplementTick, Nutrition.jsx:251)', () => {
     const state = { nutritionDays: { [TODAY]: { ...full, supps: ['a'], _ts: 2 } } }
     expect(toggleSupplement(state, TODAY, 'b')).toEqual({ ...full, supps: ['a', 'b'], _ts: 2 })
     expect(toggleSupplement(state, TODAY, 'a')).toEqual({ ...full, _ts: 2 })
   })
 
-  test('on an empty day it creates a day holding just the tick, with no stamp (nutrition.js:121, ruling 1)', () => {
+  test('on an empty day it creates a day holding just the tick, with no stamp (nutrition.js withSupplementTick, ruling 1)', () => {
     const v = toggleSupplement({}, TODAY, 'a')
     expect(v).toEqual({ supps: ['a'] })
     expect('_ts' in v).toBe(false)
@@ -223,7 +223,7 @@ describe('toggleSupplement', () => {
     expect(toggleSupplement({ nutritionDays: { [TODAY]: { extra: 1 } } }, TODAY, 'a')).toEqual({ extra: 1, supps: ['a'] })
   })
 
-  test('a day holds at most 50 ticks: a 51st is not added, unticking still works (nutrition.js:124-126)', () => {
+  test('a day holds at most 50 ticks: a 51st is not added, unticking still works (nutrition.js withSupplementTick, SUPPLEMENTS_MAX)', () => {
     const ids = Array.from({ length: 50 }, (_, i) => 's' + i)
     const state = { nutritionDays: { [TODAY]: { supps: ids } } }
     expect(toggleSupplement(state, TODAY, 'extra').supps).toHaveLength(50)
@@ -231,33 +231,33 @@ describe('toggleSupplement', () => {
     expect(toggleSupplement(state, TODAY, 's0').supps).toHaveLength(49)
   })
 
-  test('a bad date or empty id throws as the web helper does (nutrition.js:127-128)', () => {
+  test('a bad date or empty id throws as the web helper does (nutrition.js withSupplementTick)', () => {
     expect(() => toggleSupplement({}, 'nope', 'a')).toThrow()
     expect(() => toggleSupplement({}, TODAY, '')).toThrow()
   })
 })
 
 describe('targets', () => {
-  test('targetsForm reads both types, null where unset, and never NaN (nutrition.js:185 readTargets)', () => {
+  test('targetsForm reads both types, null where unset, and never NaN (nutrition.js readTargets)', () => {
     expect(targetsForm({})).toEqual({ training: { kcal: null, protein: null, fiber: null }, rest: { kcal: null, protein: null, fiber: null } })
     expect(targetsForm({ nutritionTargets: { training: { kcal: 'x', protein: 0, fiber: 30 } } }).training).toEqual({ kcal: null, protein: null, fiber: 30 })
   })
 
-  test('applyTargets sets one field and returns the whole key (nutrition.js:197 withTarget)', () => {
+  test('applyTargets sets one field and returns the whole key (nutrition.js withTarget)', () => {
     const state = { nutritionTargets: { training: { kcal: 2600 }, rest: { protein: 150 } } }
     expect(applyTargets(state, 'training', 'protein', '190')).toEqual({
       training: { kcal: 2600, protein: 190, fiber: null }, rest: { kcal: null, protein: 150, fiber: null },
     })
   })
 
-  test('null, empty or 0 clears a target; out of range clears too, as the web does (nutrition.js:197-199, :31)', () => {
+  test('null, empty or 0 clears a target; out of range clears too, as the web does (nutrition.js withTarget, NUTRIENT_MAX)', () => {
     const state = { nutritionTargets: { training: { kcal: 2600 } } }
     for (const v of [null, '', 0]) expect(applyTargets(state, 'training', 'kcal', v).training.kcal).toBeNull()
     expect(applyTargets(state, 'training', 'kcal', 20001).training.kcal).toBeNull()
     expect(applyTargets(state, 'training', 'kcal', 20000).training.kcal).toBe(20000)
   })
 
-  test('a bad type or key is refused (nutrition.js:195 throws bad target); carbs/fat are not targets (nutrition.js:28)', () => {
+  test('a bad type or key is refused (nutrition.js withTarget throws bad target); carbs/fat are not targets (nutrition.js TARGET_KEYS)', () => {
     expect(applyTargets({}, 'cheat', 'kcal', 1)).toEqual({ error: 'bad target' })
     expect(applyTargets({}, 'rest', 'carbs', 1)).toEqual({ error: 'bad target' })
   })
@@ -266,16 +266,16 @@ describe('targets', () => {
 describe('supplements', () => {
   const state = { supplements: SUPPS }
 
-  test('add returns the whole new list, trimmed, with the id the caller minted (nutrition.js:157 withSupplement, Nutrition.jsx:107)', () => {
+  test('add returns the whole new list, trimmed, with the id the caller minted (nutrition.js withSupplement, Nutrition.jsx:107)', () => {
     expect(addSupplement(state, '  Zinc ', 'c')).toEqual([...SUPPS, { id: 'c', name: 'Zinc' }])
     expect(addSupplement({}, 'Zinc', 'c')).toEqual([{ id: 'c', name: 'Zinc' }])
   })
 
-  test('names are cut at 60 characters (nutrition.js:34)', () => {
+  test('names are cut at 60 characters (nutrition.js SUPPLEMENT_NAME_MAX)', () => {
     expect(addSupplement({}, 'x'.repeat(80), 'c')[0].name).toHaveLength(60)
   })
 
-  test('a name already on the list, in any case, is refused with the web toast (nutrition.js:162, Nutrition.jsx:105)', () => {
+  test('a name already on the list, in any case, is refused with the web toast (nutrition.js withSupplement, Nutrition.jsx:105)', () => {
     expect(addSupplement(state, 'creatine', 'c')).toEqual({ error: 'That supplement is already on the list.' })
     expect(addSupplement(state, ' VITAMIN d ', 'c')).toEqual({ error: 'That supplement is already on the list.' })
   })
@@ -285,17 +285,17 @@ describe('supplements', () => {
     expect(addSupplement(state, '', 'c')).toEqual({ error: '' })
   })
 
-  test('at most 50: the 51st is refused, with the same toast the web shows (nutrition.js:50, :160, Nutrition.jsx:105)', () => {
+  test('at most 50: the 51st is refused, with the same toast the web shows (nutrition.js SUPPLEMENTS_MAX, withSupplement, Nutrition.jsx:105)', () => {
     const fifty = Array.from({ length: 50 }, (_, i) => ({ id: 's' + i, name: 'S' + i }))
     expect(addSupplement({ supplements: fifty }, 'One more', 'z')).toEqual({ error: 'That supplement is already on the list.' })
     expect(addSupplement({ supplements: fifty.slice(1) }, 'One more', 'z')).toHaveLength(50)
   })
 
-  test('add needs an id (nutrition.js:160)', () => {
+  test('add needs an id (nutrition.js withSupplement)', () => {
     expect(addSupplement(state, 'Zinc', '')).toEqual({ error: '' })
   })
 
-  test('remove returns the list without it and does not touch any day: past ticks stay (nutrition.js:167, Nutrition.jsx:128)', () => {
+  test('remove returns the list without it and does not touch any day: past ticks stay (nutrition.js withoutSupplement, Nutrition.jsx:128)', () => {
     const s = { supplements: SUPPS, nutritionDays: { [TODAY]: { supps: ['a'] } } }
     const before = JSON.stringify(s)
     expect(removeSupplement(s, 'a')).toEqual([SUPPS[1]])
@@ -304,7 +304,7 @@ describe('supplements', () => {
     expect(toggleSupplement(s, TODAY, 'b').supps).toEqual(['a', 'b'])
   })
 
-  test('removing the last one gives an empty list; removing an unknown id changes nothing; junk reads empty (nutrition.js:140)', () => {
+  test('removing the last one gives an empty list; removing an unknown id changes nothing; junk reads empty (nutrition.js readSupplements)', () => {
     expect(removeSupplement({ supplements: [SUPPS[0]] }, 'a')).toEqual([])
     expect(removeSupplement(state, 'nope')).toEqual(SUPPS)
     expect(removeSupplement({ supplements: 'x' }, 'a')).toEqual([])
