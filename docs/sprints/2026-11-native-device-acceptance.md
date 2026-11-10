@@ -83,7 +83,7 @@ Log one real session start to finish on this build. Use the rest timer and lock 
 - [ ] Rest alerts arrived when the rest ended.
 - [ ] After Finish, the session shows once: in an exercise's "Your history" (Exercises tab), and on the server (next line). Next time lines (where your progression is on) match what you expect.
 - [ ] Back online, the session reaches the server: the web's History (look, don't edit) or `list_workouts` in your MCP client shows it once, with the same sets.
-- [ ] It is in Apple Health once, as a strength workout with the right start and end.
+- [ ] It is in Apple Health once, as a strength workout with the right start and end. Tick this after the Health row's retry in section 3, not straight after Finish.
 
 Session: ______ (date), ______ (routine), ______ sets. Notes:
 
