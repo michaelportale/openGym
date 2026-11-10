@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { createNodeSqliteDb, createNodeSqliteFileDb } from '../../scripts/node-sqlite.mjs'
+import { ROUTINE_DELETED } from './edit-guard.js'
 import { createMemoryPendingEdits, createSqlitePendingEdits } from './pending-edits.js'
 
 const makers = {
@@ -26,6 +27,21 @@ describe.each(Object.entries(makers))('%s pending edits', (_, make) => {
     expect((await s.listPending()).map(e => e.key)).toEqual(['a', 'b'])
     ;(await s.get('routine', 'a')).value.name = 'changed'
     expect((await s.get('routine', 'a')).value.name).toBe('A')
+  })
+
+  // A routine create (base 0) and delete (edit-guard.js ROUTINE_DELETED): the marker is stored and
+  // sent like any routine value, and base 0 stays 0, never null (a null base is a seed routine's).
+  test('a delete row holds the marker and markSent records it without throwing; a create keeps base 0, and a delete put over it keeps base 0', async () => {
+    const s = make()
+    await s.put({ kind: 'routine', key: 'r1', baseTs: 100, value: ROUTINE_DELETED, t: 5 })
+    await expect(s.markSent([{ kind: 'routine', key: 'r1', t: 5, baseTs: 100, value: ROUTINE_DELETED }])).resolves.toEqual({ ok: true })
+    expect(await s.get('routine', 'r1')).toEqual({ kind: 'routine', key: 'r1', baseTs: 100, value: ROUTINE_DELETED, sent: ROUTINE_DELETED, t: 5 })
+    await s.put({ kind: 'routine', key: 'n', baseTs: 0, value: { id: 'n', name: 'New' }, t: 6 })
+    expect((await s.get('routine', 'n')).baseTs).toBe(0)
+    await s.markSent([{ kind: 'routine', key: 'n', t: 6, baseTs: 0, value: { id: 'n', name: 'New' } }])
+    expect((await s.get('routine', 'n')).sent).toEqual({ id: 'n', name: 'New' })
+    await s.put({ kind: 'routine', key: 'n', baseTs: null, value: ROUTINE_DELETED, t: 7 })
+    expect(await s.get('routine', 'n')).toEqual({ kind: 'routine', key: 'n', baseTs: 0, value: ROUTINE_DELETED, sent: { id: 'n', name: 'New' }, t: 7 })
   })
 
   test('a second put on a pending row keeps baseTs and sent', async () => {

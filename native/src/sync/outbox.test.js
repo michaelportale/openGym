@@ -1,5 +1,7 @@
 import { expect, test } from 'vitest'
+import { ROUTINE_DELETED } from './edit-guard.js'
 import { buildPush } from './outbox.js'
+import { createMemoryPendingEdits } from './pending-edits.js'
 
 const fixture = () => ({
   unit: 'lb',
@@ -231,6 +233,50 @@ test('an edit made on older stamps goes on the copy\'s, and is recorded for mark
   const push = buildPush(copy, [], [], [routineEdit(stale)])
   expect(push.state.routines[0]).toEqual({ ...stale, _ts: 1000, _f: { ex: 900 } })
   expect(push.edits).toEqual([{ kind: 'routine', key: 'r1', t: 50, baseTs: 1000, value: push.state.routines[0] }])
+})
+
+// Creating and deleting a routine (7E-A): a create goes in at the end with no stamps, which the
+// server sets; a delete leaves the routine out, which the server records in deleted.routines,
+// with the copy's week and dayPlan cleaned as the web's deleteRoutine cleans them.
+const deleteRow = (key, extra = {}) => ({ kind: 'routine', key, baseTs: 1000, value: ROUTINE_DELETED, sent: null, t: 50, ...extra })
+
+test('a create goes in at the end of routines with no stamps, and is recorded for markSent as it goes', () => {
+  const copy = planCopy()
+  const made = { id: 'r9', name: 'Legs', ex: [{ id: '0031', sets: 3, reps: 8 }] }
+  const push = buildPush(copy, [], [], [routineEdit({ ...made, _ts: 1000, _f: { ex: 900 } }, { baseTs: 0 })])
+  expect(push.state.routines).toEqual([...copy.state.routines, made])
+  push.state.routines.slice(0, 3).forEach((r, i) => expect(r).toBe(copy.state.routines[i]))
+  expect({ ...push.state, routines: undefined }).toEqual({ ...copy.state, routines: undefined })
+  expect(push.edits).toEqual([{ kind: 'routine', key: 'r9', t: 50, baseTs: 0, value: made }])
+  expect(copy).toEqual(planCopy())
+})
+
+test('a delete leaves the routine out and cleans the copy\'s week and dayPlan; markSent records the marker and does not throw', async () => {
+  const copy = planCopy()
+  Object.assign(copy.state, { week: { 1: ['r1', 'r2'], 4: ['r1'] }, dayPlan: { '2026-11-12': 'r1', '2026-11-13': 'r2' }, queue: { ids: ['r2', 'r1'] } })
+  const before = structuredClone(copy)
+  const row = deleteRow('r1')
+  const push = buildPush(copy, [], [], [row])
+  expect(push.state.routines).toEqual([copy.state.routines[1], 'junk'])
+  expect(push.state.week).toEqual({ 1: ['r2'] })
+  expect(push.state.dayPlan).toEqual({ '2026-11-13': 'r2' })
+  const rest = s => ({ ...s, routines: undefined, week: undefined, dayPlan: undefined })
+  expect(rest(push.state)).toEqual(rest(copy.state)) // the queue, edited and deleted go as the copy has them
+  expect(push.edits).toEqual([{ kind: 'routine', key: 'r1', t: 50, baseTs: 1000, value: ROUTINE_DELETED }])
+  expect(copy).toEqual(before)
+  const store = createMemoryPendingEdits()
+  await store.put(row)
+  await expect(store.markSent(push.edits)).resolves.toEqual({ ok: true })
+  expect((await store.get('routine', 'r1')).sent).toEqual(ROUTINE_DELETED)
+})
+
+test('a routine created and deleted before any sync makes no push, and rides along with nothing when a workout goes', () => {
+  const copy = planCopy()
+  const row = deleteRow('r9', { baseTs: 0 })
+  expect(buildPush(copy, [], [], [row])).toBeNull()
+  const push = buildPush(copy, [pend('p1')], [], [row])
+  expect(push.edits).toEqual([])
+  expect(push.state.routines).toBe(copy.state.routines)
 })
 
 // Nutrition days and the two settings (pending-edits.js rows of kind nutritionDay and setting): a

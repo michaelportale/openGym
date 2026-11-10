@@ -16,6 +16,7 @@ import { boundPort } from '../../../api/test/helpers.mjs'
 import { SQLITE_DRIVERS } from '../../scripts/node-sqlite.mjs'
 import { createSqliteWeighIns } from '../body/weigh-ins.js'
 import { createSqliteMeasurements } from '../body/measurement-store.js'
+import { ROUTINE_DELETED } from './edit-guard.js'
 import { createSqlitePendingEdits } from './pending-edits.js'
 import { createSqliteFinishedWorkouts } from '../session/finished-workouts.js'
 import { createApiClient } from './api-client.js'
@@ -650,6 +651,101 @@ describe.skipIf(!HAS_API_DEPS)(TITLE, { timeout: 30_000 }, () => {
     expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
     expect(pushes).toEqual([200, 200])
     expect(server.file().routines[0]).toEqual(stored)
+  })
+
+  // Creating and deleting a routine (7E-A): a create is a routine row on base 0, a delete a routine
+  // row holding ROUTINE_DELETED on the routine's _ts. The server stamps a new routine's _ts and
+  // records a routine the push lacks in deleted.routines (sync-stamps.js stampUnstamped).
+  const LEGS = { id: 'r9', name: 'Legs', ex: [{ id: '0031', sets: 3, reps: 8, mode: 'reps' }] }
+  const AT = new Date(T0).toISOString()
+  const counted = (server, before = null) => {
+    const plain = createApiClient({ fetch: globalThis.fetch, timeoutMs: 10_000 })
+    const pushes = []
+    const client = { ...plain, async push(...args) { if (before) { const go = before; before = null; await go(server) } const r = await plain.push(...args); pushes.push(r.ok ? 200 : r.kind); return r } }
+    return { client, pushes }
+  }
+
+  test('a phone create reaches the server file at the end of routines, and the server stamps its _ts; the pull acks it', async () => {
+    const server = await startServer({ state: planned() })
+    const app = await paired(server)
+    await app.edits.put({ kind: 'routine', key: 'r9', baseTs: 0, value: LEGS, t: T0 })
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    const file = server.file()
+    expect(file.routines.slice(0, 2)).toEqual(planned().routines)
+    expect(content(file.routines[2])).toEqual(LEGS)
+    expect(file.routines[2]._ts).toBeGreaterThan(planned().routines[0]._ts)
+    expect(file.routines).toHaveLength(3)
+    for (const k of ['queue', 'deleted', 'edited', 'workouts']) expect(file[k], k).toEqual(planned()[k])
+    expect((await app.copy.get()).state).toEqual(without(file, HIDDEN))
+    expect(await app.db.getAll('SELECT key, acked_at, superseded_at FROM pending_edits')).toEqual([{ key: 'r9', acked_at: AT, superseded_at: null }])
+    expect(await app.edits.listNotices()).toEqual([])
+  })
+
+  test('a phone delete takes the routine and its week and dayPlan places out of the server file, which records it in deleted.routines; a later pull does not bring it back', async () => {
+    const server = await startServer({ state: { ...planned(), week: { 1: ['r1', 'r2'], 4: ['r1'] }, dayPlan: { '2026-11-12': 'r1', '2026-11-13': 'r2' } } })
+    const { client, pushes } = counted(server)
+    const app = await paired(server, undefined, { client })
+    const base = (await app.copy.get()).state.routines[0]
+    await app.edits.put({ kind: 'routine', key: 'r1', baseTs: base._ts, value: ROUTINE_DELETED, t: T0 })
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    const file = server.file()
+    expect(file.routines).toEqual([planned().routines[1]])
+    expect(file.deleted.routines.r1).toBeGreaterThan(base._ts)
+    expect(file.week).toEqual({ 1: ['r2'] })
+    expect(file.dayPlan).toEqual({ '2026-11-13': 'r2' })
+    expect(file.queue).toEqual(fixture().queue) // its readers skip an id that no longer resolves
+    expect(file.workouts).toEqual(fixture().workouts)
+    expect(await app.db.getAll('SELECT key, acked_at, superseded_at FROM pending_edits')).toEqual([{ key: 'r1', acked_at: AT, superseded_at: null }])
+
+    // a web write moves the revision: the next sync pulls, and r1 stays gone with nothing sent
+    await server.webWrites(state => ({ ...state, lang: 'de', edited: { ...state.edited, lang: T0 + 700 } }))
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    expect((await app.copy.get()).state.routines.map(r => r.id)).toEqual(['r2'])
+    expect(server.file().routines.map(r => r.id)).toEqual(['r2'])
+    expect(pushes).toEqual([200])
+    expect(await app.edits.listNotices()).toEqual([])
+  })
+
+  test('a create whose id the server has on record as deleted is superseded as deleted and never sent', async () => {
+    const server = await startServer({ state: { ...planned(), deleted: { ...fixture().deleted, routines: { r9: T0 - 1000 } } } })
+    const { client, pushes } = counted(server)
+    const app = await paired(server, undefined, { client })
+    await app.edits.put({ kind: 'routine', key: 'r9', baseTs: 0, value: LEGS, t: T0 })
+    const before = server.file()
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    expect(pushes).toEqual([])
+    expect(server.file()).toEqual(before)
+    expect(await app.edits.listNotices()).toEqual([{ kind: 'routine', key: 'r9', name: 'Legs', reason: 'deleted', at: AT }])
+  })
+
+  test('a delete over a real 409 (the web changed that routine first) is superseded as changed and never sent again', async () => {
+    const server = await startServer({ state: planned() })
+    const webRenames = async ({ api }) => {
+      const cookie = webCookie()
+      const got = await (await fetch(`${api}/api/data`, { headers: cookie })).json()
+      const routines = got.state.routines.map(r => (r.id === 'r1' ? { ...r, name: 'Push A', _ts: T0 + 500 } : r))
+      const res = await fetch(`${api}/api/data`, {
+        method: 'PUT',
+        headers: { ...cookie, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state: { ...got.state, routines }, baseRev: got.rev, baseWid: got.state._wid, stamped: true }),
+      })
+      expect(res.status).toBe(200)
+    }
+    const { client, pushes } = counted(server, webRenames)
+    const app = await paired(server, undefined, { client })
+    await app.edits.put({ kind: 'routine', key: 'r1', baseTs: (await app.copy.get()).state.routines[0]._ts, value: ROUTINE_DELETED, t: T0 })
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    expect(pushes).toEqual(['conflict'])
+    const stored = server.file().routines.find(r => r.id === 'r1')
+    expect(content(stored)).toEqual({ ...content(planned().routines[0]), name: 'Push A' })
+    expect(stored._ts).toBe(T0 + 500)
+    expect(server.file().deleted).toEqual(fixture().deleted)
+    // the marker carries no name: the screen that shows the notice names it from the copy
+    expect(await app.edits.listNotices()).toEqual([{ kind: 'routine', key: 'r1', name: '', reason: 'changed', at: AT }])
+
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    expect(pushes).toEqual(['conflict'])
+    expect(server.file().routines.find(r => r.id === 'r1')).toEqual(stored)
   })
 
   // Nutrition days and the two settings, as the web keeps them: a day stamped by its own _ts, a

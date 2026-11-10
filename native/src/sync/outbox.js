@@ -5,7 +5,8 @@ import { applyEdits, entryValue } from './edit-guard.js'
 // What to send: the server's document, untouched, plus the workouts it does not have yet, this
 // phone's weigh-in and body-measurement changes by day (day-ops.js, measurement-ops.js) and its
 // pending edits that can go (edit-guard.js):
-// a routine replacing its own routine whole, a nutrition day its own day, a setting its own key.
+// a routine replacing its own routine whole (a new one added at the end; a deleted one left out,
+// with its week and dayPlan places), a nutrition day its own day, a setting its own key.
 // Nothing else is changed, so keys this app does not know survive. The one addition: a document
 // with no unit is sent as pounds, which this app logs in (the web, the carry-over and the MCP
 // read a missing unit as kilograms).
@@ -27,8 +28,8 @@ export function buildPush(copy, pending, pendingWeighIns = [], pendingEdits = []
   // the server records it in deleted.measurements (sync-stamps.js stampUnstamped).
   const measured = applyMeasurementOps(copy.state.measurements, pendingMeasurements, copy.state.deleted?.measurements)
   // Pending edits the same way: the document stays the copy's own unless one applies or rebases,
-  // and then only its own routine, day or setting moves; one that is done or superseded is
-  // settled by the sync engine's reconcile, never sent.
+  // and then only its own routine (with a deleted one's week and dayPlan places), day or setting
+  // moves; one that is done or superseded is settled by the sync engine's reconcile, never sent.
   const plan = applyEdits(copy.state, pendingEdits)
   const carried = [...plan.applied, ...plan.rebased]
   if (!add.length && !days.applied.length && !measured.applied.length && !carried.length) return null
