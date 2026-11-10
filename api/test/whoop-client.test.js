@@ -184,6 +184,35 @@ test('two concurrent 401s on one access token refresh once; the second caller re
   assert.equal(ctx.fake.count.data, 4);
 });
 
+test('a caller whose token was just rejected never joins a lookup that can hand that token back', async t => {
+  // A failed exchange holds the queue; a plain lookup queues behind it and will return T1, which
+  // the vault still holds; then another caller's T1 is rejected. That caller must queue a lookup
+  // of its own, which refreshes. Joining the plain one hands it the dead T1 back, and its retry
+  // ends in a spurious reconnect.
+  let rejected;
+  const sawReject = new Promise(r => { rejected = r; });
+  const ctx = await setup(t, { fetch: async (url, init) => { const r = await fetch(url, init); if (r.status === 401) rejected(); return r; } });
+  const t1 = seed(ctx, 'u1').access_token;
+  const held = gate();
+  ctx.fake.force('data', held.entry);
+  const first = ctx.client.get('u1', 'recovery');           // its call with T1 is held at WHOOP
+  await held.reached;
+  const ex = gate();
+  ctx.fake.force('token', ex.entry);
+  const exchange = ctx.client.exchange('u1', 'not-a-code');  // holds the queue, then fails
+  await ex.reached;
+  const second = ctx.client.get('u1', 'cycle');             // a plain lookup, queued behind it
+  ctx.fake.killAccess(t1);                                   // WHOOP stops honouring T1
+  held.release();                                            // the first call gets its 401 now
+  await sawReject;
+  await new Promise(r => setImmediate(r));                   // and has asked for a token that is not T1
+  ex.release();
+  await rejectsWith(ctx, exchange, 'reconnect');
+  assert.deepEqual(await first, []);
+  assert.deepEqual(await second, []);
+  assert.equal(ctx.fake.count.refresh_token, 1);
+});
+
 test('refresh is per uid: one user\'s stuck refresh does not hold up another\'s reads', async t => {
   const ctx = await setup(t);
   seed(ctx, 'a', 0);
@@ -250,7 +279,9 @@ test('no tokens at all is reconnect, without calling WHOOP', async t => {
 // ---- refresh failures ------------------------------------------------------------------------
 
 for (const [label, force] of [
-  ['400', 400],
+  ['400 with another error', 400],
+  ['400 without a body', { status: 400, body: '' }],
+  ['400 with an unparsable body', { status: 400, body: 'not json' }],
   ['401 with another error', 401],
   ['401 without a body', { status: 401, body: '' }],
   ['401 with an unparsable body', { status: 401, body: 'not json' }],
@@ -283,17 +314,20 @@ for (const [force, code] of [[503, 'unavailable'], [500, 'unavailable'], [429, '
   });
 }
 
-test('a 401 invalid_client on refresh is our misconfiguration: unavailable, tokens kept, and fixing .env recovers', async t => {
-  const ctx = await setup(t, { clientSecret: 'a-rotated-secret-the-env-still-has' });
-  const old = seed(ctx, 'u1', 0);
-  await rejectsWith(ctx, ctx.client.get('u1', 'cycle'), 'unavailable');
-  assert.equal(ctx.fake.log.find(r => r.route === 'token').form.grant_type, 'refresh_token');
-  assert.deepEqual(ctx.vault.read('u1'), old);
-  const fixed = ctx.make();
-  assert.deepEqual(await fixed.get('u1', 'cycle'), []);
-  assert.equal(ctx.fake.count.refresh_token, 2);
-  assert.notEqual(ctx.vault.read('u1').refresh_token, old.refresh_token);
-});
+for (const status of [400, 401]) {
+  test(`a ${status} invalid_client on refresh is our misconfiguration: unavailable, tokens kept, and fixing .env recovers`, async t => {
+    const ctx = await setup(t, { clientSecret: 'a-rotated-secret-the-env-still-has' });
+    ctx.fake.invalidClientStatus = status;
+    const old = seed(ctx, 'u1', 0);
+    await rejectsWith(ctx, ctx.client.get('u1', 'cycle'), 'unavailable');
+    assert.equal(ctx.fake.log.find(r => r.route === 'token').form.grant_type, 'refresh_token');
+    assert.deepEqual(ctx.vault.read('u1'), old);
+    const fixed = ctx.make();
+    assert.deepEqual(await fixed.get('u1', 'cycle'), []);
+    assert.equal(ctx.fake.count.refresh_token, 2);
+    assert.notEqual(ctx.vault.read('u1').refresh_token, old.refresh_token);
+  });
+}
 
 test('a refresh that grants fewer scopes is still saved and used: the old refresh token is dead', async t => {
   const ctx = await setup(t);
@@ -421,13 +455,28 @@ test('a WHOOP that never answers is unreachable once the request signal fires', 
   await rejectsWith(ctx, ctx.client.get('u1', 'cycle'), 'unreachable');
 });
 
+test('a response body that stalls or breaks mid-read is unreachable, and the tokens stay', async t => {
+  const ctx = await setup(t, { fetch: (url, init) => fetch(url, { ...init, signal: AbortSignal.any([init.signal, AbortSignal.timeout(150)]) }) });
+  for (const [route, entry, ms] of [
+    ['data', { status: 200, body: '{"records":[', hang: true }, 3_600_000],
+    ['data', { status: 200, body: '{"records":[', drop: true }, 3_600_000],
+    ['token', { status: 200, body: '{"access_token":', hang: true }, 0],      // a refresh
+    ['token', { status: 400, body: '{"error":', hang: true }, 0],             // a refusal whose error never arrives
+  ]) {
+    const old = seed(ctx, 'u1', ms);
+    ctx.fake.force(route, entry);
+    await rejectsWith(ctx, ctx.client.get('u1', 'cycle'), 'unreachable');
+    assert.deepEqual(ctx.vault.read('u1'), old, JSON.stringify(entry));
+  }
+});
+
 test('every request carries a timeout signal and refuses redirects; no token rides in a URL', async t => {
   const inits = [];
   const ctx = await setup(t, { fetch: (url, init) => { inits.push(init); return fetch(url, init); } });
   await ctx.client.exchange('u1', ctx.fake.issueCode());
   ctx.clock.t += 3600 * 1000;
   await ctx.client.get('u1', 'recovery', { start: START });
-  assert.equal(await ctx.client.revoke('u1'), true);
+  assert.deepEqual(await ctx.client.revoke('u1'), { revoked: true, wasConnected: true });
   assert.equal(inits.length, 4);                          // exchange, refresh, data, revoke
   for (const init of inits) {
     assert.equal(init.redirect, 'error');
@@ -441,7 +490,7 @@ test('every request carries a timeout signal and refuses redirects; no token rid
 test('revoke asks WHOOP to drop access, then deletes the file', async t => {
   const ctx = await setup(t);
   const pair = seed(ctx, 'u1');
-  assert.equal(await ctx.client.revoke('u1'), true);
+  assert.deepEqual(await ctx.client.revoke('u1'), { revoked: true, wasConnected: true });
   assert.equal(ctx.fake.count.revoke, 1);
   assert.equal(ctx.fake.isLive(pair.access_token), false);
   assert.equal(fs.existsSync(whoopFile(ctx.dir, 'u1')), false);
@@ -453,7 +502,7 @@ for (const force of [503, 429, 'drop']) {
     const ctx = await setup(t);
     seed(ctx, 'u1');
     ctx.fake.force('revoke', force);
-    assert.equal(await ctx.client.revoke('u1'), false);
+    assert.deepEqual(await ctx.client.revoke('u1'), { revoked: false, wasConnected: true });
     assert.equal(fs.existsSync(whoopFile(ctx.dir, 'u1')), false);
   });
 }
@@ -462,7 +511,7 @@ test('revoke refreshes once on a 401 and retries', async t => {
   const ctx = await setup(t);
   seed(ctx, 'u1');
   ctx.fake.force('revoke', 401);
-  assert.equal(await ctx.client.revoke('u1'), true);
+  assert.deepEqual(await ctx.client.revoke('u1'), { revoked: true, wasConnected: true });
   assert.equal(ctx.fake.count.refresh_token, 1);
   assert.equal(ctx.fake.count.revoke, 2);
   assert.equal(ctx.vault.read('u1'), null);
@@ -471,7 +520,7 @@ test('revoke refreshes once on a 401 and retries', async t => {
 test('revoke with an expired access token refreshes first', async t => {
   const ctx = await setup(t);
   seed(ctx, 'u1', 0);
-  assert.equal(await ctx.client.revoke('u1'), true);
+  assert.deepEqual(await ctx.client.revoke('u1'), { revoked: true, wasConnected: true });
   assert.equal(ctx.fake.count.refresh_token, 1);
   assert.equal(ctx.fake.count.revoke, 1);
 });
@@ -480,14 +529,23 @@ test('revoke whose refresh is refused still ends disconnected', async t => {
   const ctx = await setup(t);
   seed(ctx, 'u1', 0);
   ctx.fake.force('token', 400);
-  assert.equal(await ctx.client.revoke('u1'), false);
+  assert.deepEqual(await ctx.client.revoke('u1'), { revoked: false, wasConnected: true });
   assert.equal(ctx.fake.count.revoke, 0);
   assert.equal(ctx.vault.read('u1'), null);
 });
 
 test('revoke when not connected calls nobody', async t => {
   const ctx = await setup(t);
-  assert.equal(await ctx.client.revoke('u1'), false);
+  assert.deepEqual(await ctx.client.revoke('u1'), { revoked: false, wasConnected: false });
+  assert.equal(ctx.fake.log.length, 0);
+});
+
+test('revoke removes a file that will not decrypt, as not connected, without calling WHOOP', async t => {
+  const ctx = await setup(t);
+  createWhoopVault({ dir: ctx.dir, secret: 'd'.repeat(64) }).save('u1', { access_token: 'a', refresh_token: 'r' });
+  assert.equal(ctx.client.connected('u1'), false);
+  assert.deepEqual(await ctx.client.revoke('u1'), { revoked: false, wasConnected: false });
+  assert.equal(fs.existsSync(whoopFile(ctx.dir, 'u1')), false);
   assert.equal(ctx.fake.log.length, 0);
 });
 
@@ -501,7 +559,7 @@ test('a revoke during a refresh waits for it, revokes the rotated pair, and noth
   const revoked = ctx.client.revoke('u1');
   g.release();
   await Promise.allSettled([read]);
-  assert.equal(await revoked, true);
+  assert.deepEqual(await revoked, { revoked: true, wasConnected: true });
   assert.equal(ctx.fake.count.refresh_token, 1);
   assert.equal(ctx.fake.count.revoke, 1);
   assert.equal(ctx.vault.read('u1'), null);

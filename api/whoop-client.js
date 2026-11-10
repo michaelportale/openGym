@@ -65,6 +65,16 @@ export function createWhoopClient({ base = WHOOP_BASE, clientId, clientSecret, r
   }
   const discard = r => { r.body?.cancel().catch(() => {}); };
 
+  /** The parsed body, or undefined when it is not JSON. A body cut off by the timeout or a dropped
+   * connection is a transport failure, not a malformed answer. */
+  async function json(r) {
+    try { return await r.json(); }
+    catch (e) {
+      if (e instanceof SyntaxError) return undefined;
+      throw new WhoopError('unreachable');
+    }
+  }
+
   const usable = t => typeof t?.access_token === 'string' && t.access_token !== ''
     && typeof t.refresh_token === 'string' && t.refresh_token !== ''
     && Number.isFinite(t.expires_in) && t.expires_in > 0
@@ -81,25 +91,24 @@ export function createWhoopClient({ base = WHOOP_BASE, clientId, clientSecret, r
       body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret, ...params }),
     });
     if (!r.ok) {
-      // The body is read only for RFC 6749 §5.2's `error`, and none of it goes further.
-      let error;
-      if (r.status === 401) { try { error = (await r.json())?.error; } catch { /* no usable body */ } }
-      else discard(r);
-      if (r.status === 400 || r.status === 401) {
-        if (refreshing) {
-          // invalid_client is this server's credentials (a wrong or rotated WHOOP_CLIENT_SECRET),
-          // not the user's grant: keep the tokens, so fixing .env recovers without a reconnect.
-          if (error === 'invalid_client') throw new WhoopError('unavailable');
-          // Anything else refused the refresh token, which is dead for good: forget it.
-          vault.remove(uid);
-        }
-        // A refused code leaves any existing connection alone.
-        throw new WhoopError('reconnect');
+      if (r.status !== 400 && r.status !== 401) {
+        discard(r);
+        throw new WhoopError(r.status === 429 ? 'rate_limited' : 'unavailable');
       }
-      throw new WhoopError(r.status === 429 ? 'rate_limited' : 'unavailable');
+      // RFC 6749 §5.2: the body's `error` is read, and none of it goes further.
+      const error = (await json(r))?.error;
+      if (refreshing) {
+        // invalid_client (a 400, or a 401) is this server's credentials, a wrong or rotated
+        // WHOOP_CLIENT_SECRET, not the user's grant: keep the tokens, so fixing .env recovers
+        // without every user reconnecting.
+        if (error === 'invalid_client') throw new WhoopError('unavailable');
+        // Anything else refused the refresh token, which is dead for good: forget it.
+        vault.remove(uid);
+      }
+      // A refused code leaves any existing connection alone.
+      throw new WhoopError('reconnect');
     }
-    let t;
-    try { t = await r.json(); } catch { throw new WhoopError('incomplete'); }
+    const t = await json(r);
     // A connection must grant every scope. A refresh is saved even with fewer: WHOOP has already
     // killed the old refresh token, so dropping the new pair would only strand the user.
     if (!usable(t) || (!refreshing && !granted(t))) throw new WhoopError('incomplete');
@@ -138,7 +147,7 @@ export function createWhoopClient({ base = WHOOP_BASE, clientId, clientSecret, r
       discard(r);
       throw new WhoopError(r.status === 401 ? 'reconnect' : r.status === 429 ? 'rate_limited' : 'unavailable');
     }
-    try { return await r.json(); } catch { throw new WhoopError('unavailable'); }
+    return json(r);
   }
 
   return {
@@ -175,27 +184,31 @@ export function createWhoopClient({ base = WHOOP_BASE, clientId, clientSecret, r
       throw new WhoopError('unavailable');
     },
 
-    /** Asks WHOOP to drop this app's access, then deletes the tokens whatever WHOOP said.
-     * Resolves true when WHOOP confirmed, false when it could not (or nothing was connected). */
+    /** Asks WHOOP to drop this app's access, then deletes the token file whatever WHOOP said,
+     * one that will not decrypt included. `wasConnected`: a readable pair existed; `revoked`:
+     * WHOOP confirmed. */
     revoke(uid) {
       return exclusive(uid, async () => {
-        if (!vault.read(uid)) return false;
+        const wasConnected = vault.read(uid) !== null;
+        let revoked = false;
         try {
-          const call = token => send(`${api}/user/access`, { method: 'DELETE', headers: { authorization: `Bearer ${token}` } });
-          let token = await tokenFor(uid);
-          let r = await call(token);
-          if (r.status === 401) {
+          if (wasConnected) {
+            const call = token => send(`${api}/user/access`, { method: 'DELETE', headers: { authorization: `Bearer ${token}` } });
+            let token = await tokenFor(uid);
+            let r = await call(token);
+            if (r.status === 401) {
+              discard(r);
+              r = await call(await tokenFor(uid, token));
+            }
             discard(r);
-            r = await call(await tokenFor(uid, token));
+            revoked = r.ok;
           }
-          discard(r);
-          return r.ok;
         } catch (e) {
-          if (e instanceof WhoopError) return false;
-          throw e;
+          if (!(e instanceof WhoopError)) throw e;
         } finally {
           vault.remove(uid);
         }
+        return { revoked, wasConnected };
       });
     },
 

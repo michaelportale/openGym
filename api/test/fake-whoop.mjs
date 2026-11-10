@@ -9,11 +9,14 @@
  * Switches: `force(route, ...entries)` queues what the next requests on a route ('token',
  * 'data', 'revoke') get instead of the normal answer: a status number (its body carries
  * BODY_SECRET, so a test can see a client never repeats a body), `{ status, body }` (that status
- * with that body; a string is sent as is, '' for none), 302 (a redirect to the same
- * collection), 'hang' (never answers), 'drop' (the socket is destroyed), or a function, which is
- * awaited and then the request is served normally (a gate). `override` replaces fields of the
- * next token response (a string replaces the whole body); `page(path, query)` replaces the
- * default paging over `records`. `count` and `log` are what the tests read back. */
+ * with that body; a string is sent as is, '' for none; with `hang: true` the body is written but
+ * never finished, with `drop: true` the socket is destroyed after it), 302 (a redirect to the
+ * same collection), 'hang' (never answers), 'drop' (the socket is destroyed), or a function,
+ * which is awaited and then the request is served normally (a gate). `override` replaces fields
+ * of the next token response (a string replaces the whole body); `page(path, query)` replaces the
+ * default paging over `records`; `invalidClientStatus` is the status bad client credentials get
+ * (RFC 6749 §5.2 allows 400 or 401); `killAccess(token)` makes WHOOP stop honouring one access
+ * token while its refresh token still works. `count` and `log` are what the tests read back. */
 import http from 'node:http';
 import crypto from 'node:crypto';
 
@@ -40,11 +43,13 @@ export async function startFakeWhoop({
     records: { cycle: [], recovery: [], 'activity/sleep': [], 'activity/workout': [] },
     page: null,
     override: null,
+    invalidClientStatus: 401,
     force(route, ...entries) { forced[route].push(...entries); },
     issueCode() { const c = `code-${++seq}`; codes.add(c); return c; },
     /** A live pair, as a completed grant would leave it, to seed a vault with. */
     issuePair() { return mint(); },
     isLive(accessToken) { return live.some(p => p.access_token === accessToken); },
+    killAccess(accessToken) { const p = live.find(x => x.access_token === accessToken); if (p) p.access_token = null; },
     /** Everything a client must never echo: every token, the client secret, the forced body. */
     secrets() { return [clientSecret, BODY_SECRET, ...minted]; },
     close() { server.closeAllConnections(); return new Promise(r => server.close(r)); },
@@ -75,6 +80,12 @@ export async function startFakeWhoop({
     if (f === 'hang') return true;
     if (f === 'drop') { req.socket.destroy(); return true; }
     if (f === 302) { res.writeHead(302, { location: `${url.pathname}?redirected=1` }); res.end(); return true; }
+    if (typeof f === 'object' && (f.hang || f.drop)) {
+      res.writeHead(f.status, { 'content-type': 'application/json' });
+      res.write(f.body);
+      if (f.drop) res.destroy();
+      return true;
+    }
     if (typeof f === 'object') { send(res, f.status, f.body); return true; }
     send(res, f, { error: 'forced', detail: BODY_SECRET });
     return true;
@@ -84,7 +95,7 @@ export async function startFakeWhoop({
     const type = form.get('grant_type');
     if (type === 'authorization_code' || type === 'refresh_token') fake.count[type]++;
     if (await forcedAnswer('token', req, res, url)) return;
-    if (form.get('client_id') !== clientId || form.get('client_secret') !== clientSecret) return send(res, 401, { error: 'invalid_client' });
+    if (form.get('client_id') !== clientId || form.get('client_secret') !== clientSecret) return send(res, fake.invalidClientStatus, { error: 'invalid_client' });
     if (type === 'authorization_code') {
       if (!codes.delete(form.get('code')) || form.get('redirect_uri') !== redirectUri) return send(res, 400, { error: 'invalid_grant' });
     } else if (type === 'refresh_token') {
