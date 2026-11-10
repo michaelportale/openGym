@@ -2304,7 +2304,7 @@ paths:
         read whatever WHOOP answered, and voids its unused connect links. `revoked` is false
         when WHOOP could not be told (the owner can revoke in the WHOOP app);
         `wasConnected` is false when there was nothing to disconnect. Written to the audit
-        log as `auth.whoop.disconnect`. No request body.
+        log as `auth.whoop.disconnect` when there was. No request body.
       responses:
         '200':
           description: Disconnected.

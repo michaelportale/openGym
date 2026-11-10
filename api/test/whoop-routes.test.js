@@ -855,9 +855,10 @@ test('connecting and disconnecting are in the audit log, with no token, link cod
   const rows = () => auditText().split('\n').filter(Boolean).map(l => JSON.parse(l));
   const whoopRows = () => rows().filter(r => r.ev.startsWith('auth.whoop.')).map(r => [r.ev, r.ok, r.uid, r.name]);
 
-  // A refused connect is not a connection.
+  // A refused connect is not a connection, and disconnecting nothing is not a disconnect.
   const refused = await h.stateFor(A);
   await h.callback(refused, { query: 'error=access_denied' });
+  assert.deepEqual((await h.req('POST', '/api/whoop/disconnect', { as: A })).json(), { ok: true, revoked: false, wasConnected: false });
   assert.deepEqual(whoopRows(), []);
 
   const c = await h.link(A);

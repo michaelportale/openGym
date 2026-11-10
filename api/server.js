@@ -2151,7 +2151,8 @@ const whoopRoutes = {
       whoopVault.remove(user.id);
     }
     whoopForget(user.id);
-    audit(req, 'auth.whoop.disconnect', { user });
+    // Only a disconnect that had something to disconnect is an event worth a row.
+    if (result.wasConnected) audit(req, 'auth.whoop.disconnect', { user });
     json(res, 200, { ok: true, revoked: result.revoked, wasConnected: result.wasConnected });
   },
 };
