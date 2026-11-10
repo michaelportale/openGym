@@ -539,3 +539,87 @@ test('isRoutineDeleted knows the marker, and a copy of it read back from the sto
   expect(Object.isFrozen(ROUTINE_DELETED)).toBe(true)
   for (const v of [R, { id: 'a', deleted: true }, { deleted: 'yes' }, [], null, undefined, true]) expect(isRoutineDeleted(v)).toBe(false)
 })
+
+// The routines' order (7E-A): one row, kind and key routineOrder, whose value is every routine id
+// as the phone lists them, on edited.routineOrder (the server moves that stamp when the routines
+// both sides hold change order: api/sync-stamps.js orderMoved). It settles after every routine row,
+// on the document they leave, so it can place a routine created in the same push.
+const order = (ids, extra = {}) => ({ kind: 'routineOrder', key: 'routineOrder', baseTs: null, value: ids, sent: null, t: 1, ...extra })
+const listed = (...ids) => ids.map((id) => routine(id, id.toUpperCase(), { _ts: 1 }))
+const idsIn = (state) => state.routines.map((r) => (r && typeof r === 'object' ? r.id : r))
+
+test('routineOrder: an order on the stamp it saw applies: the routines in its order, each the same object, edited left to the server', () => {
+  const state = { unit: 'lb', routines: listed('a', 'b', 'c'), edited: { routineOrder: 5 }, workouts: [{ id: 'w1' }] }
+  const before = JSON.stringify(state)
+  const r = applyEdits(state, [order(['c', 'a', 'b'], { baseTs: 5, t: 3 })])
+  expect(r.applied).toEqual([{ kind: 'routineOrder', key: 'routineOrder', t: 3 }])
+  expect(r.state.routines).toEqual([state.routines[2], state.routines[0], state.routines[1]])
+  r.state.routines.forEach((x) => expect(state.routines).toContain(x))
+  expect(r.state.edited).toBe(state.edited)
+  expect(r.state.workouts).toBe(state.workouts)
+  expect(JSON.stringify(state)).toBe(before)
+  // what markSent records: every id, as the order goes
+  expect(entryValue(r.state, 'routineOrder', 'routineOrder')).toEqual(['c', 'a', 'b'])
+  // with no stamp on record, a null base applies
+  expect(applyEdits({ routines: listed('a', 'b') }, [order(['b', 'a'])]).applied).toHaveLength(1)
+})
+
+test('routineOrder: done when the copy holds the listed routines it has in the order listed, whatever else it holds or lacks', () => {
+  const state = { routines: listed('a', 'x', 'b'), edited: { routineOrder: 9 } }
+  const r = applyEdits(state, [order(['a', 'gone', 'b'], { baseTs: 5, t: 2 })])
+  expect(r.done).toEqual([{ kind: 'routineOrder', key: 'routineOrder', t: 2 }])
+  expect(r.state).toBe(state)
+  // nothing to order is nothing to do
+  expect(applyEdits({}, [order(['a'], { baseTs: 5 })]).done).toHaveLength(1)
+})
+
+test('routineOrder: the copy holding the order this phone sent, with a newer order waiting, rebases it onto the landed stamp', () => {
+  const state = { routines: listed('b', 'a', 'c'), edited: { routineOrder: 12 } }
+  const r = applyEdits(state, [order(['c', 'b', 'a'], { baseTs: 5, sent: ['b', 'a', 'c'], t: 8 })])
+  expect(r.rebased).toEqual([{ kind: 'routineOrder', key: 'routineOrder', t: 8, baseTs: 12 }])
+  expect(r.applied).toEqual([])
+  expect(idsIn(r.state)).toEqual(['c', 'b', 'a'])
+})
+
+test('routineOrder: an order the web moved since the base is superseded as changed, and nothing moves', () => {
+  const state = { routines: listed('b', 'a', 'c'), edited: { routineOrder: 9 } }
+  const r = applyEdits(state, [order(['c', 'a', 'b'], { baseTs: 5, t: 4 })])
+  expect(r.superseded).toEqual([{ kind: 'routineOrder', key: 'routineOrder', t: 4, reason: 'changed' }])
+  expect(r.state).toBe(state)
+})
+
+test('routineOrder: the order places a routine created in the same push, settling after it whatever order the rows come in', () => {
+  const state = { routines: listed('a', 'b'), edited: { routineOrder: 5 } }
+  const r = applyEdits(state, [order(['a', 'n', 'b'], { baseTs: 5, t: 1 }), edit('n', routine('n', 'New'), { baseTs: 0, t: 2 })])
+  expect(r.applied).toEqual([{ kind: 'routine', key: 'n', t: 2 }, { kind: 'routineOrder', key: 'routineOrder', t: 1 }])
+  expect(r.state.routines).toEqual([state.routines[0], routine('n', 'New'), state.routines[1]])
+})
+
+test('routineOrder: an id the copy does not hold is skipped', () => {
+  const state = { routines: listed('a', 'b') }
+  const r = applyEdits(state, [order(['gone', 'b', 'a'])])
+  expect(r.applied).toHaveLength(1)
+  expect(r.state.routines).toEqual([state.routines[1], state.routines[0]])
+})
+
+test('routineOrder: a routine the copy has and the order lacks keeps its place after the listed ones, entries that are not routines too', () => {
+  const state = { routines: [routine('w1', 'W1'), routine('a', 'A'), null, routine('w2', 'W2'), 'x', routine('b', 'B')] }
+  const r = applyEdits(state, [order(['b', 'a'])])
+  expect(idsIn(r.state)).toEqual(['b', 'a', 'w1', null, 'w2', 'x'])
+  // once there, the same order is done
+  expect(applyEdits(r.state, [order(['b', 'a'])]).done).toHaveLength(1)
+})
+
+test('routineOrder: an id the copy holds twice moves as one, nothing lost or doubled, and then reads as done', () => {
+  const list = [routine('a', 'First'), routine('b', 'B'), routine('a', 'Second')]
+  const r = applyEdits({ routines: list }, [order(['b', 'a'])])
+  expect(r.state.routines).toEqual([list[1], list[0], list[2]])
+  expect(applyEdits(r.state, [order(['b', 'a'])]).done).toHaveLength(1)
+  expect(applyEdits(r.state, [order(['b', 'a', 'b'])]).done).toHaveLength(1)
+})
+
+test('routineOrder: stampOf is edited.routineOrder, null when there is none', () => {
+  expect(stampOf({ edited: { routineOrder: 7, unit: 3 } }, 'routineOrder', 'routineOrder')).toBe(7)
+  expect(stampOf({ edited: { unit: 3 } }, 'routineOrder', 'routineOrder')).toBeNull()
+  expect(stampOf({}, 'routineOrder', 'routineOrder')).toBeNull()
+})

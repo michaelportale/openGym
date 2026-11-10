@@ -4,7 +4,8 @@
 // (applied), or was overtaken by a change on the web (superseded). A routine edit that would go
 // but that the API would change on the way in (plan/server-put-back.js: a move or swap whose
 // slots it pairs differently) is superseded as unsafe, never sent. A routine row can also create
-// the routine (base 0) or delete it (its value ROUTINE_DELETED). No I/O.
+// the routine (base 0) or delete it (its value ROUTINE_DELETED). A routineOrder row orders the
+// routines. No I/O.
 
 import { putBackChanges } from '../plan/server-put-back.js'
 import { routines as routineLib } from '../shared/training.js'
@@ -81,11 +82,35 @@ function withoutRoutine(state, key) {
   return draft
 }
 
+// The routine ids of a document, in its order (an entry with no id left out).
+const routineIds = (state) => (Array.isArray(state.routines) ? state.routines : []).filter((r) => isObj(r) && r.id != null).map((r) => r.id)
+
+// `ids` in their order, only those `of` also holds, each once.
+function orderWithin(ids, of) {
+  const keep = new Set(Array.isArray(of) ? of : [])
+  const seen = new Set()
+  const out = []
+  for (const id of Array.isArray(ids) ? ids : []) {
+    if (keep.has(id) && !seen.has(id)) {
+      seen.add(id)
+      out.push(id)
+    }
+  }
+  return out
+}
+
+// Whether two id lists put the ids both hold in the same order, as the server reads a reorder
+// (sync-stamps.js orderMoved): an id only one of them holds does not count. An id held twice
+// counts where it first stands, which is where the write below puts every copy of it.
+const sameOrder = (a, b) => deepEqual(orderWithin(a, b), orderWithin(b, a))
+
 // How each kind reads from and writes into the server's document. read(state, key) gives the copy's
 // entry { value, stamp } (value undefined when the copy has none); a routine the copy lacks is
 // `absent`, and `tombstoned` when the server deleted it. content(value) is what counts for "the
 // same". write(state, key, value, entry) is a new document with the edit's value in, on the
-// entry's stamps. unsafe(entry, value) is the routine's alone.
+// entry's stamps. unsafe(entry, value) is the routine's alone. same(a, b), when a kind has one,
+// replaces comparing content. A `late` kind settles after every other row, on the document they
+// leave.
 const ADAPTERS = {
   // Matched by id, first routine wins. A routine whose id the list holds twice is malformed, and the
   // API would pair the last of them, not the first: an edit of it that would go is unsafe.
@@ -141,10 +166,35 @@ const ADAPTERS = {
     content: (value) => value,
     write: (state, key, value) => ({ ...state, [key]: value }),
   },
+  // The routines' order, keyed routineOrder: its value is every routine id as the phone lists
+  // them, stamped by edited.routineOrder (the server moves it when the routines both sides hold
+  // change order, never for an add or a removal alone). It settles after the routine rows, so a
+  // routine created in the same push is there to be placed. Each routine goes as it is: listed
+  // ones in the listed order (an id the document lacks is skipped), then every other entry in the
+  // document's order.
+  routineOrder: {
+    late: true,
+    read: (state) => ({ value: routineIds(state), stamp: own(state.edited, 'routineOrder') ?? null }),
+    same: sameOrder,
+    write(state, key, value) {
+      const list = Array.isArray(state.routines) ? state.routines : []
+      const rank = new Map()
+      value.forEach((id, i) => {
+        if (!rank.has(id)) rank.set(id, i)
+      })
+      const placed = (r) => isObj(r) && r.id != null && rank.has(r.id)
+      // a stable sort: an id held twice keeps its copies in the document's order
+      const listed = list.filter(placed).sort((a, b) => rank.get(a.id) - rank.get(b.id))
+      return { ...state, routines: [...listed, ...list.filter((r) => !placed(r))] }
+    },
+  },
 }
 
 // state: the server's document. edits: from listPending(), of any kind (a kind with no adapter is
-// left alone). Returns { state, done, rebased, applied, superseded }, each settled edit as
+// left alone), settled in their order, a routineOrder row after all the others: it is judged on
+// the document the others leave, a routine created or deleted there included, where every other
+// row is judged on the server's document as it came. Returns { state, done, rebased, applied,
+// superseded }, each settled edit as
 // { kind, key, t }, a rebased one with the copy's stamp as its new baseTs and a superseded one with
 // its reason ('changed', 'deleted' or 'unsafe'). state is a new document only when something
 // applies or rebases, and untouched parts keep their identity (all but a routine delete, which
@@ -156,12 +206,14 @@ export function applyEdits(state, edits) {
   const applied = []
   const superseded = []
   let next = state
-  for (const edit of Array.isArray(edits) ? edits : []) {
-    const adapter = isMap(edit) && Object.hasOwn(ADAPTERS, edit.kind) ? ADAPTERS[edit.kind] : null
+  const adapterOf = (edit) => (isMap(edit) && Object.hasOwn(ADAPTERS, edit.kind) ? ADAPTERS[edit.kind] : null)
+  const rows = Array.isArray(edits) ? edits : []
+  for (const edit of [...rows.filter((e) => !adapterOf(e)?.late), ...rows.filter((e) => adapterOf(e)?.late)]) {
+    const adapter = adapterOf(edit)
     if (!adapter) continue
-    const entry = adapter.read(doc, edit.key)
+    const entry = adapter.read(adapter.late && isMap(next) ? next : doc, edit.key)
     const held = !!entry && entry.value !== undefined
-    const same = (a, b) => deepEqual(adapter.content(a), adapter.content(b))
+    const same = adapter.same ?? ((a, b) => deepEqual(adapter.content(a), adapter.content(b)))
     const ref = { kind: edit.kind, key: edit.key, t: edit.t }
     const rebase = held && !!edit.sent && same(entry.value, edit.sent)
     // nothing applies to an entry the server deleted, a create included
@@ -186,8 +238,9 @@ export function stampOf(state, kind, key) {
 }
 
 // What a document holds for one edit's kind and key, as the adapter reads it (undefined when it
-// holds none, ROUTINE_DELETED for a routine it lacks): after applyEdits, the value as it goes, on
-// the copy's stamps. Never undefined for a routine, so a delete's markSent has a value to store.
+// holds none, ROUTINE_DELETED for a routine it lacks, every routine id for routineOrder): after
+// applyEdits, the value as it goes, on the copy's stamps. Never undefined for a routine, so a
+// delete's markSent has a value to store.
 export function entryValue(state, kind, key) {
   if (!Object.hasOwn(ADAPTERS, kind)) return undefined
   return ADAPTERS[kind].read(isMap(state) ? state : {}, key)?.value

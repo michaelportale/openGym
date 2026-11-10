@@ -748,6 +748,57 @@ describe.skipIf(!HAS_API_DEPS)(TITLE, { timeout: 30_000 }, () => {
     expect(server.file().routines.find(r => r.id === 'r1')).toEqual(stored)
   })
 
+  // What the Plan tab saves for the routines' order: every id as it lists them, on the copy's
+  // edited.routineOrder.
+  const orderEdit = async (app, ids) => {
+    const held = (await app.copy.get()).state
+    await app.edits.put({ kind: 'routineOrder', key: 'routineOrder', baseTs: held.edited?.routineOrder ?? null, value: ids, t: T0 })
+  }
+
+  test('a phone reorder reaches the server file, which stamps edited.routineOrder; a later pull keeps the order and sends nothing', async () => {
+    const server = await startServer({ state: planned() })
+    const { client, pushes } = counted(server)
+    const app = await paired(server, undefined, { client })
+    await orderEdit(app, ['r2', 'r1'])
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    expect(pushes).toEqual([200])
+    const file = server.file()
+    expect(file.routines).toEqual([planned().routines[1], planned().routines[0]]) // each routine as it was
+    expect(file.edited.routineOrder).toBeGreaterThan(planned().routines[0]._ts)
+    expect(without(file.edited, ['routineOrder'])).toEqual(planned().edited)
+    for (const k of ['queue', 'deleted', 'workouts']) expect(file[k], k).toEqual(planned()[k])
+    expect((await app.copy.get()).state).toEqual(without(file, HIDDEN))
+    expect(await app.db.getAll('SELECT kind, acked_at, superseded_at FROM pending_edits')).toEqual([{ kind: 'routineOrder', acked_at: AT, superseded_at: null }])
+
+    // a web write moves the revision: the next sync pulls, and the order stays with nothing sent
+    await server.webWrites(state => ({ ...state, lang: 'de', edited: { ...state.edited, lang: T0 + 700 } }))
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    expect((await app.copy.get()).state.routines.map(r => r.id)).toEqual(['r2', 'r1'])
+    expect(server.file().routines.map(r => r.id)).toEqual(['r2', 'r1'])
+    expect(server.file().edited.routineOrder).toBe(file.edited.routineOrder)
+    expect(pushes).toEqual([200])
+    expect(await app.edits.listNotices()).toEqual([])
+  })
+
+  test('a create and an order in one push: the new routine lands where the phone put it, not at the end', async () => {
+    const server = await startServer({ state: planned() })
+    const { client, pushes } = counted(server)
+    const app = await paired(server, undefined, { client })
+    await orderEdit(app, ['r1', 'r9', 'r2'])
+    await app.edits.put({ kind: 'routine', key: 'r9', baseTs: 0, value: LEGS, t: T0 + 1 })
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    expect(pushes).toEqual([200])
+    const file = server.file()
+    expect(file.routines.map(r => r.id)).toEqual(['r1', 'r9', 'r2'])
+    expect(content(file.routines[1])).toEqual(LEGS)
+    expect((await app.copy.get()).state).toEqual(without(file, HIDDEN))
+    expect(await app.db.getAll('SELECT kind, acked_at, superseded_at FROM pending_edits ORDER BY kind')).toEqual([
+      { kind: 'routine', acked_at: AT, superseded_at: null },
+      { kind: 'routineOrder', acked_at: AT, superseded_at: null },
+    ])
+    expect(await app.edits.listNotices()).toEqual([])
+  })
+
   // Nutrition days and the two settings, as the web keeps them: a day stamped by its own _ts, a
   // setting by its stamp in `edited`.
   const nourished = () => ({

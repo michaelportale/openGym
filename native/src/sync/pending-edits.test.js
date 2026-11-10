@@ -335,6 +335,22 @@ describe.each(Object.entries(makers))('%s pending edits', (_, make) => {
     await s.put({ kind: 'setting', key: 'supplements', baseTs: null, value: [], t: 3 })
     expect((await s.listPending()).map(e => e.key)).toEqual(['nutritionTargets', 'supplements'])
   })
+
+  // The routines' order (edit-guard.js): every routine id as the phone lists them, under one key.
+  test('a routineOrder row holds a list of routine ids under the key routineOrder; anything else throws, and nothing is stored', async () => {
+    const s = make()
+    for (const value of [{}, { 0: 'a' }, 'a', null, undefined, [1], ['a', null], [['a']]]) {
+      await expect(s.put({ kind: 'routineOrder', key: 'routineOrder', baseTs: null, value, t: 1 }), JSON.stringify(value)).rejects.toThrow(/routineOrder/)
+    }
+    for (const key of ['order', 'routines', 'r1']) {
+      await expect(s.put({ kind: 'routineOrder', key, baseTs: null, value: ['a'], t: 1 }), key).rejects.toThrow(/routineOrder/)
+    }
+    expect(await s.listPending()).toEqual([])
+    await s.put({ kind: 'routineOrder', key: 'routineOrder', baseTs: 5, value: ['b', 'a'], t: 2 })
+    expect(await s.listPending()).toEqual([{ kind: 'routineOrder', key: 'routineOrder', baseTs: 5, value: ['b', 'a'], sent: null, t: 2 }])
+    await s.markSent([{ kind: 'routineOrder', key: 'routineOrder', t: 2, baseTs: 5, value: ['b', 'a', 'c'] }])
+    expect((await s.get('routineOrder', 'routineOrder')).sent).toEqual(['b', 'a', 'c'])
+  })
 })
 
 test('real sqlite: survives a reopen with value and sent as objects', async () => {
