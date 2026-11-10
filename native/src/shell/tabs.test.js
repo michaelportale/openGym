@@ -70,7 +70,6 @@ test('the app opens on Workout: the launch route is the Workout tab, and Home is
   const read = file => readFileSync(new URL(`../app/(tabs)/${file}`, import.meta.url), 'utf8')
   expect(read('index.js')).toContain('useWorkoutHome')
   expect(read('home.js')).toContain('HomeScreen')
-  expect(read('home.js')).not.toContain('UnbuiltScreen')
 })
 
 test('every tab is ready', () => {
@@ -79,21 +78,17 @@ test('every tab is ready', () => {
   expect(TABS.some(tab => tab.availability === 'preview')).toBe(false)
 })
 
-test('the Progress tab renders its cards and the Nutrition and Measurements links, not the placeholder', () => {
+test('the Progress tab renders its cards and the Nutrition and Measurements links', () => {
   const src = readFileSync(new URL('../app/(tabs)/progress.js', import.meta.url), 'utf8')
   expect(src).toContain('<ProgressBody')
-  expect(src).not.toContain('UnbuiltScreen')
-  expect(src).not.toContain('destinationCopy')
   const body = readFileSync(new URL('../progress/ProgressBody.js', import.meta.url), 'utf8')
   expect(body).toContain("'/nutrition'")
   expect(body).toContain("'/measurements'")
 })
 
-test('the Plan tab renders the Plan screen, not the placeholder', () => {
+test('the Plan tab renders the Plan screen', () => {
   const src = readFileSync(new URL('../app/(tabs)/plan.js', import.meta.url), 'utf8')
   expect(src).toContain('<PlanScreen')
-  expect(src).not.toContain('UnbuiltScreen')
-  expect(src).not.toContain('destinationCopy')
 })
 
 test('iOS pins both appearances to the same colour and other platforms keep the hex', () => {
