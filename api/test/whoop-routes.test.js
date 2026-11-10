@@ -1,13 +1,15 @@
-/* The WHOOP routes (Phase 8, Task 4): connect-link, connect, callback, read and disconnect,
-   against the real server.js in a child and the fake WHOOP in this process.
+/* The WHOOP routes (Phase 8, Task 4): connect-link, the confirmation page and its Continue,
+   the callback, the read and disconnect, against the real server.js in a child and the fake WHOOP
+   in this process.
 
    What has to hold, because this server keeps the owner's real data and the WHOOP grant opens a
    third-party account:
    - one user never sees, connects or disconnects another's WHOOP;
-   - a link code and a state are each good once, for ten minutes, for the uid they were made for;
+   - a link code and a state are each good once, for ten minutes, for the uid they were made for,
+     and the link names that profile before anything is used up;
    - no token and no client secret ever reaches a response, a page, a log line or a file in clear.
 
-   The server's Date.now() is driven by test/fake-clock.mjs, so the ten-minute edges are exact. */
+   The server's Date.now() is driven by test/fake-clock.mjs, so the time edges are exact. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -22,12 +24,14 @@ import { startFakeWhoop } from './fake-whoop.mjs';
 const API = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ORIGIN = 'http://localhost:8080';
 const SECRET = crypto.randomBytes(32).toString('hex');
-const A = 'whoopUserA_1', B = 'whoopUserB_1', ADMIN = 'whoopAdmin_1';
+const A = 'whoopUserA_1', B = 'whoopUserB_1', C = 'whoopUserC_1', ADMIN = 'whoopAdmin_1';
+const HOSTILE_NAME = `<script>alert("x")</script> & 'Co'`;
 const MIN = 60000, DAY = 86400000;
 // Noon UTC today: the window and the seeded records never straddle a UTC midnight.
 const T0 = Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate(), 12);
 const iso = ms => new Date(ms).toISOString();
 const TODAY = iso(T0).slice(0, 10);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // Same construction as server.js makeSession(): `uid:exp:sv:kind`, HMAC-SHA256 over SECRET.
 const token = (uid, kind = 'b') => {
@@ -41,6 +45,10 @@ const EXPIRED = failed('the link expired');
 const USED = failed('the link was already used');
 const SAID_NO = failed('WHOOP said no');
 const UNREACHABLE = failed("WHOOP couldn't be reached");
+const confirmText = name => `Connect WHOOP to the openGym profile ${name}? `
+  + 'Only continue if you opened this link yourself from the openGym app. Continue';
+// How a browser submits the page's form: same origin, an empty form body.
+const SAME_ORIGIN = { Origin: ORIGIN, 'Sec-Fetch-Site': 'same-origin' };
 // The text a person reads on the page: tags dropped, the five escapes undone.
 const pageText = html => html.replace(/<style[\s\S]*?<\/style>|<title>[\s\S]*?<\/title>/g, '').replace(/<[^>]*>/g, ' ')
   .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&')
@@ -53,14 +61,15 @@ function seed(fake) {
   fake.records['activity/workout'] = [{ id: 'w1', start: iso(T0 - 5 * 3600000), end: iso(T0 - 4 * 3600000), timezone_offset: '+00:00', sport_name: 'running', score_state: 'SCORED', score: { strain: 8.1, average_heart_rate: 140, kilojoule: 2092 } }];
 }
 
-/** A server.js child (WHOOP configured against `fake` unless `fake` is null) with users A, B and
- * an admin, its clock at T0, and every response and log line kept for the leak scan. */
-async function boot(t, { fake } = {}) {
+/** A server.js child (WHOOP configured against `fake` unless `fake` is null; `env` on top) with
+ * users A, B, C (a hostile name) and an admin, its clock at T0, and every response and log line
+ * kept for the leak scan. */
+async function boot(t, { fake, env: extra = {} } = {}) {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gym-whoop-'));
   fs.writeFileSync(path.join(dataDir, 'secret'), SECRET, { mode: 0o600 });
   const created = new Date().toISOString();
   fs.writeFileSync(path.join(dataDir, 'db.json'), JSON.stringify({
-    users: [{ id: A, name: 'Ann', created }, { id: B, name: 'Bea', created }, { id: ADMIN, name: 'Adm', created, admin: true }],
+    users: [{ id: A, name: 'Ann', created }, { id: B, name: 'Bea', created }, { id: C, name: HOSTILE_NAME, created }, { id: ADMIN, name: 'Adm', created, admin: true }],
     creds: [], subs: [], invites: []
   }));
   // A WHOOP_* in the shell running the tests must not configure the "not configured" server.
@@ -69,7 +78,8 @@ async function boot(t, { fake } = {}) {
     cwd: API, stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
     env: {
       ...env, PORT: '0', DATA_DIR: dataDir, ORIGIN, RP_ID: 'localhost',
-      ...(fake ? { WHOOP_CLIENT_ID: fake.clientId, WHOOP_CLIENT_SECRET: fake.clientSecret, WHOOP_BASE_URL: fake.url } : {})
+      ...(fake ? { WHOOP_CLIENT_ID: fake.clientId, WHOOP_CLIENT_SECRET: fake.clientSecret, WHOOP_BASE_URL: fake.url } : {}),
+      ...extra
     }
   });
   let log = '';
@@ -87,27 +97,48 @@ async function boot(t, { fake } = {}) {
       child.on('message', done);
       child.send({ now });
     }),
-    /** A request as the phone makes it (`as`: a bearer for that uid) or as a browser (`headers`). */
-    async req(method, p, { as, headers = {}, body } = {}) {
+    /** A request as the phone makes it (`as`: a bearer for that uid), as a browser (`headers`),
+     * with a JSON `body`, or (`form`) with the empty form body a submitted <form> sends. */
+    async req(method, p, { as, headers = {}, body, form } = {}) {
       const r = await fetch(api + p, {
         method, redirect: 'manual',
-        headers: { ...(as ? { Authorization: `Bearer ${token(as)}` } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}), ...headers },
-        ...(body ? { body: JSON.stringify(body) } : {})
+        headers: {
+          ...(as ? { Authorization: `Bearer ${token(as)}` } : {}),
+          ...(body ? { 'Content-Type': 'application/json' } : {}),
+          ...(form ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
+          ...headers
+        },
+        ...(body ? { body: JSON.stringify(body) } : form ? { body: '' } : {})
       });
       const text = await r.text();
       seen.push(`${method} ${p} -> ${r.status} ${JSON.stringify([...r.headers])}\n${text}`);
       return { status: r.status, headers: r.headers, text, json: () => JSON.parse(text) };
     },
     whoop: uid => h.req('GET', '/api/whoop', { as: uid }),
-    /** Link, connect and callback for `uid`, as Safari would walk it. */
+    /** A fresh link code for `uid`, from the phone. */
+    async link(uid) {
+      const r = await h.req('POST', '/api/whoop/connect-link', { as: uid });
+      assert.equal(r.status, 200, log);
+      return new URL(r.json().url).searchParams.get('c');
+    },
+    /** The page the link opens. */
+    page: c => h.req('GET', `/api/whoop/connect?c=${encodeURIComponent(c)}`),
+    /** Continue on that page, as the browser submits its form. */
+    confirm: (c, headers = SAME_ORIGIN) => h.req('POST', `/api/whoop/connect?c=${encodeURIComponent(c)}`, { form: true, headers }),
+    /** The state in the WHOOP URL that Continue sends the browser to. */
+    async stateFor(uid) {
+      const r = await h.confirm(await h.link(uid));
+      assert.equal(r.status, 302, r.text);
+      return new URL(r.headers.get('location')).searchParams.get('state');
+    },
+    callback: (state, { code = fake.issueCode(), headers } = {}) =>
+      h.req('GET', `/api/whoop/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`, { headers }),
+    /** Link, page, Continue and callback for `uid`, as Safari would walk it. */
     async connect(uid) {
-      const link = await h.req('POST', '/api/whoop/connect-link', { as: uid });
-      assert.equal(link.status, 200, log);
-      const c = new URL(link.json().url).searchParams.get('c');
-      const go = await h.req('GET', `/api/whoop/connect?c=${encodeURIComponent(c)}`);
-      assert.equal(go.status, 302, go.text);
-      const state = new URL(go.headers.get('location')).searchParams.get('state');
-      const cb = await h.req('GET', `/api/whoop/callback?code=${fake.issueCode()}&state=${encodeURIComponent(state)}`);
+      const c = await h.link(uid);
+      assert.equal((await h.page(c)).status, 200);
+      const state = new URL((await h.confirm(c)).headers.get('location')).searchParams.get('state');
+      const cb = await h.callback(state);
       assert.equal(cb.status, 200, cb.text);
       assert.equal(pageText(cb.text), SUCCESS);
       return { c, state };
@@ -135,8 +166,9 @@ async function whoopFake(t) {
 }
 
 const NOT_CONNECTED = { configured: true, connected: false, fetchedAt: null, stale: false, days: [], workouts: [] };
+const UNAVAILABLE = { configured: true, connected: true, fetchedAt: null, stale: false, error: 'unavailable', days: [], workouts: [] };
 
-test('the full connect flow: link, WHOOP, callback, then GET /api/whoop is filled', async t => {
+test('the full connect flow: link, page, Continue, WHOOP, callback, then GET /api/whoop is filled', async t => {
   const fake = await whoopFake(t);
   const h = await boot(t, { fake });
 
@@ -146,8 +178,13 @@ test('the full connect flow: link, WHOOP, callback, then GET /api/whoop is fille
   assert.equal(link.status, 200);
   const { url } = link.json();
   assert.match(url, /^http:\/\/localhost:8080\/api\/whoop\/connect\?c=[A-Za-z0-9_-]{43}$/, 'a 32-byte base64url code on ORIGIN');
+  const c = new URL(url).searchParams.get('c');
 
-  const go = await h.req('GET', new URL(url).pathname + new URL(url).search);
+  const page = await h.req('GET', new URL(url).pathname + new URL(url).search);
+  assert.equal(page.status, 200);
+  assert.equal(pageText(page.text), confirmText('Ann'));
+
+  const go = await h.confirm(c);
   assert.equal(go.status, 302);
   assert.equal(go.headers.get('cache-control'), 'no-store');
   const auth = new URL(go.headers.get('location'));
@@ -158,9 +195,9 @@ test('the full connect flow: link, WHOOP, callback, then GET /api/whoop is fille
   assert.equal(auth.searchParams.get('scope'), 'read:recovery read:cycles read:sleep read:workout offline');
   const state = auth.searchParams.get('state');
   assert.match(state, /^[A-Za-z0-9_-]{43}$/, 'a 32-byte base64url state');
-  assert.notEqual(state, new URL(url).searchParams.get('c'), 'the state is not the link code');
+  assert.notEqual(state, c, 'the state is not the link code');
 
-  const cb = await h.req('GET', `/api/whoop/callback?code=${fake.issueCode()}&state=${state}`);
+  const cb = await h.callback(state);
   assert.equal(cb.status, 200);
   assert.equal(cb.headers.get('content-type'), 'text/html; charset=utf-8');
   assert.equal(cb.headers.get('cache-control'), 'no-store');
@@ -177,7 +214,6 @@ test('the full connect flow: link, WHOOP, callback, then GET /api/whoop is fille
   assert.equal(body.stale, false);
   assert.equal(body.fetchedAt, iso(T0));
   assert.equal(body.days.length, 14);
-  assert.equal(body.days[0].d, TODAY, 'newest first, ending today');
   assert.deepEqual(body.days[0], { d: TODAY, recovery: 67, hrv: 55.5, rhr: 52, calibrating: false, strain: 12.34 });
   assert.deepEqual(body.workouts, [{ d: TODAY, sport: 'running', start: iso(T0 - 5 * 3600000), minutes: 60, strain: 8.1, avgHr: 140, kcal: 500 }]);
 
@@ -193,23 +229,86 @@ test('the full connect flow: link, WHOOP, callback, then GET /api/whoop is fille
   h.assertNoLeak();
 });
 
-test('a link code and a state are each good once, and nothing from the query is echoed', async t => {
+test('the link opens a page that names the profile, uses nothing up, and cannot be framed', async t => {
+  const fake = await whoopFake(t);
+  const h = await boot(t, { fake });
+  const c = await h.link(A);
+
+  for (const n of [1, 2]) {
+    const page = await h.page(c);
+    assert.equal(page.status, 200, `GET ${n}`);
+    assert.equal(pageText(page.text), confirmText('Ann'), `GET ${n} shows the page, the code still unused`);
+  }
+  const page = await h.page(c);
+  assert.equal(page.headers.get('content-type'), 'text/html; charset=utf-8');
+  assert.equal(page.headers.get('cache-control'), 'no-store');
+  assert.equal(page.headers.get('x-frame-options'), 'DENY');
+  const csp = page.headers.get('content-security-policy');
+  assert.match(csp, /(^|; )default-src 'none'(;|$)/);
+  assert.match(csp, /(^|; )frame-ancestors 'none'(;|$)/);
+  assert.ok(!/unsafe-inline/.test(csp), csp);
+  assert.ok(!/<script/i.test(page.text));
+  // A same-origin POST back to the same path; the code rides in the action's query, not a body.
+  const form = /<form method="post" action="([^"]+)">/.exec(page.text);
+  assert.ok(form, page.text);
+  assert.equal(new URL(form[1].replace(/&amp;/g, '&'), `${ORIGIN}/api/whoop/connect?c=${c}`).href, `${ORIGIN}/api/whoop/connect?c=${c}`);
+  assert.equal(fake.log.length, 0, 'nothing reached WHOOP before Continue');
+
+  // A name with markup in it is text on the page.
+  const hostile = await h.page(await h.link(C));
+  assert.ok(!hostile.text.includes('<script>alert'), hostile.text);
+  assert.ok(hostile.text.includes('&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt; &amp; &#39;Co&#39;'), hostile.text);
+  assert.equal(pageText(hostile.text), confirmText(HOSTILE_NAME));
+  h.assertNoLeak();
+});
+
+test('Continue: refused from another site, a redirect to WHOOP from the page itself, and good once', async t => {
+  const fake = await whoopFake(t);
+  const h = await boot(t, { fake });
+  const c = await h.link(A);
+
+  for (const headers of [
+    { Origin: 'https://evil.example', 'Sec-Fetch-Site': 'cross-site' },
+    { Origin: 'https://evil.example' },
+    { Origin: 'https://other.localhost:8080', 'Sec-Fetch-Site': 'same-site' },
+  ]) {
+    const r = await h.confirm(c, headers);
+    assert.equal(r.status, 403, JSON.stringify(headers));
+    assert.equal(r.headers.get('location'), null);
+  }
+  // A bearer buys nothing here: the code is the credential, and the origin check still applies.
+  assert.equal((await h.req('POST', `/api/whoop/connect?c=${c}`, { as: A, form: true, headers: { Origin: 'https://evil.example', 'Sec-Fetch-Site': 'cross-site' } })).status, 403);
+  assert.equal(pageText((await h.page(c)).text), confirmText('Ann'), 'a refused POST used nothing up');
+
+  const go = await h.confirm(c);
+  assert.equal(go.status, 302);
+  assert.equal(new URL(go.headers.get('location')).origin, fake.url);
+  // A browser without Sec-Fetch-Site still sends its Origin on the form POST.
+  assert.equal((await h.confirm(await h.link(A), { Origin: ORIGIN })).status, 302);
+
+  const again = await h.confirm(c);
+  assert.equal(again.status, 400);
+  assert.equal(pageText(again.text), USED, 'a replayed Continue');
+  assert.equal(pageText((await h.page(c)).text), USED, 'and the page says so too');
+  h.assertNoLeak();
+});
+
+test('a state is good once, unknown values expire, and nothing from the query is echoed', async t => {
   const fake = await whoopFake(t);
   const h = await boot(t, { fake });
 
-  const { c, state } = await h.connect(A);
-  const again = await h.req('GET', `/api/whoop/connect?c=${encodeURIComponent(c)}`);
-  assert.equal(again.status, 400);
-  assert.equal(pageText(again.text), USED, 'a replayed code');
-  const replay = await h.req('GET', `/api/whoop/callback?code=${fake.issueCode()}&state=${encodeURIComponent(state)}`);
+  const { state } = await h.connect(A);
+  const replay = await h.callback(state);
   assert.equal(replay.status, 400);
   assert.equal(pageText(replay.text), USED, 'a replayed state');
   assert.equal(fake.count.authorization_code, 1, 'a replayed state never reaches WHOOP');
 
   for (const q of ['', '?c=', '?c=nope', `?c=${crypto.randomBytes(32).toString('base64url')}`]) {
-    const r = await h.req('GET', `/api/whoop/connect${q}`);
-    assert.equal(r.status, 400, q);
-    assert.equal(pageText(r.text), EXPIRED, q);
+    for (const m of ['GET', 'POST']) {
+      const r = await h.req(m, `/api/whoop/connect${q}`, { form: m === 'POST', headers: m === 'POST' ? SAME_ORIGIN : {} });
+      assert.equal(r.status, 400, `${m} ${q}`);
+      assert.equal(pageText(r.text), EXPIRED, `${m} ${q}`);
+    }
   }
   for (const q of ['', '?code=x', `?code=x&state=${crypto.randomBytes(32).toString('base64url')}`]) {
     const r = await h.req('GET', `/api/whoop/callback${q}`);
@@ -219,56 +318,50 @@ test('a link code and a state are each good once, and nothing from the query is 
 
   // A value from the query never reaches the page, escaped or not.
   const marker = '<script>alert("MARK-3f9")</script>';
-  for (const p of [`/api/whoop/connect?c=${encodeURIComponent(marker)}`, `/api/whoop/callback?code=${encodeURIComponent(marker)}&state=${encodeURIComponent(marker)}`]) {
-    const r = await h.req('GET', p);
+  for (const [m, p] of [['GET', `/api/whoop/connect?c=${encodeURIComponent(marker)}`], ['POST', `/api/whoop/connect?c=${encodeURIComponent(marker)}`],
+    ['GET', `/api/whoop/callback?code=${encodeURIComponent(marker)}&state=${encodeURIComponent(marker)}`]]) {
+    const r = await h.req(m, p, { form: m === 'POST', headers: m === 'POST' ? SAME_ORIGIN : {} });
     assert.ok(!r.text.includes('MARK-3f9'), r.text);
     assert.ok(!r.text.includes('<script'), r.text);
   }
 
   // Six codes for one profile: only the newest five are kept, so a loop cannot grow the table.
   const codes = [];
-  for (let i = 0; i < 6; i++) codes.push(new URL((await h.req('POST', '/api/whoop/connect-link', { as: B })).json().url).searchParams.get('c'));
-  assert.equal(pageText((await h.req('GET', `/api/whoop/connect?c=${codes[0]}`)).text), EXPIRED, 'the oldest was dropped');
-  assert.equal((await h.req('GET', `/api/whoop/connect?c=${codes[1]}`)).status, 302, 'the second still works');
+  for (let i = 0; i < 6; i++) codes.push(await h.link(B));
+  assert.equal(pageText((await h.page(codes[0])).text), EXPIRED, 'the oldest was dropped');
+  assert.equal((await h.confirm(codes[1])).status, 302, 'the second still works');
   h.assertNoLeak();
 });
 
 test('the callback: WHOOP refusing, a denied consent and WHOOP down each give their reason and use the state up', async t => {
   const fake = await whoopFake(t);
   const h = await boot(t, { fake });
-  const stateFor = async uid => {
-    const c = new URL((await h.req('POST', '/api/whoop/connect-link', { as: uid })).json().url).searchParams.get('c');
-    return new URL((await h.req('GET', `/api/whoop/connect?c=${c}`)).headers.get('location')).searchParams.get('state');
-  };
 
   // The person said no at WHOOP: WHOOP comes back with error=access_denied and no code.
-  let state = await stateFor(A);
+  let state = await h.stateFor(A);
   let r = await h.req('GET', `/api/whoop/callback?error=access_denied&error_description=nope&state=${state}`);
   assert.equal(r.status, 400);
   assert.equal(pageText(r.text), SAID_NO);
-  assert.equal(pageText((await h.req('GET', `/api/whoop/callback?code=${fake.issueCode()}&state=${state}`)).text), USED, 'the state went with the refusal');
+  assert.equal(pageText((await h.callback(state)).text), USED, 'the state went with the refusal');
 
   // WHOOP refuses the code (invalid_grant).
-  state = await stateFor(A);
-  r = await h.req('GET', `/api/whoop/callback?code=not-a-real-code&state=${state}`);
+  r = await h.callback(await h.stateFor(A), { code: 'not-a-real-code' });
   assert.equal(pageText(r.text), SAID_NO);
 
   // Every permission has to be granted.
-  state = await stateFor(A);
+  state = await h.stateFor(A);
   fake.override = { scope: 'read:recovery offline' };
-  r = await h.req('GET', `/api/whoop/callback?code=${fake.issueCode()}&state=${state}`);
-  assert.equal(pageText(r.text), SAID_NO);
+  assert.equal(pageText((await h.callback(state)).text), SAID_NO);
 
   // WHOOP down at the token endpoint.
-  state = await stateFor(A);
+  state = await h.stateFor(A);
   fake.force('token', 503);
-  r = await h.req('GET', `/api/whoop/callback?code=${fake.issueCode()}&state=${state}`);
+  r = await h.callback(state);
   assert.equal(r.status, 502);
   assert.equal(pageText(r.text), UNREACHABLE);
-  state = await stateFor(A);
+  state = await h.stateFor(A);
   fake.force('token', 'drop');
-  r = await h.req('GET', `/api/whoop/callback?code=${fake.issueCode()}&state=${state}`);
-  assert.equal(pageText(r.text), UNREACHABLE);
+  assert.equal(pageText((await h.callback(state)).text), UNREACHABLE);
 
   assert.equal(fs.existsSync(h.file(A)), false, 'none of that connected anything');
   assert.deepEqual((await h.whoop(A)).json(), NOT_CONNECTED);
@@ -278,48 +371,43 @@ test('the callback: WHOOP refusing, a denied consent and WHOOP down each give th
 test('a link code and a state expire ten minutes after they were made (fake clock)', async t => {
   const fake = await whoopFake(t);
   const h = await boot(t, { fake });
-  const link = async () => new URL((await h.req('POST', '/api/whoop/connect-link', { as: A })).json().url).searchParams.get('c');
 
-  const [c1, c2, c3] = [await link(), await link(), await link()];
+  const [c1, c2, c3] = [await h.link(A), await h.link(A), await h.link(A)];
   await h.at(T0 + 10 * MIN - 1);
-  assert.equal((await h.req('GET', `/api/whoop/connect?c=${c1}`)).status, 302, 'good until the last millisecond');
+  assert.equal((await h.page(c1)).status, 200, 'the page shows until the last millisecond');
+  assert.equal((await h.confirm(c1)).status, 302, 'and Continue works then');
   await h.at(T0 + 10 * MIN);
-  const late = await h.req('GET', `/api/whoop/connect?c=${c2}`);
+  const late = await h.page(c2);
   assert.equal(late.status, 400);
   assert.equal(pageText(late.text), EXPIRED);
+  assert.equal(pageText((await h.confirm(c2)).text), EXPIRED);
   await h.at(T0 + 60 * MIN);
-  assert.equal(pageText((await h.req('GET', `/api/whoop/connect?c=${c3}`)).text), EXPIRED);
+  assert.equal(pageText((await h.confirm(c3)).text), EXPIRED);
 
   // A state minted now is dead ten minutes on, before any exchange.
   const T1 = T0 + 2 * 60 * MIN;
   await h.at(T1);
-  const go = await h.req('GET', `/api/whoop/connect?c=${await link()}`);
-  const state = new URL(go.headers.get('location')).searchParams.get('state');
+  const state = await h.stateFor(A);
   await h.at(T1 + 10 * MIN);
-  const cb = await h.req('GET', `/api/whoop/callback?code=${fake.issueCode()}&state=${state}`);
-  assert.equal(pageText(cb.text), EXPIRED);
+  assert.equal(pageText((await h.callback(state)).text), EXPIRED);
   assert.equal(fake.count.authorization_code, 0, 'an expired state never reaches WHOOP');
   assert.equal(fs.existsSync(h.file(A)), false);
   h.assertNoLeak();
 });
 
-test("a state made for A stores A's tokens whoever opens the callback, and B can neither read nor disconnect A", async t => {
+test("a state made for A stores A's tokens whoever is signed in, and B can neither read nor disconnect A", async t => {
   const fake = await whoopFake(t);
   const h = await boot(t, { fake });
 
-  const c = new URL((await h.req('POST', '/api/whoop/connect-link', { as: A })).json().url).searchParams.get('c');
-  const state = new URL((await h.req('GET', `/api/whoop/connect?c=${c}`)).headers.get('location')).searchParams.get('state');
-  // B's browser, signed in as B both ways, finishes A's flow.
-  const cb = await h.req('GET', `/api/whoop/callback?code=${fake.issueCode()}&state=${state}`, {
-    headers: { Authorization: `Bearer ${token(B)}`, Cookie: `gymsid=${token(B, 'c')}` }
-  });
+  const state = await h.stateFor(A);
+  // The browser finishing A's flow is signed in as B, both ways.
+  const cb = await h.callback(state, { headers: { Authorization: `Bearer ${token(B)}`, Cookie: `gymsid=${token(B, 'c')}` } });
   assert.equal(pageText(cb.text), SUCCESS);
   assert.equal(fs.existsSync(h.file(A)), true, 'stored for the uid the state was made for');
   assert.equal(fs.existsSync(h.file(B)), false, 'never for the caller');
 
   assert.deepEqual((await h.whoop(B)).json(), NOT_CONNECTED);
-  const a = (await h.whoop(A)).json();
-  assert.equal(a.connected, true);
+  assert.equal((await h.whoop(A)).json().connected, true);
 
   const off = await h.req('POST', '/api/whoop/disconnect', { as: B });
   assert.equal(off.status, 200);
@@ -337,14 +425,33 @@ test('not configured: configured false everywhere, a 503 link, and no session no
   const link = await h.req('POST', '/api/whoop/connect-link', { as: A });
   assert.equal(link.status, 503);
   assert.ok(link.json().error);
-  const go = await h.req('GET', '/api/whoop/connect?c=anything');
-  assert.equal(go.status, 400);
-  assert.equal(pageText(go.text), EXPIRED);
+  for (const m of ['GET', 'POST']) {
+    const go = await h.req(m, '/api/whoop/connect?c=anything', { form: m === 'POST', headers: m === 'POST' ? SAME_ORIGIN : {} });
+    assert.equal(go.status, 400);
+    assert.equal(pageText(go.text), EXPIRED);
+  }
   assert.equal(pageText((await h.req('GET', '/api/whoop/callback?code=x&state=y')).text), EXPIRED);
   assert.deepEqual((await h.req('POST', '/api/whoop/disconnect', { as: A })).json(), { ok: true, revoked: false, wasConnected: false });
 
   for (const [m, p] of [['GET', '/api/whoop'], ['POST', '/api/whoop/connect-link'], ['POST', '/api/whoop/disconnect']]) {
     assert.equal((await h.req(m, p)).status, 401, `${m} ${p} without a session`);
+  }
+});
+
+test('WHOOP_BASE_URL is honoured only on a loopback host, and anything else is ignored without being printed', async t => {
+  const creds = { WHOOP_CLIENT_ID: 'base-test-id', WHOOP_CLIENT_SECRET: 'base-test-secret' };
+  const authorizeOrigin = async h => new URL((await h.confirm(await h.link(A))).headers.get('location')).origin;
+
+  for (const bad of ['http://whoop-evil.example:8443', 'http://127.0.0.1.whoop-evil.example', 'http://localhost.whoop-evil.example:80', 'not a url whoop-evil']) {
+    const h = await boot(t, { fake: null, env: { ...creds, WHOOP_BASE_URL: bad } });
+    assert.equal(await authorizeOrigin(h), 'https://api.prod.whoop.com', bad);
+    assert.match(h.log(), /WHOOP_BASE_URL/, 'a warning at boot');
+    assert.ok(!h.log().includes('whoop-evil'), `the value is never printed:\n${h.log()}`);
+  }
+  for (const [good, origin] of [['http://[::1]:9', 'http://[::1]:9'], ['http://localhost:9/', 'http://localhost:9'], ['http://127.0.0.1:9', 'http://127.0.0.1:9']]) {
+    const h = await boot(t, { fake: null, env: { ...creds, WHOOP_BASE_URL: good } });
+    assert.equal(await authorizeOrigin(h), origin, good);
+    assert.ok(!/WHOOP_BASE_URL/.test(h.log()), h.log());
   }
 });
 
@@ -364,9 +471,9 @@ test('the read is cached ten minutes per profile, and two reads at once share on
   const gate = new Promise(r => { release = r; });
   fake.force('data', () => gate);
   const one = h.whoop(A);
-  while (fake.count.data < 8) await new Promise(r => setTimeout(r, 5));
+  while (fake.count.data < 8) await sleep(5);
   const two = h.whoop(A);
-  await new Promise(r => setTimeout(r, 200));
+  await sleep(200);
   release();
   const [r1, r2] = await Promise.all([one, two]);
   assert.equal(fake.count.data, 8, 'the second read joined the fetch in flight');
@@ -385,6 +492,33 @@ test('the read is cached ten minutes per profile, and two reads at once share on
   h.assertNoLeak();
 });
 
+test('a fetch still out across a disconnect and a reconnect never plants its read in the cache', async t => {
+  const fake = await whoopFake(t);
+  const h = await boot(t, { fake });
+  await h.connect(A);
+  await h.whoop(A);
+  assert.equal(fake.count.data, 4);
+
+  await h.at(T0 + 11 * MIN);
+  let release;
+  const gate = new Promise(r => { release = r; });
+  fake.force('data', () => gate);
+  const one = h.whoop(A);
+  while (fake.count.data < 8) await sleep(5);
+  fake.force('revoke', 'drop');                 // WHOOP unreachable: the old token stays live at the fake
+  assert.deepEqual((await h.req('POST', '/api/whoop/disconnect', { as: A })).json(), { ok: true, revoked: false, wasConnected: true });
+  await h.connect(A);                           // a new connection while the old fetch is still out
+  await h.at(T0 + 12 * MIN);
+  release();
+  assert.equal((await one).json().connected, true, 'the read that started it still gets its answer');
+
+  const before = fake.count.data;
+  const next = (await h.whoop(A)).json();
+  assert.equal(fake.count.data, before + 4, 'the next read fetched afresh: the old fetch did not cache');
+  assert.equal(next.fetchedAt, iso(T0 + 12 * MIN));
+  h.assertNoLeak();
+});
+
 test('WHOOP rate-limited or down: the last good read with stale true, or an error with nothing cached', async t => {
   const fake = await whoopFake(t);
   const h = await boot(t, { fake });
@@ -393,23 +527,62 @@ test('WHOOP rate-limited or down: the last good read with stale true, or an erro
 
   await h.at(T0 + 11 * MIN);
   fake.force('data', 429, 429, 429, 429);
-  const stale = (await h.whoop(A)).json();
-  assert.deepEqual(stale, { ...good, stale: true }, 'the last good read, as of when it was fetched');
-
+  assert.deepEqual((await h.whoop(A)).json(), { ...good, stale: true }, 'the last good read, as of when it was fetched');
+  await h.at(T0 + 12 * MIN);
   fake.force('data', 503, 503, 503, 503);
   assert.deepEqual((await h.whoop(A)).json(), { ...good, stale: true });
+  await h.at(T0 + 13 * MIN);
   fake.force('data', 'drop', 'drop', 'drop', 'drop');
   assert.deepEqual((await h.whoop(A)).json(), { ...good, stale: true });
 
   // A profile with nothing cached gets a plain error.
   await h.connect(B);
   fake.force('data', 429, 429, 429, 429);
-  assert.deepEqual((await h.whoop(B)).json(), { configured: true, connected: true, fetchedAt: null, stale: false, error: 'unavailable', days: [], workouts: [] });
+  assert.deepEqual((await h.whoop(B)).json(), UNAVAILABLE);
 
   // Back up: a fresh read, not stale.
+  await h.at(T0 + 14 * MIN);
   const back = (await h.whoop(A)).json();
   assert.equal(back.stale, false);
-  assert.equal(back.fetchedAt, iso(T0 + 11 * MIN));
+  assert.equal(back.fetchedAt, iso(T0 + 14 * MIN));
+  h.assertNoLeak();
+});
+
+test('after WHOOP fails, the next minute of reads answers without asking WHOOP again', async t => {
+  const fake = await whoopFake(t);
+  const h = await boot(t, { fake });
+  await h.connect(A);
+  const good = (await h.whoop(A)).json();
+
+  const T1 = T0 + 11 * MIN;
+  await h.at(T1);
+  fake.force('data', 429, 429, 429, 429);
+  assert.deepEqual((await h.whoop(A)).json(), { ...good, stale: true });
+  const after = fake.count.data;
+  await h.at(T1 + MIN - 1);
+  assert.deepEqual((await h.whoop(A)).json(), { ...good, stale: true }, 'stale, from the cache');
+  assert.equal(fake.count.data, after, 'WHOOP left alone for a minute');
+  await h.at(T1 + MIN);
+  const fresh = (await h.whoop(A)).json();
+  assert.equal(fake.count.data, after + 4, 'asked again after the minute');
+  assert.equal(fresh.stale, false);
+  assert.equal(fresh.fetchedAt, iso(T1 + MIN));
+
+  // With nothing cached: the error shape, also without a call.
+  await h.connect(B);
+  fake.force('data', 503, 503, 503, 503);
+  assert.deepEqual((await h.whoop(B)).json(), UNAVAILABLE);
+  const quiet = fake.count.data;
+  assert.deepEqual((await h.whoop(B)).json(), UNAVAILABLE);
+  assert.equal(fake.count.data, quiet);
+
+  // Disconnecting and connecting again starts clean.
+  await h.req('POST', '/api/whoop/disconnect', { as: B });
+  await h.connect(B);
+  const clean = (await h.whoop(B)).json();
+  assert.equal(fake.count.data, quiet + 4, 'a new connection reads at once');
+  assert.equal(clean.connected, true);
+  assert.equal(clean.stale, false);
   h.assertNoLeak();
 });
 
@@ -462,12 +635,12 @@ test('disconnect revokes at WHOOP, and removes the file even when WHOOP is down'
 test("disconnect voids the profile's unused links, so a tab left open cannot reconnect it", async t => {
   const fake = await whoopFake(t);
   const h = await boot(t, { fake });
-  const c = new URL((await h.req('POST', '/api/whoop/connect-link', { as: A })).json().url).searchParams.get('c');
-  const c2 = new URL((await h.req('POST', '/api/whoop/connect-link', { as: A })).json().url).searchParams.get('c');
-  const state = new URL((await h.req('GET', `/api/whoop/connect?c=${c}`)).headers.get('location')).searchParams.get('state');
+  const state = await h.stateFor(A);
+  const c2 = await h.link(A);
   await h.req('POST', '/api/whoop/disconnect', { as: A });
-  assert.equal(pageText((await h.req('GET', `/api/whoop/callback?code=${fake.issueCode()}&state=${state}`)).text), EXPIRED);
-  assert.equal(pageText((await h.req('GET', `/api/whoop/connect?c=${c2}`)).text), EXPIRED);
+  assert.equal(pageText((await h.callback(state)).text), EXPIRED);
+  assert.equal(pageText((await h.page(c2)).text), EXPIRED);
+  assert.equal(pageText((await h.confirm(c2)).text), EXPIRED);
   assert.equal(fs.existsSync(h.file(A)), false);
   h.assertNoLeak();
 });
@@ -497,7 +670,7 @@ test('deleting a profile revokes its WHOOP grant and removes its token file', as
   await h.connect(B);
   const del = await h.req('POST', '/api/admin/user/delete', { headers: { Cookie: `gymsid=${token(ADMIN, 'c')}`, Origin: ORIGIN }, body: { id: A } });
   assert.equal(del.status, 200, del.text);
-  for (let i = 0; i < 200 && fs.existsSync(h.file(A)); i++) await new Promise(r => setTimeout(r, 10));
+  for (let i = 0; i < 200 && fs.existsSync(h.file(A)); i++) await sleep(10);
   assert.equal(fs.existsSync(h.file(A)), false);
   assert.equal(fake.count.revoke, 1, 'asked WHOOP to drop the grant');
   assert.equal(fs.existsSync(h.file(B)), true, "B's connection is untouched");

@@ -65,8 +65,9 @@ info:
     comes back in the body, never as a cookie), and any request a Bearer token
     authenticates by itself: a valid session token, with no session cookie beside it, on
     any route but the sign-in ones — the four passkey routes, the password and reset-code
-    routes and the two device-link routes, which act on the credential in the body, never
-    on a Bearer. A cross-origin request whose Bearer does not buy the exemption is refused
+    routes, the two device-link routes and the WHOOP connect page's Continue
+    (`POST /api/whoop/connect`), which act on the credential in the request, never on a
+    Bearer. A cross-origin request whose Bearer does not buy the exemption is refused
     before any handler runs: `401 {"error":"not signed in"}` when that Bearer does not
     verify and is the only credential (a paired app whose token was revoked or expired),
     the 403 otherwise.
@@ -109,7 +110,7 @@ info:
     - Every response body is JSON with `Cache-Control: no-store`. The exceptions are
       `GET /api/media/{hash}`, which answers with the stored file itself
       (`Cache-Control: private, no-store`), and the two pages a browser opens to connect
-      WHOOP (`GET /api/whoop/connect`, `GET /api/whoop/callback`): a redirect or a small
+      WHOOP (`/api/whoop/connect`, `GET /api/whoop/callback`): a redirect or a small
       HTML page, also `no-store`.
     - Errors are always `{"error": "<human-readable message>"}`. The `password`, throttle and
       `media` routes add a stable `code` for the client to word in its own language.
@@ -2160,6 +2161,8 @@ paths:
         - Not connected, or WHOOP has dropped the grant: `connected: false`.
         - WHOOP rate-limiting, failing or unreachable: the last good read with `stale: true`
           and its own `fetchedAt`; with nothing cached, `error: "unavailable"` and empty lists.
+          After such a failure WHOOP is not asked again for a minute: reads in that minute get
+          the same answer without a call. Disconnecting or connecting again ends the wait.
       responses:
         '200':
           description: The read, or the reason there is none.
@@ -2215,13 +2218,35 @@ paths:
   /api/whoop/connect:
     get:
       tags: [whoop]
-      operationId: whoopConnect
-      summary: Swap a link code for an OAuth state and go to WHOOP
+      operationId: whoopConnectPage
+      summary: The page a connect link opens, naming the profile it connects
       description: |
-        Opened by the browser, so no session: the code is the credential. It is used up
-        here and becomes a one-use state (32 random bytes, 10 minutes, bound to the same
-        profile), and the browser is sent to WHOOP's sign-in. A code that is unknown, used or
-        expired gets the failure page.
+        Opened by the browser, so no session: the code is the credential. Uses nothing up.
+        A good code gets a page that asks "Connect WHOOP to the openGym profile <name>?",
+        says "Only continue if you opened this link yourself from the openGym app." and has
+        a Continue button: a form that POSTs to this same URL. A code that is unknown, used or
+        expired gets the failure page. The page cannot be framed (`frame-ancestors 'none'`,
+        `X-Frame-Options: DENY`) and runs no script.
+      security: []
+      parameters:
+        - { name: c, in: query, required: true, schema: { type: string }, description: The link code. }
+      responses:
+        '200':
+          description: The confirmation page (HTML, `no-store`).
+          content:
+            text/html:
+              schema: { type: string }
+        '400': { $ref: '#/components/responses/WhoopPage' }
+    post:
+      tags: [whoop]
+      operationId: whoopConnect
+      summary: "Continue: swap the link code for an OAuth state and go to WHOOP"
+      description: |
+        The confirmation page's own form submit. The code rides in the query (the form sends
+        an empty `application/x-www-form-urlencoded` body, which is not read). It is used
+        up here and becomes a one-use state (32 random bytes, 10 minutes, bound to the same
+        profile), and the browser is sent to WHOOP's sign-in. Same-origin only: the CSRF
+        check refuses another site's submit, and a Bearer does not exempt it.
       security: []
       parameters:
         - { name: c, in: query, required: true, schema: { type: string }, description: The link code. }
@@ -2231,6 +2256,12 @@ paths:
           headers:
             Location: { schema: { type: string } }
         '400': { $ref: '#/components/responses/WhoopPage' }
+        '403':
+          description: Not submitted from this origin.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: "cross-origin request refused" }
 
   /api/whoop/callback:
     get:
@@ -3143,7 +3174,7 @@ components:
   responses:
     WhoopPage:
       description: >-
-        A small HTML page (`Cache-Control: no-store`, no script) with fixed copy only; nothing
+        A small HTML page (`Cache-Control: no-store`, no script, cannot be framed) with fixed copy only; nothing
         from the query is put on it. 200 says "WHOOP is connected. You can close this tab and
         go back to openGym." A failure says "WHOOP wasn't connected: <reason>. Go back to
         openGym and try again.", where the reason is `the link expired` (400: unknown,
