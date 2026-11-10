@@ -760,8 +760,9 @@ app." and you should do exactly that. You can connect again afterwards.
 
 ### Freshness and limits
 
-- The server caches what it reads for 10 minutes per profile, so the numbers are up to 10 minutes
-  old. After a failed read from WHOOP it waits a minute before asking again.
+- When you open Progress the numbers are at most about 10 minutes old: the server keeps what it
+  reads from WHOOP for 10 minutes per profile, and the phone asks again once that copy has
+  expired. After a failed read from WHOOP the server waits a minute before asking again.
 - WHOOP allows 100 requests a minute and 10,000 a day per app. A refresh takes about five requests.
 - When WHOOP can't be reached, the card keeps the last good numbers and shows "As of <time>".
 - Root deployments only: the redirect URI and the connect link don't include a subpath, so WHOOP
