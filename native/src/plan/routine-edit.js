@@ -3,16 +3,19 @@
 // Pure: every function returns new objects and leaves its input alone. Nothing here deletes a key
 // the server would put back (server-put-back.js): `excludeFromProgression` is the only routine key
 // an edit may drop.
-import { format, glyphs, history, progression, routines as routinesLib } from '../shared/training.js'
+import { format, history, progression, routines as routinesLib } from '../shared/training.js'
 import { putBackChanges } from './server-put-back.js'
 
+// frontend/src/lib/glyphs.js DEFAULT_GLYPH. Not imported: that file pulls in Icon.jsx, which the
+// shared-logic scan (and Node) cannot load.
+const DEFAULT_GLYPH = 'figureStrength'
 const clone = value => JSON.parse(JSON.stringify(value))
 const nameOrNull = name => (typeof name === 'string' && name.trim() ? name.trim() : null)
 
 // A routine with a name and no exercises yet, or null for a blank name.
 export function newRoutine(name) {
   const trimmed = nameOrNull(name)
-  return trimmed ? { id: format.uid(), name: trimmed, emoji: glyphs.DEFAULT_GLYPH, ex: [] } : null
+  return trimmed ? { id: format.uid(), name: trimmed, emoji: DEFAULT_GLYPH, ex: [] } : null
 }
 
 // routines.copyRoutine ("Push (Copy)", "Push (Copy 2)"), with the stamps taken off: the phone
