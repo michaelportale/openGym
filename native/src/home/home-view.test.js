@@ -1,7 +1,13 @@
 import { readFileSync } from 'node:fs'
-import { expect, test } from 'vitest'
+import { describe, expect, test } from 'vitest'
 import { todayView } from '../nutrition/nutrition-screen.js'
-import { HOME_EMPTY, homeView, nutritionNoticeLink } from './home-view.js'
+import { createMemoryWeighIns } from '../body/weigh-ins.js'
+import { nutritionLoader } from '../nutrition/nutrition-source.js'
+import { applyDayForm, toggleSupplement } from '../nutrition/nutrition-view.js'
+import { dayDraft, dayValues, nutritionSaveArgs } from '../nutrition/nutrition-screen.js'
+import { createMemoryFinishedWorkouts } from '../session/finished-workouts.js'
+import { createMemoryPendingEdits } from '../sync/pending-edits.js'
+import { DAY_OPEN_FAILED, HOME_EMPTY, daySheetOpen, homeView, nutritionNoticeLink } from './home-view.js'
 
 const TODAY = '2026-11-09'
 const NOW = Date.parse('2026-11-09T12:00:00Z')
@@ -74,8 +80,67 @@ test('no line without a nutrition notice: none, a routine one, an unknown settin
   }
 })
 
+test('the Home screen opens the day sheet only on a fresh load', () => {
+  const src = readFileSync(new URL('./HomeScreen.js', import.meta.url), 'utf8')
+  expect(src).toContain('daySheetOpen(await n.reload())')
+  expect(src).toContain('opened={day.source}')
+  expect(src).not.toContain('canAct')
+  const sheet = readFileSync(new URL('../nutrition/DaySheet.js', import.meta.url), 'utf8')
+  expect(sheet).toContain('const src = opened ?? source')
+})
+
 test('the Home screen draws that line from nutritionNoticeLink and opens its href', () => {
   const src = readFileSync(new URL('./HomeScreen.js', import.meta.url), 'utf8')
   expect(src).toContain('nutritionNoticeLink(n.notices)')
   expect(src).toContain('router.push(view.notice.href)')
+})
+
+// Home is a tab and stays mounted: its source can predate a supplement tick saved on Nutrition until
+// its focus reload lands. The day sheet built on that source would save the day without the tick.
+// So Log/Edit opens the sheet only on what a fresh load produced (ponytail review, finding 1).
+describe("daySheetOpen: what Home's Log/Edit opens the day sheet on", () => {
+  const bundled = { state: { workouts: [], bodyweight: [] }, names: {} }
+  const copy = {
+    state: { routines: [], workouts: [], supplements: [{ id: 'a', name: 'Creatine' }], nutritionDays: { [TODAY]: { ...full, _ts: 10 } }, edited: {} },
+    rev: 5, wid: 'w5',
+  }
+  const stores = () => ({
+    finished: createMemoryFinishedWorkouts(), serverCopy: { get: async () => copy, key: async () => ({ rev: copy.rev, wid: copy.wid }) },
+    weighIns: createMemoryWeighIns(), edits: createMemoryPendingEdits(), bundled, now: NOW,
+  })
+
+  test("a tick saved just before opening is in the sheet's state, and the sheet's Save keeps it", async () => {
+    const s = stores()
+    const load = nutritionLoader()
+    const shown = (await load(s)).source // Home's source from its last visit
+    // On Nutrition: tick Creatine, saved to the pending store.
+    const ticked = toggleSupplement(shown.state, TODAY, 'a')
+    await s.edits.put(nutritionSaveArgs({ copy: shown.copy, bundled }, { kind: 'nutritionDay', key: TODAY, value: ticked }, { t: 1000 }))
+    // Back on Home, Edit: a fresh load first.
+    const open = daySheetOpen(await load(s))
+    expect(open.error).toBeUndefined()
+    expect(open.source.state.nutritionDays[TODAY].supps).toEqual(['a'])
+    const draft = dayDraft(open.source.state, TODAY)
+    draft.text.kcal = '2400'
+    const out = applyDayForm(open.source.state, TODAY, dayValues(draft), { today: TODAY })
+    expect(out.value).toMatchObject({ kcal: 2400, supps: ['a'] })
+    // The base is still the copy the sheet opened on, so a web change while it is open supersedes.
+    expect(open.source.copy).toBe(copy)
+    // The source Home showed would have dropped the tick: the bug this guards.
+    expect(applyDayForm(shown.state, TODAY, dayValues(dayDraft(shown.state, TODAY)), { today: TODAY }).value.supps).toBeUndefined()
+  })
+
+  test('a failed load opens no sheet and says so', () => {
+    expect(daySheetOpen({ ok: false, error: { message: 'disk I/O error' } })).toEqual({ error: DAY_OPEN_FAILED })
+    for (const junk of [undefined, null, {}, { ok: true }]) expect(daySheetOpen(junk)).toEqual({ error: DAY_OPEN_FAILED })
+    expect(DAY_OPEN_FAILED).toBe("Couldn't load today's nutrition. Try again.")
+  })
+
+  test('the sheet gets the { state, copy } of that load, nothing else', () => {
+    const source = { status: 'ready', state: { a: 1 }, copy: { b: 2 }, bodyweight: [], notices: [], error: null }
+    const open = daySheetOpen({ ok: true, source })
+    expect(open).toEqual({ source: { state: source.state, copy: source.copy } })
+    expect(open.source.state).toBe(source.state)
+    expect(open.source.copy).toBe(source.copy)
+  })
 })

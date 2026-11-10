@@ -17,6 +17,20 @@ export function nutritionNoticeLink(notices) {
   return Array.isArray(notices) && notices.some(isNutritionNotice) ? { ...NOTICE_LINK } : null
 }
 
+export const DAY_OPEN_FAILED = "Couldn't load today's nutrition. Try again."
+
+/**
+ * What Home's Log/Edit opens the day sheet on, from a fresh load (nutrition-source.js): that load's
+ * { state, copy }, or { error } when it failed, and then no sheet opens. Never the source Home is
+ * showing: Home is a tab and stays mounted, so until its focus reload lands that source can predate
+ * a supplement tick saved on Nutrition, and a day built on it would save without the tick. The
+ * sheet keeps this copy as its base, so a web change while it is open still supersedes.
+ */
+export function daySheetOpen(result) {
+  const source = result?.ok ? result.source : null
+  return source ? { source: { state: source.state, copy: source.copy } } : { error: DAY_OPEN_FAILED }
+}
+
 export function homeView(state, { today, now }) {
   const id = nextRoutineId(state ?? {}, now)
   const routine = id == null ? null : (Array.isArray(state?.routines) ? state.routines : []).find(r => r?.id === id)

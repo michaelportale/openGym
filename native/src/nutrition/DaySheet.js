@@ -19,14 +19,18 @@ const { NUTRIENTS, DAY_TYPES, NOTE_MAX } = nutrition
 
 // Log or edit one day's totals (Nutrition.jsx DayLog). Mounted per open (the caller keys it).
 // `source` is the screen's { state, copy } as it is now; the draft and the copy it was made on are
-// taken from it when the sheet opens and again when the date moves, as the web re-reads the day
-// (pickDate), and Save builds the day on that same pair, so its base is the copy the owner saw.
+// taken from `opened` (default: `source`) when the sheet opens, and from `source` again when the
+// date moves, as the web re-reads the day (pickDate). Save builds the day on that same pair, so its
+// base is the copy the owner saw. Home passes `opened`: the pair a fresh load gave just before.
 // onSave({ iso, value, copy }) resolves { ok }: a refusal or a failed save shows here, is said to
 // VoiceOver and keeps the sheet open with what was typed.
-export default function DaySheet({ visible, source, initialDate, onSave, onClose }) {
+export default function DaySheet({ visible, source, opened, initialDate, onSave, onClose }) {
   const live = useRef(source)
   live.current = source
-  const [made, setMade] = useState(() => ({ src: source, draft: dayDraft(source.state, initialDate) }))
+  const [made, setMade] = useState(() => {
+    const src = opened ?? source
+    return { src, draft: dayDraft(src.state, initialDate) }
+  })
   const { src, draft } = made
   const [message, setMessage] = useState(null)
   const [busy, setBusy] = useState(false)
