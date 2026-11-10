@@ -203,8 +203,9 @@ const ADAPTERS = {
 
 // state: the server's document. edits: from listPending(), of any kind (a kind with no adapter is
 // left alone), settled in their order, a routineOrder row after all the others: it is judged on
-// the document the others leave, a routine created or deleted there included, where every other
-// row is judged on the server's document as it came. Returns { state, done, rebased, applied,
+// the document the others leave, a routine created or deleted there included (and is done or
+// rebased only when the server's document holds it as well), where every other row is judged on
+// the server's document as it came. Returns { state, done, rebased, applied,
 // superseded }, each settled edit as
 // { kind, key, t }, a rebased one with the copy's stamp as its new baseTs and a superseded one with
 // its reason ('changed', 'deleted' or 'unsafe'). state is a new document only when something
@@ -226,11 +227,16 @@ export function applyEdits(state, edits) {
     const held = !!entry && entry.value !== undefined
     const same = adapter.same ?? ((a, b) => deepEqual(adapter.content(a), adapter.content(b)))
     const ref = { kind: edit.kind, key: edit.key, t: edit.t }
+    // A late row is done or rebased only when the server's document holds the value too: one that
+    // holds only on what the other rows leave goes with them, as they may not land (and `sent` is
+    // recorded before a push goes, so it may never have landed).
+    const stored = adapter.late ? adapter.read(doc, edit.key) : entry
+    const holds = (v) => held && same(entry.value, v) && (stored === entry || same(stored.value, v))
     // never onto a routine the copy lacks: that would bring back one this phone deleted
-    const rebase = held && !entry.absent && !!edit.sent && same(entry.value, edit.sent)
+    const rebase = held && !entry.absent && !!edit.sent && holds(edit.sent)
     // nothing applies to an entry the server deleted, a create included
     const apply = !!entry && !entry.tombstoned && entry.stamp === edit.baseTs
-    if (held && same(entry.value, edit.value)) done.push(ref)
+    if (holds(edit.value)) done.push(ref)
     else if ((rebase || apply) && adapter.unsafe?.(entry, edit.value, edit.key)) superseded.push({ ...ref, reason: 'unsafe' })
     else if (rebase || apply) {
       if (rebase) rebased.push({ ...ref, baseTs: entry.stamp })

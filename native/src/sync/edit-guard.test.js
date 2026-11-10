@@ -595,6 +595,35 @@ test('routineOrder: the order places a routine created in the same push, settlin
   expect(r.state.routines).toEqual([state.routines[0], routine('n', 'New'), state.routines[1]])
 })
 
+// b moved above a, then a deleted: without a the order already holds, but the server's copy holds
+// it only once the delete lands, and the delete may yet lose to the web.
+test('routineOrder: an order that holds only on the document the other rows leave is not done: it goes with them', () => {
+  const state = { routines: listed('a', 'b', 'c'), edited: { routineOrder: 5 } }
+  const rows = [order(['b', 'a', 'c'], { baseTs: 5, t: 1 }), edit('a', ROUTINE_DELETED, { baseTs: 1, t: 2 })]
+  const r = applyEdits(state, rows)
+  expect(r.done).toEqual([])
+  expect(r.applied).toEqual([{ kind: 'routine', key: 'a', t: 2 }, { kind: 'routineOrder', key: 'routineOrder', t: 1 }])
+  expect(idsIn(r.state)).toEqual(['b', 'c'])
+  // the delete refused (the web changed a first): the order still goes, b above a
+  const web = { routines: [routine('a', 'Web', { _ts: 9 }), ...listed('b', 'c')], edited: { routineOrder: 5 } }
+  const refused = applyEdits(web, rows)
+  expect(refused.superseded).toEqual([{ kind: 'routine', key: 'a', t: 2, reason: 'changed' }])
+  expect(refused.applied).toEqual([{ kind: 'routineOrder', key: 'routineOrder', t: 1 }])
+  expect(idsIn(refused.state)).toEqual(['b', 'a', 'c'])
+  // once the server's copy holds it, it is done
+  expect(applyEdits({ ...state, routines: listed('b', 'c') }, rows).done).toEqual([{ kind: 'routine', key: 'a', t: 2 }, { kind: 'routineOrder', key: 'routineOrder', t: 1 }])
+})
+
+// sent is recorded before the push goes, so it can name an order that never landed: the server's
+// copy must hold it for a rebase, or the phone's order would stand on the web's stamp.
+test('routineOrder: a sent order that holds only on the document the other rows leave is not rebased onto the web\'s stamp', () => {
+  // the phone sent b above a (it did not land); the web then put a first; a delete of a waits
+  const web = { routines: listed('a', 'b', 'c'), edited: { routineOrder: 9 } }
+  const r = applyEdits(web, [order(['b', 'a', 'c'], { baseTs: 5, sent: ['b', 'a', 'c'], t: 1 }), edit('a', ROUTINE_DELETED, { baseTs: 1, t: 2 })])
+  expect(r.rebased).toEqual([])
+  expect(r.superseded).toEqual([{ kind: 'routineOrder', key: 'routineOrder', t: 1, reason: 'changed' }])
+})
+
 test('routineOrder: an id the copy does not hold is skipped', () => {
   const state = { routines: listed('a', 'b') }
   const r = applyEdits(state, [order(['gone', 'b', 'a'])])
