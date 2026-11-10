@@ -9,14 +9,18 @@ const docOf = v => (v === null ? {} : isDoc(v) ? v : undefined)
 // Request Timeout and Too Many Requests pass by themselves; any other 4xx is the server (or a
 // proxy in front of it) refusing, and saying the same thing every time it is asked again.
 const PASSING = new Set([408, 429])
+// The server's WHOOP revoke can take over a minute when WHOOP hangs (up to four WHOOP requests of
+// 20 s each, api/whoop-client.js). Giving up sooner would say "Couldn't disconnect" while the
+// server goes on to delete the tokens, and lose the "WHOOP couldn't be told" line.
+const WHOOP_DISCONNECT_MS = 120000
 
 export function createApiClient({ fetch, timeoutMs = 15000 }) {
-  async function call(base, path, { method = 'GET', token, body } = {}, onStatus) {
+  async function call(base, path, { method = 'GET', token, body, timeoutMs: limit = timeoutMs } = {}, onStatus) {
     const headers = { Accept: 'application/json' }
     if (token) headers.Authorization = `Bearer ${token}`
     if (body !== undefined) headers['Content-Type'] = 'application/json'
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    const timer = setTimeout(() => controller.abort(), limit)
     try {
       const res = await fetch(`${base}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal: controller.signal })
       let json
@@ -98,7 +102,7 @@ export function createApiClient({ fetch, timeoutMs = 15000 }) {
     },
     // revoked: WHOOP was told; wasConnected: there was something to disconnect. No body.
     async whoopDisconnect(base, token) {
-      const r = await call(base, '/api/whoop/disconnect', { method: 'POST', token })
+      const r = await call(base, '/api/whoop/disconnect', { method: 'POST', token, timeoutMs: WHOOP_DISCONNECT_MS })
       return shaped(r, j => (j.ok === true ? { ok: true, revoked: j.revoked === true, wasConnected: j.wasConnected === true } : null))
     },
   }

@@ -238,6 +238,44 @@ describe('WHOOP', () => {
     for (const r of await Promise.all(calls(make(() => res(404, { error: 'not found' })).client))) expect(r).toEqual({ ok: false, kind: 'refused', status: 404 })
   })
 
+  test("whoopDisconnect waits up to 2 minutes, while every other call keeps 15 s: the server's revoke can take over a minute", async () => {
+    vi.useFakeTimers()
+    try {
+      const done = p => { const s = { at: null, r: undefined }; p.then(r => { s.r = r; s.at = Date.now() }); return s }
+      // A server that answers after `after` ms (never, for Infinity), unless the call is aborted first.
+      const answering = after => (url, init) => new Promise((resolve, reject) => {
+        const t = after === Infinity ? null : setTimeout(() => resolve(res(200, { ok: true, revoked: false, wasConnected: true, url: `${BASE}/x`, ...whoop })), after)
+        init.signal.addEventListener('abort', () => { clearTimeout(t); reject(new Error('aborted')) })
+      })
+
+      // WHOOP slow to answer the revoke: the server answers after 20 s, and the phone is still there.
+      let client = createApiClient({ fetch: answering(20_000) })
+      const off = done(client.whoopDisconnect(BASE, TOKEN))
+      const others = [
+        client.redeem(BASE, 'ABC123'), client.me(BASE, TOKEN), client.rev(BASE, TOKEN), client.pull(BASE, TOKEN),
+        client.push(BASE, TOKEN, { state: {} }), client.getWhoop(BASE, TOKEN), client.whoopConnectLink(BASE, TOKEN),
+      ].map(done)
+      await vi.advanceTimersByTimeAsync(15_000 - 1)
+      expect(others.filter(o => o.at !== null)).toEqual([])
+      await vi.advanceTimersByTimeAsync(1)
+      for (const o of others) expect(o.r).toEqual({ ok: false, kind: 'offline' }) // the default 15 s, unchanged
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(off.r).toEqual({ ok: true, revoked: false, wasConnected: true })
+
+      // A server that never answers: the disconnect gives up after 2 minutes, not 15 s.
+      client = createApiClient({ fetch: answering(Infinity) })
+      const hung = done(client.whoopDisconnect(BASE, TOKEN))
+      const from = Date.now()
+      await vi.advanceTimersByTimeAsync(120_000 - 1)
+      expect(hung.at).toBeNull()
+      await vi.advanceTimersByTimeAsync(1)
+      expect(hung.r).toEqual({ ok: false, kind: 'offline' })
+      expect(hung.at - from).toBe(120_000)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   test('never logs a body, a link or the token, and the token is in no result or URL', async () => {
     const spies = ['log', 'info', 'warn', 'error', 'debug'].map(m => vi.spyOn(console, m).mockImplementation(() => {}))
     try {
