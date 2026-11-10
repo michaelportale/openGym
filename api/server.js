@@ -36,6 +36,9 @@ import { effectiveRoutineId } from './queue.js';
 import { stampPut } from './sync-stamps.js';
 import { atomicWrite as durableWrite } from './durable.js';
 import { excusedOn, nudgeFor, nudgeWindowOpen, toneOf } from './nudge.js';
+import { createWhoopVault } from './whoop-vault.js';
+import { createWhoopClient, WhoopError, WHOOP_BASE } from './whoop-client.js';
+import { whoopView } from './whoop-view.js';
 
 const PORT = +(process.env.PORT || 3000);
 const DATA = process.env.DATA_DIR || '/data';
@@ -1862,6 +1865,189 @@ const passkeyRoutes = {
   }
 };
 
+/* ---------- WHOOP, read-only (Phase 8) ---------- */
+// The phone reads one endpoint, GET /api/whoop; the OAuth, the token refresh, the fetch and the
+// normalising all happen here (whoop-client.js, whoop-view.js), so a WHOOP token or the client
+// secret never leaves this process. The tokens live encrypted in DATA_DIR/whoop-<uid>.json
+// (whoop-vault.js); the app's credentials come from the environment and are never written down.
+//
+// Connecting starts on the phone, which has a bearer but no browser session: POST connect-link
+// mints a one-use code, Safari opens GET connect?c=, which swaps it for a one-use state and sends
+// Safari to WHOOP, and WHOOP sends it back to GET callback. The two GETs carry no session, so the
+// code and the state are the only credentials there: 32 random bytes each, good once, for ten
+// minutes, bound to the uid that minted the code. The callback stores the tokens for that uid and
+// nobody else, whoever's browser opens it.
+//
+// Not configured (either variable missing) means configured: false on the read, a 503 on
+// connect-link and no client at all. The vault is there either way, so deleting a profile still
+// removes a token file left from when it was configured. WHOOP_BASE_URL is for the tests' fake.
+const WHOOP_ID = String(process.env.WHOOP_CLIENT_ID || '').trim();
+const WHOOP_SECRET = String(process.env.WHOOP_CLIENT_SECRET || '').trim();
+if (!WHOOP_ID !== !WHOOP_SECRET) console.warn('WHOOP needs both WHOOP_CLIENT_ID and WHOOP_CLIENT_SECRET; it stays off');
+const APP_ORIGIN = ORIGIN.replace(/\/+$/, '');
+const whoopVault = createWhoopVault({ dir: DATA, secret: SECRET, write: atomicWrite });
+// Exactly one client for the process: its per-uid queue is what serialises the token rotation.
+const whoop = WHOOP_ID && WHOOP_SECRET ? createWhoopClient({
+  base: process.env.WHOOP_BASE_URL || WHOOP_BASE, clientId: WHOOP_ID, clientSecret: WHOOP_SECRET,
+  redirectUri: `${APP_ORIGIN}/api/whoop/callback`, vault: whoopVault,
+}) : null;
+const WHOOP_LINK_MS = 10 * 60000;
+// Per profile, in each table: a signed-in loop minting codes cannot grow it past this, and one
+// profile's loop never pushes out another's code.
+const WHOOP_LINKS_PER_UID = 5;
+const whoopCodes = new Map();    // link code -> { uid, exp, used }
+const whoopStates = new Map();   // OAuth state -> { uid, exp, used }
+function whoopPurge(table) {
+  const now = Date.now();
+  for (const [k, v] of table) if (v.exp <= now) table.delete(k);
+}
+function whoopMint(table, uid) {
+  whoopPurge(table);
+  const mine = [...table].filter(([, v]) => v.uid === uid);
+  for (const [k] of mine.slice(0, Math.max(0, mine.length - WHOOP_LINKS_PER_UID + 1))) table.delete(k);
+  const key = crypto.randomBytes(32).toString('base64url');
+  table.set(key, { uid, exp: Date.now() + WHOOP_LINK_MS, used: false });
+  return key;
+}
+// The entry, now used up; or 'used' for one already taken (kept, marked, until it expires, so the
+// page can say which); or 'expired' for anything else: unknown, lapsed, missing.
+function whoopTake(table, key) {
+  whoopPurge(table);
+  const e = typeof key === 'string' ? table.get(key) : undefined;
+  if (!e) return 'expired';
+  if (e.used) return 'used';
+  e.used = true;
+  return e;
+}
+const whoopDrop = uid => { for (const t of [whoopCodes, whoopStates]) for (const [k, v] of t) if (v.uid === uid) t.delete(k); };
+
+// The last good read per profile, { payload, fetchedAt }, fresh for ten minutes and served stale
+// after that while WHOOP is rate-limiting or down; and the one fetch in flight per profile.
+const WHOOP_FRESH_MS = 10 * 60000;
+const WHOOP_WINDOW_MS = 16 * 86400000;
+const whoopCache = new Map();
+const whoopInflight = new Map();
+// Disconnecting, connecting again or losing the grant forgets both. A fetch already in flight
+// then finds it is no longer the one in the table and leaves the cache alone.
+const whoopForget = uid => { whoopCache.delete(uid); whoopInflight.delete(uid); };
+const whoopNone = configured => ({ configured, connected: false, fetchedAt: null, stale: false, days: [], workouts: [] });
+function whoopFetch(uid) {
+  const running = whoopInflight.get(uid);
+  if (running) return running;
+  const p = (async () => {
+    const start = new Date(Date.now() - WHOOP_WINDOW_MS).toISOString();
+    const [cycles, recoveries, sleeps, workouts] = await Promise.all(
+      ['cycle', 'recovery', 'activity/sleep', 'activity/workout'].map(c => whoop.get(uid, c, { start })));
+    const fetchedAt = Date.now();
+    const payload = {
+      configured: true, connected: true, fetchedAt: new Date(fetchedAt).toISOString(), stale: false,
+      ...whoopView({ cycles, recoveries, sleeps, workouts }, { now: new Date(fetchedAt) }),
+    };
+    if (whoopInflight.get(uid) === p) whoopCache.set(uid, { payload, fetchedAt });
+    return payload;
+  })();
+  whoopInflight.set(uid, p);
+  const clear = () => { if (whoopInflight.get(uid) === p) whoopInflight.delete(uid); };
+  p.then(clear, clear);
+  return p;
+}
+
+// The page Safari lands on after the connect link or WHOOP. Fixed copy only: nothing from the
+// query is ever put on it. No script, no subresource, no referrer for the code in the URL.
+const WHOOP_REASONS = {
+  expired: 'the link expired', used: 'the link was already used',
+  refused: 'WHOOP said no', unreachable: "WHOOP couldn't be reached",
+};
+const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+function whoopPage(res, status, message) {
+  res.writeHead(status, {
+    'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store',
+    'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'",
+    'Referrer-Policy': 'no-referrer', 'X-Content-Type-Options': 'nosniff',
+  });
+  res.end('<!doctype html><html lang="en"><head><meta charset="utf-8">'
+    + '<meta name="viewport" content="width=device-width, initial-scale=1"><title>openGym</title>'
+    + '<style>body{font:18px/1.45 system-ui,sans-serif;margin:2.5rem 1.25rem;max-width:32rem}</style>'
+    + `</head><body><p>${escapeHtml(message)}</p></body></html>`);
+}
+const whoopFailed = (res, reason) => whoopPage(res, reason === 'unreachable' ? 502 : 400,
+  `WHOOP wasn't connected: ${WHOOP_REASONS[reason]}. Go back to openGym and try again.`);
+const activeUser = uid => db.users.find(u => u.id === uid && !u.disabled) || null;
+
+const whoopRoutes = {
+  // { configured, connected, fetchedAt, stale, days, workouts } for the signed-in profile, plus
+  // `error: 'unavailable'` when WHOOP cannot be read and nothing good is cached.
+  'GET /api/whoop': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    if (!whoop) return json(res, 200, whoopNone(false));
+    if (!whoop.connected(user.id)) { whoopForget(user.id); return json(res, 200, whoopNone(true)); }
+    const hit = whoopCache.get(user.id);
+    if (hit && Date.now() - hit.fetchedAt < WHOOP_FRESH_MS) return json(res, 200, hit.payload);
+    try {
+      json(res, 200, await whoopFetch(user.id));
+    } catch (e) {
+      // Anything but a WhoopError (the vault's disk write) is the server's own failure: a 500.
+      if (!(e instanceof WhoopError)) throw e;
+      if (e.code === 'reconnect') { whoopForget(user.id); return json(res, 200, whoopNone(true)); }
+      const last = whoopCache.get(user.id);
+      json(res, 200, last ? { ...last.payload, stale: true } : { ...whoopNone(true), connected: true, error: 'unavailable' });
+    }
+  },
+
+  'POST /api/whoop/connect-link': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    if (!whoop) return json(res, 503, { error: 'WHOOP is not set up on this server' });
+    json(res, 200, { url: `${APP_ORIGIN}/api/whoop/connect?c=${whoopMint(whoopCodes, user.id)}` });
+  },
+
+  // No session: Safari opens it. The code is the credential, and becomes a state for WHOOP.
+  'GET /api/whoop/connect': async (req, res) => {
+    const c = whoopTake(whoopCodes, new URL(req.url, 'http://x').searchParams.get('c'));
+    if (typeof c === 'string') return whoopFailed(res, c);
+    if (!whoop || !activeUser(c.uid)) return whoopFailed(res, 'expired');
+    res.writeHead(302, { Location: whoop.authorizeUrl(whoopMint(whoopStates, c.uid)), 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' });
+    res.end();
+  },
+
+  // No session either: whoever's browser lands here, the tokens go to the state's uid. The state
+  // is used up before the code is exchanged, so a replay never reaches WHOOP.
+  'GET /api/whoop/callback': async (req, res) => {
+    const q = new URL(req.url, 'http://x').searchParams;
+    const s = whoopTake(whoopStates, q.get('state'));
+    if (typeof s === 'string') return whoopFailed(res, s);
+    if (!whoop || !activeUser(s.uid)) return whoopFailed(res, 'expired');
+    const code = q.get('code');
+    if (q.has('error') || !code) return whoopFailed(res, 'refused');
+    try {
+      await whoop.exchange(s.uid, code);
+    } catch (e) {
+      if (!(e instanceof WhoopError)) throw e;
+      return whoopFailed(res, e.code === 'reconnect' || e.code === 'incomplete' ? 'refused' : 'unreachable');
+    }
+    whoopForget(s.uid);
+    whoopPage(res, 200, 'WHOOP is connected. You can close this tab and go back to openGym.');
+  },
+
+  // Asks WHOOP to drop the grant, then deletes the tokens whatever WHOOP said; `revoked` says
+  // whether WHOOP confirmed, so the phone can tell the owner to revoke in the WHOOP app instead.
+  // Unused links go too, so a connect tab left open cannot quietly reconnect the profile.
+  'POST /api/whoop/disconnect': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    whoopDrop(user.id);
+    let result;
+    if (whoop) result = await whoop.revoke(user.id);
+    else {
+      result = { revoked: false, wasConnected: whoopVault.read(user.id) !== null };
+      whoopVault.remove(user.id);
+    }
+    whoopForget(user.id);
+    json(res, 200, { ok: true, revoked: result.revoked, wasConnected: result.wasConnected });
+  },
+};
+
 /* ---------- photos & videos of custom exercises (api/media.js) ---------- */
 // One photo, GIF or short video per custom exercise, stored per profile and named by its sha256.
 // The state only ever carries a small ref; the bytes arrive and leave through the routes below.
@@ -2541,6 +2727,9 @@ const routes = {
     json(res, 200, { ok: true });
   },
 
+  // WHOOP, read-only. Always there: an unconfigured instance answers configured: false.
+  ...whoopRoutes,
+
   /* ---------- admin dashboard ---------- */
   // One row per user, cheap enough for a personal instance (reads each state file once).
   'GET /api/admin/users': async (req, res) => {
@@ -2626,6 +2815,12 @@ const routes = {
     // The training history and any Coach credential of theirs, both outside db.json.
     try { fs.unlinkSync(stateFile(u.id)); } catch { /* already gone */ }
     try { coachConfig.clearProfileAuth(u.id); } catch { /* nothing stored */ }
+    // Their WHOOP grant: revoked at WHOOP where it can be (in the background; the file goes
+    // whatever WHOOP says), and the token file removed either way.
+    whoopDrop(u.id);
+    whoopForget(u.id);
+    if (whoop) whoop.revoke(u.id).catch(e => console.error('whoop: could not remove the tokens of', u.id, e.message));
+    else try { whoopVault.remove(u.id); } catch (e) { console.error('whoop: could not remove the tokens of', u.id, e.message); }
     // Their photos and videos — the one place a profile's folder under uploads/ is removed.
     try { MEDIA.removeUser(u.id); } catch (e) { console.error('media: could not remove uploads of', u.id, e.message); }
     saveDb();
