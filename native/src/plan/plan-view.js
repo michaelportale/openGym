@@ -8,6 +8,13 @@ import { sameRoutine } from '../sync/edit-guard.js'
 import { applySlotForm, failureOnPick, formRanged, moveSlot, policyChoices, stepInvalid } from './slot-edit.js'
 
 export const UNSAFE_EDIT = 'This move or swap has to be made on the web.'
+export const REFUSED_SUPERSET = "It's linked in a superset. Keep it, or delete the whole routine."
+export const REFUSED_TWIN = UNSAFE_EDIT
+export const NAME_BLANK = 'Enter a name.'
+export const PAIR_TO_AUTHOR = 'Pair with your server to add, delete or reorder routines.'
+// The web's own words for the routine's deload switch (RoutineEdit.jsx).
+export const DELOAD_TITLE = 'Deload routine'
+export const DELOAD_SUBTITLE = 'Its workouts do not count toward progression. They still show in history and statistics.'
 export const MISSING_ROUTINE = "This routine isn't in your plan any more."
 // The web's own words (sheets.jsx:1808) for a rule whose Step is not positive (slot-edit.js stepInvalid).
 export const STEP_INVALID = 'Enter a positive step to use this progression rule.'
