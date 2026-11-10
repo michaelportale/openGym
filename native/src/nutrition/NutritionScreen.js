@@ -15,7 +15,7 @@ import { announce } from '../plan/announce'
 import DaySheet from './DaySheet'
 import TargetsSheet from './TargetsSheet'
 import { clearDayValue, toggleSupplement } from './nutrition-view'
-import { dayRows, nutritionNotices, supplementChecks, todayView, weekCard } from './nutrition-screen'
+import { canAct, dayRows, nutritionNotices, supplementChecks, todayView, weekCard } from './nutrition-screen'
 import { todayIso, useNutrition } from './use-nutrition'
 
 const FAILED = "Couldn't save. Try again."
@@ -62,6 +62,7 @@ export default function NutritionScreen() {
     announce(text)
   }
   const [busy, setBusy] = useState(false)
+  const idle = canAct({ ready, busy })
 
   // A day value saved from this screen (a tick, a clear), on the source it was made on.
   const saveDay = async (iso, value, copy, done) => {
@@ -75,7 +76,7 @@ export default function NutritionScreen() {
 
   // Today is read when the box is ticked, so a tap just after midnight lands on the new day.
   const tick = id => {
-    if (busy || !ready) return
+    if (!idle) return
     const { state, copy } = live.current
     const iso = todayIso()
     let value
@@ -89,7 +90,7 @@ export default function NutritionScreen() {
 
   // The day as it is when Clear is tapped; the confirm only says yes to that.
   const clear = row => {
-    if (busy || !ready) return
+    if (!idle) return
     const { state, copy } = live.current
     Alert.alert('Clear this day?', `Removes the totals and note logged on ${row.label}. Supplement ticks stay.`, [
       { text: 'Cancel', style: 'cancel' },
@@ -102,7 +103,7 @@ export default function NutritionScreen() {
   const [day, setDay] = useState(null)
   const [targets, setTargets] = useState(null)
   const openDay = iso => {
-    if (!ready) return
+    if (!idle) return
     setMessage(null)
     setDay({ no: ++opens.current, iso, open: true })
   }
@@ -141,7 +142,7 @@ export default function NutritionScreen() {
               {t.logged ? <AppText variant="lead">{t.headline}</AppText> : <AppText variant="body" color={color.textSecondary}>{t.empty}</AppText>}
               {t.target ? <AppText variant="label" color={color.textSecondary}>{t.target}</AppText> : null}
             </View>
-            <TextButton label={t.action} accessibilityLabel={`${t.action} today`} accessibilityHint="Opens the day sheet for today." onPress={() => openDay(todayIso())} />
+            <TextButton label={t.action} accessibilityLabel={`${t.action} today`} accessibilityHint="Opens the day sheet for today." disabled={!idle} onPress={() => openDay(todayIso())} />
           </View>
           {t.lines.map(line => <AppText key={line} variant="body">{line}</AppText>)}
         </Card>
@@ -155,7 +156,7 @@ export default function NutritionScreen() {
           {week.empty ? (
             <>
               <AppText variant="body" color={color.textSecondary}>{week.emptyText}</AppText>
-              {week.current ? <SecondaryButton label="Log today" accessibilityHint="Opens the day sheet for today." onPress={() => openDay(todayIso())} /> : null}
+              {week.current ? <SecondaryButton label="Log today" accessibilityHint="Opens the day sheet for today." disabled={!idle} onPress={() => openDay(todayIso())} /> : null}
             </>
           ) : (
             <View style={styles.tiles}>
@@ -178,8 +179,8 @@ export default function NutritionScreen() {
               accessibilityRole="checkbox"
               accessibilityLabel={c.name}
               accessibilityHint="Ticks it off for today."
-              accessibilityState={{ checked: c.checked, disabled: busy }}
-              disabled={busy}
+              accessibilityState={{ checked: c.checked, disabled: !idle }}
+              disabled={!idle}
               onPress={() => tick(c.id)}
               style={({ pressed }) => [styles.check, pressed && styles.pressed]}
             >
@@ -204,8 +205,8 @@ export default function NutritionScreen() {
                 <AppText variant="heading">{r.label}</AppText>
                 <AppText variant="label" color={color.textMuted}>{r.subtitle}</AppText>
               </View>
-              <TextButton label="Edit" accessibilityLabel={r.editLabel} accessibilityHint="Opens the day sheet for this day." disabled={busy} onPress={() => openDay(r.iso)} />
-              {r.canClear ? <TextButton label="Clear" accessibilityLabel={r.clearLabel} accessibilityHint="Asks before removing this day's totals and note." disabled={busy} onPress={() => clear(r)} /> : null}
+              <TextButton label="Edit" accessibilityLabel={r.editLabel} accessibilityHint="Opens the day sheet for this day." disabled={!idle} onPress={() => openDay(r.iso)} />
+              {r.canClear ? <TextButton label="Clear" accessibilityLabel={r.clearLabel} accessibilityHint="Asks before removing this day's totals and note." disabled={!idle} onPress={() => clear(r)} /> : null}
             </View>
             {r.lines.length ? <AppText variant="body" color={color.textSecondary}>{r.lines.join(' · ')}</AppText> : null}
             {r.note ? <AppText variant="body">{r.note}</AppText> : null}
@@ -213,7 +214,7 @@ export default function NutritionScreen() {
         )) : (
           <View style={[styles.pad, styles.empty]}>
             <AppText variant="body" color={color.textSecondary}>Days you log show here, newest first.</AppText>
-            <SecondaryButton label="Log your first day" accessibilityHint="Opens the day sheet for today." onPress={() => openDay(todayIso())} />
+            <SecondaryButton label="Log your first day" accessibilityHint="Opens the day sheet for today." disabled={!idle} onPress={() => openDay(todayIso())} />
           </View>
         )}
       </>

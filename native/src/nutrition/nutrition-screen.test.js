@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest'
 import { applyEdits } from '../sync/edit-guard.js'
 import { createMemoryPendingEdits } from '../sync/pending-edits.js'
 import {
-  dayDraft, dayRows, dayValues, nutritionNotices, nutritionSaveArgs, stepDay, supplementChecks,
+  canAct, dayDraft, dayRows, dayValues, nutritionNotices, nutritionSaveArgs, stepDay, supplementChecks,
   supplementsSection, targetsDraft, targetsSave, todayView, weekCard,
 } from './nutrition-screen.js'
 
@@ -308,5 +308,16 @@ describe('nutritionSaveArgs: the base comes from the copy (or the snapshot) with
 
     const web = { ...copy.state, nutritionDays: { [TODAY]: { ...full, note: 'web', _ts: 200 } } }
     expect(applyEdits(web, pending).superseded).toEqual([{ kind: 'nutritionDay', key: TODAY, t: 10, reason: 'changed' }])
+  })
+})
+
+// Task 6 fix round 1: a day sheet opened while a tick is saving would take the state before the
+// tick, and its Save would replace the pending day without it.
+describe('canAct (a tap that writes a day or opens the day sheet)', () => {
+  test('only on a loaded screen with no save running', () => {
+    expect(canAct({ ready: true, busy: false })).toBe(true)
+    expect(canAct({ ready: true, busy: true })).toBe(false)
+    expect(canAct({ ready: false, busy: false })).toBe(false)
+    expect(canAct({ ready: false, busy: true })).toBe(false)
   })
 })

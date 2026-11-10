@@ -13,6 +13,13 @@ const isMap = v => !!v && typeof v === 'object' && !Array.isArray(v)
 const own = (map, key) => (isMap(map) && Object.hasOwn(map, key) ? map[key] : undefined)
 const MACROS = NUTRIENTS.filter(k => k !== 'kcal')
 
+/**
+ * Whether a tap that writes a day (a tick, Clear) or opens the day sheet may run: only on a loaded
+ * screen with no save running. A sheet opened while a tick is saving would take the state before
+ * the tick, and its Save would replace the pending day without it.
+ */
+export const canAct = ({ ready, busy }) => !!ready && !busy
+
 /** The Today card (Nutrition.jsx:228-243), with each total against its day type's target. */
 export function todayView(state, { today }) {
   const c = todayCard(state, { today })
