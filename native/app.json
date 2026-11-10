@@ -10,6 +10,10 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "io.github.michaelportale.opengym",
+      "buildNumber": "1",
+      "config": {
+        "usesNonExemptEncryption": false
+      },
       "infoPlist": {
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true

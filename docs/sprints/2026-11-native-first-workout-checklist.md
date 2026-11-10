@@ -268,6 +268,8 @@ WHOOP, now that the phone is paired with your real server (Phase 8; [SELF_HOSTIN
 
 From here on, do not install a dev build over the Release app. Any test on this phone now writes into the real record.
 
+Next is Phase 9: the TestFlight build, the device scenarios and a real gym session, in [the acceptance log](2026-11-native-device-acceptance.md).
+
 ## After each real session
 
 - [ ] Check the saved screen says "Synced to <host> at <time>". If it says "It will sync when <host> is reachable", open the app again with the server reachable, or tap "Sync now" in Diagnostics, until it does.
