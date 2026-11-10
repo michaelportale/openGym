@@ -22,7 +22,7 @@ What `app.json` declares for you:
 - `buildNumber` is `"1"`. Every later upload needs a higher number: edit it, commit it, and repeat this section **from step 2**. Step 2 keeps your data out of that upload too.
 - `usesNonExemptEncryption: false` answers Apple's export-compliance question for every build. It is true for this app: it uses only HTTPS and the Keychain, both through iOS, and no encryption library of its own. If that ever changes, change this line.
 
-TestFlight builds stop launching 90 days after upload. Your data stays on the phone and the server. Upload a new build (this section, from step 2) before then.
+TestFlight builds stop launching 90 days after upload. Your data stays on the phone and the server. Upload a new build (this section, from step 2, with a higher build number) before then.
 
 ## 2. Install over your current build
 
@@ -33,7 +33,7 @@ TestFlight builds stop launching 90 days after upload. Your data stays on the ph
   - starting a routine shows your real previous weights in the "Last" column (discard it: Finish, then Discard workout, then Discard);
   - Progress, Your lifts lists your real lifts;
   - no example-data banner.
-- [ ] If it says "Not paired" instead, the install did not keep the app's data. Until you pair, this build shows the example routines and the example-data banner. That is expected here, and it is not the checklist's "stop and rebuild". Start nothing. Pair again with the real server, as in checklist step 16. Everything you synced before installing comes back from the server.
+- [ ] If it says "Not paired" instead, the pairing did not survive the install; the app's data may have. If the data did not survive either, this build shows the example routines and the example-data banner until you pair. That is expected here, and it is not the checklist's "stop and rebuild". Either way, start nothing. Pair again with the real server, as in checklist step 16. Everything you synced before installing comes back from the server.
 - [ ] Apple Health is still on. If it is off, turn it on again and allow access.
 - [ ] Rest alerts are allowed (Settings > Notifications > openGym).
 
@@ -67,9 +67,9 @@ All rows must pass. Write Pass or Fail, the date, and anything odd. A failure st
 | Focus, silent mode, Low Power Mode (each, then turn it back) | Recording and recovery still work. Lock the phone during rest: when rest ends, the "Rest over" alert is in Notification Centre even if no banner showed or no sound played. | | | |
 | Undo or complete rapidly, or background during completion | No double counting; last durable state recovered; alerts reconciled. | | | |
 | Finish during rest, then reopen from an old alert | History appears once; no remaining alert or revived session. | | | |
-| Leave a session unfinished overnight | Offer resume, finish with a chosen end time, or discard; overnight time is never logged silently. | | | Checklist section 5 "Midnight" checked the prompt. Here, leave a discardable session open overnight for real. |
+| Leave a session unfinished overnight | Offer resume, finish with a chosen end time, or discard; overnight time is never logged silently. | | | Checklist section 5 "Midnight" checked the prompt. Here, leave a discardable session open overnight for real. The app has no end-time picker: Finish "ends at your last set, or now if that was under 20 minutes ago". Pass the row if overnight time is never logged silently, and write down that the end time is chosen for you, not by you. |
 | Change the clock or time zone mid-session, then turn it back | No negative timers, duplicated session or corrupted duration. | | | Settings, General, Date & Time: turn off Set Automatically, change the time zone, then the time. Afterwards, turn Set Automatically back on. |
-| Interrupt Health permission or export | Local workout remains saved; retry is explicit and creates no duplicate. | | | As checklist section 11 "Writing off" and "Writing back on", on this build. |
+| Interrupt Health permission or export | Local workout remains saved; retry is explicit and creates no duplicate. | | | Run it at the end of section 4's real session, not on a test workout: before you tap Finish, turn Workouts off (Settings, Health, Data Access & Devices, openGym). After Finish, Diagnostics shows "1 waiting". Turn Workouts back on: the workout reaches Health once (tap Retry if "1 waiting" stays). |
 | Storage full during save | No false "saved"; entry preserved with an actionable retry. | | | A really full phone isn't practical. Run Diagnostics, Storage check ("Storage check passed"), and write "not run on a full phone" here. Failed saves are covered by unit tests on real SQLite (`native/src/session/checkpoint-error.test.js`). |
 | One-handed use and keyboard during a real session | Controls reachable; keyboard never hides the active field. | | | Tick it during section 4's real session. |
 
