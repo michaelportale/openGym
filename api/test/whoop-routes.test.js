@@ -348,6 +348,9 @@ test('on an https ORIGIN the browser cookie is __Host- and Secure', async t => {
   const go = await h.confirm(await h.link(A), { Origin: 'https://gym.test', 'Sec-Fetch-Site': 'same-origin' });
   assert.equal(go.status, 302, go.text);
   assert.match(go.headers.get('set-cookie'), /^__Host-gymwhoop=[A-Za-z0-9_-]{43}; Path=\/; Max-Age=600; HttpOnly; Secure; SameSite=Lax$/);
+  // The callback expires it under the same name and attributes.
+  const cb = await h.req('GET', '/api/whoop/callback?code=x&state=y');
+  assert.equal(cb.headers.get('set-cookie'), '__Host-gymwhoop=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax');
 });
 
 test('a state is good once, unknown values expire, and nothing from the query is echoed', async t => {
@@ -731,6 +734,54 @@ test('deleting a profile revokes its WHOOP grant and removes its token file', as
   assert.equal(fs.existsSync(h.file(A)), false);
   assert.equal(fake.count.revoke, 1, 'asked WHOOP to drop the grant');
   assert.equal(fs.existsSync(h.file(B)), true, "B's connection is untouched");
+  h.assertNoLeak();
+});
+
+test("the callback: a connection the server can't save gets the failure page, and the log has the reason only", async t => {
+  const fake = await whoopFake(t);
+  const h = await boot(t, { fake });
+  const c = await h.link(A);
+  const state = new URL((await h.confirm(c)).headers.get('location')).searchParams.get('state');
+  const code = fake.issueCode();
+  fs.mkdirSync(`${h.file(A)}.tmp`); // the vault's write cannot open its temp file, as on a full disk
+
+  const r = await h.callback(state, { code });
+  assert.equal(r.status, 500);
+  assert.equal(r.headers.get('content-type'), 'text/html; charset=utf-8');
+  assert.equal(r.headers.get('cache-control'), 'no-store');
+  assert.equal(pageText(r.text), failed("your server couldn't save the WHOOP connection"));
+  assert.equal(fake.count.authorization_code, 1, 'WHOOP was asked; the code is spent');
+  assert.equal(fs.existsSync(h.file(A)), false);
+  assert.match(h.log(), /whoop: could not save the connection of whoopUserA_1: EISDIR/);
+  for (const v of [c, state, code]) assert.ok(!h.log().includes(v), 'no link code, state or code in the log');
+  assert.deepEqual((await h.whoop(A)).json(), NOT_CONNECTED);
+
+  // Once the disk is fixed, Connect again works.
+  fs.rmdirSync(`${h.file(A)}.tmp`);
+  await h.connect(A);
+  assert.equal((await h.whoop(A)).json().connected, true);
+  h.assertNoLeak();
+});
+
+test('every callback outcome expires the browser cookie that Continue set', async t => {
+  const fake = await whoopFake(t);
+  const h = await boot(t, { fake });
+  const EXPIRE = 'gymwhoop=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax';
+  const outcomes = [];
+  let state = await h.stateFor(A);
+  outcomes.push(['connected', await h.callback(state)]);
+  outcomes.push(['used', await h.callback(state)]);
+  outcomes.push(['expired', await h.req('GET', '/api/whoop/callback?code=x&state=y')]);
+  outcomes.push(['another browser', await h.callback(await h.stateFor(A), { jar: '' })]);
+  outcomes.push(['said no', await h.callback(await h.stateFor(A), { query: 'error=access_denied' })]);
+  state = await h.stateFor(A);
+  fake.force('token', 503);
+  outcomes.push(['unreachable', await h.callback(state)]);
+  state = await h.stateFor(B);
+  fs.mkdirSync(`${h.file(B)}.tmp`);
+  outcomes.push(['not saved', await h.callback(state)]);
+  for (const [name, r] of outcomes) assert.equal(r.headers.get('set-cookie'), EXPIRE, name);
+  assert.deepEqual(outcomes.map(([, r]) => r.status), [200, 400, 400, 400, 400, 502, 500]);
   h.assertNoLeak();
 });
 

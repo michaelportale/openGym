@@ -2281,7 +2281,8 @@ paths:
         No session: the tokens are stored for the profile the state was made for, whoever is
         signed in, and only in the browser that pressed Continue (its `gymwhoop` cookie).
         The state is used up before anything else is checked, so a replay never reaches
-        WHOOP. Every permission has to be granted.
+        WHOOP. Every permission has to be granted. Every answer expires the `gymwhoop`
+        cookie.
       security: []
       parameters:
         - { name: state, in: query, required: true, schema: { type: string } }
@@ -2290,6 +2291,7 @@ paths:
       responses:
         '200': { $ref: '#/components/responses/WhoopPage' }
         '400': { $ref: '#/components/responses/WhoopPage' }
+        '500': { $ref: '#/components/responses/WhoopPage' }
         '502': { $ref: '#/components/responses/WhoopPage' }
 
   /api/whoop/disconnect:
@@ -3191,7 +3193,8 @@ components:
         expired, or the instance is not configured), `the link was already used` (400),
         `WHOOP said no` (400: consent refused, the code refused, or a permission left out),
         `it didn't come back to the browser it started in` (400: the callback came without
-        the cookie Continue set) or `WHOOP couldn't be reached` (502).
+        the cookie Continue set), `WHOOP couldn't be reached` (502) or `your server couldn't
+        save the WHOOP connection` (500: the token file could not be written).
       content:
         text/html:
           schema: { type: string }

@@ -2020,7 +2020,9 @@ const WHOOP_REASONS = {
   expired: 'the link expired', used: 'the link was already used',
   refused: 'WHOOP said no', unreachable: "WHOOP couldn't be reached",
   browser: "it didn't come back to the browser it started in",
+  unsaved: "your server couldn't save the WHOOP connection",
 };
+const WHOOP_FAILED_STATUS = { unreachable: 502, unsaved: 500 };
 const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const WHOOP_STYLE = 'body{font:18px/1.45 system-ui,sans-serif;margin:2.5rem 1.25rem;max-width:32rem}button{font:inherit;padding:.6rem 1.5rem}';
 const WHOOP_CSP = `default-src 'none'; style-src 'sha256-${crypto.createHash('sha256').update(WHOOP_STYLE).digest('base64')}'; base-uri 'none'; frame-ancestors 'none'`;
@@ -2037,7 +2039,7 @@ function whoopPage(res, status, body, referrer = 'no-referrer') {
     + `<style>${WHOOP_STYLE}</style></head><body>${body}</body></html>`);
 }
 const whoopSay = (res, status, message) => whoopPage(res, status, `<p>${escapeHtml(message)}</p>`);
-const whoopFailed = (res, reason) => whoopSay(res, reason === 'unreachable' ? 502 : 400,
+const whoopFailed = (res, reason) => whoopSay(res, WHOOP_FAILED_STATUS[reason] || 400,
   `WHOOP wasn't connected: ${WHOOP_REASONS[reason]}. Go back to openGym and try again.`);
 const activeUser = uid => db.users.find(u => u.id === uid && !u.disabled) || null;
 
@@ -2109,17 +2111,25 @@ const whoopRoutes = {
   // the browser that pressed Continue. The state is used up before anything else is checked, so
   // a replay never reaches WHOOP.
   'GET /api/whoop/callback': async (req, res) => {
+    // Whatever the outcome, Continue's cookie has done its job.
+    res.setHeader('Set-Cookie', expireCookie(WHOOP_COOKIE));
     const q = new URL(req.url, 'http://x').searchParams;
     const s = whoopTake(whoopStates, q.get('state'));
     if (typeof s === 'string') return whoopFailed(res, s);
-    if (!whoop || !activeUser(s.uid)) return whoopFailed(res, 'expired');
+    const user = whoop && activeUser(s.uid);
+    if (!user) return whoopFailed(res, 'expired');
     if (!whoopSameBrowser(req, s.nonce)) return whoopFailed(res, 'browser');
     const code = q.get('code');
     if (q.has('error') || !code) return whoopFailed(res, 'refused');
     try {
       await whoop.exchange(s.uid, code);
     } catch (e) {
-      if (!(e instanceof WhoopError)) throw e;
+      if (!(e instanceof WhoopError)) {
+        // The vault's write (a full disk, say). The code is spent by now, so the page says what to
+        // do rather than a bare 500; the message is a file error's, never a token's.
+        console.error(`whoop: could not save the connection of ${s.uid}:`, e?.message);
+        return whoopFailed(res, 'unsaved');
+      }
       return whoopFailed(res, e.code === 'reconnect' || e.code === 'incomplete' ? 'refused' : 'unreachable');
     }
     whoopForget(s.uid);
