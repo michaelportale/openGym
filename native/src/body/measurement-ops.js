@@ -18,11 +18,17 @@ export function sameValue(a, b) {
   return keys.length === Object.keys(b).length && keys.every(k => Object.prototype.hasOwnProperty.call(b, k) && sameValue(a[k], b[k]))
 }
 
+// Whether an entry has a t a remove can name: a finite number. Imported data can lack one.
+export const hasTime = entry => typeof entry?.t === 'number' && Number.isFinite(entry.t)
+
 // A remove also takes out an entry this phone set itself (ownTs): a set whose push landed but whose
-// pull failed is on the server before the copy, and so the t the owner deleted, knows it. Any other
-// entry (a later web edit) is not the one deleted, and stays. Sets are the typed path as they are.
+// pull failed is on the server before the copy, and so the t the owner deleted, knows it. A remove
+// that names no t (baseT null: the copy's entry had none, measurement-view.js removeOp) takes out
+// an entry that has none either. Any other entry (a later web edit) is not the one deleted, and
+// stays. Sets are the typed path as they are.
 function canApply(op, entry, removed) {
   if (entry && op.op === 'remove' && Array.isArray(op.ownTs) && op.ownTs.includes(entry.t)) return true
+  if (entry && op.op === 'remove' && op.baseT == null && !hasTime(entry)) return true
   return typedCanApply(op, entry, removed)
 }
 
@@ -34,8 +40,8 @@ const MEASUREMENTS = {
 
 // The phone's pending ops laid over the document's `measurements` list under the typed guard:
 // a set applies unless the day holds a later entry, or (a day with no entry) a removal on record
-// at or after it; a remove applies only to the entry it names (entry.t === baseT) or one this
-// phone set itself (ownTs includes entry.t); a set is done
+// at or after it; a remove applies only to the entry it names (entry.t === baseT), one this
+// phone set itself (ownTs includes entry.t), or, naming none, an entry with no t; a set is done
 // when the day holds an equal entry, a remove when the day has none. If two entries share a day,
 // the one with the larger t (the first on equal t) is the one the guard reads.
 //

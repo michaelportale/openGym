@@ -184,6 +184,12 @@ describe('removeOp', () => {
     const copy = { measurements: [{ d: D, t: 90, waist: 1 }, { d: D, t: 40, neck: 1 }] }
     expect(removeOp(copy, D, { now: NOW }).baseT).toBe(90)
   })
+  test('an entry with no finite numeric t (imported data) gives no baseT: the guard takes an untimed entry out', () => {
+    for (const t of [undefined, null, NaN, 'x', '90']) {
+      expect(removeOp({ measurements: [{ d: D, t, waist: 1 }] }, D, { now: NOW }).baseT).toBeNull()
+    }
+    expect(removeOp({ measurements: [{ d: D, t: null, waist: 1 }, { d: D, t: 40, neck: 1 }] }, D, { now: NOW }).baseT).toBe(40)
+  })
 })
 
 describe('historyRows (Measurements.jsx recent list)', () => {

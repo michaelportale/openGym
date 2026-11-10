@@ -168,9 +168,38 @@ test('a remove over a later web edit, whose t is neither baseT nor the phone\'s 
     expect(r.next[0]).toBe(later)
     expect(r.superseded).toEqual([{ d: D, t: 20 }])
   }
-  expect(outcome([{ ...later, t: '10' }], { ...remove(D, 20), ownTs: [10] })).toBe('superseded') // strict, as baseT is
+  // strict, as baseT is (a remove naming a t: one naming none takes out an entry with no numeric t, below)
+  expect(outcome([{ ...later, t: '10' }], { ...remove(D, 20, 5), ownTs: [10] })).toBe('superseded')
 })
 
 test('ownTs never moves a set: a later entry still beats it', () => {
   expect(outcome([entry(D, 15)], { ...set(entry(D, 10)), ownTs: [15] })).toBe('superseded')
+})
+
+// Imported data can hold a day whose entry has no finite numeric t. removeOp then names no t
+// (baseT null), and the strict t match can never take it out: the day came back after a Delete.
+// A remove that names no t now takes out an untimed entry; a timed one is still decided as before.
+test('a remove naming no t (baseT null) takes out an untimed entry', () => {
+  for (const t of [undefined, null, NaN, Infinity, 'x', '7', '10']) {
+    const untimed = { ...entry(D, 0), t }
+    if (t === undefined) delete untimed.t
+    for (const op of [remove(D, 20, null), remove(D, 20)]) {
+      expect(applyMeasurementOps([untimed], [op])).toEqual({ next: [], applied: [{ d: D, t: 20 }], done: [], superseded: [] })
+    }
+  }
+})
+
+test('a remove naming no t over a timed entry, with no ownTs match, is superseded and the entry stays', () => {
+  const timed = entry(D, 15)
+  for (const op of [remove(D, 20, null), remove(D, 20), { ...remove(D, 20, null), ownTs: [10] }, { ...remove(D, 20, null), ownTs: [] }]) {
+    const r = applyMeasurementOps([timed], [op])
+    expect(r.next[0]).toBe(timed)
+    expect(r).toMatchObject({ applied: [], done: [], superseded: [{ d: D, t: 20 }] })
+  }
+  expect(outcome([entry(D, 0)], remove(D, 20, null))).toBe('superseded') // 0 is a time
+})
+
+test('a remove naming no t on a day with no entry is done, as before', () => {
+  expect(applyMeasurementOps([entry('2026-11-07', 1)], [remove(D, 20, null)])).toMatchObject({ applied: [], done: [{ d: D, t: 20 }], superseded: [] })
+  expect(outcome([], remove(D, 20, null), { [D]: 20 })).toBe('done')
 })

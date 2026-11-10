@@ -4,6 +4,7 @@
 // No I/O, no React, no clock: `now` is always passed in.
 import { measurements as M } from '../shared/training.js'
 import { dayLabel } from '../ui/dates.js'
+import { hasTime } from './measurement-ops.js'
 
 const UNIT = 'lb' // pounds only: measurements show in inches
 const DAY = /^\d{4}-\d{2}-\d{2}$/
@@ -181,7 +182,7 @@ export function applyLogForm(state, d, form, { now } = {}) {
 export function removeOp(copyState, d, { now } = {}) {
   needNow('removeOp', now)
   const ts = (Array.isArray(copyState?.measurements) ? copyState.measurements : [])
-    .filter(e => isObj(e) && e.d === d && Number.isFinite(Number(e.t))).map(e => Number(e.t))
+    .filter(e => isObj(e) && e.d === d && hasTime(e)).map(e => e.t)
   return { d, op: 'remove', t: now, baseT: ts.length ? Math.max(...ts) : null }
 }
 
