@@ -278,6 +278,8 @@ export function applySlotForm(slot, form, routine) {
 // field; a slot's own `inc` of 0 is what makes one invalid (none, or a negative one, is the
 // default increment).
 export function stepInvalid(form, slot, routine) {
+  // Validate the slot Save will write, including a pyramid switched on or off in this draft.
+  slot = applySlotForm(slot, form, routine)
   const mode = history.modeOf(slot)
   const policy = progression.policyFor({ ...slot, prog: form.prog || undefined }, routine, mode)
   const step = slot.inc >= 0 ? slot.inc : mode === 'time' ? 5 : exercises.defaultIncrement(slot.id, 'lb')

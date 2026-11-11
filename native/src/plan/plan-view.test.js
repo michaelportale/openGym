@@ -309,13 +309,13 @@ describe('sheetView: the controls the sheet shows', () => {
     expect(v.controls).toMatchObject({ canAdd: true, canRemove: true, addLabel: 'Add a set', removeLabel: 'Remove a set' })
     expect(v.invalid).toBeNull()
   })
-  test('a flat slot with no step still refuses Save after the pyramid switch is turned on', () => {
+  test('a flat slot with no step allows Save after switching to a pyramid without progression', () => {
     const slot = { id: 'bench', sets: 3, reps: 10, inc: 0, prog: 'linear' }
     const routine = r(slot)
     const form = withPyramid(slotForm(slot, routine), true)
     const v = sheetView(form, slot, routine)
     expect(v.pyramid).toBe(true)
-    expect(v.invalid).toBe('Enter a positive step to use this progression rule.')
+    expect(v.invalid).toBeNull()
   })
   test('a flat reps slot offers the pyramid switch off, beside sets and progression', () => {
     const v = view({ id: 'bench', sets: 3, reps: 10, prog: 'linear' })

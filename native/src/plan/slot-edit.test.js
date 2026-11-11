@@ -595,3 +595,26 @@ describe('pyramid sets', () => {
     expect(JSON.stringify(form)).toBe(formBefore)
   })
 })
+
+
+test('turning pyramid on validates the saved pyramid, where automatic progression is off', () => {
+  const slot = { ...bench, prog: 'linear', inc: 0, backoff: true }
+  const r = routine([slot])
+  const flat = slotForm(slot, r)
+  expect(sheetView(flat, slot, r).invalid).toBe(STEP_INVALID)
+  const on = withPyramid(flat, true)
+  expect(sheetView(on, slot, r).invalid).toBeNull()
+  expect(applySlotForm(slot, on, r)).toMatchObject({ pyramid: [10, 10, 10], backoff: false })
+})
+
+test('turning pyramid off validates the restored rule and exposes the picker to fix it', () => {
+  const slot = { ...bench, pyramid: [10, 8, 6], prog: 'linear', inc: 0 }
+  const r = routine([slot])
+  const off = withPyramid(slotForm(slot, r), false)
+  const view = sheetView(off, slot, r)
+  expect(view.invalid).toBe(STEP_INVALID)
+  expect(view.choices.some(c => c.value === 'off')).toBe(true)
+  const corrected = withProg(off, 'off', slot, r)
+  expect(sheetView(corrected, slot, r).invalid).toBeNull()
+  expect(applySlotForm(slot, corrected, r)).toMatchObject({ pyramid: [], prog: 'off' })
+})
