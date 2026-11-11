@@ -343,13 +343,13 @@ describe('customDelete', () => {
     expect(customDelete(used, 'c1', [{ id: 'c1' }])).toEqual({ error: 'Finish your current workout first.' })
     expect(customDelete(empty(), 'c1', ['c1'])).toEqual({ error: 'Finish your current workout first.' })
     expect(customDelete(used, 'c1', [])).toEqual({
-      error: 'In 1 routines and 2 workouts. Remove it from the routines first; it stays in your history.',
+      error: 'In 1 routine and 2 workouts. Remove it from the routines first; it stays in your history.',
     })
     expect(customDelete({ routines: [{ ex: [{ id: 'c1' }] }], workouts: [] }, 'c1', [])).toEqual({
-      error: 'In 1 routines and 0 workouts. Remove it from the routines first; it stays in your history.',
+      error: 'In 1 routine and 0 workouts. Remove it from the routines first; it stays in your history.',
     })
     expect(customDelete({ routines: [], workouts: [{ entries: [{ id: 'c1' }] }] }, 'c1', [])).toEqual({
-      error: 'In 0 routines and 1 workouts. Remove it from the routines first; it stays in your history.',
+      error: 'In 0 routines and 1 workout. Remove it from the routines first; it stays in your history.',
     })
   })
 

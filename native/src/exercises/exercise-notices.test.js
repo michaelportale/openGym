@@ -46,7 +46,7 @@ describe('exerciseNoticeLines', () => {
       ['c1', "curl wasn't added: an exercise with that id was deleted on your server.", 'Dismiss notice about curl'],
       ['c1', "curl wasn't added: it couldn't be sent safely. Try adding it again.", 'Dismiss notice about curl'],
       ['c2', "curl wasn't added: an exercise with that id was deleted on your server.", 'Dismiss notice about curl'],
-      ['c3', "This exercise wasn't added: it couldn't be sent safely. Try adding it again.", 'Dismiss notice about this exercise'],
+      ['c3', "This exercise is used by a routine or workout, so it wasn't deleted.", 'Dismiss notice about this exercise'],
     ])
   })
 
@@ -95,4 +95,10 @@ describe('canAuthorCustom', () => {
     expect(canAuthorCustom(null)).toBe(false)
     expect(canAuthorCustom(undefined)).toBe(false)
   })
+})
+
+
+test('a refused delete explains current usage instead of claiming the exercise changed', () => {
+  const lines = exerciseNoticeLines([notice('c1', 'unsafe')], [row('c1', { deleted: true }, 5)], { customEx: [curl] })
+  expect(lines[0].text).toBe("Curl is used by a routine or workout, so it wasn't deleted.")
 })

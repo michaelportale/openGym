@@ -18,6 +18,7 @@ const LINES = {
     unsafe: (name, Name) => `${Name} wasn't added: it couldn't be sent safely. Try adding it again.`,
   },
   delete: {
+    unsafe: (name, Name) => `${Name} is used by a routine or workout, so it wasn't deleted.`,
     changed: (name, Name) => `${Name} changed on the web, so it wasn't deleted.`,
   },
 }
@@ -42,7 +43,7 @@ export function exerciseNoticeLines(notices, rows, state) {
   const stored = (Array.isArray(rows) ? rows : []).filter(isMap)
   return (Array.isArray(notices) ? notices : []).filter(n => n && n.kind === 'customEx').map(n => {
     const row = stored.find(r => r.kind === n.kind && r.key === n.key)
-    const op = row?.baseTs === 0 ? 'create' : isRoutineDeleted(row?.value) ? 'delete' : 'edit'
+    const op = isRoutineDeleted(row?.value) ? 'delete' : row?.baseTs === 0 ? 'create' : 'edit'
     const name = exerciseName(row, state, n.key)
     const mid = name ?? FALLBACK
     const start = name ?? FALLBACK_START

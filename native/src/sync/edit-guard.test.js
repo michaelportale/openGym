@@ -1065,11 +1065,11 @@ test('a delete of an absent custom exercise is done', () => {
   }
 })
 
-test('a custom exercise delete removes that id from customEx and leaves a routine that still names it', () => {
+test('an unused custom exercise delete removes only that id from customEx', () => {
   const stay = custom('c0', 'Stay', { _ts: 1 })
   const gone = custom('c1', 'Curl', { media: photo, url: link, _ts: 5 })
-  const routine = { id: 'r', name: 'Push', ex: [{ id: 'c1' }, { id: 'bench' }] }
-  const workouts = [{ id: 'w1', entries: [{ id: 'c1', n: 'Curl' }] }]
+  const routine = { id: 'r', name: 'Push', ex: [{ id: 'c0' }, { id: 'bench' }] }
+  const workouts = [{ id: 'w1', entries: [{ id: 'c0', n: 'Stay' }] }]
   const exWeights = { c1: 10, bench: 20 }
   const favEx = ['c1', 'bench']
   const state = { customEx: [stay, gone, null], routines: [routine], workouts, exWeights, favEx }
@@ -1079,7 +1079,7 @@ test('a custom exercise delete removes that id from customEx and leaves a routin
   expect(r.state.customEx).toEqual([stay, null])
   expect(r.state.customEx[0]).toBe(stay)
   expect(r.state.routines).toBe(state.routines)
-  expect(r.state.routines[0].ex).toEqual([{ id: 'c1' }, { id: 'bench' }])
+  expect(r.state.routines[0].ex).toEqual([{ id: 'c0' }, { id: 'bench' }])
   expect(r.state.workouts).toBe(workouts)
   expect(r.state.exWeights).toBe(exWeights)
   expect(r.state.favEx).toBe(favEx)
@@ -1186,4 +1186,22 @@ test('stampOf for customEx is that entry\'s _ts, or 0 when the list has no such 
   expect(stampOf({ deleted: { customEx: { gone: 6 } } }, 'customEx', 'gone')).toBe(0)
   const row = { kind: 'customEx', key: 'c1', baseTs: stampOf(state, 'customEx', 'c1'), value: custom('c1', 'Curl 2'), sent: null, t: 1 }
   expect(applyEdits(state, [row]).applied).toEqual([{ kind: 'customEx', key: 'c1', t: 1 }])
+})
+
+
+test.each([
+  { routines: [{ id: 'r', ex: [{ id: 'c1' }] }] },
+  { workouts: [{ id: 'w', entries: [{ id: 'c1' }] }] },
+])('a queued custom delete is refused when the latest server document uses it: %j', usage => {
+  const kept = custom('c1', 'Curl', { _ts: 5 })
+  const state = { customEx: [kept], ...usage }
+  const before = structuredClone(state)
+  for (const extra of [{ baseTs: 5 }, { baseTs: 1, sent: routineContent(kept) }]) {
+    const r = applyEdits(state, [customEdit('c1', { deleted: true }, { ...extra, t: 9 })])
+    expect(r.superseded).toEqual([{ kind: 'customEx', key: 'c1', t: 9, reason: 'unsafe' }])
+    expect(r.applied).toEqual([])
+    expect(r.rebased).toEqual([])
+    expect(r.state).toBe(state)
+    expect(state).toEqual(before)
+  }
 })

@@ -123,7 +123,13 @@ export function createSync({ client, credentials, copy, workouts, weighIns, edit
     // the web changed (or deleted) that routine, day or setting first: the store lists its notice by
     // kind (the Plan tab shows the routine ones). Rebased: the copy holds what this phone sent while
     // a newer edit waited, so the newer one now stands on the copy's stamp.
-    const guarded = applyEdits(state, await edits.listPending())
+    // Match the outbox's usage check: still-pending workouts and eligible routine edits can
+    // keep a custom exercise in use, or remove its last routine reference before deletion.
+    const localWorkouts = await workouts.listPending()
+    const editState = localWorkouts.length
+      ? { ...state, workouts: [...(Array.isArray(state.workouts) ? state.workouts : []), ...localWorkouts] }
+      : state
+    const guarded = applyEdits(editState, await edits.listPending())
     const at = iso()
     if (guarded.done.length) await edits.markAcked(guarded.done, at)
     if (guarded.rebased.length) await edits.rebase(guarded.rebased)

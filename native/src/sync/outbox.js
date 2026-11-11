@@ -32,7 +32,9 @@ export function buildPush(copy, pending, pendingWeighIns = [], pendingEdits = []
   // and then only its own routine (with a deleted one's week and dayPlan places), the order of the
   // routines, day or setting moves; one that is done or superseded is settled by the sync engine's
   // reconcile, never sent.
-  const plan = applyEdits(copy.state, pendingEdits)
+  // A queued workout must keep its custom exercises, even if the delete was queued first.
+  const withWorkouts = add.length ? { ...copy.state, workouts: [...held, ...add] } : copy.state
+  const plan = applyEdits(withWorkouts, pendingEdits)
   const carried = [...plan.applied, ...plan.rebased]
   if (!add.length && !days.applied.length && !measured.applied.length && !carried.length) return null
   return {

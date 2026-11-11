@@ -12,6 +12,7 @@
 // scheduleMode, rotation, queue, week and dayPlan together, and is done once dead routine pins are
 // gone. No I/O.
 
+import { customUsage } from '../exercises/custom-ex-edit.js'
 import { customPutBackChanges, putBackChanges } from '../plan/server-put-back.js'
 import { routines as routineLib } from '../shared/training.js'
 
@@ -82,7 +83,8 @@ function customTombstoned(state, key) {
 const customAt = (list, key) => list.findIndex((ex) => ex && typeof ex === 'object' && ex.id === key)
 
 // Out of customEx only. Routines, workouts, exWeights and favEx stay as they are, including a
-// routine slot that still names the id. No shared delete helper: those rewrite logged workouts.
+// routine slot that still names the id (the guard refuses that case). No shared delete helper:
+// those rewrite logged workouts.
 function withoutCustomEx(state, key) {
   const list = Array.isArray(state.customEx) ? state.customEx : []
   return { ...state, customEx: list.filter((ex) => !(ex && typeof ex === 'object' && ex.id === key)) }
@@ -244,7 +246,7 @@ const ADAPTERS = {
   // out of customEx and nothing else. Unsafe, besides a value whose id is not the row key: the id
   // twice, customPutBack changing the value, or media the copy holds and the edit does not carry.
   // Clearing the link omits url; the server allows that drop. A create is not checked for media.
-  // A delete is not unsafe.
+  // A delete is unsafe when the outgoing document uses the exercise in a routine or workout.
   customEx: {
     read(state, key) {
       const list = Array.isArray(state.customEx) ? state.customEx : []
@@ -266,10 +268,15 @@ const ADAPTERS = {
       }
       return { ...state, customEx }
     },
-    unsafe: (entry, value, key) =>
-      !isRoutineDeleted(value) && (value?.id !== key || (!entry.absent && (
+    unsafe(entry, value, key, state) {
+      if (isRoutineDeleted(value)) {
+        const usage = customUsage(state, key)
+        return usage.routines > 0 || usage.workouts > 0
+      }
+      return value?.id !== key || (!entry.absent && (
         entry.twice || customPutBackChanges(entry.value, value) || !carried(entry.value, value, 'media')
-      ))),
+      ))
+    },
   },
   // state.nutritionDays[key], stamped by its _ts (the server stamps a day it changed). A day the copy
   // lacks is not deleted: it is a day with no stamp.
@@ -361,7 +368,8 @@ const ADAPTERS = {
 // left alone), settled in their order, a late row (routineOrder, schedule) after all the others:
 // it is judged on the document the others leave, a routine created or deleted there included (and
 // is done or rebased only when the server's document holds it as well), where every other row is
-// judged on the server's document as it came. Returns { state, done, rebased, applied,
+// judged on the server's document as it came. Custom deletes run last and also check usage on
+// the projected document, including pending workouts supplied by the caller. Returns { state, done, rebased, applied,
 // superseded }, each settled edit as
 // { kind, key, t }, a rebased one with the copy's stamp as its new baseTs and a superseded one with
 // its reason ('changed', 'deleted' or 'unsafe'). state is a new document only when something
@@ -376,7 +384,11 @@ export function applyEdits(state, edits) {
   let next = state
   const adapterOf = (edit) => (isMap(edit) && Object.hasOwn(ADAPTERS, edit.kind) ? ADAPTERS[edit.kind] : null)
   const rows = Array.isArray(edits) ? edits : []
-  for (const edit of [...rows.filter((e) => !adapterOf(e)?.late), ...rows.filter((e) => adapterOf(e)?.late)]) {
+  const customDelete = e => e?.kind === 'customEx' && isRoutineDeleted(e.value)
+  // Check deletions after eligible edits have added or removed routine references. Their
+  // stamps and acknowledgements still read the server copy, never the projected document.
+  const earlier = rows.filter(e => !customDelete(e))
+  for (const edit of [...earlier.filter(e => !adapterOf(e)?.late), ...earlier.filter(e => adapterOf(e)?.late), ...rows.filter(customDelete)]) {
     const adapter = adapterOf(edit)
     if (!adapter) continue
     const entryState = adapter.late && isMap(next) ? next : doc
@@ -396,7 +408,7 @@ export function applyEdits(state, edits) {
     // nothing applies to an entry the server deleted, a create included
     const apply = !!entry && !entry.tombstoned && entry.stamp === edit.baseTs
     if (holds(edit.value)) done.push(ref)
-    else if ((rebase || apply) && adapter.unsafe?.(entry, edit.value, edit.key)) superseded.push({ ...ref, reason: 'unsafe' })
+    else if ((rebase || apply) && adapter.unsafe?.(entry, edit.value, edit.key, customDelete(edit) ? next : entryState)) superseded.push({ ...ref, reason: 'unsafe' })
     else if (rebase || apply) {
       if (rebase) rebased.push({ ...ref, baseTs: entry.stamp })
       else applied.push(ref)

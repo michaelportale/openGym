@@ -2171,3 +2171,74 @@ describe('measurements', () => {
     expect(() => createSync({ client: {}, credentials: {}, copy: {}, workouts: {}, weighIns: {}, edits: {}, meta: {}, now: Date.now })).toThrow(/measurements/)
   })
 })
+
+
+describe('queued custom-exercise deletion', () => {
+  test.each([
+    ['routine', false], ['workout', false], ['routine', true], ['workout', true],
+  ])('keeps the exercise when the web adds %s usage (race at PUT: %s)', async (kind, race) => {
+    const exercise = { id: 'c1', n: 'Custom curl', bp: 'upper arms', eq: 'dumbbell', custom: true, _ts: 10 }
+    const t = await setup({ server: fakeServer({ ...initialDoc(), customEx: [exercise] }) })
+    await t.sync.syncNow()
+    await t.edits.put({ kind: 'customEx', key: 'c1', baseTs: 10, value: { deleted: true }, fresh: true, t: T0 + 1 })
+    const useOnWeb = () => kind === 'routine'
+      ? t.server.webEditsRoutine('r1', r => ({ ...r, ex: [...r.ex, { id: 'c1' }] }))
+      : t.server.webAdds({ id: 'web-custom', entries: [{ id: 'c1', sets: [{ w: 10, r: 8, done: true }] }] })
+    if (race) t.server.once.push = [async () => { useOnWeb() }]
+    else useOnWeb()
+    t.fresh()
+    const result = await t.sync.syncNow()
+    expect(t.server.doc.customEx).toEqual([exercise])
+    expect((await t.copy.get()).state).toEqual(t.server.doc)
+    expect(kind === 'routine'
+      ? t.server.doc.routines[0].ex.some(e => e.id === 'c1')
+      : t.server.doc.workouts.some(w => w.id === 'web-custom')).toBe(true)
+    expect(t.server.pushes).toHaveLength(race ? 1 : 0) // the only attempt in the race is rejected by the revision check
+    expect(await t.edits.listPending()).toEqual([])
+    expect(await t.edits.listNotices()).toEqual([
+      { kind: 'customEx', key: 'c1', name: '', reason: 'unsafe', at: iso(T0) },
+    ])
+    expect(result).toMatchObject({ state: 'idle', pendingEdits: 0 })
+  })
+})
+
+
+test.each(['add', 'remove', 'stale removal'])('custom deletion checks the document after a queued routine %s', async kind => {
+  const exercise = { id: 'c1', n: 'Custom curl', custom: true, _ts: 10 }
+  const doc = initialDoc()
+  doc.customEx = [exercise]
+  doc.routines[0]._ts = 10
+  if (kind !== 'add') doc.routines[0].ex.push({ id: 'c1' })
+  const t = await setup({ server: fakeServer(doc) })
+  await t.sync.syncNow()
+  const changed = { ...doc.routines[0], ex: kind === 'add' ? [{ id: 'bench' }, { id: 'c1' }] : [{ id: 'bench' }] }
+  // Put the delete first to prove the guard doesn't depend on storage ordering.
+  await t.edits.put({ kind: 'customEx', key: 'c1', baseTs: 10, value: { deleted: true }, fresh: true, t: T0 + 1 })
+  await t.edits.put({ kind: 'routine', key: 'r1', baseTs: 10, value: changed, t: T0 + 2 })
+  if (kind === 'stale removal') t.server.webEditsRoutine('r1', r => ({ ...r, name: 'New web name' }))
+  const result = await t.sync.syncNow()
+  expect(t.server.doc.customEx).toEqual(kind === 'remove' ? [] : [exercise])
+  expect(t.server.doc.routines[0].ex).toEqual(kind === 'remove' ? [{ id: 'bench' }] : [{ id: 'bench' }, { id: 'c1' }])
+  expect(await t.edits.listPending()).toEqual([])
+  const customNotices = await t.edits.listNotices({ kind: 'customEx' })
+  expect(customNotices).toHaveLength(kind === 'remove' ? 0 : 1)
+  if (customNotices.length) expect(customNotices[0].reason).toBe('unsafe')
+  expect(result).toMatchObject({ state: 'idle', pendingEdits: 0 })
+})
+
+test('a workout queued on the phone after a custom delete keeps its exercise when both sync', async () => {
+  const exercise = { id: 'c1', n: 'Custom curl', custom: true, _ts: 10 }
+  const t = await setup({ server: fakeServer({ ...initialDoc(), customEx: [exercise] }) })
+  await t.sync.syncNow()
+  await t.edits.put({ kind: 'customEx', key: 'c1', baseTs: 10, value: { deleted: true }, fresh: true, t: T0 + 1 })
+  const logged = { ...phone('new-local'), entries: [{ id: 'c1', sets: [{ w: 10, r: 8, done: true }] }] }
+  await t.workouts.put(logged)
+  await t.sync.syncNow()
+  expect(t.server.doc.customEx).toEqual([exercise])
+  expect(t.server.doc.workouts.find(w => w.id === 'new-local').entries).toEqual(logged.entries)
+  expect(await t.edits.listPending()).toEqual([])
+  expect(await t.edits.listNotices({ kind: 'customEx' })).toEqual([
+    { kind: 'customEx', key: 'c1', name: '', reason: 'unsafe', at: iso(T0) },
+  ])
+  expect(await t.pendingIds()).toEqual([])
+})

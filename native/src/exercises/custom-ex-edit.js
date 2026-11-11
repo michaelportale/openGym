@@ -145,8 +145,7 @@ export function customDelete(state, id, openEntries) {
   if (usage.open) return { error: 'Finish your current workout first.' }
   if (usage.routines !== 0 || usage.workouts !== 0) {
     return {
-      error: 'In ' + usage.routines + ' routines and ' + usage.workouts
-        + ' workouts. Remove it from the routines first; it stays in your history.',
+      error: `In ${usage.routines} ${usage.routines === 1 ? 'routine' : 'routines'} and ${usage.workouts} ${usage.workouts === 1 ? 'workout' : 'workouts'}. Remove it from the routines first; it stays in your history.`,
     }
   }
   return { value: { deleted: true } }

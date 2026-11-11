@@ -29,7 +29,9 @@ export function askDeleteCustom({ state, id, openEntries, copy, saveCustom, onEr
     onError(result.error)
     return
   }
-  Alert.alert('Delete', undefined, [
+  const list = Array.isArray(state?.customEx) ? state.customEx : []
+  const name = list.find(ex => ex?.id === id)?.n
+  Alert.alert(name ? `Delete “${name}”?` : 'Delete exercise?', undefined, [
     { text: 'Cancel', style: 'cancel' },
     {
       text: 'Delete',
