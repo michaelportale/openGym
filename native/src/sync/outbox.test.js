@@ -454,3 +454,15 @@ test('a workout, a weigh-in, an edit and a measurement ride one push, each in it
   expect(push.state.measurements).toEqual([...copy.state.measurements, mine])
   expect(push.edits.map(e => [e.kind, e.key])).toEqual([['routine', 'r1']])
 })
+
+
+test('a pending workout prevents a custom delete in the same outgoing document', () => {
+  const exercise = { id: 'c1', n: 'Curl', _ts: 10 }
+  const copy = { state: { ...fixture(), customEx: [exercise] }, rev: 41, wid: 'wid-a' }
+  const row = { kind: 'customEx', key: 'c1', baseTs: 10, value: { deleted: true }, sent: null, t: 50 }
+  const workout = pend('new', { entries: [{ id: 'c1', sets: [{ w: 10, r: 8, done: true }] }] })
+  const push = buildPush(copy, [workout], [], [row])
+  expect(push.state.customEx).toEqual([exercise])
+  expect(push.state.workouts.at(-1)).toEqual(workout)
+  expect(push.edits).toEqual([])
+})

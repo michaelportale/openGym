@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest'
+import { exercises, history } from '../shared/training.js'
 import { buildSessionBase } from './start-session.js'
 
 const now = Date.parse('2026-11-09T23:30:00-05:00')
@@ -50,4 +51,19 @@ test('does not mutate state or routine, and makes an id when none is given', () 
   expect(JSON.stringify({ state, routine })).toBe(before)
   expect(typeof base.id).toBe('string')
   expect(base.id).not.toBe('')
+})
+
+// Without the custom in EXIDX, modeOf falls through to reps and the session opens as a lift.
+test('a custom cardio slot opens in cardio mode', () => {
+  const custom = { id: 'c-cardio-sess', n: 'Run', bp: 'cardio', eq: 'body weight', custom: true }
+  const cardioRoutine = { id: 'r-cardio', name: 'Run', ex: [{ id: 'c-cardio-sess', sets: 3 }] }
+  const cardioState = { customEx: [custom], routines: [cardioRoutine], workouts: [] }
+  try {
+    const base = buildSessionBase({ state: cardioState, routine: cardioRoutine, now, timeZone, id: 's-cardio' })
+    expect(history.modeOf(base.entries[0])).toBe('cardio')
+    // min/speed are chosen while the entry is built. modeOf alone would pass if registration ran after.
+    expect(base.entries[0].sets.map(s => [s.min, s.speed])).toEqual([[20, 8], [20, 8], [20, 8]])
+  } finally {
+    exercises.registerCustom([])
+  }
 })

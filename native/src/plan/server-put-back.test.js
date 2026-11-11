@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { keepUnknown } from '../../../api/sync-stamps.js'
-import { putBackChanges, serverPutBack } from './server-put-back.js'
+import { customPutBack, customPutBackChanges, putBackChanges, serverPutBack } from './server-put-back.js'
 
 const clone = v => JSON.parse(JSON.stringify(v))
 // What the API stores for this routine when the phone (a writer that does not stamp) sends `edit`
@@ -116,4 +116,46 @@ test('malformed slots and lists are paired as the API pairs them', () => {
     expect(serverPutBack(copy, edit)).toEqual(real(copy, edit))
   }
   expect(serverPutBack({ id: 'r1', ex: 'junk' }, routine([bench]))).toEqual(real({ id: 'r1', ex: 'junk' }, routine([bench])))
+})
+
+// A custom exercise has no nested list. media and url are the only keys the API lets a
+// non-stamping writer drop; every other missing key is put back. Stamps are entry meta.
+const realCustom = (copy, edit) => {
+  const next = { customEx: [clone(edit)] }
+  keepUnknown({ customEx: [clone(copy)] }, next)
+  return next.customEx[0]
+}
+
+test('customPutBack matches the API on a custom exercise: only media and url may drop', () => {
+  const copy = {
+    id: 'c1', n: 'Curl', bp: 'arms', desc: 'note', media: { hash: 'h', kind: 'image' }, url: 'https://ex.test/c',
+    future: 1, steps: [{ id: 'a', secret: 1 }], _ts: 4, _f: { n: 2 }, _u: { n: [1] },
+  }
+  const cases = [
+    without(copy, 'media'),
+    without(copy, 'url'),
+    without(copy, 'media', 'url'),
+    without(copy, 'future'),
+    without(copy, 'desc'),
+    without({ ...copy, n: 'Hammer curl' }, '_ts', '_f', '_u'),
+    { ...copy, n: 'Hammer curl' },
+    { ...copy, steps: [{ id: 'a' }] },
+    { id: 'c1', n: 'Curl' },
+  ]
+  for (const edit of cases) {
+    const before = clone(edit)
+    const copyBefore = clone(copy)
+    const expected = realCustom(copy, edit)
+    expect(customPutBack(copy, edit)).toEqual(expected)
+    expect(customPutBackChanges(copy, edit)).toBe(JSON.stringify(expected) !== JSON.stringify(edit))
+    expect(edit).toEqual(before)
+    expect(copy).toEqual(copyBefore)
+  }
+  expect(customPutBackChanges(copy, without(copy, 'media'))).toBe(false)
+  expect(customPutBackChanges(copy, without(copy, 'url'))).toBe(false)
+  expect(customPutBackChanges(copy, without(copy, 'future'))).toBe(true)
+  expect(customPutBack(copy, without(copy, 'future')).future).toBe(1)
+  expect('media' in customPutBack(copy, without(copy, 'media'))).toBe(false)
+  // a list the edit already carries is not paired item by item
+  expect(customPutBack(copy, { ...copy, steps: [{ id: 'a' }] }).steps).toEqual([{ id: 'a' }])
 })

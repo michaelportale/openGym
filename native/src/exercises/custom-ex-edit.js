@@ -1,0 +1,132 @@
+// Pure checks for a custom exercise: the draft the phone can save, where that id is still
+// used, and whether a delete is allowed. Nothing here writes state or invents stamps.
+import { customUsage } from '../sync/edit-guard.js'
+import { equipment, exercises, format, mediaRefs, muscles } from '../shared/training.js'
+
+const NAME_MAX = 80
+const DESC_MAX = 1000
+
+const isStored = stored => stored !== null && typeof stored === 'object'
+const muscleNames = list => (Array.isArray(list) ? list : []).filter(m => typeof m === 'string')
+
+// Same seed as the web form. An exercise that already lists primaries keeps those. Otherwise a
+// legacy row is read from tg, sm, or muscleGroups. A row with none of those stays empty: the
+// body-part fallback is not a muscle the user saved.
+export function muscleSeed(stored) {
+  const existing = isStored(stored) ? stored : null
+  if (existing && Array.isArray(existing.primaries) && existing.primaries.length) {
+    return {
+      primaries: existing.primaries.slice(),
+      secondaries: Array.isArray(existing.secondaries) ? existing.secondaries.slice() : [],
+    }
+  }
+  if (existing && existing.bp === 'cardio') return { primaries: ['cardiovascular system'], secondaries: [] }
+  const norm = muscles.hasExplicitMuscleMetadata(existing || {})
+    ? muscles.normalizeMuscleGroups(existing || {})
+    : []
+  return { primaries: norm.length ? [norm[0]] : [], secondaries: norm.slice(1) }
+}
+
+// The edit the form saves. `baseTs` is the copy's stamp when the form opened. A later sync must
+// not replace it: the fields below are still the ones on screen, and a newer stamp would make
+// that older name look like it was based on the web's edit.
+export function customFormEdit({ editing, id, baseTs, stored, state, input }) {
+  const fields = {
+    n: input.n,
+    bp: input.bp,
+    eq: input.eq,
+    primaries: input.primaries,
+    secondaries: input.secondaries,
+    desc: input.desc,
+    url: input.url,
+    tg: isStored(stored) ? stored.tg : input.tg,
+    media: editing ? (isStored(stored) ? stored.media : null) : input.media,
+  }
+  if (editing) fields.id = id
+  else if (input.id) fields.id = input.id
+  const draft = customDraft(state, fields, editing ? stored : undefined)
+  if (typeof draft.id !== 'string') return draft
+  return { kind: 'customEx', key: draft.id, baseTs: editing ? baseTs : 0, value: draft }
+}
+
+// The id a duplicate check compares against. A brand-new exercise has none yet, so any
+// existing name is a clash. uid() runs only once the draft is valid.
+const prospectiveId = (input, stored) => {
+  if (typeof input.id === 'string' && input.id !== '') return input.id
+  if (isStored(stored) && stored.id != null && stored.id !== '') return stored.id
+  return undefined
+}
+
+// The exercise to save, or { error }. `stored` is the copy's row on an edit; a create omits it.
+// The result starts as that row with the stamps taken off, then the edited fields overwrite.
+export function customDraft(state, input, stored) {
+  const name = typeof input.n === 'string' ? input.n.trim() : ''
+  if (!name) return { error: 'Give it a name.' }
+  if (name.length > NAME_MAX) return { error: 'Keep the name to 80 characters.' }
+  if (!exercises.BODYPARTS.includes(input.bp)) return { error: 'Pick a body part.' }
+
+  const storedEq = isStored(stored) && typeof stored.eq === 'string' ? stored.eq : null
+  const eqKnown = equipment.ALL_EQUIPMENT.includes(input.eq)
+  const eqKept = storedEq != null && !equipment.ALL_EQUIPMENT.includes(storedEq) && input.eq === storedEq
+  if (!eqKnown && !eqKept) return { error: 'Pick equipment.' }
+
+  const previous = isStored(stored) ? String(stored.n || '').trim() : ''
+  const renamed = !isStored(stored) || name.toLowerCase() !== previous.toLowerCase()
+  if (renamed) {
+    const id = prospectiveId(input, stored)
+    const existing = exercises.allExercises(state).find(e =>
+      e && typeof e.n === 'string' && e.n.toLowerCase() === name.toLowerCase() && e.id !== id)
+    if (existing) return { error: '\u201c' + existing.n + '\u201d already exists' }
+  }
+
+  const desc = String(input.desc ?? '').trim().slice(0, DESC_MAX)
+  let url = null
+  if (typeof input.url === 'string' && input.url.trim()) {
+    url = mediaRefs.cleanUrl(input.url.trim())
+    if (!url) return { error: 'That link is not a web address.' }
+  }
+
+  const primaries = input.bp === 'cardio'
+    ? ['cardiovascular system']
+    : muscles.inMuscleOrder(muscleNames(input.primaries))
+  const secondaries = muscles.inMuscleOrder(muscleNames(input.secondaries).filter(m => !primaries.includes(m)))
+  const tg = primaries.includes(input.tg)
+    ? input.tg
+    : (isStored(stored) && primaries.includes(stored.tg) ? stored.tg : (primaries[0] || ''))
+
+  const exercise = isStored(stored) ? { ...stored } : {}
+  delete exercise._ts
+  delete exercise._f
+  delete exercise._u
+  delete exercise.edited
+  delete exercise.trainingMetadata
+  exercise.id = prospectiveId(input, stored) || ('c' + format.uid())
+  exercise.n = name
+  exercise.bp = input.bp
+  exercise.eq = input.eq
+  exercise.desc = desc
+  exercise.primaries = primaries
+  exercise.secondaries = secondaries
+  exercise.sm = secondaries
+  exercise.muscleGroups = [...primaries, ...secondaries]
+  exercise.tg = tg
+  exercise.custom = true
+  if (url) exercise.url = url
+  else delete exercise.url
+  if (input.media !== null && typeof input.media === 'object') exercise.media = input.media
+  else delete exercise.media
+  return exercise
+}
+
+// Refuses while the id is in the open session, then while any routine or workout still has it.
+// An unused id is the delete marker and nothing else.
+export function customDelete(state, id, openEntries) {
+  const usage = customUsage(state, id, openEntries)
+  if (usage.open) return { error: 'Finish your current workout first.' }
+  if (usage.routines !== 0 || usage.workouts !== 0) {
+    return {
+      error: `In ${usage.routines} ${usage.routines === 1 ? 'routine' : 'routines'} and ${usage.workouts} ${usage.workouts === 1 ? 'workout' : 'workouts'}. Remove it from the routines first; it stays in your history.`,
+    }
+  }
+  return { value: { deleted: true } }
+}

@@ -1,14 +1,18 @@
-// Pure guard for edits waiting to sync (pending-edits.js rows): routines, nutrition days,
-// settings, the routines' order and the schedule. For each pending edit it decides, against the
-// server's copy, whether the edit is already there (done), is the phone's own landed push with
-// newer edits on top (rebased), can go (applied), or was overtaken by a change on the web
+// Pure guard for edits waiting to sync (pending-edits.js rows): routines, custom exercises,
+// nutrition days, settings, the routines' order and the schedule. For each pending edit it decides,
+// against the server's copy, whether the edit is already there (done), is the phone's own landed
+// push with newer edits on top (rebased), can go (applied), or was overtaken by a change on the web
 // (superseded). A routine edit that would go but that the API would change on the way in
 // (plan/server-put-back.js: a move or swap whose slots it pairs differently) is superseded as
-// unsafe, never sent. A routine row can also create the routine (base 0) or delete it (its value
-// ROUTINE_DELETED). A routineOrder row orders the routines. A schedule row replaces scheduleMode,
-// rotation, queue, week and dayPlan together, and is done once dead routine pins are gone. No I/O.
+// unsafe, never sent. A custom exercise edit is unsafe the same way, and also when it would drop
+// or replace media the copy holds. Omitting url is a cleared link and is sent. A routine row can
+// also create the routine (base 0) or
+// delete it (its value ROUTINE_DELETED). A customEx row does the same for state.customEx, and a
+// delete removes only that entry. A routineOrder row orders the routines. A schedule row replaces
+// scheduleMode, rotation, queue, week and dayPlan together, and is done once dead routine pins are
+// gone. No I/O.
 
-import { putBackChanges } from '../plan/server-put-back.js'
+import { customPutBackChanges, putBackChanges } from '../plan/server-put-back.js'
 import { routines as routineLib } from '../shared/training.js'
 
 const META = new Set(['_ts', '_f', '_u'])
@@ -19,6 +23,27 @@ const isMap = v => isObj(v) && !Array.isArray(v)
 // a row read back holds an equal object, not this one: test with isRoutineDeleted.
 export const ROUTINE_DELETED = Object.freeze({ deleted: true })
 export const isRoutineDeleted = v => isMap(v) && v.deleted === true && Object.keys(v).length === 1
+
+const countWhere = (list, key, id) => {
+  if (!Array.isArray(list)) return 0
+  let n = 0
+  for (const item of list) {
+    const entries = item && item[key]
+    if (Array.isArray(entries) && entries.some(e => e && e.id === id)) n += 1
+  }
+  return n
+}
+
+// How many routines and finished workouts name this id (once each), and whether the open
+// session does. A null routine or workout is skipped.
+export function customUsage(state, id, openEntries) {
+  const source = state || {}
+  return {
+    routines: countWhere(source.routines, 'ex', id),
+    workouts: countWhere(source.workouts, 'entries', id),
+    open: Array.isArray(openEntries) && openEntries.some(e => e === id || (e && typeof e === 'object' && e.id === id)),
+  }
+}
 
 // The routine without its top-level sync stamps, for comparison.
 export function routineContent(r) {
@@ -66,6 +91,30 @@ const routineAt = (list, key) => list.findIndex((r) => r && typeof r === 'object
 function tombstoned(state, key) {
   const wiped = isMap(state.resetIds) && Array.isArray(state.resetIds.routines) ? state.resetIds.routines : []
   return own(isMap(state.deleted) ? state.deleted.routines : undefined, key) !== undefined || wiped.some((id) => String(id) === key)
+}
+
+// The same record for a custom exercise: deleted.customEx or resetIds.customEx. A routine
+// tombstone does not count, and the other way around.
+function customTombstoned(state, key) {
+  const wiped = isMap(state.resetIds) && Array.isArray(state.resetIds.customEx) ? state.resetIds.customEx : []
+  return own(isMap(state.deleted) ? state.deleted.customEx : undefined, key) !== undefined || wiped.some((id) => String(id) === key)
+}
+
+const customAt = (list, key) => list.findIndex((ex) => ex && typeof ex === 'object' && ex.id === key)
+
+// Out of customEx only. Routines, workouts, exWeights and favEx stay as they are, including a
+// routine slot that still names the id (the guard refuses that case). No shared delete helper:
+// those rewrite logged workouts.
+function withoutCustomEx(state, key) {
+  const list = Array.isArray(state.customEx) ? state.customEx : []
+  return { ...state, customEx: list.filter((ex) => !(ex && typeof ex === 'object' && ex.id === key)) }
+}
+
+// True when the copy has no `key`, or the edit carries the same value (key order does not count).
+// A missing key on the edit is not the same. The API would store a dropped photo.
+function carried(copy, edit, key) {
+  if (!isMap(copy) || !Object.hasOwn(copy, key)) return true
+  return isMap(edit) && Object.hasOwn(edit, key) && deepEqual(copy[key], edit[key])
 }
 
 // The document with routine `key` deleted as the web deletes it (routines.js deleteRoutine): out of
@@ -169,7 +218,7 @@ function scheduleHeld(value, ids) {
 // entry { value, stamp } (value undefined when the copy has none); a routine the copy lacks is
 // `absent`, and `tombstoned` when the server deleted it. content(value) is what counts for "the
 // same". write(state, key, value, entry) is a new document with the edit's value in, on the
-// entry's stamps. unsafe(entry, value, key) is the routine's alone. same(a, b), when a kind has
+// entry's stamps. unsafe(entry, value, key), when a kind has one, holds the edit back. same(a, b), when a kind has
 // one, replaces comparing content. sameOn(held, value, state), when a kind has one, compares on
 // the document that held was read from; every other kind keeps same. A `late` kind settles after
 // every other row, on the document they leave.
@@ -209,6 +258,45 @@ const ADAPTERS = {
     },
     unsafe: (entry, value, key) =>
       !isRoutineDeleted(value) && (value?.id !== key || (!entry.absent && (entry.twice || putBackChanges(entry.value, value)))),
+  },
+  // state.customEx, matched by id, first wins. An id the list holds twice is malformed, and an edit
+  // of it that would go is unsafe. One the copy lacks reads as the delete marker on stamp 0: a
+  // delete of it is done, and a create (base 0) goes unless the id is tombstoned. A create appends,
+  // its stamps taken off. An edit replaces that id on the copy's stamps. A delete filters that id
+  // out of customEx and nothing else. Unsafe, besides a value whose id is not the row key: the id
+  // twice, customPutBack changing the value, or media the copy holds and the edit does not carry.
+  // Clearing the link omits url; the server allows that drop. A create is not checked for media.
+  // A delete is unsafe when the outgoing document uses the exercise in a routine or workout.
+  customEx: {
+    read(state, key) {
+      const list = Array.isArray(state.customEx) ? state.customEx : []
+      const index = customAt(list, key)
+      if (index < 0) return { value: ROUTINE_DELETED, stamp: 0, absent: true, tombstoned: customTombstoned(state, key) }
+      const value = list[index]
+      const twice = list.some((ex, i) => i > index && ex && typeof ex === 'object' && ex.id === key)
+      return { value, stamp: value._ts ?? null, twice }
+    },
+    content: routineContent,
+    write(state, key, value, entry) {
+      if (isRoutineDeleted(value)) return withoutCustomEx(state, key)
+      const customEx = Array.isArray(state.customEx) ? state.customEx.slice() : []
+      if (entry.absent) customEx.push(routineContent(value))
+      else {
+        const index = customAt(customEx, key)
+        if (index < 0) return state
+        customEx[index] = onCopyStamps(value, entry.value)
+      }
+      return { ...state, customEx }
+    },
+    unsafe(entry, value, key, state) {
+      if (isRoutineDeleted(value)) {
+        const usage = customUsage(state, key)
+        return usage.routines > 0 || usage.workouts > 0
+      }
+      return value?.id !== key || (!entry.absent && (
+        entry.twice || customPutBackChanges(entry.value, value) || !carried(entry.value, value, 'media')
+      ))
+    },
   },
   // state.nutritionDays[key], stamped by its _ts (the server stamps a day it changed). A day the copy
   // lacks is not deleted: it is a day with no stamp.
@@ -300,7 +388,8 @@ const ADAPTERS = {
 // left alone), settled in their order, a late row (routineOrder, schedule) after all the others:
 // it is judged on the document the others leave, a routine created or deleted there included (and
 // is done or rebased only when the server's document holds it as well), where every other row is
-// judged on the server's document as it came. Returns { state, done, rebased, applied,
+// judged on the server's document as it came. Custom deletes run last and also check usage on
+// the projected document, including pending workouts supplied by the caller. Returns { state, done, rebased, applied,
 // superseded }, each settled edit as
 // { kind, key, t }, a rebased one with the copy's stamp as its new baseTs and a superseded one with
 // its reason ('changed', 'deleted' or 'unsafe'). state is a new document only when something
@@ -315,7 +404,11 @@ export function applyEdits(state, edits) {
   let next = state
   const adapterOf = (edit) => (isMap(edit) && Object.hasOwn(ADAPTERS, edit.kind) ? ADAPTERS[edit.kind] : null)
   const rows = Array.isArray(edits) ? edits : []
-  for (const edit of [...rows.filter((e) => !adapterOf(e)?.late), ...rows.filter((e) => adapterOf(e)?.late)]) {
+  const customDelete = e => e?.kind === 'customEx' && isRoutineDeleted(e.value)
+  // Check deletions after eligible edits have added or removed routine references. Their
+  // stamps and acknowledgements still read the server copy, never the projected document.
+  const earlier = rows.filter(e => !customDelete(e))
+  for (const edit of [...earlier.filter(e => !adapterOf(e)?.late), ...earlier.filter(e => adapterOf(e)?.late), ...rows.filter(customDelete)]) {
     const adapter = adapterOf(edit)
     if (!adapter) continue
     const entryState = adapter.late && isMap(next) ? next : doc
@@ -335,7 +428,7 @@ export function applyEdits(state, edits) {
     // nothing applies to an entry the server deleted, a create included
     const apply = !!entry && !entry.tombstoned && entry.stamp === edit.baseTs
     if (holds(edit.value)) done.push(ref)
-    else if ((rebase || apply) && adapter.unsafe?.(entry, edit.value, edit.key)) superseded.push({ ...ref, reason: 'unsafe' })
+    else if ((rebase || apply) && adapter.unsafe?.(entry, edit.value, edit.key, customDelete(edit) ? next : entryState)) superseded.push({ ...ref, reason: 'unsafe' })
     else if (rebase || apply) {
       if (rebase) rebased.push({ ...ref, baseTs: entry.stamp })
       else applied.push(ref)
@@ -354,9 +447,10 @@ export function stampOf(state, kind, key) {
 }
 
 // What a document holds for one edit's kind and key, as the adapter reads it (undefined when it
-// holds none, ROUTINE_DELETED for a routine it lacks, every routine id for routineOrder, the five
-// schedule keys for schedule): after applyEdits, the value as it goes, on the copy's stamps. Never
-// undefined for a routine, so a delete's markSent has a value to store.
+// holds none, ROUTINE_DELETED for a routine or custom exercise it lacks, every routine id for
+// routineOrder, the five schedule keys for schedule): after applyEdits, the value as it goes, on
+// the copy's stamps. Never undefined for a routine or a custom exercise, so a delete's markSent
+// has a value to store.
 export function entryValue(state, kind, key) {
   if (!Object.hasOwn(ADAPTERS, kind)) return undefined
   return ADAPTERS[kind].read(isMap(state) ? state : {}, key)?.value

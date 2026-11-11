@@ -1164,4 +1164,138 @@ describe.skipIf(!HAS_API_DEPS)(TITLE, { timeout: 30_000 }, () => {
     expect(pushes).toEqual([])
     expect(server.file()).toEqual(web)
   })
+
+  // A custom exercise (7E-C): a create is a customEx row on base 0, an edit replaces that row
+  // and keeps media, a delete is { deleted: true } on the entry's _ts with fresh set. The server
+  // stamps a new exercise's _ts and records one the push lacks in deleted.customEx.
+  const CURL_ID = 'c1'
+  const CURL = { id: CURL_ID, n: 'Curl', bp: 'arms', eq: 'dumbbell', custom: true }
+  const PHOTO = { hash: 'h', kind: 'image' }
+  const CURL_URL = 'https://ex.test/c'
+  const withCustom = list => ({ ...planned(), customEx: list })
+  const keptBeside = (file, seed) => {
+    for (const k of Object.keys(seed)) {
+      if (['customEx', '_rev', '_wid', '_wids', ...HIDDEN].includes(k)) continue
+      expect(file[k], k).toEqual(seed[k])
+    }
+  }
+
+  test('a phone custom exercise create reaches the server file, which stamps its _ts; a later sync sends nothing', async () => {
+    const seed = withCustom([])
+    const server = await startServer({ state: seed })
+    const { client, pushes } = counted(server)
+    const app = await paired(server, undefined, { client })
+    await app.edits.put({ kind: 'customEx', key: CURL_ID, baseTs: 0, value: CURL, t: T0 })
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    expect(pushes).toEqual([200])
+    const file = server.file()
+    expect(file.customEx).toHaveLength(1)
+    expect(content(file.customEx[0])).toEqual(CURL)
+    expect(file.customEx[0]._ts).toBeGreaterThan(T0)
+    keptBeside(file, seed)
+    expect((await app.copy.get()).state).toEqual(without(file, HIDDEN))
+    expect(await app.db.getAll('SELECT kind, key, acked_at, superseded_at FROM pending_edits')).toEqual([
+      { kind: 'customEx', key: CURL_ID, acked_at: AT, superseded_at: null },
+    ])
+    expect(await app.edits.listNotices()).toEqual([])
+
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    expect(pushes).toEqual([200])
+    expect(server.file()).toEqual(file)
+  })
+
+  test('an edit that keeps media changes the name and the server keeps the same media', async () => {
+    const seeded = { ...CURL, media: PHOTO, url: CURL_URL, _ts: 1730000000000 }
+    const seed = withCustom([seeded])
+    const server = await startServer({ state: seed })
+    const { client, pushes } = counted(server)
+    const app = await paired(server, undefined, { client })
+    const copy = (await app.copy.get()).state.customEx[0]
+    const value = { ...CURL, n: 'Hammer curl', media: PHOTO, url: CURL_URL }
+    await app.edits.put({ kind: 'customEx', key: CURL_ID, baseTs: copy._ts, value, t: T0 })
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    expect(pushes).toEqual([200])
+    const file = server.file()
+    expect(file.customEx).toHaveLength(1)
+    expect(file.customEx[0].n).toBe('Hammer curl')
+    expect(file.customEx[0].media).toEqual(PHOTO)
+    expect(file.customEx[0].url).toBe(CURL_URL)
+    expect(file.customEx[0]._ts).toBeGreaterThan(copy._ts)
+    keptBeside(file, seed)
+    expect((await app.copy.get()).state).toEqual(without(file, HIDDEN))
+    expect(await app.edits.listNotices()).toEqual([])
+
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    expect(pushes).toEqual([200])
+    expect(server.file()).toEqual(file)
+  })
+
+  test('an edit that drops media is not sent; the file keeps the photo and the row is superseded as unsafe', async () => {
+    const seeded = { ...CURL, media: PHOTO, url: CURL_URL, _ts: 1730000000000 }
+    const server = await startServer({ state: withCustom([seeded]) })
+    const { client, pushes } = counted(server)
+    const app = await paired(server, undefined, { client })
+    const copy = (await app.copy.get()).state.customEx[0]
+    const { media, ...value } = content(copy)
+    expect(media).toEqual(PHOTO)
+    await app.edits.put({ kind: 'customEx', key: CURL_ID, baseTs: copy._ts, value, t: T0 })
+    const before = server.file()
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    expect(pushes).toEqual([])
+    expect(server.file()).toEqual(before)
+    expect(server.file().customEx[0].media).toEqual(PHOTO)
+    expect(await app.edits.listNotices()).toEqual([{ kind: 'customEx', key: CURL_ID, name: 'Curl', reason: 'unsafe', at: AT }])
+  })
+
+  test('a phone delete takes the custom exercise out of the server file, which records it in deleted.customEx; a later pull does not bring it back', async () => {
+    const seeded = { ...CURL, _ts: 1730000000000 }
+    const server = await startServer({ state: withCustom([seeded]) })
+    const { client, pushes } = counted(server)
+    const app = await paired(server, undefined, { client })
+    const copy = (await app.copy.get()).state.customEx[0]
+    await app.edits.put({ kind: 'customEx', key: CURL_ID, baseTs: copy._ts, value: { deleted: true }, t: T0, fresh: true })
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    expect(pushes).toEqual([200])
+    const file = server.file()
+    expect(file.customEx).toEqual([])
+    expect(file.deleted.customEx[CURL_ID]).toBeGreaterThan(copy._ts)
+    expect(file.deleted.workouts).toEqual(planned().deleted.workouts)
+    expect(file.routines).toEqual(planned().routines)
+    expect(file.workouts).toEqual(planned().workouts)
+    expect(await app.db.getAll('SELECT key, acked_at, superseded_at FROM pending_edits')).toEqual([{ key: CURL_ID, acked_at: AT, superseded_at: null }])
+    expect(await app.edits.listNotices()).toEqual([])
+
+    await server.webWrites(state => ({ ...state, lang: 'de', edited: { ...state.edited, lang: T0 + 700 } }))
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    expect((await app.copy.get()).state.customEx).toEqual([])
+    expect(server.file().customEx).toEqual([])
+    expect(server.file().deleted.customEx[CURL_ID]).toBe(file.deleted.customEx[CURL_ID])
+    expect(pushes).toEqual([200])
+    expect(await app.edits.listNotices()).toEqual([])
+  })
+
+  test('the web edits the same custom exercise before the phone pushes: the phone\'s edit is superseded as changed and never sent', async () => {
+    const seeded = { ...CURL, _ts: 1730000000000 }
+    const server = await startServer({ state: withCustom([seeded]) })
+    const { client, pushes } = counted(server)
+    const app = await paired(server, undefined, { client })
+    const copy = (await app.copy.get()).state.customEx[0]
+    await app.edits.put({ kind: 'customEx', key: CURL_ID, baseTs: copy._ts, value: { ...CURL, n: 'Hammer curl' }, t: T0 })
+    await server.webWrites(state => ({
+      ...state,
+      customEx: state.customEx.map(ex => (ex.id === CURL_ID ? { ...ex, n: 'Web curl', _ts: T0 + 500 } : ex)),
+    }))
+    const web = server.file()
+    expect(web.customEx[0]).toMatchObject({ n: 'Web curl', _ts: T0 + 500 })
+
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    expect(pushes).toEqual([])
+    expect(server.file()).toEqual(web)
+    expect((await app.copy.get()).state.customEx[0]).toEqual(web.customEx[0])
+    expect(await app.edits.listNotices()).toEqual([{ kind: 'customEx', key: CURL_ID, name: 'Hammer curl', reason: 'changed', at: AT }])
+
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    expect(pushes).toEqual([])
+    expect(server.file()).toEqual(web)
+  })
 })

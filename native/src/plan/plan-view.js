@@ -6,7 +6,7 @@ import { findExercise } from '../exercises/detail-view.js'
 import { cap } from '../sync/source.js'
 import { ROUTINE_DELETED, isRoutineDeleted, sameRoutine, stampOf } from '../sync/edit-guard.js'
 import { routinesMoved } from './routine-edit.js'
-import { applySlotForm, failureOnPick, formRanged, moveSlot, policyChoices, stepInvalid } from './slot-edit.js'
+import { applySlotForm, failureOnPick, formRanged, moveSlot, policyChoices, pyramidControls, stepInvalid } from './slot-edit.js'
 
 export const UNSAFE_EDIT = 'This move or swap has to be made on the web.'
 export const REFUSED_SUPERSET = "It's linked in a superset. Keep it, or delete the whole routine."
@@ -36,6 +36,8 @@ export function leaveForPlan(router) {
 
 // The web's own words (sheets.jsx:1808) for a rule whose Step is not positive (slot-edit.js stepInvalid).
 export const STEP_INVALID = 'Enter a positive step to use this progression rule.'
+// An object pyramid (rows of { w, r }) is still edited on the web. A list of numbers and 'max' is not.
+export const PYRAMID_ON_WEB = 'Pyramid sets: edit them on the web'
 
 const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v)
 const routinesOf = state => (Array.isArray(state?.routines) ? state.routines.filter(isObj) : [])
@@ -341,14 +343,27 @@ function fieldsOf(form) {
   return [sets, field('reps', 'Reps', stride, stride, 10)]
 }
 
-// The sheet's controls for a draft (slotForm). A pyramid is read-only; cardio has no rule to pick
-// (applySlotForm writes none for it). `invalid`: the message while Save is refused (STEP_INVALID).
+// The sheet's controls for a draft (slotForm). A number pyramid hides sets, reps and the rule
+// picker; an object pyramid stays read-only (PYRAMID_ON_WEB). Cardio has no rule to pick.
+// `invalid`: the message while Save is refused (STEP_INVALID).
 export function sheetView(form, slot, routine) {
-  const choices = form.pyramid || form.mode === 'cardio'
+  const locked = !!form.pyramidLocked
+  const on = !!form.pyramid && !locked
+  const choices = on || locked || form.mode === 'cardio'
     ? null
     : policyChoices(slot, routine).map(c => ({ ...c, selected: c.value === (form.prog || '') }))
-  const invalid = !form.pyramid && stepInvalid(form, slot, routine) ? STEP_INVALID : null
-  return { editable: !form.pyramid, pyramid: !!form.pyramid, fields: fieldsOf(form), choices, invalid }
+  const invalid = locked || !stepInvalid(form, slot, routine) ? null : STEP_INVALID
+  return {
+    editable: !locked,
+    pyramid: !!form.pyramid,
+    showSwitch: form.mode === 'reps' && !locked,
+    switchLabel: 'Pyramid sets',
+    sentence: locked ? PYRAMID_ON_WEB : null,
+    controls: on ? pyramidControls(form) : null,
+    fields: fieldsOf(form),
+    choices,
+    invalid,
+  }
 }
 
 // One press of a stepper's + (dir 1) or − (dir -1), never below the field's floor.

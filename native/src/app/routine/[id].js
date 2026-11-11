@@ -21,6 +21,7 @@ import {
   REFUSED_SUPERSET, REFUSED_TWIN, UNSAFE_EDIT, deleteTitle, findRoutine, indexOfKey, leaveForPlan, movedText,
   noticeLines, removeTitle, routineAuthoring, routineProgChoices, routineView, savedRoutine,
 } from '../../plan/plan-view'
+import { registerScreenCustoms } from '../../exercises/register-customs'
 import { duplicateRoutine, renamedRoutine, routineWithDeload, routineWithProg, routineWithSlotAdded, routineWithSlotRemoved } from '../../plan/routine-edit'
 import { createWriteChain } from '../../plan/write-chain'
 import { moveSlot, stepInvalid, swapSlot } from '../../plan/slot-edit'
@@ -210,6 +211,8 @@ export default function RoutineScreen() {
       if (deleting.current) return 'gone'
       const now = current()
       if (slotAt(now.routine, index)?.id !== slotId) return 'gone'
+      // Same screen state as Add. A custom cardio swapped in is defaulted from EXIDX.
+      registerScreenCustoms(latest.current.state)
       const result = swapSlot(now.routine, index, exId, latest.current.state, now.base)
       if (!result) return 'same'
       if (result.unsafe) return 'unsafe'
@@ -344,6 +347,9 @@ export default function RoutineScreen() {
         if (deleting.current || !routineAuthoring(latest.current.copy).canAdd) return 'gone'
         const now = current()
         if (!now.routine) return 'gone'
+        // latest.current.state is this render's screen source, including a custom still pending.
+        // The chain's routine can be ahead of that state; the customs live on the screen state.
+        registerScreenCustoms(latest.current.state)
         const next = routineWithSlotAdded(now.routine, exId)
         const pending = startCommit({ routine: next, base: now.base, fresh: now.fresh })
         if (!pending) return 'gone'

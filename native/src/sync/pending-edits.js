@@ -1,5 +1,5 @@
-// Local edits waiting to sync: routines, their order, the schedule, nutrition days and settings
-// (edit-guard.js settles each kind). One row per kind and key holding what this phone last saved
+// Local edits waiting to sync: routines, custom exercises, their order, the schedule, nutrition
+// days and settings (edit-guard.js settles each kind). One row per kind and key holding what this phone last saved
 // for it; acked_at is NULL until
 // the push has settled it, superseded_at is set when the server moved on first (the outbox is the
 // rows with both NULL). resent is 1 on an acked row resetAcked put back in the outbox (a resend to
@@ -29,10 +29,12 @@ const isMap = v => !!v && typeof v === 'object' && !Array.isArray(v)
 const SCHEDULE_KEYS = ['scheduleMode', 'rotation', 'queue', 'week', 'dayPlan']
 // All five keys, and the two maps. A clear of scheduleMode, rotation or queue is null, which is present.
 const isScheduleValue = v => isMap(v) && SCHEDULE_KEYS.every(k => Object.hasOwn(v, k)) && isMap(v.week) && isMap(v.dayPlan)
-// What each kind's value is: a routine and a day are objects; a setting (nutritionTargets,
-// supplements) an object or a list; the routines' order a list of routine ids; the schedule the five keys.
+// What each kind's value is: a routine, a custom exercise and a day are objects (a custom exercise
+// delete is the map { deleted: true }); a setting (nutritionTargets, supplements) an object or a
+// list; the routines' order a list of routine ids; the schedule the five keys.
 const VALUE_OK = {
   routine: isMap,
+  customEx: isMap,
   routineOrder: v => Array.isArray(v) && v.every(id => typeof id === 'string'),
   schedule: isScheduleValue,
   nutritionDay: isMap,
@@ -63,8 +65,12 @@ function normalized(edit) {
 
 const isPending = row => row.ackedAt == null && row.supersededAt == null
 const publicEdit = row => ({ kind: row.kind, key: row.key, baseTs: row.baseTs, value: structuredClone(row.value), sent: row.sent == null ? null : structuredClone(row.sent), t: row.t })
-// A routine is named by its name; a day by its date and a setting by its key (the screens word them).
-const nameOf = row => (row.kind !== 'routine' ? row.key : typeof row.value.name === 'string' ? row.value.name : '')
+// A routine is named by its name, a custom exercise by n; a day by its date and a setting by its key.
+const nameOf = row => {
+  if (row.kind === 'routine') return typeof row.value.name === 'string' ? row.value.name : ''
+  if (row.kind === 'customEx') return typeof row.value.n === 'string' ? row.value.n : ''
+  return row.key
+}
 const noticeOf = row => ({ kind: row.kind, key: row.key, name: nameOf(row), reason: row.reason, at: row.supersededAt })
 const byT = (a, b) => a.t - b.t
 const byAt = (a, b) => (a.supersededAt < b.supersededAt ? -1 : a.supersededAt > b.supersededAt ? 1 : 0)

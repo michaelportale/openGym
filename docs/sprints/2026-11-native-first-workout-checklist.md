@@ -267,6 +267,33 @@ Device checks for the schedule (7E-B), on your real server, on a throwaway chang
 - [ ] Start the loop over while no workout is open. Tap "Start the loop over". If a workout is open the app says "Finish the open workout before starting the loop over." and does not change the loop; finish or discard that workout first, then tap it again. Sync now. Reload the web: a new pass has started. Close the web tab.
 - [ ] Put the real schedule back. Switch the mode back, set the two weekdays back ("Rest day" clears one), and on the date tap "Back to weekly plan". Sync now. Reload the web: the schedule matches what you noted. Tap Sync now once more and reload: it stays. Close the web tab.
 
+Custom exercises and pyramid sets (7E-C), on a throwaway custom exercise and a throwaway routine, against the real server. Do not edit a real exercise or a real routine. Look at the web and do not edit it: reload the tab to check, then close it.
+
+- [ ] Create one. Open the Exercises tab. Tap "New exercise". Name it Test 7E curl, pick a body part and a piece of equipment, and tap "Save exercise". Sync now. Reload the web: the exercise is in your custom exercises, with no photo. Close the web tab.
+- [ ] Edit the name. Open Test 7E curl, tap Edit, change the name to Test 7E curl b, and tap "Save exercise". Sync now. Reload the web: the name is Test 7E curl b and the photo is still absent. Close the web tab.
+- [ ] Set a pyramid on a throwaway routine. On the Plan tab create a routine, add one built-in reps exercise, and open it. Turn on "Pyramid sets", tap a preset, and tap Save. Sync now. Reload the web: that exercise is a pyramid. Close the web tab.
+- [ ] Turn the pyramid off. Open the same exercise, turn "Pyramid sets" off, and tap Save. Sync now. Reload the web: it is sets and reps again, not a pyramid. Close the web tab.
+- [ ] Delete is refused while it is in a routine. Add Test 7E curl b to the throwaway routine. Open the exercise and tap Delete. The screen says "In 1 routine and 0 workouts. Remove it from the routines first; it stays in your history." and does not delete it.
+- [ ] Remove it from the routine, then delete it. Remove it from the throwaway routine and delete that routine the way the 7E-A rows do. Open Test 7E curl b, tap Delete, then Delete on the alert titled "Delete “Test 7E curl b”?". Sync now. Reload the web: the exercise is gone. Tap Sync now once more and reload: it does not come back. Close the web tab.
+
+### 7E-C paired simulator verification — 2026-11-11
+
+PR #127's paired UI gate passed on source commit `e5e76bf2265d731d197f4df07ff1d2ddd4b5c382`, which includes merged #128. A Release build ran on a separate iPhone 16 simulator (iOS 18.3.1), paired with a disposable **PR127 UI QA** profile served by the real `api/server.js`. Native screens were operated through UI automation; persisted results were checked through the authenticated API, not the web frontend. No owner snapshot or workout history was used. The owner's physical-device rows above, 7E-A/7E-B acceptance, and Phase 9 remain pending.
+
+| Check | Observed result |
+| --- | --- |
+| Create and rename | Test 7E curl reached the server, then became Test 7E curl b. Neither save added a photo. |
+| Pyramid on and off | Air squat in PR127 UI Routine saved `[12, 10, 8, 6]`, then `pyramid: []` with 4 sets of 12. |
+| Refuse an in-use delete | The UI kept the exercise and said "In 1 routine and 0 workouts. Remove it from the routines first; it stays in your history." |
+| Delete an unused exercise | After removing its slot and the throwaway routine, the confirmation named the exercise. Deletion reached the server and stayed deleted after another Sync now. |
+| Legacy muscles | A fixture with only `tg: biceps` and `sm: [forearm]` opened with Biceps and Forearms selected. Save preserved both muscles on the server. |
+| Web edit while form stays open | The server renamed the legacy exercise while its form remained open. Background/foreground refreshed the server copy, confirmed by GET requests. Saving the phone's description retained the web name, sent no PUT, and displayed the changed-on-the-web notice. |
+| Offline delete, then new web usage | A loopback proxy returned 503 while the phone queued Delete. The direct API added a routine reference. After reconnecting and Sync now, both exercise and reference remained; no deletion PUT was sent, the pending count cleared, and the UI said it was used and wasn't deleted. |
+
+`npm run verify` in `native/` passed **2,596 tests across 134 files** on that source commit; the shared import graph was clean. The signed Release build succeeded with zero errors. It emitted compiler, bundle, and build-script warnings; this fresh simulator build is not a warning-count comparison with the earlier archive. An initial unsigned test build could not save the pairing because it lacked Keychain entitlements; rebuilding the same source with normal ad-hoc simulator signing resolved that setup failure. Local build commands, logs, API request log, and result record are retained under `.local-work/pr127-paired-ui/` (ignored).
+
+### Continue the owner's paired checks
+
 Nutrition, Measurements and Home, now that the phone is paired with your real server. Like the Plan block, this deliberately uses the web for a few minutes: reload the web tab before each web edit, close it when the block is done, and log nothing else on the web. Use one throwaway day for the web-note and clash rows, a day you have no real numbers for, and clear it at the end. Open the Nutrition screen.
 
 - [ ] Diagnostics lines. Pick one throwaway day, a day you have no real nutrition or waist reading for, and use only that day for every row in this block. In Airplane Mode, log nutrition for it on the phone, and log a waist measurement of 30.0 in for the same day. Diagnostics shows "1 plan or nutrition edit waiting to send" ("<n> plan or nutrition edits waiting to send" for more) and "1 measurement waiting" ("<n> measurements waiting"). Turn Airplane Mode off and tap "Sync now": both lines go.

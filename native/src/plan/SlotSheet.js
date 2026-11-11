@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { Modal, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native'
 import { color, radius, size, space, touch } from '../theme/tokens'
 import AppText from '../ui/AppText'
 import NativeSymbol from '../ui/NativeSymbol'
@@ -7,7 +7,7 @@ import PrimaryButton from '../ui/PrimaryButton'
 import ScaleButton from '../ui/ScaleButton'
 import { announce } from './announce'
 import { draftChanged, sheetView, stepForm, withProg } from './plan-view'
-import { slotForm } from './slot-edit'
+import { addPyramidSet, removePyramidSet, setPyramidTarget, slotForm, stepPyramid, withPyramid, withPyramidPreset } from './slot-edit'
 
 function SecondaryButton({ label, accessibilityHint, disabled, onPress }) {
   return (
@@ -27,7 +27,8 @@ function SecondaryButton({ label, accessibilityHint, disabled, onPress }) {
 
 // − value +. VoiceOver reads it as one adjustable control: swipe up or down to change it.
 function Stepper({ field, disabled, onStep }) {
-  const canDown = !disabled && field.value > field.min
+  const numeric = typeof field.value === 'number'
+  const canDown = !disabled && (!numeric || field.value > field.min)
   const step = dir => {
     if (disabled || (dir < 0 && !canDown)) return
     onStep(dir)
@@ -52,6 +53,46 @@ function Stepper({ field, disabled, onStep }) {
           <AppText variant="value">+</AppText>
         </ScaleButton>
       </View>
+    </View>
+  )
+}
+
+function PyramidEditor({ controls, busy, onPreset, onStep, onMax, onAdd, onRemove }) {
+  return (
+    <View style={styles.group}>
+      {controls.presets.map(preset => (
+        <Pressable
+          key={preset.accessibilityLabel}
+          accessibilityRole="button"
+          accessibilityLabel={preset.accessibilityLabel}
+          accessibilityState={{ selected: preset.selected, disabled: Boolean(busy) }}
+          disabled={busy}
+          onPress={() => onPreset(preset.targets)}
+          style={[styles.choice, preset.selected && styles.choiceOn]}
+        >
+          <AppText variant="body" style={styles.grow}>{preset.label}</AppText>
+          {preset.selected ? <NativeSymbol name="checkmark.circle.fill" tintColor={color.accent} size={size.icon} /> : null}
+        </Pressable>
+      ))}
+      {controls.sets.map((set, i) => (
+        <View key={set.reps.label} style={styles.group}>
+          <Stepper field={set.reps} disabled={busy} onStep={dir => onStep(i, 'reps', dir)} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={set.maxLabel}
+            accessibilityState={{ selected: set.isMax, disabled: Boolean(busy) }}
+            disabled={busy}
+            onPress={() => onMax(i)}
+            style={[styles.secondary, set.isMax && styles.choiceOn]}
+          >
+            <AppText variant="button" style={styles.centered}>Max</AppText>
+          </Pressable>
+          <Stepper field={set.rest} disabled={busy} onStep={dir => onStep(i, 'rest', dir)} />
+          <Stepper field={set.weight} disabled={busy} onStep={dir => onStep(i, 'weight', dir)} />
+        </View>
+      ))}
+      <SecondaryButton label={controls.addLabel} disabled={busy || !controls.canAdd} onPress={onAdd} />
+      <SecondaryButton label={controls.removeLabel} disabled={busy || !controls.canRemove} onPress={onRemove} />
     </View>
   )
 }
@@ -89,15 +130,38 @@ export default function SlotSheet({ visible, title, slot, routine, message, busy
             <AppText variant="label" color={color.textSecondary}>Save or cancel your changes to swap.</AppText>
           ) : null}
 
-          {view.pyramid ? (
-            <AppText variant="body" color={color.textSecondary}>Pyramid sets: edit them on the web</AppText>
-          ) : (
+          {view.sentence ? (
+            <AppText variant="body" color={color.textSecondary}>{view.sentence}</AppText>
+          ) : null}
+          {view.showSwitch ? (
+            <View style={styles.switchRow}>
+              <AppText variant="body" style={styles.grow}>Pyramid sets</AppText>
+              <Switch
+                accessibilityLabel={view.switchLabel}
+                value={view.pyramid}
+                disabled={busy}
+                onValueChange={on => setForm(f => withPyramid(f, on))}
+                trackColor={{ false: color.track, true: color.accent }}
+              />
+            </View>
+          ) : null}
+          {view.controls ? (
+            <PyramidEditor
+              controls={view.controls}
+              busy={busy}
+              onPreset={targets => setForm(f => withPyramidPreset(f, targets))}
+              onStep={(index, part, dir) => setForm(f => stepPyramid(f, index, part, dir))}
+              onMax={index => setForm(f => setPyramidTarget(f, index, 'max'))}
+              onAdd={() => setForm(f => addPyramidSet(f))}
+              onRemove={() => setForm(f => removePyramidSet(f))}
+            />
+          ) : view.fields.length ? (
             <View style={styles.group}>
               {view.fields.map(field => (
                 <Stepper key={field.key} field={field} disabled={busy} onStep={dir => setForm(f => stepForm(f, field.key, dir))} />
               ))}
             </View>
-          )}
+          ) : null}
 
           {view.choices ? (
             <View style={styles.group}>
@@ -143,6 +207,16 @@ const styles = StyleSheet.create({
   body: { flex: 1 },
   content: { gap: space.lg, paddingHorizontal: space.lg, paddingBottom: space.xl },
   group: { gap: space.sm },
+  switchRow: {
+    minHeight: touch.row,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+    borderRadius: radius.md,
+    backgroundColor: color.surface
+  },
   grow: { flexShrink: 1, flexGrow: 1 },
   stepper: {
     minHeight: touch.row,

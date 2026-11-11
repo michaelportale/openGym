@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'vitest'
-import { applySlotForm, formRanged, moveSlot, policyChoices, slotForm, stepInvalid, swapSlot } from './slot-edit.js'
+import { pyramid } from '../shared/training.js'
+import { applySlotForm, addPyramidSet, formRanged, moveSlot, policyChoices, removePyramidSet, setPyramidTarget, slotForm, stepInvalid, stepPyramid, swapSlot, withPyramid, withPyramidPreset } from './slot-edit.js'
+import { putBackChanges } from './server-put-back.js'
 import { STEP_INVALID, sheetView, withProg } from './plan-view.js'
 
 const routine = (ex, extra = {}) => ({ id: 'r1', name: 'Push', ex, ...extra })
@@ -23,7 +25,21 @@ describe('slotForm', () => {
     expect(slotForm({ ...bench, side: true }, routine([bench])).perSide).toBe(true)
   })
   test('a pyramid slot reports pyramid', () => {
-    expect(slotForm({ ...bench, pyramid: [10, 8, 6] }, routine([bench])).pyramid).toBe(true)
+    const f = slotForm({ ...bench, pyramid: [10, 8, 6], pyramidRest: [60], pyramidWeight: [40] }, routine([bench]))
+    expect(f.pyramid).toBe(true)
+    expect(f.pyramidLocked).toBe(false)
+    expect(f.targets).toEqual([10, 8, 6])
+    expect(f.rests).toEqual([60, 0, 0])
+    expect(f.weights).toEqual([40, 0, 0])
+  })
+  test('an object pyramid is locked', () => {
+    const f = slotForm({ ...bench, pyramid: [{ w: 60, r: 8 }] }, routine([bench]))
+    expect(f).toMatchObject({ pyramid: true, pyramidLocked: true })
+  })
+  test('a flat slot and an empty pyramid are off and unlocked', () => {
+    expect(slotForm(bench, routine([bench]))).toMatchObject({ pyramid: false, pyramidLocked: false })
+    expect(slotForm({ ...bench, pyramid: [] }, routine([bench]))).toMatchObject({ pyramid: false, pyramidLocked: false })
+    expect(slotForm({ ...bench, pyramid: [12, 'max', 8] }, routine([bench])).targets).toEqual([12, 'max', 8])
   })
   test('time and cardio forms carry sec and min', () => {
     expect(slotForm({ id: 'plank', mode: 'time', sets: 3, sec: 60 }, routine([])).sec).toBe(60)
@@ -122,11 +138,21 @@ describe('applySlotForm (sheets.jsx:1875 save)', () => {
     const plank = { id: 'plank', mode: 'time', sets: 3, sec: 60, reps: 10, repsMin: 8 }
     expect(apply(plank, { sec: 30 })).toMatchObject({ reps: 10, repsMin: 8, sec: 30 })
   })
-  test('a pyramid slot keeps sets, reps, repsMin and prog', () => {
-    const slot = { ...bench, pyramid: [12, 10, 8], sets: 3, reps: 12, repsMin: 8, prog: 'double' }
+  test('a number pyramid keeps its list and setsMax, and takes the draft rule', () => {
+    const slot = { ...bench, pyramid: [12, 10, 8], sets: 3, reps: 12, repsMin: 8, prog: 'double', setsMax: 5, backoff: false, lastToFailure: false }
     const out = apply(slot, { sets: 9, reps: 1, repsMin: 1, prog: 'linear' })
+    expect(out.pyramid).toEqual([12, 10, 8])
+    expect(out).toMatchObject({ sets: 3, reps: 12, prog: 'linear', setsMax: 5, backoff: false, lastToFailure: false })
+    expect(out).not.toHaveProperty('repsMin')
+    expect(out).not.toBe(slot)
+  })
+  test('an object pyramid is copied and not rewritten', () => {
+    const slot = { ...bench, pyramid: [{ w: 60, r: 8 }, { w: 70, r: 5 }], setsMax: 5, note: 'keep', backoff: true, lastToFailure: true }
+    const before = JSON.stringify(slot)
+    const out = apply(slot, { sets: 9, reps: 1, prog: 'linear', pyramid: false, pyramidLocked: false, targets: [5, 5, 5] })
     expect(out).toEqual(slot)
     expect(out).not.toBe(slot)
+    expect(JSON.stringify(slot)).toBe(before)
   })
   test('never mutates the slot', () => {
     const slot = { ...bench, prog: 'double', repsMin: 8 }
@@ -349,4 +375,246 @@ describe('swapSlot (routines.replaceSlotExercise)', () => {
     const state = { workouts: [], routines: [] }
     expect(swapSlot(routine([slot]), 0, 'press', state, null).routine.ex[0].id).toBe('press')
   })
+})
+
+// A reps slot whose pyramid is absent, empty, or only numbers and 'max' can be edited. An object
+// element (the shape the server's put-back fixtures use) stays read-only. Off is pyramid: [], never
+// a missing key, and only when the slot was a pyramid.
+describe('pyramid sets', () => {
+  const kept = {
+    id: 'bench', mode: 'reps', sets: 3, reps: 10, weight: 60, prog: 'linear', setsMax: 6,
+    stationId: 'rack-2', note: 'pause', restSec: 90, dbLoad: 'pair', intensifier: { type: 'drop' },
+    warmupSets: 1, sg: 'a', sgName: 'A', loadConvention: 'total', deloadFactor: 0.8, inc: 5,
+    repsMax: 15, futureSlotKey: { nested: [1, { x: 'y' }] },
+  }
+  const save = (slot, form) => {
+    const base = routine([slot])
+    const out = applySlotForm(slot, form, base)
+    return { out, putBack: putBackChanges(base, { ...base, ex: [out] }) }
+  }
+  const aside = (slot, out, keys) => {
+    const drop = (obj) => {
+      const copy = { ...obj }
+      for (const key of keys) delete copy[key]
+      return copy
+    }
+    expect(drop(out)).toEqual(drop(slot))
+  }
+
+  test('turning a flat slot on writes pyramidFromFlat, backoff false and lastToFailure false', () => {
+    const slot = { ...kept, backoff: true, lastToFailure: true }
+    const base = routine([slot])
+    const form = withPyramid(slotForm(slot, base), true)
+    const { out, putBack } = save(slot, form)
+    expect(out.pyramid).toEqual(pyramid.pyramidFromFlat(slot))
+    expect(out.backoff).toBe(false)
+    expect(out.lastToFailure).toBe(false)
+    expect(out.setsMax).toBe(6)
+    aside(slot, out, ['pyramid', 'backoff', 'lastToFailure'])
+    expect(putBack).toBe(false)
+    const stepped = withPyramid({ ...slotForm(slot, base), sets: 4, reps: 6 }, true)
+    expect(applySlotForm(slot, stepped, base).pyramid).toEqual([6, 6, 6, 6])
+    const ruled = withPyramid(withProg(slotForm(slot, base), 'double', slot, base), true)
+    const keptRule = applySlotForm(slot, ruled, base)
+    expect(keptRule.prog).toBe('double')
+    expect(keptRule.repsMin).toBeGreaterThan(0)
+    expect(keptRule.pyramid).toHaveLength(3)
+    expect(putBackChanges(base, { ...base, ex: [keptRule] })).toBe(false)
+  })
+
+  test('turning a pyramid off writes pyramid: [] and sets and reps from the list being turned off', () => {
+    const slot = {
+      ...kept, pyramid: [12, 10, 8, 'max'], sets: 3, reps: 10, setsMax: 3, prog: 'triple',
+      pyramidRest: [45, 30, 15, 0], pyramidWeight: [40, 50, 60, 70], backoff: true, lastToFailure: true,
+    }
+    const base = routine([slot])
+    const opened = slotForm(slot, base)
+    const direct = save(slot, { ...opened, pyramid: false })
+    expect(direct.out.pyramid).toEqual([])
+    expect(direct.out.sets).toBe(4)
+    expect(direct.out.reps).toBe(12)
+    expect(direct.out.setsMax).toBe(3)
+    expect(direct.out.pyramidRest).toEqual(slot.pyramidRest)
+    expect(direct.out.pyramidWeight).toEqual(slot.pyramidWeight)
+    expect(direct.out.backoff).toBe(true)
+    expect(direct.out.lastToFailure).toBe(true)
+    expect(direct.putBack).toBe(false)
+    const edited = withPyramid(setPyramidTarget(opened, 0, 15), false)
+    const after = save(slot, { ...edited, sets: 5 })
+    expect(after.out.pyramid).toEqual([])
+    expect(after.out.sets).toBe(5)
+    expect(after.out.reps).toBe(15)
+    expect(after.out.setsMax).toBe(3)
+    expect(after.putBack).toBe(false)
+  })
+
+  test('a flat slot and an empty pyramid do not gain pyramid: [] while the switch stays off', () => {
+    expect('pyramid' in apply(kept, { sets: 4 })).toBe(false)
+    expect('backoff' in apply(kept, { sets: 4 })).toBe(false)
+    const empty = { ...kept, pyramid: [] }
+    expect(apply(empty, { sets: 4 }).pyramid).toEqual([])
+  })
+
+  test('a preset is stored through normalizePyramid and clears rest and weight to [] when those keys exist', () => {
+    const slot = {
+      ...kept, pyramid: [10, 10, 10], sets: 3, reps: 10, repsMin: 8, backoff: false, lastToFailure: false,
+      pyramidRest: [60, 30, 15], pyramidWeight: [40, 50, 60],
+    }
+    const base = routine([slot])
+    const form = withPyramidPreset(slotForm(slot, base), pyramid.PYRAMID_PRESETS[0])
+    const { out, putBack } = save(slot, form)
+    expect(out.pyramid).toEqual(pyramid.normalizePyramid(pyramid.PYRAMID_PRESETS[0]))
+    expect(out).toMatchObject({ sets: 4, reps: 12, pyramidRest: [], pyramidWeight: [], setsMax: 6, repsMin: 8 })
+    aside(slot, out, ['pyramid', 'sets', 'reps', 'pyramidRest', 'pyramidWeight'])
+    expect(putBack).toBe(false)
+    const odd = { ...bench, side: true, pyramid: [10, 10], sets: 2, reps: 10, backoff: false, lastToFailure: false }
+    const oddForm = withPyramidPreset(slotForm(odd, routine([odd])), [11, 9, 7])
+    expect(oddForm.targets).toEqual([12, 10, 8])
+    expect(applySlotForm(odd, oddForm, routine([odd])).pyramid).toEqual([12, 10, 8])
+  })
+
+  test('a per-set edit stores that target, including max, and putBackChanges stays false', () => {
+    const slot = {
+      ...kept, pyramid: [12, 10, 8], sets: 3, reps: 12, backoff: false, lastToFailure: false,
+      pyramidRest: [30, 45, 60],
+    }
+    const base = routine([slot])
+    const edited = save(slot, setPyramidTarget(slotForm(slot, base), 1, 7.6))
+    expect(edited.out.pyramid).toEqual([12, 8, 8])
+    expect(edited.out.pyramidRest).toEqual([30, 45, 60])
+    aside(slot, edited.out, ['pyramid'])
+    expect(edited.putBack).toBe(false)
+    const maxed = save(slot, setPyramidTarget(slotForm(slot, base), 0, 'max'))
+    expect(maxed.out.pyramid).toEqual(['max', 10, 8])
+    expect(maxed.out.reps).toBe(10)
+    expect(maxed.putBack).toBe(false)
+  })
+
+  test('adding a set copies the last target, rest and weight, and stops at MAX_PYRAMID_SETS', () => {
+    const slot = {
+      ...bench, pyramid: [12, 'max'], sets: 2, reps: 12, pyramidRest: [30, 45], pyramidWeight: [20, 40],
+      backoff: false, lastToFailure: false, setsMax: 8,
+    }
+    const base = routine([slot])
+    const form = addPyramidSet(slotForm(slot, base))
+    expect(form.targets).toEqual([12, 'max', 'max'])
+    expect(form.rests).toEqual([30, 45, 45])
+    expect(form.weights).toEqual([20, 40, 40])
+    const { out, putBack } = save(slot, form)
+    expect(out.pyramid).toEqual([12, 'max', 'max'])
+    expect(out.pyramidRest).toEqual([30, 45, 45])
+    expect(out.pyramidWeight).toEqual([20, 40, 40])
+    expect(out).toMatchObject({ sets: 3, reps: 12, setsMax: 8 })
+    expect(putBack).toBe(false)
+    const fullTargets = Array(pyramid.MAX_PYRAMID_SETS).fill(8)
+    const full = { ...slotForm(slot, base), targets: fullTargets, rests: fullTargets.map(() => 0), weights: fullTargets.map(() => 0) }
+    expect(addPyramidSet(full).targets).toHaveLength(pyramid.MAX_PYRAMID_SETS)
+    expect(addPyramidSet(full)).toBe(full)
+  })
+
+  test('removing a set leaves at least one and drops that set\'s rest and weight', () => {
+    const slot = {
+      ...bench, pyramid: [12, 10, 8], sets: 3, reps: 12, pyramidRest: [30, 45, 60], pyramidWeight: [10, 20, 30],
+      backoff: false, lastToFailure: false,
+    }
+    const base = routine([slot])
+    const once = removePyramidSet(slotForm(slot, base))
+    const { out, putBack } = save(slot, once)
+    expect(out.pyramid).toEqual([12, 10])
+    expect(out.pyramidRest).toEqual([30, 45])
+    expect(out.pyramidWeight).toEqual([10, 20])
+    expect(out.sets).toBe(2)
+    expect(putBack).toBe(false)
+    const last = removePyramidSet(once)
+    expect(last.targets).toEqual([12])
+    expect(removePyramidSet(last)).toBe(last)
+  })
+
+  test('clearing rest stores [] when the slot had pyramidRest, and leaves the key off when it never did', () => {
+    const had = {
+      ...kept, pyramid: [10, 8, 6], sets: 3, reps: 10, backoff: false, lastToFailure: false, pyramidRest: [60, 30, 15],
+    }
+    const base = routine([had])
+    let cleared = slotForm(had, base)
+    cleared = { ...cleared, rests: cleared.rests.map(() => 0) }
+    const gone = save(had, cleared)
+    expect(gone.out.pyramidRest).toEqual([])
+    expect(gone.putBack).toBe(false)
+    const never = { ...kept, pyramid: [10, 8, 6], sets: 3, reps: 10, backoff: false, lastToFailure: false }
+    const keptOff = save(never, slotForm(never, routine([never])))
+    expect(Object.hasOwn(keptOff.out, 'pyramidRest')).toBe(false)
+    expect(Object.hasOwn(keptOff.out, 'pyramidWeight')).toBe(false)
+    expect(keptOff.putBack).toBe(false)
+    const raised = save(never, stepPyramid(slotForm(never, routine([never])), 1, 'rest', 1))
+    expect(raised.out.pyramidRest).toEqual([0, 15, 0])
+    expect(raised.putBack).toBe(false)
+  })
+
+  test('weight steps by 5 from 0, and an all-zero result is [] only when the slot had pyramidWeight', () => {
+    const never = { ...kept, pyramid: [10, 8, 6], sets: 3, reps: 10, backoff: false, lastToFailure: false }
+    const base = routine([never])
+    const raised = save(never, stepPyramid(slotForm(never, base), 2, 'weight', 1))
+    expect(raised.out.pyramidWeight).toEqual([0, 0, 5])
+    expect(raised.putBack).toBe(false)
+    const had = { ...never, pyramidWeight: [25, 0, 0] }
+    let form = slotForm(had, routine([had]))
+    for (let i = 0; i < 5; i++) form = stepPyramid(form, 0, 'weight', -1)
+    expect(form.weights[0]).toBe(0)
+    expect(stepPyramid(form, 0, 'weight', -1).weights[0]).toBe(0)
+    const cleared = save(had, form)
+    expect(cleared.out.pyramidWeight).toEqual([])
+    expect(cleared.putBack).toBe(false)
+    const untouched = save(never, slotForm(never, base))
+    expect(Object.hasOwn(untouched.out, 'pyramidWeight')).toBe(false)
+    expect(untouched.putBack).toBe(false)
+  })
+
+  test('rest does not step below 0', () => {
+    const slot = { ...bench, pyramid: [10, 8], sets: 2, reps: 10 }
+    const form = slotForm(slot, routine([slot]))
+    expect(stepPyramid(form, 0, 'rest', -1).rests[0]).toBe(0)
+    expect(stepPyramid(form, 0, 'rest', 1).rests).toEqual([15, 0])
+  })
+
+  test('the slot and the form are not mutated', () => {
+    const slot = { ...kept, pyramid: [12, 10, 8], pyramidRest: [30, 0, 0], backoff: true, lastToFailure: true }
+    const base = routine([slot])
+    const form = slotForm(slot, base)
+    const slotBefore = JSON.stringify(slot)
+    const formBefore = JSON.stringify(form)
+    withPyramid(form, false)
+    withPyramidPreset(form, pyramid.PYRAMID_PRESETS[2])
+    setPyramidTarget(form, 1, 'max')
+    addPyramidSet(form)
+    removePyramidSet(form)
+    stepPyramid(form, 0, 'reps', 1)
+    stepPyramid(form, 0, 'rest', 1)
+    stepPyramid(form, 0, 'weight', 1)
+    applySlotForm(slot, form, base)
+    expect(JSON.stringify(slot)).toBe(slotBefore)
+    expect(JSON.stringify(form)).toBe(formBefore)
+  })
+})
+
+
+test('turning pyramid on validates the saved pyramid, where automatic progression is off', () => {
+  const slot = { ...bench, prog: 'linear', inc: 0, backoff: true }
+  const r = routine([slot])
+  const flat = slotForm(slot, r)
+  expect(sheetView(flat, slot, r).invalid).toBe(STEP_INVALID)
+  const on = withPyramid(flat, true)
+  expect(sheetView(on, slot, r).invalid).toBeNull()
+  expect(applySlotForm(slot, on, r)).toMatchObject({ pyramid: [10, 10, 10], backoff: false })
+})
+
+test('turning pyramid off validates the restored rule and exposes the picker to fix it', () => {
+  const slot = { ...bench, pyramid: [10, 8, 6], prog: 'linear', inc: 0 }
+  const r = routine([slot])
+  const off = withPyramid(slotForm(slot, r), false)
+  const view = sheetView(off, slot, r)
+  expect(view.invalid).toBe(STEP_INVALID)
+  expect(view.choices.some(c => c.value === 'off')).toBe(true)
+  const corrected = withProg(off, 'off', slot, r)
+  expect(sheetView(corrected, slot, r).invalid).toBeNull()
+  expect(applySlotForm(slot, corrected, r)).toMatchObject({ pyramid: [], prog: 'off' })
 })

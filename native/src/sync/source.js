@@ -2,6 +2,7 @@
 // { state, names, example }, so nothing downstream knows which it got.
 import { readCopy } from './server-copy.js'
 import { exercises } from '../shared/training.js'
+import { registerScreenCustoms } from '../exercises/register-customs.js'
 import { sessionState } from '../workout/history-state.js'
 import { applyEdits } from './edit-guard.js'
 import { applyMeasurementOps } from '../body/measurement-ops.js'
@@ -74,13 +75,18 @@ function withMeasurements(state, ops) {
 export function screenSource({ copy, bundled, pending, edits, measurements }) {
   if (!copy) {
     const state = withMeasurements(withEdits(sessionState(bundled, pending), edits), measurements)
-    return { state, names: { ...namesFor(state), ...bundled.names }, example: bundled.example === true }
+    const names = { ...namesFor(state), ...bundled.names }
+    // After the overlay, so a pending custom is in the index before a default or a session is built.
+    registerScreenCustoms(state)
+    return { state, names, example: bundled.example === true }
   }
   const doc = readable(copy.state)
   // Acked workouts are in the copy and it wins; only unsent ones are added.
   const held = new Set((doc.workouts ?? []).map(w => w.id))
   const state = withMeasurements(withEdits(sessionState({ state: doc }, (pending ?? []).filter(w => !held.has(w.id))), edits), measurements)
-  return { state, names: namesFor(state), example: false }
+  const names = namesFor(state)
+  registerScreenCustoms(state)
+  return { state, names, example: false }
 }
 
 // What the Workout tab opens on, read from the stores: `finished` (the finished-workout store)
