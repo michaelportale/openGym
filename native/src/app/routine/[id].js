@@ -211,6 +211,8 @@ export default function RoutineScreen() {
       if (deleting.current) return 'gone'
       const now = current()
       if (slotAt(now.routine, index)?.id !== slotId) return 'gone'
+      // Same screen state as Add. A custom cardio swapped in is defaulted from EXIDX.
+      registerScreenCustoms(latest.current.state)
       const result = swapSlot(now.routine, index, exId, latest.current.state, now.base)
       if (!result) return 'same'
       if (result.unsafe) return 'unsafe'

@@ -4,5 +4,9 @@
 import { exercises } from '../shared/training.js'
 
 export function registerScreenCustoms(state) {
-  exercises.registerCustom(exercises.healCustomEx(state && state.customEx))
+  const list = state && state.customEx
+  // A document with no customEx list is not "no customs". registerCustom replaces the whole
+  // index, so treating a missing key as empty would drop customs another screen just registered.
+  if (!Array.isArray(list)) return
+  exercises.registerCustom(exercises.healCustomEx(list))
 }

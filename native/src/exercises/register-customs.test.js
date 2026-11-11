@@ -29,3 +29,18 @@ test('a custom missing the flag is registered as custom, and the flag is not wri
     exercises.registerCustom([])
   }
 })
+
+test('a state with no customEx list leaves customs already registered', () => {
+  const entry = { id: 'c-cardio-reg', n: 'Run', bp: 'cardio', eq: 'body weight', custom: true }
+  try {
+    registerScreenCustoms({ customEx: [entry] })
+    expect(history.modeOf({ id: 'c-cardio-reg' })).toBe('cardio')
+    registerScreenCustoms({})
+    registerScreenCustoms(undefined)
+    expect(history.modeOf({ id: 'c-cardio-reg' })).toBe('cardio')
+    registerScreenCustoms({ customEx: [] })
+    expect(history.modeOf({ id: 'c-cardio-reg' })).toBe('reps')
+  } finally {
+    exercises.registerCustom([])
+  }
+})
