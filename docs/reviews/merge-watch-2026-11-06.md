@@ -1,5 +1,7 @@
 # Overnight merge watch
 
+Archived on 2026-11-11 as `archive/pr-67`. This remains the 2026-11-07 00:08 EST snapshot; later merges are outside its window. The #85 elapsed guarantee and #100 clamping explanation were corrected during archival. Historical test results below were not rerun.
+
 Running log of pulls merged into `native/phase-1` on the night of 6 November 2026. This pull request is a log only. Do not merge it.
 
 - Last checked: 2026-11-07 00:08 EST (~12:08 AM ET)
@@ -382,7 +384,7 @@ This pass, at 00:08 EST, found no newer commit on [#65](https://github.com/micha
 - Merged commit: `37e5a95a0a568c1e7e416bf367af88d84615f99e`
 - Resulting `native/phase-1` head: `2e2fafd4efb34b94ff60da7a520e5fb2ad94f25a`
 - Lane: session (Charlie)
-- Summary: A reopen seeds the trail of counted instants, and stamps are walked in time order, so a fixed session does not lose elapsed except on discard.
+- Summary: A reopen seeds the trail of counted instants, and stamps are walked in time order, so the tested reopen paths preserve elapsed after storage accepts the checkpoint. This does not guarantee preservation after a failed checkpoint or a concurrent base overwrite.
 - Tests claimed at merge: `npm run verify` on `37e5a95a`, 39 files, 309 tests, `check:shared` clean.
 - Review status: Reviewed by Charlie at `37e5a95a0a568c1e7e416bf367af88d84615f99e`. Independent findings: the diff stays in `native/src/session`, including a new `rewind.test.js`. No lockfile change, no secrets, no `node:` import. `elapsedStamps` skips a sample earlier than the start and sorts every stamp by time, so a later resume cannot hide an earlier sample. `compactSeen` drops a middle instant only when the hop across it still counts, which keeps a midnight point whose bridge is longer than a rest. The scripted session runs on memory and on the fake SQLite driver, flushes before each kill, and allows elapsed to fall only on discard. `toActive` strips `_sessionSeenTrail`. `writeBase` in this pull request still copies the trail from the body it read before the replace. [#86](https://github.com/michaelportale/openGym/pull/86) copies that trail inside the upsert. This pull request does not change `set.add` or `exercise.add`. F003 stays open until [#91](https://github.com/michaelportale/openGym/pull/91).
 
@@ -519,7 +521,7 @@ This pass, at 00:08 EST, found no newer commit on [#65](https://github.com/micha
 - Lane: session (Charlie)
 - Summary: `moveExercise` refuses a non-integer `toIndex` in every state and writes nothing.
 - Tests claimed at merge: `npm run verify`, 41 files, 335 tests, `check:shared` clean. That count is this branch's suite. It is one test under the #99 claim.
-- Review status: Reviewed by Charlie at `8bcf34414bbd7a88c7c05e188a0621f0dcc06e09`. Independent findings: the diff is `session.js` and `session.test.js`. No lockfile change, no secrets, no `node:` import. The check is `Number.isInteger` and it runs before the unknown-exercise check, including after finish and discard. The test covers `1.5`, a missing index, `NaN`, and `'0'`, and checks the journal is unchanged. A negative integer is still written. The fold clamps it into range, so the move does change the order. An index past the end is also written and clamped. [#101](https://github.com/michaelportale/openGym/pull/101) later treats a move that lands on the same index as unchanged.
+- Review status: Reviewed by Charlie at `8bcf34414bbd7a88c7c05e188a0621f0dcc06e09`. Independent findings: the diff is `session.js` and `session.test.js`. No lockfile change, no secrets, no `node:` import. The check is `Number.isInteger` and it runs before the unknown-exercise check, including after finish and discard. The test covers `1.5`, a missing index, `NaN`, and `'0'`, and checks the journal is unchanged. A negative integer is still written. The fold clamps it to zero, which changes the order only when the exercise was not already first. An index past the end is also written and clamped, and can likewise leave the last exercise in place. [#101](https://github.com/michaelportale/openGym/pull/101) later treats a move that lands on the same index as unchanged.
 
 ### #102 — [native: keep a copied seen trail as an array](https://github.com/michaelportale/openGym/pull/102)
 
