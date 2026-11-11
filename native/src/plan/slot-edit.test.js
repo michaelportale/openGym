@@ -138,11 +138,12 @@ describe('applySlotForm (sheets.jsx:1875 save)', () => {
     const plank = { id: 'plank', mode: 'time', sets: 3, sec: 60, reps: 10, repsMin: 8 }
     expect(apply(plank, { sec: 30 })).toMatchObject({ reps: 10, repsMin: 8, sec: 30 })
   })
-  test('a number pyramid ignores the flat sets, reps and prog fields and keeps the other keys', () => {
+  test('a number pyramid keeps its list and setsMax, and takes the draft rule', () => {
     const slot = { ...bench, pyramid: [12, 10, 8], sets: 3, reps: 12, repsMin: 8, prog: 'double', setsMax: 5, backoff: false, lastToFailure: false }
     const out = apply(slot, { sets: 9, reps: 1, repsMin: 1, prog: 'linear' })
     expect(out.pyramid).toEqual([12, 10, 8])
-    expect(out).toMatchObject({ sets: 3, reps: 12, repsMin: 8, prog: 'double', setsMax: 5, backoff: false, lastToFailure: false })
+    expect(out).toMatchObject({ sets: 3, reps: 12, prog: 'linear', setsMax: 5, backoff: false, lastToFailure: false })
+    expect(out).not.toHaveProperty('repsMin')
     expect(out).not.toBe(slot)
   })
   test('an object pyramid is copied and not rewritten', () => {
@@ -413,6 +414,12 @@ describe('pyramid sets', () => {
     expect(putBack).toBe(false)
     const stepped = withPyramid({ ...slotForm(slot, base), sets: 4, reps: 6 }, true)
     expect(applySlotForm(slot, stepped, base).pyramid).toEqual([6, 6, 6, 6])
+    const ruled = withPyramid(withProg(slotForm(slot, base), 'double', slot, base), true)
+    const keptRule = applySlotForm(slot, ruled, base)
+    expect(keptRule.prog).toBe('double')
+    expect(keptRule.repsMin).toBeGreaterThan(0)
+    expect(keptRule.pyramid).toHaveLength(3)
+    expect(putBackChanges(base, { ...base, ex: [keptRule] })).toBe(false)
   })
 
   test('turning a pyramid off writes pyramid: [] and sets and reps from the list being turned off', () => {

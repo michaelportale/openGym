@@ -352,7 +352,7 @@ export function sheetView(form, slot, routine) {
   const choices = on || locked || form.mode === 'cardio'
     ? null
     : policyChoices(slot, routine).map(c => ({ ...c, selected: c.value === (form.prog || '') }))
-  const invalid = on || locked || !stepInvalid(form, slot, routine) ? null : STEP_INVALID
+  const invalid = locked || !stepInvalid(form, slot, routine) ? null : STEP_INVALID
   return {
     editable: !locked,
     pyramid: !!form.pyramid,

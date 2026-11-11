@@ -192,12 +192,27 @@ export function failureOnPick(prog, slot) {
 
 // The list is the prescription. buildSets still lays out cfg.sets rows, so sets and reps follow
 // the list (flatFromPyramid), the same way the web's save does.
-function applyPyramidOn(slot, form) {
+function applyPyramidOn(slot, form, routine) {
   const stride = strideOf(history.isPerSide(slot))
   const fromForm = Array.isArray(form.targets) ? pyramid.normalizePyramid(form.targets, stride) : []
   const list = fromForm.length ? fromForm : pyramid.normalizePyramid(pyramid.pyramidFromFlat({ sets: form.sets, reps: form.reps }), stride)
   const flat = pyramid.flatFromPyramid(list)
-  const out = { ...slot, pyramid: list, sets: flat.sets, reps: flat.reps, backoff: false, lastToFailure: false }
+  // Turning a flat slot on writes the two flags the web clears. A pyramid that never had them
+  // stays without them, so opening it and saving is not a change the server would then put back.
+  const turningOn = pyramidKind(slot.pyramid) !== 'numbers'
+  const out = { ...slot, pyramid: list, sets: flat.sets, reps: flat.reps }
+  if (turningOn || Object.hasOwn(slot, 'backoff')) out.backoff = false
+  if (turningOn || Object.hasOwn(slot, 'lastToFailure')) out.lastToFailure = false
+  // A rule the draft actually changed. An unchanged pyramid keeps a leftover repsMin, so opening
+  // it and saving is not a change. repsMin is written only for a range rule, as the flat save does.
+  if ((form.prog || '') !== (slot.prog || '')) {
+    if (form.prog) out.prog = form.prog
+    else delete out.prog
+    if (formRanged(form, slot, routine)) out.repsMin = repRange.normalizeRepRange(out.reps, form.repsMin, stride).repsMin
+    else delete out.repsMin
+  }
+  if (Object.hasOwn(slot, 'setsMax')) out.setsMax = slot.setsMax
+  else delete out.setsMax
   writeColumn(out, slot, 'pyramidRest', pyramid.normalizePyramidRest(form.rests, list.length))
   writeColumn(out, slot, 'pyramidWeight', pyramid.normalizePyramidWeight(form.weights, list.length))
   return out
@@ -207,7 +222,7 @@ function applyPyramidOn(slot, form) {
 export function applySlotForm(slot, form, routine) {
   const mode = history.modeOf(slot)
   if (mode === 'reps' && pyramidKind(slot.pyramid) === 'locked') return { ...slot }
-  if (mode === 'reps' && form?.pyramid && !form?.pyramidLocked) return applyPyramidOn(slot, form)
+  if (mode === 'reps' && form?.pyramid && !form?.pyramidLocked) return applyPyramidOn(slot, form, routine)
   const out = { ...slot }
   if (mode === 'cardio') {
     out.sets = whole(form.sets, 1)

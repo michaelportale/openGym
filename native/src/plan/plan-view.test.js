@@ -3,7 +3,7 @@ import {
   DELETE_BODY, MISSING_ROUTINE, UNSAFE_EDIT, baseRoutine, deleteTitle, draftChanged, editBase, findRoutine, indexOfKey, leaveForPlan, movedText, noticeLines, planView, removeTitle, routineAuthoring, routineProgChoices, routineView, savedRoutine, sheetView, stepForm, withProg,
   PAIR_TO_AUTHOR, PLAN_NOTICE_KINDS, orderMoved, planNotices, routineCreateEdit, routineDeleteEdit, routineOrderEdit, scheduleEdit, schedulePlan,
 } from './plan-view.js'
-import { applySlotForm, slotForm } from './slot-edit.js'
+import { applySlotForm, slotForm, withPyramid } from './slot-edit.js'
 import { format, progression, pyramid } from '../shared/training.js'
 import { ROUTINE_DELETED, applyEdits } from '../sync/edit-guard.js'
 import { createMemoryPendingEdits } from '../sync/pending-edits.js'
@@ -236,18 +236,20 @@ describe('draftChanged: what holds Move and Swap back', () => {
     expect(draftChanged(slot, routine, opened, back)).toBe(false)
     expect(draftChanged(slot, routine, opened, stepForm(stepForm(opened, 'reps', 1), 'reps', -1))).toBe(false)
   })
-  test('opening a pyramid and saving it unchanged is not a change, even though save writes backoff and last-to-failure false', () => {
+  test('opening a pyramid and saving it unchanged is not a change', () => {
     const pyramidSlot = { id: 'bench', sets: 3, reps: 12, pyramid: [12, 10, 8] }
     const r = { id: 'a', ex: [pyramidSlot] }
     const openedPyramid = slotForm(pyramidSlot, r)
     const saved = applySlotForm(pyramidSlot, openedPyramid, r)
-    expect(saved.backoff).toBe(false)
-    expect(saved.lastToFailure).toBe(false)
-    expect(draftChanged(pyramidSlot, r, openedPyramid, openedPyramid)).toBe(false)
-    const held = { ...pyramidSlot, backoff: false, lastToFailure: false }
-    const heldOpen = slotForm(held, { ...r, ex: [held] })
-    expect(draftChanged(held, { ...r, ex: [held] }, heldOpen, heldOpen)).toBe(false)
-    expect(savedRoutine({ ...r, ex: [held] }, 0, heldOpen)).toBeNull()
+    expect(saved).not.toHaveProperty('backoff')
+    expect(saved).not.toHaveProperty('lastToFailure')
+    expect(savedRoutine(r, 0, openedPyramid)).toBeNull()
+    const flat = { id: 'bench', sets: 3, reps: 10 }
+    const turned = withPyramid(slotForm(flat, r), true)
+    const on = applySlotForm(flat, turned, r)
+    expect(on.backoff).toBe(false)
+    expect(on.lastToFailure).toBe(false)
+    expect(on.pyramid).toEqual([10, 10, 10])
   })
 })
 
@@ -306,6 +308,14 @@ describe('sheetView: the controls the sheet shows', () => {
     expect(v.controls.sets[1].weight).toEqual({ label: 'Set 2 weight', value: 0, step: 5, min: 0 })
     expect(v.controls).toMatchObject({ canAdd: true, canRemove: true, addLabel: 'Add a set', removeLabel: 'Remove a set' })
     expect(v.invalid).toBeNull()
+  })
+  test('a flat slot with no step still refuses Save after the pyramid switch is turned on', () => {
+    const slot = { id: 'bench', sets: 3, reps: 10, inc: 0, prog: 'linear' }
+    const routine = r(slot)
+    const form = withPyramid(slotForm(slot, routine), true)
+    const v = sheetView(form, slot, routine)
+    expect(v.pyramid).toBe(true)
+    expect(v.invalid).toBe('Enter a positive step to use this progression rule.')
   })
   test('a flat reps slot offers the pyramid switch off, beside sets and progression', () => {
     const v = view({ id: 'bench', sets: 3, reps: 10, prog: 'linear' })
