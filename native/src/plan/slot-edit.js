@@ -1,9 +1,10 @@
 // What the Plan tab's exercise sheet can change in one routine slot: sets, target, progression
-// rule, position and exercise. Pure: every function returns new objects and leaves its input
-// alone. The clamps restate ExConfig's save (frontend/src/sheets.jsx). Only sets, reps, repsMin,
-// sec, min and prog are written, plus what the web's rule picker and save do beside them:
-// setsMax, lastToFailure and repsMax, which are set or raised, never removed. Every other key of
-// the slot is kept as it is.
+// rule, pyramid sets, position and exercise. Pure: every function returns new objects and leaves
+// its input alone. The clamps restate ExConfig's save (frontend/src/sheets.jsx). Only sets, reps,
+// repsMin, sec, min and prog are written, plus what the web's rule picker and save do beside them:
+// setsMax, lastToFailure and repsMax, which are set or raised, never removed. A reps pyramid of
+// numbers and 'max' is edited here too: off is pyramid: [], on writes the list plus backoff false
+// and lastToFailure false, and setsMax is left as it was. Every other key of the slot is kept.
 import { exercises, history, progression, repRange, routines, pyramid } from '../shared/training.js'
 import { putBackChanges } from './server-put-back.js'
 
@@ -11,9 +12,44 @@ const climbsRange = policy => policy === 'double' || policy === 'triple'
 const clone = value => JSON.parse(JSON.stringify(value))
 // The web's `Math.max(1, Math.round(x) || fallback)`; strings and blanks come out as the fallback.
 const whole = (x, fallback) => Math.max(1, Math.round(x) || fallback)
+const REST_STEP = 15
+const WEIGHT_STEP = 5
 
-function isPyramidSlot(slot, mode) {
-  return mode === 'reps' && pyramid.isPyramid({ ...slot, mode })
+// Absent and [] are a flat slot. Numbers and 'max' are the pyramid the phone edits. Anything else
+// (the put-back fixtures store { w, r } rows) is left unread, the way the sheet used to be.
+function pyramidKind(list) {
+  if (list == null) return 'absent'
+  if (!Array.isArray(list)) return 'locked'
+  if (!list.length) return 'empty'
+  for (const v of list) {
+    if (v === pyramid.PYRAMID_MAX) continue
+    if (typeof v === 'number' && Number.isFinite(v)) continue
+    return 'locked'
+  }
+  return 'numbers'
+}
+
+const strideOf = perSide => (perSide ? 2 : 1)
+
+function restColumn(src, length) {
+  const list = Array.isArray(src) ? src : []
+  return Array.from({ length }, (_, i) => Math.max(0, Math.round(Number(list[i])) || 0))
+}
+
+function weightColumn(src, length) {
+  const list = Array.isArray(src) ? src : []
+  return Array.from({ length }, (_, i) => {
+    const w = Number(list[i])
+    return Number.isFinite(w) && w > 0 ? Math.round(w * 100) / 100 : 0
+  })
+}
+
+// All zeros is the normalizer's "no field". A slot that already has the key keeps [] so the server
+// does not put the old list back; a slot that never had it stays without the key.
+function writeColumn(out, slot, key, normalized) {
+  if (normalized.length) out[key] = normalized
+  else if (Object.hasOwn(slot, key)) out[key] = []
+  else delete out[key]
 }
 
 // Whether the policy in force for the draft climbs a rep range (reps mode only).
@@ -29,7 +65,122 @@ export function slotForm(slot, routine) {
   const draft = { mode, sets: slot.sets, reps: slot.reps, repsMin: slot.repsMin, sec: slot.sec, min: slot.min, prog: slot.prog || '', lastToFailure: slot.lastToFailure }
   const ranged = formRanged(draft, slot, routine)
   if (ranged) Object.assign(draft, repRange.normalizeRepRange(slot.reps, slot.repsMin, perSide ? 2 : 1))
-  return { ...draft, ranged, perSide, pyramid: isPyramidSlot(slot, mode) }
+  const kind = mode === 'reps' ? pyramidKind(slot.pyramid) : 'absent'
+  const on = kind === 'numbers'
+  const targets = on ? pyramid.normalizePyramid(slot.pyramid, strideOf(perSide)) : []
+  return {
+    ...draft,
+    ranged,
+    perSide,
+    pyramid: on || kind === 'locked',
+    pyramidLocked: kind === 'locked',
+    targets,
+    rests: on ? restColumn(slot.pyramidRest, targets.length) : [],
+    weights: on ? weightColumn(slot.pyramidWeight, targets.length) : [],
+  }
+}
+
+// The switch. On starts from the list already in the draft, or from the flat sets × reps. Off
+// folds that list back into sets and reps and drops it from the draft, so a later sets edit is
+// what Save writes.
+export function withPyramid(form, on) {
+  if (!form || form.pyramidLocked) return form
+  const stride = strideOf(form.perSide)
+  if (on) {
+    if (form.pyramid && form.targets?.length) return form
+    const targets = pyramid.normalizePyramid(form.targets?.length ? form.targets : pyramid.pyramidFromFlat(form), stride)
+    return { ...form, pyramid: true, targets, rests: restColumn(form.rests, targets.length), weights: weightColumn(form.weights, targets.length) }
+  }
+  if (!form.pyramid) return form
+  const list = form.targets?.length ? pyramid.normalizePyramid(form.targets, stride) : pyramid.normalizePyramid(pyramid.pyramidFromFlat(form), stride)
+  const flat = pyramid.flatFromPyramid(list)
+  return { ...form, pyramid: false, sets: flat.sets, reps: flat.reps, targets: [], rests: [], weights: [] }
+}
+
+export function withPyramidPreset(form, list) {
+  if (!form || form.pyramidLocked) return form
+  const targets = pyramid.normalizePyramid(list, strideOf(form.perSide))
+  if (!targets.length) return form
+  return { ...form, pyramid: true, targets, rests: Array(targets.length).fill(0), weights: Array(targets.length).fill(0) }
+}
+
+export function setPyramidTarget(form, index, value) {
+  if (!form?.targets || index < 0 || index >= form.targets.length) return form
+  const targets = form.targets.map((t, i) => (i === index ? value : t))
+  return { ...form, targets: pyramid.normalizePyramid(targets, strideOf(form.perSide)) }
+}
+
+export function addPyramidSet(form) {
+  if (!form?.targets?.length || form.targets.length >= pyramid.MAX_PYRAMID_SETS) return form
+  const last = form.targets.length - 1
+  return {
+    ...form,
+    targets: [...form.targets, form.targets[last]],
+    rests: [...(form.rests || []), (form.rests || [])[last] || 0],
+    weights: [...(form.weights || []), (form.weights || [])[last] || 0],
+  }
+}
+
+export function removePyramidSet(form) {
+  if (!form?.targets || form.targets.length <= 1) return form
+  return {
+    ...form,
+    targets: form.targets.slice(0, -1),
+    rests: (form.rests || []).slice(0, -1),
+    weights: (form.weights || []).slice(0, -1),
+  }
+}
+
+// One press of a pyramid stepper. Reps step by 1, or by 2 per side; rest by 15 seconds; weight by
+// 5. Each floors at 0, except reps, which floors at its stride. A Max target steps off Max.
+export function stepPyramid(form, index, part, dir) {
+  if (!form?.targets || index < 0 || index >= form.targets.length) return form
+  if (part === 'reps') {
+    const stride = strideOf(form.perSide)
+    const cur = form.targets[index]
+    const base = cur === pyramid.PYRAMID_MAX
+      ? (form.targets.find(v => typeof v === 'number') ?? (Number(form.reps) || 10))
+      : Number(cur)
+    return setPyramidTarget(form, index, Math.max(stride, base + dir * stride))
+  }
+  if (part === 'rest') {
+    const rests = (form.rests || []).slice()
+    rests[index] = Math.max(0, (Number(rests[index]) || 0) + dir * REST_STEP)
+    return { ...form, rests }
+  }
+  if (part === 'weight') {
+    const weights = (form.weights || []).slice()
+    weights[index] = Math.max(0, Math.round(((Number(weights[index]) || 0) + dir * WEIGHT_STEP) * 100) / 100)
+    return { ...form, weights }
+  }
+  return form
+}
+
+// What the sheet renders for an open pyramid: preset buttons and one reps, rest and weight
+// stepper per set. Null when the switch is off or the pyramid is locked.
+export function pyramidControls(form) {
+  if (!form?.pyramid || form.pyramidLocked) return null
+  const stride = strideOf(form.perSide)
+  const targets = form.targets || []
+  return {
+    presets: pyramid.PYRAMID_PRESETS.map(list => ({
+      label: pyramid.pyramidLabel(list),
+      accessibilityLabel: `Pyramid preset ${pyramid.pyramidLabel(list)}`,
+      targets: list,
+      selected: JSON.stringify(targets) === JSON.stringify(list),
+    })),
+    sets: targets.map((target, i) => ({
+      reps: { label: `Set ${i + 1} reps`, value: target === pyramid.PYRAMID_MAX ? 'Max' : target, step: stride, min: stride },
+      rest: { label: `Set ${i + 1} rest`, value: (form.rests || [])[i] || 0, step: REST_STEP, min: 0 },
+      weight: { label: `Set ${i + 1} weight`, value: (form.weights || [])[i] || 0, step: WEIGHT_STEP, min: 0 },
+      maxLabel: `Set ${i + 1} max`,
+      isMax: target === pyramid.PYRAMID_MAX,
+    })),
+    canAdd: targets.length < pyramid.MAX_PYRAMID_SETS,
+    canRemove: targets.length > 1,
+    addLabel: 'Add a set',
+    removeLabel: 'Remove a set',
+  }
 }
 
 // Picking a rule in the sheet (sheets.jsx:1771 setRule): Greyskull's final set is taken to
@@ -39,11 +190,25 @@ export function failureOnPick(prog, slot) {
   return prog === 'greyskull' && slot.lastToFailure == null ? true : slot.lastToFailure
 }
 
-// The slot after the draft is saved. Pyramid slots are left as they are.
+// The list is the prescription. buildSets still lays out cfg.sets rows, so sets and reps follow
+// the list (flatFromPyramid), the same way the web's save does.
+function applyPyramidOn(slot, form) {
+  const stride = strideOf(history.isPerSide(slot))
+  const fromForm = Array.isArray(form.targets) ? pyramid.normalizePyramid(form.targets, stride) : []
+  const list = fromForm.length ? fromForm : pyramid.normalizePyramid(pyramid.pyramidFromFlat({ sets: form.sets, reps: form.reps }), stride)
+  const flat = pyramid.flatFromPyramid(list)
+  const out = { ...slot, pyramid: list, sets: flat.sets, reps: flat.reps, backoff: false, lastToFailure: false }
+  writeColumn(out, slot, 'pyramidRest', pyramid.normalizePyramidRest(form.rests, list.length))
+  writeColumn(out, slot, 'pyramidWeight', pyramid.normalizePyramidWeight(form.weights, list.length))
+  return out
+}
+
+// The slot after the draft is saved. An object pyramid is returned unchanged, as a new object.
 export function applySlotForm(slot, form, routine) {
   const mode = history.modeOf(slot)
+  if (mode === 'reps' && pyramidKind(slot.pyramid) === 'locked') return { ...slot }
+  if (mode === 'reps' && form?.pyramid && !form?.pyramidLocked) return applyPyramidOn(slot, form)
   const out = { ...slot }
-  if (isPyramidSlot(slot, mode)) return out
   if (mode === 'cardio') {
     out.sets = whole(form.sets, 1)
     out.min = whole(form.min, 20)
@@ -76,6 +241,19 @@ export function applySlotForm(slot, form, routine) {
   // Bodyweight work with no load climbs reps to repsMax, then adds a set: a ceiling below the
   // working reps would add a set on day one, so it is raised to the reps (sheets.jsx:1945).
   if (history.isBw(slot) && !(slot.weight > 0) && slot.repsMax > 0 && out.reps > slot.repsMax) out.repsMax = out.reps
+  // Turning a number pyramid off. The list still on the draft is the one being turned off; once
+  // withPyramid has folded it into sets and reps, a later edit of those fields is what lands.
+  // setsMax is put back to the slot's own: the flat save above may have raised it for triple.
+  if (pyramidKind(slot.pyramid) === 'numbers') {
+    out.pyramid = []
+    if (Array.isArray(form.targets) && form.targets.length) {
+      const flat = pyramid.flatFromPyramid(pyramid.normalizePyramid(form.targets, strideOf(history.isPerSide(slot))))
+      out.sets = flat.sets
+      out.reps = flat.reps
+    }
+    if (Object.hasOwn(slot, 'setsMax')) out.setsMax = slot.setsMax
+    else delete out.setsMax
+  }
   return out
 }
 

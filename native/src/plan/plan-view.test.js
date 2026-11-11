@@ -3,8 +3,8 @@ import {
   DELETE_BODY, MISSING_ROUTINE, UNSAFE_EDIT, baseRoutine, deleteTitle, draftChanged, editBase, findRoutine, indexOfKey, leaveForPlan, movedText, noticeLines, planView, removeTitle, routineAuthoring, routineProgChoices, routineView, savedRoutine, sheetView, stepForm, withProg,
   PAIR_TO_AUTHOR, PLAN_NOTICE_KINDS, orderMoved, planNotices, routineCreateEdit, routineDeleteEdit, routineOrderEdit, scheduleEdit, schedulePlan,
 } from './plan-view.js'
-import { slotForm } from './slot-edit.js'
-import { format, progression } from '../shared/training.js'
+import { applySlotForm, slotForm } from './slot-edit.js'
+import { format, progression, pyramid } from '../shared/training.js'
 import { ROUTINE_DELETED, applyEdits } from '../sync/edit-guard.js'
 import { createMemoryPendingEdits } from '../sync/pending-edits.js'
 
@@ -236,6 +236,19 @@ describe('draftChanged: what holds Move and Swap back', () => {
     expect(draftChanged(slot, routine, opened, back)).toBe(false)
     expect(draftChanged(slot, routine, opened, stepForm(stepForm(opened, 'reps', 1), 'reps', -1))).toBe(false)
   })
+  test('opening a pyramid and saving it unchanged is not a change, even though save writes backoff and last-to-failure false', () => {
+    const pyramidSlot = { id: 'bench', sets: 3, reps: 12, pyramid: [12, 10, 8] }
+    const r = { id: 'a', ex: [pyramidSlot] }
+    const openedPyramid = slotForm(pyramidSlot, r)
+    const saved = applySlotForm(pyramidSlot, openedPyramid, r)
+    expect(saved.backoff).toBe(false)
+    expect(saved.lastToFailure).toBe(false)
+    expect(draftChanged(pyramidSlot, r, openedPyramid, openedPyramid)).toBe(false)
+    const held = { ...pyramidSlot, backoff: false, lastToFailure: false }
+    const heldOpen = slotForm(held, { ...r, ex: [held] })
+    expect(draftChanged(held, { ...r, ex: [held] }, heldOpen, heldOpen)).toBe(false)
+    expect(savedRoutine({ ...r, ex: [held] }, 0, heldOpen)).toBeNull()
+  })
 })
 
 describe('sheetView: the controls the sheet shows', () => {
@@ -272,10 +285,42 @@ describe('sheetView: the controls the sheet shows', () => {
       { key: 'min', label: 'Minutes', value: 30, step: 1, min: 1 },
     ])
     expect(v.choices).toBeNull()
+    expect(v.showSwitch).toBe(false)
+    expect(v.sentence).toBeNull()
   })
-  test('a pyramid shows no sets, reps or choices and cannot be saved', () => {
-    const v = view({ id: 'bench', sets: 3, reps: 10, pyramid: [10, 8, 6] })
-    expect(v).toMatchObject({ editable: false, pyramid: true, fields: [], choices: null })
+  test('a number-array pyramid is editable, with no sets, reps, choices, or web sentence', () => {
+    const slot = { id: 'bench', sets: 3, reps: 10, pyramid: [10, 8, 'max'], pyramidRest: [30], pyramidWeight: [25] }
+    const v = view(slot)
+    expect(v).toMatchObject({ editable: true, pyramid: true, fields: [], choices: null, showSwitch: true, sentence: null, switchLabel: 'Pyramid sets' })
+    expect(v.controls.presets.map(p => [p.label, p.accessibilityLabel])).toEqual(
+      pyramid.PYRAMID_PRESETS.map(list => [pyramid.pyramidLabel(list), `Pyramid preset ${pyramid.pyramidLabel(list)}`]),
+    )
+    expect(v.controls.sets.map(s => s.reps)).toEqual([
+      { label: 'Set 1 reps', value: 10, step: 1, min: 1 },
+      { label: 'Set 2 reps', value: 8, step: 1, min: 1 },
+      { label: 'Set 3 reps', value: 'Max', step: 1, min: 1 },
+    ])
+    expect(v.controls.sets.map(s => s.maxLabel)).toEqual(['Set 1 max', 'Set 2 max', 'Set 3 max'])
+    expect(v.controls.sets[0].rest).toEqual({ label: 'Set 1 rest', value: 30, step: 15, min: 0 })
+    expect(v.controls.sets[2].weight).toEqual({ label: 'Set 3 weight', value: 0, step: 5, min: 0 })
+    expect(v.controls.sets[1].weight).toEqual({ label: 'Set 2 weight', value: 0, step: 5, min: 0 })
+    expect(v.controls).toMatchObject({ canAdd: true, canRemove: true, addLabel: 'Add a set', removeLabel: 'Remove a set' })
+    expect(v.invalid).toBeNull()
+  })
+  test('a flat reps slot offers the pyramid switch off, beside sets and progression', () => {
+    const v = view({ id: 'bench', sets: 3, reps: 10, prog: 'linear' })
+    expect(v).toMatchObject({ editable: true, pyramid: false, showSwitch: true, sentence: null, switchLabel: 'Pyramid sets', controls: null })
+    expect(v.fields.map(f => f.key)).toEqual(['sets', 'reps'])
+    expect(v.choices).not.toBeNull()
+  })
+  test('an object pyramid stays read-only and still says to edit it on the web', () => {
+    const v = view({ id: 'bench', sets: 3, reps: 10, pyramid: [{ w: 60, r: 8 }] })
+    expect(v).toMatchObject({ editable: false, pyramid: true, fields: [], choices: null, showSwitch: false, controls: null })
+    expect(v.sentence).toBe('Pyramid sets: edit them on the web')
+  })
+  test('one pyramid set cannot be removed, and a full pyramid cannot grow', () => {
+    expect(view({ id: 'bench', sets: 1, reps: 8, pyramid: [8] }).controls.canRemove).toBe(false)
+    expect(view({ id: 'bench', sets: 10, reps: 8, pyramid: Array(pyramid.MAX_PYRAMID_SETS).fill(8) }).controls.canAdd).toBe(false)
   })
   test('a blank value shows the default Save would write', () => {
     const slot = { id: 'bench' }
