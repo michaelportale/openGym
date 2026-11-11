@@ -30,7 +30,9 @@ describe('customDraft', () => {
 
   test('long name', () => {
     expect(customDraft(empty(), input({ n: 'a'.repeat(80) })).n).toBe('a'.repeat(80))
-    expect(customDraft(empty(), input({ n: '  ' + 'b'.repeat(81) }))).toEqual({ error: 'Keep the name to 80 characters.' })
+    // 82 characters before trim, 80 after. A check on the raw string would refuse this.
+    expect(customDraft(empty(), input({ n: '  ' + 'c'.repeat(80) })).n).toBe('c'.repeat(80))
+    expect(customDraft(empty(), input({ n: ' ' + 'b'.repeat(81) }))).toEqual({ error: 'Keep the name to 80 characters.' })
   })
 
   test('missing body part', () => {
@@ -54,6 +56,9 @@ describe('customDraft', () => {
     const result = customDraft(empty(), input({ n: 'Renamed Lift', eq: 'spring-stick' }), stored)
     expect(result.eq).toBe('spring-stick')
     expect(result.error).toBeUndefined()
+    const switched = customDraft(empty(), input({ n: 'Renamed Lift', eq: 'barbell' }), stored)
+    expect(switched.eq).toBe('barbell')
+    expect(switched.n).toBe('Renamed Lift')
   })
 
   test('duplicate on create', () => {
@@ -87,8 +92,12 @@ describe('customDraft', () => {
   })
 
   test('empty link omits url', () => {
-    const stored = { id: 'c1', n: 'My Lift', url: 'https://example.com/old', custom: true }
+    const stored = { id: 'c1', n: 'My Lift', bp: 'chest', url: 'https://example.com/old', custom: true }
     const result = customDraft(empty(), input({ url: '   ' }), stored)
+    expect(result.n).toBe('My Lift')
+    expect(result.id).toBe('c1')
+    expect(result.bp).toBe('chest')
+    expect(result.error).toBeUndefined()
     expect(result).not.toHaveProperty('url')
   })
 
@@ -167,8 +176,12 @@ describe('customDraft', () => {
   })
 
   test('media omitted when input.media is null', () => {
-    const stored = { id: 'c1', n: 'My Lift', media: { kind: 'image', hash: 'old' }, custom: true }
+    const stored = { id: 'c1', n: 'My Lift', bp: 'chest', media: { kind: 'image', hash: 'old' }, custom: true }
     const result = customDraft(empty(), input({ media: null }), stored)
+    expect(result.n).toBe('My Lift')
+    expect(result.id).toBe('c1')
+    expect(result.bp).toBe('chest')
+    expect(result.error).toBeUndefined()
     expect(result).not.toHaveProperty('media')
   })
 
@@ -275,8 +288,15 @@ describe('customDelete', () => {
   test('delete refused with the exact sentences', () => {
     expect(customDelete(used, 'c1', ['c1'])).toEqual({ error: 'Finish your current workout first.' })
     expect(customDelete(used, 'c1', [{ id: 'c1' }])).toEqual({ error: 'Finish your current workout first.' })
+    expect(customDelete(empty(), 'c1', ['c1'])).toEqual({ error: 'Finish your current workout first.' })
     expect(customDelete(used, 'c1', [])).toEqual({
       error: 'In 1 routines and 2 workouts. Remove it from the routines first; it stays in your history.',
+    })
+    expect(customDelete({ routines: [{ ex: [{ id: 'c1' }] }], workouts: [] }, 'c1', [])).toEqual({
+      error: 'In 1 routines and 0 workouts. Remove it from the routines first; it stays in your history.',
+    })
+    expect(customDelete({ routines: [], workouts: [{ entries: [{ id: 'c1' }] }] }, 'c1', [])).toEqual({
+      error: 'In 0 routines and 1 workouts. Remove it from the routines first; it stays in your history.',
     })
   })
 
