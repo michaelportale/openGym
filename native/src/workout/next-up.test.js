@@ -100,3 +100,85 @@ test('several passes merged into the web at once leave the web on the routine ne
     expect(queue.queueRemaining(web)[0], picks.length + ' finishes').toBe(phoneNext(web, picks.length))
   }
 })
+
+// Local calendar day of a noon timestamp, so the weekday does not depend on the machine's timezone.
+const localNoon = (year, monthIndex, day) => new Date(year, monthIndex, day, 12).getTime()
+const localDay = ts => {
+  const d = new Date(ts)
+  const iso = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
+  return { iso, weekday: d.getDay() }
+}
+
+test('a fixed week returns the routine pinned to today', () => {
+  const ts = localNoon(2026, 10, 11)
+  const { weekday } = localDay(ts)
+  // pull is first, so the no-queue fallback cannot pass for a weekday pin
+  const state = {
+    scheduleMode: 'week',
+    week: { [weekday]: ['push'] },
+    dayPlan: {},
+    routines: [{ id: 'pull' }, { id: 'push' }],
+    workouts: [],
+  }
+  expect(nextRoutineId(state, ts)).toBe('push')
+})
+
+test('an empty today returns the next training day', () => {
+  const ts = localNoon(2026, 10, 11)
+  const next = new Date(2026, 10, 11, 12)
+  next.setDate(next.getDate() + 1)
+  const { weekday } = localDay(next.getTime())
+  const state = {
+    scheduleMode: 'week',
+    week: { [weekday]: ['pull'] },
+    dayPlan: { [localDay(ts).iso]: 'rest' },
+    routines: [{ id: 'push' }, { id: 'pull', ex: [{ id: 'e' }] }],
+    workouts: [],
+  }
+  expect(nextRoutineId(state, ts)).toBe('pull')
+})
+
+test('a dayPlan override wins over the weekday', () => {
+  const ts = localNoon(2026, 10, 11)
+  const { iso, weekday } = localDay(ts)
+  const state = {
+    scheduleMode: 'week',
+    week: { [weekday]: ['push'] },
+    dayPlan: { [iso]: 'legs' },
+    routines: [{ id: 'push' }, { id: 'legs' }],
+    workouts: [],
+  }
+  expect(nextRoutineId(state, ts)).toBe('legs')
+})
+
+test('a live queue stays on the replay when a weekday is also pinned', () => {
+  const state = fixture([])
+  state.week = { [localDay(now).weekday]: ['push'] }
+  expect(nextRoutineId(state, now)).toBe('a')
+})
+
+test('a chosen week with nothing scheduled returns null', () => {
+  const state = {
+    scheduleMode: 'week',
+    week: {},
+    dayPlan: {},
+    routines: [{ id: 'pull', ex: [{ id: 'e' }] }],
+    workouts: [],
+  }
+  expect(nextRoutineId(state, localNoon(2026, 10, 11))).toBeNull()
+})
+
+test('a week-mode call leaves the state unchanged', () => {
+  const ts = localNoon(2026, 10, 11)
+  const { weekday } = localDay(ts)
+  const week = { [weekday]: ['push'] }
+  const dayPlan = {}
+  const routines = [{ id: 'pull' }, { id: 'push' }]
+  const state = { scheduleMode: 'week', week, dayPlan, routines, workouts: [] }
+  const before = JSON.stringify(state)
+  nextRoutineId(state, ts)
+  expect(JSON.stringify(state)).toBe(before)
+  expect(state.week).toBe(week)
+  expect(state.dayPlan).toBe(dayPlan)
+  expect(state.routines).toBe(routines)
+})
