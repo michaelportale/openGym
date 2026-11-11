@@ -9,17 +9,18 @@ Start only after [the device checklist](2026-11-native-first-workout-checklist.m
 These steps are yours: they use your Apple account. Run every command from the repository root.
 
 1. **App record (once).** In App Store Connect, create an app with the bundle id `io.github.michaelportale.opengym`. The name must be unique on the App Store; it does not have to be "openGym", because only you will see it.
-2. **Keep your data out of the upload.** A Release build bundles `native/local/snapshot.json`, which holds your routines and history. A TestFlight upload sends the whole app to Apple. Move the snapshot aside before archiving:
-   `mv native/local/snapshot.json native/local/snapshot.json.off`
-   The build then carries only the example data. Your real routines and history come from your server once the phone is paired, which it already is.
+2. **Check the snapshot resolver:** `(cd native && npm test -- scripts/metro-snapshot.test.mjs)`. This tests Metro’s selection rules with a simulated local snapshot. Fresh Metro bundles use the committed example by default. Personal Run builds require `OPENGYM_PERSONAL_SNAPSHOT=1` on the build command. Xcode archive actions (`ACTION=install` or `archive`) force the example even with that opt-in. Leave your snapshot where it is. The paired phone gets your real routines and history from your server.
 3. **Regenerate the iOS project:** `(cd native && LANG=en_US.UTF-8 npx expo prebuild --platform ios)`. This applies `app.json`, including the build number and the export-compliance answer. Don't add `--clean`, because that drops your signing team.
 4. **Archive in Xcode.** Open `native/ios/openGym.xcworkspace`. In the openGym target, under Signing & Capabilities, check that Team is yours and Automatically manage signing is on. Then choose the "Any iOS Device (arm64)" destination and Product > Archive.
 5. **Upload.** In the Archives window, choose Distribute App, then the App Store Connect upload. Recent Xcode may offer "TestFlight Internal Only", which fits: only you test this.
-6. **Restore your snapshot:** `mv native/local/snapshot.json.off native/local/snapshot.json`.
-7. **Add yourself as a tester.** Wait for the build to finish processing in App Store Connect. Then, in TestFlight, add yourself as an internal tester. Internal testing needs no review.
+6. **Add yourself as a tester.** Wait for the build to finish processing in App Store Connect. Then, in TestFlight, add yourself as an internal tester. Internal testing needs no review.
+
+Standalone bundles and exports also default to the example, including Release and `NODE_ENV=production`. Use `OPENGYM_DISTRIBUTION=1` to force example mode even if the environment has a personal opt-in (for example, `cd native && OPENGYM_DISTRIBUTION=1 npx expo export --platform ios`). Metro uses separate cache versions for example and personal modes.
+
+These protections apply to fresh Metro bundles, not prebuilt artifacts. Do not pass `__EXPO_EAGER_BUNDLE_OPTIONS` when archiving: Expo can reuse an eager bundle before loading Metro. Do not upload an older archive made before this guard or a personal Run build; make a fresh archive with the steps above.
 
 What `app.json` declares for you:
-- `buildNumber` is `"1"`. Every later upload needs a higher number: edit it, commit it, and repeat this section **from step 2**. Step 2 keeps your data out of that upload too.
+- `buildNumber` is `"1"`. Every later upload needs a higher number: edit it, commit it, and repeat this section **from step 2** to create a fresh archive.
 - `usesNonExemptEncryption: false` answers Apple's export-compliance question for every build. It is true for this app: it uses only HTTPS and the Keychain, both through iOS, and no encryption library of its own. If that ever changes, change this line.
 
 TestFlight builds stop launching 90 days after upload. Your data stays on the phone and the server. Upload a new build (this section, from step 2, with a higher build number) before then.
