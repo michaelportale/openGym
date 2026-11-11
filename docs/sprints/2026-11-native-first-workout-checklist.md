@@ -22,11 +22,12 @@ Swipe up from the bottom edge and pause to open the app switcher. Then swipe the
 
 ## 1. Install the Release build
 
-- [ ] Run:
-  `cd native && LANG=en_US.UTF-8 npx expo run:ios --configuration Release --device <hardware UDID> --no-bundler`
+- [ ] Run this personal build with the snapshot opt-in set on the command:
+  `cd native && OPENGYM_PERSONAL_SNAPSHOT=1 LANG=en_US.UTF-8 npx expo run:ios --configuration Release --device <hardware UDID> --no-bundler`
+  Keep the opt-in scoped to this command. A fresh build uses example data by default, including Release.
 - [ ] `--no-bundler` is required. Without it Expo starts Metro on 8081, which is taken on this Mac, and its TypeScript check fails on a test fixture.
 - [ ] The app opens on the Workout tab, not Home.
-- [ ] The example-data banner is absent. If you see "Example data. Your routines are not loaded on this build.", the snapshot is missing. Stop and rebuild.
+- [ ] The example-data banner is absent. If you see "Example data. Your routines are not loaded on this build.", check that the snapshot exists and the build command includes the opt-in. Stop and rebuild.
 - [ ] Only if this phone already holds real gym sessions (logged since an earlier wipe), do this now, before any test below: the reinstall in step 10 and the wipe in step 16 delete everything on the phone. On the Mac, from the repository root, note the count: `node -e "console.log(JSON.parse(require('fs').readFileSync('data/state-<user id>.json','utf8')).workouts.length)"` (the user id is the part of the file name between `state-` and `.json`). In ··· More, Diagnostics, pair with the **real** server: print a code with `docker compose exec api node scripts/pair-code.mjs` (or the bare-metal form in SELF_HOSTING) and enter the https address you open the web app at and the code. Run the count again: it went up by the sessions on the phone. Then tap "Forget this server" and confirm, so no test below reaches the real server. With no real sessions on the phone, skip this line.
 
 ## 2. Airplane Mode
@@ -143,7 +144,7 @@ Phase 6, Stages A (workouts) and B (weigh-ins). Do it before the wipe, on test w
 
 ## 12. Exercises and Progress
 
-Phases 7A (text side) and 7B. Do it before the wipe, with the Release build. This adds native dependencies (expo-video, react-native-svg), so the phone needs a fresh Release build first: `npx expo run:ios --configuration Release …`, the command from step 1. The phone is unpaired here, so exercise screens show text only and Progress shows only what is logged on this phone (the bundled snapshot has no weigh-ins); the animation checks and the real-data Progress check come after the cutover, in step 16. Open the Exercises tab.
+Phases 7A (text side) and 7B. Do it before the wipe, with the Release build. This adds native dependencies (expo-video, react-native-svg), so the phone needs a fresh Release build first. Use the personal build command from step 1. The phone is unpaired here, so exercise screens show text only and Progress shows only what is logged on this phone (the bundled snapshot has no weigh-ins); the animation checks and the real-data Progress check come after the cutover, in step 16. Open the Exercises tab.
 
 - [ ] Search. Tap the "Search exercises" field and type `db press`. Dumbbell presses are listed, each row showing the name and "target · equipment". A search with no match (try `zzzz`) says `No exercise matches “zzzz”.`, then "Close matches".
 - [ ] Tap with the keyboard up. With the keyboard still showing, tap a row. The exercise screen opens at once, without a first tap that only closes the keyboard.
