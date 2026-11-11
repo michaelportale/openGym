@@ -27,43 +27,51 @@ function loadConfig(env = {}, exists = () => true) {
 
 const resolveSnapshot = config => config.resolver.resolveRequest({}, '@opengym/snapshot', 'ios')
 
-describe('distribution snapshots', () => {
+describe('example snapshots', () => {
   test.each([
-    { ACTION: 'install', CONFIGURATION: 'Release' },
-    { ACTION: 'archive', CONFIGURATION: 'Release' },
-    { ACTION: 'install', OPENGYM_DISTRIBUTION: '0' },
-    { OPENGYM_DISTRIBUTION: '1' }
-  ])('uses only example data for %j, even with a local snapshot', env => {
-    expect(resolveSnapshot(loadConfig(env))).toEqual({ type: 'sourceFile', filePath: example })
+    {},
+    { NODE_ENV: 'production' },
+    { ACTION: 'build', CONFIGURATION: 'Debug' },
+    { ACTION: 'build', CONFIGURATION: 'Release', NODE_ENV: 'production' },
+    { OPENGYM_DISTRIBUTION: '0' },
+    { OPENGYM_PERSONAL_SNAPSHOT: '0' },
+    { ACTION: 'install', OPENGYM_PERSONAL_SNAPSHOT: '1', OPENGYM_DISTRIBUTION: '0' },
+    { ACTION: 'archive', OPENGYM_PERSONAL_SNAPSHOT: '1' },
+    { OPENGYM_DISTRIBUTION: '1', OPENGYM_PERSONAL_SNAPSHOT: '1' }
+  ])('uses the example without checking for a personal snapshot for %j', env => {
+    const config = loadConfig(env, () => { throw new Error('Private file checked') })
+    expect(resolveSnapshot(config)).toEqual({ type: 'sourceFile', filePath: example })
   })
 
-  test('does not even inspect the personal snapshot during an archive', () => {
-    const config = loadConfig({ ACTION: 'install' }, () => { throw new Error('Private file accessed') })
-    expect(resolveSnapshot(config).filePath).toBe(example)
+  test.each([
+    { OPENGYM_DISTRIBUTION: 'true' },
+    { OPENGYM_DISTRIBUTION: '' },
+    { OPENGYM_PERSONAL_SNAPSHOT: 'true' },
+    { OPENGYM_PERSONAL_SNAPSHOT: '' }
+  ])('rejects invalid snapshot flags for %j', env => {
+    expect(() => loadConfig(env)).toThrow(Object.keys(env)[0])
   })
 
-  test('rejects a misspelled explicit distribution flag rather than bundling personal data', () => {
-    expect(() => loadConfig({ OPENGYM_DISTRIBUTION: 'true' })).toThrow(/OPENGYM_DISTRIBUTION/)
-  })
-
-  test('keeps personal and distribution Metro caches separate', () => {
-    expect(loadConfig({ ACTION: 'install' }).cacheVersion).not.toBe(loadConfig().cacheVersion)
+  test('uses separate Metro caches for example and personal modes', () => {
+    const exampleCache = loadConfig().cacheVersion
+    expect(loadConfig({ OPENGYM_PERSONAL_SNAPSHOT: '1' }).cacheVersion).not.toBe(exampleCache)
+    expect(loadConfig({ ACTION: 'install', OPENGYM_PERSONAL_SNAPSHOT: '1' }).cacheVersion).toBe(exampleCache)
+    expect(loadConfig({ OPENGYM_DISTRIBUTION: '1', OPENGYM_PERSONAL_SNAPSHOT: '1' }).cacheVersion).toBe(exampleCache)
   })
 })
 
 describe('personal builds', () => {
   test.each([
-    {},
-    { ACTION: 'build', CONFIGURATION: 'Debug' },
-    { ACTION: 'build', CONFIGURATION: 'Release', NODE_ENV: 'production' },
-    { OPENGYM_DISTRIBUTION: '0' }
-  ])('retains the personal snapshot for %j', env => {
+    { OPENGYM_PERSONAL_SNAPSHOT: '1' },
+    { ACTION: 'build', CONFIGURATION: 'Debug', OPENGYM_PERSONAL_SNAPSHOT: '1' },
+    { ACTION: 'build', CONFIGURATION: 'Release', NODE_ENV: 'production', OPENGYM_PERSONAL_SNAPSHOT: '1' }
+  ])('uses the personal snapshot when explicitly enabled for %j', env => {
     expect(resolveSnapshot(loadConfig(env))).toEqual({ type: 'sourceFile', filePath: local })
   })
 
   test('falls back to the example until a personal snapshot is generated', () => {
     let exists = false
-    const config = loadConfig({}, filename => {
+    const config = loadConfig({ OPENGYM_PERSONAL_SNAPSHOT: '1' }, filename => {
       expect(filename).toBe(local)
       return exists
     })
