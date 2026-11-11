@@ -250,7 +250,7 @@ proxies the API and serves exercise media, so its replacement is planned before 
 | 7 | Phase 7 code done, with the device checklist pending | PR #119, PR #120, PR #121 and PR #122 |
 | 7E-A | Code done; device rows pending | PR #125 |
 | 7E-B | Code done; device rows pending | PR #126 |
-| 7E-C | Code done; device rows pending; UI unverified | PR #127 |
+| 7E-C | Paired simulator UI verified on 2026-11-11; owner's physical-device rows pending | PR #127; [verification record](2026-11-native-first-workout-checklist.md#7e-c-paired-simulator-verification-2026-11-11) |
 | 8 | Code done; the owner's WHOOP setup is pending | PR #123 |
 | 9 | Prepared; the owner's TestFlight run and gym session are pending (results in [the acceptance log](2026-11-native-device-acceptance.md)) | PR #124 |
 | 10 | Not started | |
