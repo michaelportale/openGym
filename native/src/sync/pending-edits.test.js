@@ -378,6 +378,51 @@ describe.each(Object.entries(makers))('%s pending edits', (_, make) => {
     await s.markSent([{ kind: 'schedule', key: 'schedule', t: 2, baseTs: 5, value: sent }])
     expect((await s.get('schedule', 'schedule')).sent).toEqual(sent)
   })
+
+  // A custom exercise (edit-guard.js): any string key, a map value. The delete marker is a map.
+  test('a customEx row holds a map under any string key, and a non-map is refused', async () => {
+    const s = make()
+    for (const value of [null, [], 'Curl', 1, undefined, true]) {
+      await expect(s.put({ kind: 'customEx', key: 'c1', baseTs: 0, value, t: 1 }), JSON.stringify(value)).rejects.toThrow(/customEx/)
+    }
+    expect(await s.listPending()).toEqual([])
+    const curl = { id: 'c1', n: 'Curl', bp: 'arms' }
+    await s.put({ kind: 'customEx', key: 'c1', baseTs: 0, value: curl, t: 2 })
+    await s.put({ kind: 'customEx', key: 'deleted-id', baseTs: null, value: { deleted: true }, t: 3 })
+    expect(await s.listPending()).toEqual([
+      { kind: 'customEx', key: 'c1', baseTs: 0, value: curl, sent: null, t: 2 },
+      { kind: 'customEx', key: 'deleted-id', baseTs: null, value: { deleted: true }, sent: null, t: 3 },
+    ])
+  })
+
+  test('listNotices names a custom exercise by n when that is a string, and by an empty name otherwise', async () => {
+    const s = make()
+    await s.put({ kind: 'customEx', key: 'c1', baseTs: 1, value: { id: 'c1', n: 'Curl' }, t: 1 })
+    await s.put({ kind: 'customEx', key: 'c2', baseTs: 1, value: { id: 'c2', n: 5 }, t: 2 })
+    await s.put({ kind: 'customEx', key: 'c3', baseTs: 1, value: { deleted: true }, t: 3 })
+    await s.put({ kind: 'routine', key: 'r1', baseTs: 1, value: r1, t: 4 })
+    await s.markSuperseded([{ kind: 'customEx', key: 'c1', t: 1, reason: 'changed' }], '2026-02-01')
+    await s.markSuperseded([{ kind: 'customEx', key: 'c2', t: 2, reason: 'deleted' }], '2026-02-02')
+    await s.markSuperseded([{ kind: 'customEx', key: 'c3', t: 3, reason: 'unsafe' }], '2026-02-03')
+    await s.markSuperseded([{ kind: 'routine', key: 'r1', t: 4, reason: 'changed' }], '2026-02-04')
+    expect(await s.listNotices()).toEqual([
+      { kind: 'customEx', key: 'c1', name: 'Curl', reason: 'changed', at: '2026-02-01' },
+      { kind: 'customEx', key: 'c2', name: '', reason: 'deleted', at: '2026-02-02' },
+      { kind: 'customEx', key: 'c3', name: '', reason: 'unsafe', at: '2026-02-03' },
+      { kind: 'routine', key: 'r1', name: 'Push', reason: 'changed', at: '2026-02-04' },
+    ])
+    expect((await s.listNotices({ kind: 'customEx' })).map(n => n.key)).toEqual(['c1', 'c2', 'c3'])
+  })
+
+  // A delete over a create still in flight must not keep that create's sent value (ruling: fresh).
+  test('a fresh customEx delete does not keep a create that is still in flight', async () => {
+    const s = make()
+    const made = { id: 'c1', n: 'Curl' }
+    await s.put({ kind: 'customEx', key: 'c1', baseTs: 0, value: made, t: 1 })
+    await s.markSent([{ kind: 'customEx', key: 'c1', baseTs: 0, value: made }])
+    await s.put({ kind: 'customEx', key: 'c1', baseTs: null, value: { deleted: true }, t: 2, fresh: true })
+    expect(await s.get('customEx', 'c1')).toEqual({ kind: 'customEx', key: 'c1', baseTs: null, value: { deleted: true }, sent: null, t: 2 })
+  })
 })
 
 test('real sqlite: survives a reopen with value and sent as objects', async () => {

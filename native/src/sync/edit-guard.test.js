@@ -954,3 +954,224 @@ test('schedule: stampOf is the greatest schedule stamp, null when none of them i
   expect(stampOf({}, 'schedule', 'schedule')).toBeNull()
   expect(stampOf(undefined, 'schedule', 'schedule')).toBeNull()
 })
+
+// A custom exercise (7E-C): a second list, state.customEx, settled like a routine. A create is
+// base 0 and lands at the end with its stamps off. An edit replaces that id on the copy's stamps.
+// A delete is { deleted: true } and drops only that id. media and url are not put back by the API,
+// so an edit that does not carry the copy's value for either is unsafe; so is any other key the
+// copy holds and the edit omits. A create is not checked for media. A delete is not unsafe.
+const custom = (id, n, extra = {}) => ({ id, n, ...extra })
+const customEdit = (id, value, extra = {}) => ({ kind: 'customEx', key: id, baseTs: null, value, sent: null, t: 1, ...extra })
+const photo = { hash: 'h', kind: 'image' }
+const link = 'https://ex.test/c'
+
+test('a custom exercise create is applied at the end with _ts, _f and _u taken off', () => {
+  const list = [custom('c0', 'Other', { _ts: 1 }), null, 'x']
+  const routines = [{ id: 'r', name: 'Push' }]
+  const state = { unit: 'lb', customEx: list, routines }
+  const before = JSON.stringify(state)
+  const made = { ...custom('c1', 'Curl', { bp: 'arms' }), _ts: 4, _f: { n: 4 }, _u: { n: [1] } }
+  const r = applyEdits(state, [customEdit('c1', made, { baseTs: 0, t: 3 })])
+  expect(r.applied).toEqual([{ kind: 'customEx', key: 'c1', t: 3 }])
+  expect(r.state.customEx).toEqual([...list, custom('c1', 'Curl', { bp: 'arms' })])
+  expect(r.state.customEx[0]).toBe(list[0])
+  expect(r.state.customEx[1]).toBeNull()
+  expect(r.state.routines).toBe(routines)
+  expect(JSON.stringify(state)).toBe(before)
+  expect(entryValue(r.state, 'customEx', 'c1')).toEqual(custom('c1', 'Curl', { bp: 'arms' }))
+  // no customEx yet starts the list; lacking media is not unsafe on a create
+  expect(applyEdits({ unit: 'lb' }, [customEdit('c1', made, { baseTs: 0 })]).state).toEqual({ unit: 'lb', customEx: [custom('c1', 'Curl', { bp: 'arms' })] })
+})
+
+test('a custom exercise edit applies on the copy\'s stamps and replaces that id in place', () => {
+  const other = custom('c0', 'Other', { _ts: 1 })
+  const copy = custom('c1', 'Curl', { bp: 'arms', _ts: 4, _f: { n: 2 }, _u: { n: [1] } })
+  const list = [other, null, copy]
+  const routines = [{ id: 'r', name: 'Push', ex: [{ id: 'c1' }] }]
+  const state = { unit: 'lb', customEx: list, routines }
+  const before = JSON.stringify(state)
+  const mine = custom('c1', 'Hammer curl', { bp: 'arms', _ts: 99, _f: { n: 99 } })
+  const r = applyEdits(state, [customEdit('c1', mine, { baseTs: 4, t: 4 })])
+  expect(r.applied).toEqual([{ kind: 'customEx', key: 'c1', t: 4 }])
+  expect(r.state.customEx).toEqual([other, null, custom('c1', 'Hammer curl', { bp: 'arms', _ts: 4, _f: { n: 2 }, _u: { n: [1] } })])
+  expect(r.state.customEx[0]).toBe(other)
+  expect(r.state.customEx[1]).toBeNull()
+  expect(r.state.routines).toBe(routines)
+  expect(JSON.stringify(state)).toBe(before)
+})
+
+test('a custom exercise the copy already holds is done', () => {
+  const copy = custom('c1', 'Curl', { bp: 'arms', media: photo, url: link, _ts: 9, _f: { n: 1 } })
+  const state = { customEx: [copy] }
+  const r = applyEdits(state, [customEdit('c1', custom('c1', 'Curl', { bp: 'arms', media: photo, url: link }), { baseTs: 3, t: 7 })])
+  expect(r.done).toEqual([{ kind: 'customEx', key: 'c1', t: 7 }])
+  expect(r.applied).toEqual([])
+  expect(r.rebased).toEqual([])
+  expect(r.state).toBe(state)
+})
+
+test('a sent custom exercise the copy holds on a newer stamp is rebased', () => {
+  const sent = custom('c1', 'Sent', { bp: 'arms', media: photo, url: link })
+  const newer = custom('c1', 'Newer', { bp: 'arms', media: photo, url: link })
+  const copy = { ...sent, _ts: 12 }
+  const state = { customEx: [copy] }
+  const r = applyEdits(state, [customEdit('c1', newer, { baseTs: 3, sent, t: 8 })])
+  expect(r.rebased).toEqual([{ kind: 'customEx', key: 'c1', t: 8, baseTs: 12 }])
+  expect(r.applied).toEqual([])
+  expect(r.done).toEqual([])
+  expect(r.state.customEx).toEqual([{ ...newer, _ts: 12 }])
+})
+
+test('a newer _ts and a different custom exercise value is superseded as changed', () => {
+  const list = [custom('c1', 'Web', { bp: 'arms', _ts: 8 })]
+  const state = { customEx: list }
+  const r = applyEdits(state, [customEdit('c1', custom('c1', 'Mine', { bp: 'arms' }), { baseTs: 3, t: 4 })])
+  expect(r.superseded).toEqual([{ kind: 'customEx', key: 'c1', t: 4, reason: 'changed' }])
+  expect(r.applied).toEqual([])
+  expect(r.state).toBe(state)
+})
+
+test('a tombstoned custom exercise create is superseded as deleted and is not appended', () => {
+  const made = { ...custom('c1', 'Curl'), _ts: 4, _f: { n: 4 } }
+  const stay = custom('c0', 'Stay')
+  for (const state of [
+    { customEx: [stay], deleted: { customEx: { c1: 6 } } },
+    { customEx: [stay], resetIds: { customEx: ['c0', 'c1'] } },
+  ]) {
+    const r = applyEdits(state, [customEdit('c1', made, { baseTs: 0, t: 3 })])
+    expect(r.superseded).toEqual([{ kind: 'customEx', key: 'c1', t: 3, reason: 'deleted' }])
+    expect(r.applied).toEqual([])
+    expect(r.state).toBe(state)
+    expect(state.customEx).toEqual([stay])
+  }
+  // a routine tombstone is not a custom exercise tombstone
+  const routineTombstone = { customEx: [], deleted: { routines: { c1: 6 } }, resetIds: { routines: ['c1'] } }
+  const created = applyEdits(routineTombstone, [customEdit('c1', custom('c1', 'Curl'), { baseTs: 0, t: 1 })])
+  expect(created.applied).toEqual([{ kind: 'customEx', key: 'c1', t: 1 }])
+  expect(created.state.customEx).toEqual([custom('c1', 'Curl')])
+})
+
+test('a delete of an absent custom exercise is done', () => {
+  for (const state of [
+    { customEx: [custom('c0', 'Stay')] },
+    {},
+    { customEx: [], deleted: { customEx: { c1: 6 } } },
+    { resetIds: { customEx: ['c1'] } },
+  ]) {
+    const r = applyEdits(state, [customEdit('c1', { deleted: true }, { baseTs: 5, t: 2 })])
+    expect(r.done).toEqual([{ kind: 'customEx', key: 'c1', t: 2 }])
+    expect(r.applied).toEqual([])
+    expect(r.state).toBe(state)
+  }
+})
+
+test('a custom exercise delete removes that id from customEx and leaves a routine that still names it', () => {
+  const stay = custom('c0', 'Stay', { _ts: 1 })
+  const gone = custom('c1', 'Curl', { media: photo, url: link, _ts: 5 })
+  const routine = { id: 'r', name: 'Push', ex: [{ id: 'c1' }, { id: 'bench' }] }
+  const workouts = [{ id: 'w1', entries: [{ id: 'c1', n: 'Curl' }] }]
+  const exWeights = { c1: 10, bench: 20 }
+  const favEx = ['c1', 'bench']
+  const state = { customEx: [stay, gone, null], routines: [routine], workouts, exWeights, favEx }
+  const before = structuredClone(state)
+  const r = applyEdits(state, [customEdit('c1', { deleted: true }, { baseTs: 5, t: 2 })])
+  expect(r.applied).toEqual([{ kind: 'customEx', key: 'c1', t: 2 }])
+  expect(r.state.customEx).toEqual([stay, null])
+  expect(r.state.customEx[0]).toBe(stay)
+  expect(r.state.routines).toBe(state.routines)
+  expect(r.state.routines[0].ex).toEqual([{ id: 'c1' }, { id: 'bench' }])
+  expect(r.state.workouts).toBe(workouts)
+  expect(r.state.exWeights).toBe(exWeights)
+  expect(r.state.favEx).toBe(favEx)
+  expect(state).toEqual(before)
+  expect(entryValue(r.state, 'customEx', 'c1')).toEqual({ deleted: true })
+  expect(stampOf(r.state, 'customEx', 'c1')).toBe(0)
+})
+
+test('an edit that drops media or url the copy holds is superseded as unsafe and the copy is unchanged', () => {
+  const copy = custom('c1', 'Curl', { bp: 'arms', media: photo, url: link, _ts: 3 })
+  const state = { customEx: [copy], routines: [{ id: 'r', ex: [{ id: 'c1' }] }] }
+  const dropMedia = custom('c1', 'Curl', { bp: 'arms', url: link })
+  const r = applyEdits(state, [customEdit('c1', dropMedia, { baseTs: 3, t: 4 })])
+  expect(r.superseded).toEqual([{ kind: 'customEx', key: 'c1', t: 4, reason: 'unsafe' }])
+  expect(r.applied).toEqual([])
+  expect(r.state).toBe(state)
+  expect(copy.media).toEqual(photo)
+  const dropUrl = custom('c1', 'Curl', { bp: 'arms', media: photo })
+  const u = applyEdits(state, [customEdit('c1', dropUrl, { baseTs: 3, t: 5 })])
+  expect(u.superseded).toEqual([{ kind: 'customEx', key: 'c1', t: 5, reason: 'unsafe' }])
+  expect(u.state).toBe(state)
+  const replaced = custom('c1', 'Curl', { bp: 'arms', media: { hash: 'other', kind: 'image' }, url: 'https://ex.test/other' })
+  const m = applyEdits(state, [customEdit('c1', replaced, { baseTs: 3, t: 6 })])
+  expect(m.superseded).toEqual([{ kind: 'customEx', key: 'c1', t: 6, reason: 'unsafe' }])
+  expect(m.state).toBe(state)
+})
+
+test('a rebased custom exercise edit that drops media is unsafe and is not written', () => {
+  const sent = custom('c1', 'Sent', { media: photo, url: link })
+  const newer = custom('c1', 'Newer', { url: link })
+  const state = { customEx: [{ ...sent, _ts: 9 }] }
+  const r = applyEdits(state, [customEdit('c1', newer, { baseTs: 3, sent, t: 6 })])
+  expect(r.superseded).toEqual([{ kind: 'customEx', key: 'c1', t: 6, reason: 'unsafe' }])
+  expect(r.rebased).toEqual([])
+  expect(r.state).toBe(state)
+})
+
+test('an edit that omits some other key the copy holds is unsafe', () => {
+  const copy = custom('c1', 'Curl', { bp: 'arms', desc: 'keep me', media: photo, url: link, _ts: 3 })
+  const state = { customEx: [copy] }
+  const edit = custom('c1', 'Curl', { bp: 'arms', media: photo, url: link })
+  const r = applyEdits(state, [customEdit('c1', edit, { baseTs: 3, t: 4 })])
+  expect(r.superseded).toEqual([{ kind: 'customEx', key: 'c1', t: 4, reason: 'unsafe' }])
+  expect(r.applied).toEqual([])
+  expect(r.state).toBe(state)
+  expect(copy.desc).toBe('keep me')
+})
+
+test('an edit that keeps media and url and changes n is applied', () => {
+  const copy = custom('c1', 'Curl', { bp: 'arms', media: photo, url: link, _ts: 3, _f: { n: 1 } })
+  const other = custom('c0', 'Other')
+  const workouts = [{ id: 'w' }]
+  const state = { customEx: [other, copy], workouts }
+  // key order inside media does not count
+  const edit = custom('c1', 'Hammer curl', { bp: 'arms', media: { kind: 'image', hash: 'h' }, url: link })
+  const r = applyEdits(state, [customEdit('c1', edit, { baseTs: 3, t: 4 })])
+  expect(r.applied).toEqual([{ kind: 'customEx', key: 'c1', t: 4 }])
+  expect(r.state.customEx[0]).toBe(other)
+  expect(r.state.customEx[1]).toEqual({ ...edit, _ts: 3, _f: { n: 1 } })
+  expect(r.state.workouts).toBe(workouts)
+})
+
+test('a custom exercise whose id is not the row key is unsafe, a create included, and is not written', () => {
+  const state = { customEx: [custom('c1', 'Curl', { _ts: 3 })] }
+  const r = applyEdits(state, [customEdit('c1', custom('c2', 'Curl'), { baseTs: 3, t: 4 })])
+  expect(r.superseded).toEqual([{ kind: 'customEx', key: 'c1', t: 4, reason: 'unsafe' }])
+  expect(r.state).toBe(state)
+  const created = applyEdits({ customEx: [] }, [customEdit('c1', custom('c2', 'New'), { baseTs: 0, t: 5 })])
+  expect(created.superseded).toEqual([{ kind: 'customEx', key: 'c1', t: 5, reason: 'unsafe' }])
+  expect(created.state.customEx).toEqual([])
+})
+
+test('a custom exercise id twice in the copy makes an edit unsafe; a delete of it is not, and removes every copy', () => {
+  const other = custom('c2', 'Other')
+  const list = [custom('c1', 'First', { _ts: 1 }), other, custom('c1', 'Second', { _ts: 1 })]
+  const state = { customEx: list }
+  const r = applyEdits(state, [customEdit('c1', custom('c1', 'Mine'), { baseTs: 1, t: 4 })])
+  expect(r.superseded).toEqual([{ kind: 'customEx', key: 'c1', t: 4, reason: 'unsafe' }])
+  expect(r.state).toBe(state)
+  const gone = applyEdits(state, [customEdit('c1', { deleted: true }, { baseTs: 1, t: 5 })])
+  expect(gone.applied).toEqual([{ kind: 'customEx', key: 'c1', t: 5 }])
+  expect(gone.state.customEx).toEqual([other])
+  expect(gone.state.customEx[0]).toBe(other)
+})
+
+test('stampOf for customEx is that entry\'s _ts, or 0 when the list has no such id', () => {
+  const state = { customEx: [custom('c1', 'Curl', { _ts: 4 }), custom('c2', 'Bare')] }
+  expect(stampOf(state, 'customEx', 'c1')).toBe(4)
+  expect(stampOf(state, 'customEx', 'c2')).toBeNull()
+  expect(stampOf(state, 'customEx', 'gone')).toBe(0)
+  expect(stampOf({}, 'customEx', 'gone')).toBe(0)
+  expect(stampOf({ deleted: { customEx: { gone: 6 } } }, 'customEx', 'gone')).toBe(0)
+  const row = { kind: 'customEx', key: 'c1', baseTs: stampOf(state, 'customEx', 'c1'), value: custom('c1', 'Curl 2'), sent: null, t: 1 }
+  expect(applyEdits(state, [row]).applied).toEqual([{ kind: 'customEx', key: 'c1', t: 1 }])
+})

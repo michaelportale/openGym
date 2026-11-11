@@ -2,9 +2,9 @@
 // for a writer that does not stamp (`stamped: false`, as this phone is). Every key the stored
 // routine has and the pushed one lacks is put back, unless an app that does not stamp may have
 // dropped it on purpose; the same for each slot, paired with a stored slot as the API pairs them.
-// Hand-copied from api/sync-stamps.js (keepKeys for `routines`, pairItems, V139_DROPS, the entry
-// meta); server-put-back.test.js runs the real keepUnknown over generated edits to keep them the
-// same. Pure; inputs are never mutated.
+// Hand-copied from api/sync-stamps.js (keepKeys for `routines` and `customEx`, pairItems,
+// V139_DROPS, the entry meta); server-put-back.test.js runs the real keepUnknown over generated
+// edits to keep them the same. A custom exercise has no nested list. Pure; inputs are never mutated.
 
 const isMap = v => !!v && typeof v === 'object' && !Array.isArray(v)
 const same = (x, y) => JSON.stringify(x) === JSON.stringify(y)
@@ -16,6 +16,7 @@ const V139_DROPS = {
   routines: new Set(['excludeFromProgression']),
   'routines.ex': new Set(['id', 'sg', 'sets', 'min', 'speed', 'mode', 'sec', 'weight', 'bodyweight', 'prog',
     'inc', 'deloadFactor', 'note', 'warmupSets', 'restSec', 'reps', 'side', 'repsMin', 'repsMax', 'intensifier']),
+  customEx: new Set(['media', 'url']),
 }
 const NESTED = { routines: ['ex'] }
 
@@ -73,4 +74,18 @@ export function serverPutBack(copy, edit) {
 // Whether the API would store something other than `edit`: then it is not sent (sync/edit-guard.js).
 export function putBackChanges(copy, edit) {
   return !same(serverPutBack(copy, edit), edit)
+}
+
+// The custom exercise the API would store for `edit` pushed over `copy`, before its stamps.
+// media and url may be left off; every other missing key is put back. Nothing inside the exercise
+// is paired: a custom exercise has no nested list.
+export function customPutBack(copy, edit) {
+  const out = clone(edit)
+  keepKeys(copy, out, 'customEx')
+  return out
+}
+
+// Whether that put-back would change `edit`. Dropping media or url does not, by itself.
+export function customPutBackChanges(copy, edit) {
+  return !same(customPutBack(copy, edit), edit)
 }
