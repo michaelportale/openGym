@@ -47,10 +47,10 @@ Five tabs stay in fixed positions: Home, Plan, Workout, Progress, Exercises.
 | Tab | In this sprint |
 | --- | --- |
 | Home | Next session from the rotation, start or resume, nutrition summary card. |
-| Plan | View rotation and routines. Reorder, swap exercise, change sets and rep range, override progression per exercise. Add, copy, rename, delete and reorder routines; add and remove exercises; routine progression and deload. Switch between a fixed week and a rotation, edit the loop, assign weekdays, and set the next 14 days. |
+| Plan | View rotation and routines. Reorder, swap exercise, change sets and rep range, override progression per exercise. Add, copy, rename, delete and reorder routines; add and remove exercises; routine progression and deload. Switch between a fixed week and a rotation, edit the loop, assign weekdays, and set the next 14 days. Edit pyramid sets on a reps slot. |
 | Workout | Full logging flow (below). |
 | Progress | Body-weight trend, per-lift history and e1RM, Measurements, Nutrition, read-only WHOOP recovery, strain and cardio. |
-| Exercises | Browse and search the catalogue and custom exercises. Text built in; animations per the licence rules below. |
+| Exercises | Browse and search the catalogue and custom exercises. Create, edit, and delete an unused custom exercise. Text built in; animations per the licence rules below. |
 
 **Workout flow:** weight x reps sets, complete and undo, add a set, edit any set during or after the
 workout, move between exercises, finish, rest timer. Warm-up sets are prompted at the start of a
@@ -250,6 +250,7 @@ proxies the API and serves exercise media, so its replacement is planned before 
 | 7 | Phase 7 code done, with the device checklist pending | PR #119, PR #120, PR #121 and PR #122 |
 | 7E-A | Code done; device rows pending | PR #125 |
 | 7E-B | Code done; device rows pending | PR #126 |
+| 7E-C | Code done; device rows pending; UI unverified | |
 | 8 | Code done; the owner's WHOOP setup is pending | PR #123 |
 | 9 | Prepared; the owner's TestFlight run and gym session are pending (results in [the acceptance log](2026-11-native-device-acceptance.md)) | PR #124 |
 | 10 | Not started | |
