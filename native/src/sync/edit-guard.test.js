@@ -958,8 +958,8 @@ test('schedule: stampOf is the greatest schedule stamp, null when none of them i
 // A custom exercise (7E-C): a second list, state.customEx, settled like a routine. A create is
 // base 0 and lands at the end with its stamps off. An edit replaces that id on the copy's stamps.
 // A delete is { deleted: true } and drops only that id. Dropping or replacing media is unsafe.
-// Omitting url is applied. So is any other key the copy holds and the edit omits. A create is
-// not checked for media. A delete is not unsafe.
+// Omitting url is applied. Omitting any other key the copy holds is unsafe. A create is not
+// checked for media. A delete is not unsafe.
 const custom = (id, n, extra = {}) => ({ id, n, ...extra })
 const customEdit = (id, value, extra = {}) => ({ kind: 'customEx', key: id, baseTs: null, value, sent: null, t: 1, ...extra })
 const photo = { hash: 'h', kind: 'image' }
