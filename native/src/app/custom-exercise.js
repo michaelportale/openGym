@@ -13,14 +13,13 @@ import { announce } from '../plan/announce'
 import { cap } from '../sync/source'
 import { stampOf } from '../sync/edit-guard'
 import { equipment, exercises, muscles } from '../shared/training'
-import { customDraft } from '../exercises/custom-ex-edit'
+import { customFormEdit, muscleSeed } from '../exercises/custom-ex-edit'
 import { askDeleteCustom, leaveForExercises } from '../exercises/delete-custom'
 import { canAuthorCustom } from '../exercises/exercise-notices'
 import { routeId } from '../exercises/route-id'
 import { useExerciseSource } from '../exercises/use-exercise-source'
 
 const textOf = value => (typeof value === 'string' ? value : '')
-const stringsOf = list => (Array.isArray(list) ? list.filter(m => typeof m === 'string') : [])
 const muscleLabel = m => muscles.MUSCLE_NAME[m] || m
 
 // ExerciseMedia plays a catalogue still and clip. A custom photo is a MediaRef (a hash, no
@@ -51,16 +50,22 @@ function Form({ id, editing, stored, source, router }) {
   const [n, setN] = useState(() => textOf(stored?.n))
   const [bp, setBp] = useState(() => textOf(stored?.bp))
   const [eq, setEq] = useState(() => textOf(stored?.eq))
-  const [primaries, setPrimaries] = useState(() => stringsOf(stored?.primaries))
-  const [secondaries, setSecondaries] = useState(() => stringsOf(stored?.secondaries))
+  const [primaries, setPrimaries] = useState(() => muscleSeed(stored).primaries)
+  const [secondaries, setSecondaries] = useState(() => muscleSeed(stored).secondaries)
   const [desc, setDesc] = useState(() => textOf(stored?.desc))
   const [url, setUrl] = useState(() => textOf(stored?.url))
   const [message, setMessage] = useState(null)
   const [busy, setBusy] = useState(false)
   const lock = useRef(false)
+  const opened = useRef(null)
+  if (opened.current == null) {
+    opened.current = {
+      stored,
+      baseTs: editing ? stampOf(source.copy?.state, 'customEx', id) : 0,
+    }
+  }
   const latest = useRef(null)
   latest.current = {
-    stored,
     state: source.state,
     copy: source.copy,
     openEntries: source.openEntries,
@@ -88,22 +93,22 @@ function Form({ id, editing, stored, source, router }) {
   const onSave = async () => {
     if (lock.current) return
     const now = latest.current
-    const input = { n, bp, eq, primaries, secondaries, desc, url, tg: now.stored?.tg }
-    if (editing) {
-      input.id = id
-      input.media = now.stored?.media
-    }
-    const draft = customDraft(now.state, input, editing ? now.stored : undefined)
-    if (typeof draft.id !== 'string') {
-      show(draft.error)
+    const form = opened.current
+    const edit = customFormEdit({
+      editing,
+      id,
+      baseTs: form.baseTs,
+      stored: form.stored,
+      state: now.state,
+      input: { n, bp, eq, primaries, secondaries, desc, url },
+    })
+    if (typeof edit.value?.id !== 'string') {
+      show(edit.error)
       return
     }
     lock.current = true
     setBusy(true)
     setMessage(null)
-    const edit = editing
-      ? { kind: 'customEx', key: draft.id, baseTs: stampOf(now.copy.state, 'customEx', draft.id), value: draft }
-      : { kind: 'customEx', key: draft.id, baseTs: 0, value: draft }
     const saved = await now.saveCustom(edit)
     lock.current = false
     setBusy(false)

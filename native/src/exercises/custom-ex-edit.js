@@ -8,6 +8,46 @@ const DESC_MAX = 1000
 const isStored = stored => stored !== null && typeof stored === 'object'
 const muscleNames = list => (Array.isArray(list) ? list : []).filter(m => typeof m === 'string')
 
+// Same seed as the web form. An exercise that already lists primaries keeps those. Otherwise a
+// legacy row is read from tg, sm, or muscleGroups. A row with none of those stays empty: the
+// body-part fallback is not a muscle the user saved.
+export function muscleSeed(stored) {
+  const existing = isStored(stored) ? stored : null
+  if (existing && Array.isArray(existing.primaries) && existing.primaries.length) {
+    return {
+      primaries: existing.primaries.slice(),
+      secondaries: Array.isArray(existing.secondaries) ? existing.secondaries.slice() : [],
+    }
+  }
+  if (existing && existing.bp === 'cardio') return { primaries: ['cardiovascular system'], secondaries: [] }
+  const norm = muscles.hasExplicitMuscleMetadata(existing || {})
+    ? muscles.normalizeMuscleGroups(existing || {})
+    : []
+  return { primaries: norm.length ? [norm[0]] : [], secondaries: norm.slice(1) }
+}
+
+// The edit the form saves. `baseTs` is the copy's stamp when the form opened. A later sync must
+// not replace it: the fields below are still the ones on screen, and a newer stamp would make
+// that older name look like it was based on the web's edit.
+export function customFormEdit({ editing, id, baseTs, stored, state, input }) {
+  const fields = {
+    n: input.n,
+    bp: input.bp,
+    eq: input.eq,
+    primaries: input.primaries,
+    secondaries: input.secondaries,
+    desc: input.desc,
+    url: input.url,
+    tg: isStored(stored) ? stored.tg : input.tg,
+    media: editing ? (isStored(stored) ? stored.media : null) : input.media,
+  }
+  if (editing) fields.id = id
+  else if (input.id) fields.id = input.id
+  const draft = customDraft(state, fields, editing ? stored : undefined)
+  if (typeof draft.id !== 'string') return draft
+  return { kind: 'customEx', key: draft.id, baseTs: editing ? baseTs : 0, value: draft }
+}
+
 // The id a duplicate check compares against. A brand-new exercise has none yet, so any
 // existing name is a clash. uid() runs only once the draft is valid.
 const prospectiveId = (input, stored) => {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { equipment, exercises } from '../shared/training.js'
-import { customDelete, customDraft, customUsage } from './custom-ex-edit.js'
+import { customDelete, customDraft, customFormEdit, customUsage, muscleSeed } from './custom-ex-edit.js'
 
 const CATALOGUE_NAME = 'barbell bench press'
 
@@ -270,6 +270,59 @@ describe('customUsage', () => {
     expect(customUsage(state, 'c1', [{ id: 'nope' }, { id: 'c1' }]).open).toBe(true)
     expect(customUsage(state, 'c1', [{ id: 'nope' }]).open).toBe(false)
     expect(customUsage(empty(), 'c1', 'c1').open).toBe(false)
+  })
+})
+
+describe('muscleSeed', () => {
+  test('legacy tg and sm fill the chips when primaries were never stored', () => {
+    const stored = { id: 'c1', n: 'Old Curl', bp: 'chest', eq: 'dumbbell', custom: true, tg: 'biceps', sm: ['forearm'] }
+    expect(muscleSeed(stored)).toEqual({ primaries: ['biceps'], secondaries: ['forearm'] })
+    const draft = customDraft(empty(), input({
+      id: 'c1', n: 'New Curl', bp: 'chest', eq: 'dumbbell', tg: stored.tg, ...muscleSeed(stored),
+    }), stored)
+    expect(draft.n).toBe('New Curl')
+    expect(draft.primaries).toEqual(['biceps'])
+    expect(draft.secondaries).toEqual(['forearm'])
+    expect(draft.tg).toBe('biceps')
+    expect(draft.sm).toEqual(['forearm'])
+    expect(draft.muscleGroups).toEqual(['biceps', 'forearm'])
+  })
+
+  test('a muscleGroups list is split the same way, and a listed primary is not replaced by tg', () => {
+    expect(muscleSeed({ muscleGroups: ['upper-back', 'biceps'] })).toEqual({ primaries: ['upper-back'], secondaries: ['biceps'] })
+    expect(muscleSeed({ primaries: ['chest'], secondaries: [], tg: 'biceps' })).toEqual({ primaries: ['chest'], secondaries: [] })
+    expect(muscleSeed({ bp: 'chest', n: 'Plain' })).toEqual({ primaries: [], secondaries: [] })
+  })
+
+  test('cardio without primaries seeds the cardiovascular system', () => {
+    expect(muscleSeed({ bp: 'cardio', tg: 'chest' })).toEqual({
+      primaries: ['cardiovascular system'],
+      secondaries: [],
+    })
+  })
+})
+
+describe('customFormEdit', () => {
+  test('an edit keeps the stamp the form opened on when the row later carries a newer one', () => {
+    const opened = {
+      id: 'c1', n: 'Curl', bp: 'chest', eq: 'barbell', custom: true, _ts: 3, media: { hash: 'h' }, note: 'keep',
+    }
+    const refreshed = { ...opened, n: 'Web curl', _ts: 9 }
+    const edit = customFormEdit({
+      editing: true,
+      id: 'c1',
+      baseTs: opened._ts,
+      stored: opened,
+      state: { customEx: [refreshed], routines: [], workouts: [] },
+      input: input({ id: 'c1', n: 'Curl', desc: 'note' }),
+    })
+    expect(edit.baseTs).toBe(3)
+    expect(edit.baseTs).not.toBe(refreshed._ts)
+    expect(edit.value.n).toBe('Curl')
+    expect(edit.value.desc).toBe('note')
+    expect(edit.value.media).toEqual({ hash: 'h' })
+    expect(edit.value.note).toBe('keep')
+    expect(edit.value._ts).toBeUndefined()
   })
 })
 
