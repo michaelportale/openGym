@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import {
-  DELETE_BODY, MISSING_ROUTINE, UNSAFE_EDIT, baseRoutine, deleteTitle, draftChanged, editBase, findRoutine, indexOfKey, movedText, noticeLines, planView, removeTitle, routineAuthoring, routineProgChoices, routineView, savedRoutine, sheetView, stepForm, withProg,
+  DELETE_BODY, MISSING_ROUTINE, UNSAFE_EDIT, baseRoutine, deleteTitle, draftChanged, editBase, findRoutine, indexOfKey, leaveForPlan, movedText, noticeLines, planView, removeTitle, routineAuthoring, routineProgChoices, routineView, savedRoutine, sheetView, stepForm, withProg,
   PAIR_TO_AUTHOR, orderMoved, planNotices, routineCreateEdit, routineDeleteEdit, routineOrderEdit,
 } from './plan-view.js'
 import { slotForm } from './slot-edit.js'
@@ -399,6 +399,29 @@ describe('planNotices: what each notice was, from its stored row', () => {
   test('none, or not a list, reads as none', () => {
     expect(planNotices(null, null, state)).toEqual([])
     expect(planNotices(undefined, [], null)).toEqual([])
+  })
+})
+
+describe('leaveForPlan: a deleted routine returns to the Plan tab', () => {
+  const recordingRouter = canDismiss => {
+    const calls = []
+    return {
+      calls,
+      canDismiss: () => canDismiss,
+      dismissAll: () => calls.push('dismissAll'),
+      navigate: href => calls.push(['navigate', href]),
+      replace: href => calls.push(['replace', href]),
+    }
+  }
+  test('when the stack can be dismissed, dismissAll then navigate to Plan, and replace is not called', () => {
+    const router = recordingRouter(true)
+    leaveForPlan(router)
+    expect(router.calls).toEqual(['dismissAll', ['navigate', '/(tabs)/plan']])
+  })
+  test('when the stack cannot be dismissed, the only call is replace with Plan', () => {
+    const router = recordingRouter(false)
+    leaveForPlan(router)
+    expect(router.calls).toEqual([['replace', '/(tabs)/plan']])
   })
 })
 

@@ -21,6 +21,19 @@ export const MISSING_ROUTINE = "This routine isn't in your plan any more."
 export const DELETE_BODY = "It's removed from your plan and your week. Your history keeps its workouts."
 export const deleteTitle = name => `Delete ${name}?`
 export const removeTitle = name => `Remove ${name}?`
+
+// After a delete lands, leave the routine screens for the Plan tab. dismissAll is POP_TO_TOP:
+// it clears every routine pushed above the root tabs, including a duplicate sitting on the
+// source routine. navigate then selects Plan. With nothing to dismiss, replace opens Plan.
+export function leaveForPlan(router) {
+  if (router.canDismiss()) {
+    router.dismissAll()
+    router.navigate('/(tabs)/plan')
+    return
+  }
+  router.replace('/(tabs)/plan')
+}
+
 // The web's own words (sheets.jsx:1808) for a rule whose Step is not positive (slot-edit.js stepInvalid).
 export const STEP_INVALID = 'Enter a positive step to use this progression rule.'
 

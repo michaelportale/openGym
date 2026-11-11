@@ -18,7 +18,7 @@ import { announce } from '../../plan/announce'
 import { waitForPick } from '../../plan/pick-relay'
 import {
   DELETE_BODY, DELOAD_SUBTITLE, DELOAD_TITLE, MISSING_ROUTINE, NAME_BLANK, PAIR_TO_AUTHOR,
-  REFUSED_SUPERSET, REFUSED_TWIN, UNSAFE_EDIT, deleteTitle, findRoutine, indexOfKey, movedText,
+  REFUSED_SUPERSET, REFUSED_TWIN, UNSAFE_EDIT, deleteTitle, findRoutine, indexOfKey, leaveForPlan, movedText,
   noticeLines, removeTitle, routineAuthoring, routineProgChoices, routineView, savedRoutine,
 } from '../../plan/plan-view'
 import { duplicateRoutine, renamedRoutine, routineWithDeload, routineWithProg, routineWithSlotAdded, routineWithSlotRemoved } from '../../plan/routine-edit'
@@ -310,8 +310,7 @@ export default function RoutineScreen() {
     const { remove, baseOf } = latest.current
     const result = await remove(id, baseOf(id).base)
     if (result.ok) {
-      if (router.canGoBack()) router.back()
-      else router.replace('/(tabs)/plan')
+      leaveForPlan(router)
       return
     }
     deleting.current = false
