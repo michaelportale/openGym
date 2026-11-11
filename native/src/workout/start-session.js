@@ -1,4 +1,5 @@
 import { sessionStart } from '../shared/training.js'
+import { registerScreenCustoms } from '../exercises/register-customs.js'
 import { localDate } from '../session/timing.js'
 import { createEventId } from '../session/ids.js'
 import { applyOpeningWeights } from './last-time.js'
@@ -6,6 +7,9 @@ import { applyOpeningWeights } from './last-time.js'
 // The base document a session opens from, built as the web's beginWorkout builds it, with
 // each work set opened at the prescription's weight, else at what was lifted last time.
 export function buildSessionBase({ state, routine, now, timeZone, id = createEventId() }) {
+  // Before the entries, so a custom cardio slot is not built as reps. The screen source
+  // registers too; a session can also be built from state that did not just come from it.
+  registerScreenCustoms(state)
   const built = sessionStart.buildSessionEntries(state, routine).map(e => ({ ...e, rid: routine.id }))
   return {
     id,
