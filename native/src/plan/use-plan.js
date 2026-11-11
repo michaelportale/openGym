@@ -24,8 +24,9 @@ export async function savePlanEdit({ rid, routine, copyRoutine, fresh = false })
 }
 
 // One of the Plan's authoring edits (plan-view.js routineCreateEdit, routineDeleteEdit,
-// routineOrderEdit), then the sync is asked to run, as savePlanEdit does. Never `fresh`: these are
-// offered only while a server copy is held (planView canAuthor). Throws when the write fails.
+// routineOrderEdit), then the sync is asked to run, as savePlanEdit does. The edit is spread into
+// the put, so a fresh flag on it reaches the store. A delete carries one (routineDeleteEdit); a
+// later change here must not drop that flag. Throws when the write fails.
 async function saveAuthoring(edit) {
   const db = await openAppDatabase()
   await createSqlitePendingEdits(db).put({ ...edit, t: Date.now() })
@@ -34,8 +35,9 @@ async function saveAuthoring(edit) {
 
 // A new routine (routine-edit.js newRoutine or duplicateRoutine), on base 0.
 export const saveRoutineCreate = routine => saveAuthoring(routineCreateEdit(routine))
-// Routine rid deleted, on the base the server holds (copyRoutine: the copy's routine). Over a
-// create still pending, the store keeps base 0 and the guard reads the row as done.
+// Routine rid deleted, on the base the server holds (copyRoutine: the copy's routine). The edit
+// is fresh, so the put replaces a pending row's base with that routine's _ts, or null when there
+// is no copy routine. The guard still reads a create-then-delete as done.
 export const saveRoutineDelete = (rid, copyRoutine) => saveAuthoring(routineDeleteEdit(rid, copyRoutine))
 // The routines' order: every id as the Plan lists them, on the copy's edited.routineOrder.
 export const saveRoutineOrder = (ids, copy) => saveAuthoring(routineOrderEdit(ids, copy))

@@ -17,6 +17,10 @@ export const PAIR_TO_AUTHOR = 'Pair with your server to add, delete or reorder r
 export const DELOAD_TITLE = 'Deload routine'
 export const DELOAD_SUBTITLE = 'Its workouts do not count toward progression. They still show in history and statistics.'
 export const MISSING_ROUTINE = "This routine isn't in your plan any more."
+// The routine screen's delete confirm (title is deleteTitle). History keeps the workouts.
+export const DELETE_BODY = "It's removed from your plan and your week. Your history keeps its workouts."
+export const deleteTitle = name => `Delete ${name}?`
+export const removeTitle = name => `Remove ${name}?`
 // The web's own words (sheets.jsx:1808) for a rule whose Step is not positive (slot-edit.js stepInvalid).
 export const STEP_INVALID = 'Enter a positive step to use this progression rule.'
 
@@ -128,6 +132,13 @@ export function planView(state, { nextId = null, notices = [], copy = null } = {
   }
 }
 
+// Duplicate, delete and add exercise need a server copy (PAIR_TO_AUTHOR). Rename, removing an
+// exercise, the routine's rule and deload do not: they are whole-routine edits, as a slot edit is.
+export function routineAuthoring(copy) {
+  const paired = copy != null
+  return { canDuplicate: paired, canDelete: paired, canAdd: paired }
+}
+
 // The order a Move up (-1) or Move down (+1) on routine `id` saves: every id of `routines` (the
 // Plan's rows, as on screen) with that one moved a place. Null at an edge, for an id not listed,
 // and for a list whose ids are not all distinct strings: the store holds string ids only, and a
@@ -141,11 +152,13 @@ export function orderMoved(routines, id, dir) {
 
 // What the Plan's authoring saves put in the pending-edits store, without the time. A create is
 // the routine on base 0, which the guard adds only while the server has no routine with its id and
-// never deleted one. A delete is ROUTINE_DELETED on the copy's routine's _ts (over a create still
-// pending, the store keeps base 0, and the guard reads it as done: nothing is sent). An order is
-// every routine id, on the stamp the guard reads (edited.routineOrder).
+// never deleted one. A delete is ROUTINE_DELETED on the copy's routine's _ts, and fresh, so the
+// put replaces a pending row's base. Over a create still pending, with no copy routine, that base
+// becomes null; the guard still reads the row as done (a routine the copy lacks is the marker,
+// checked before the stamp) and nothing is sent. An order is every routine id, on the stamp the
+// guard reads (edited.routineOrder).
 export const routineCreateEdit = routine => ({ kind: 'routine', key: routine.id, baseTs: 0, value: routine })
-export const routineDeleteEdit = (rid, copyRoutine) => ({ kind: 'routine', key: rid, baseTs: copyRoutine?._ts ?? null, value: ROUTINE_DELETED })
+export const routineDeleteEdit = (rid, copyRoutine) => ({ kind: 'routine', key: rid, baseTs: copyRoutine?._ts ?? null, value: ROUTINE_DELETED, fresh: true })
 export const routineOrderEdit = (ids, copy) => ({ kind: 'routineOrder', key: 'routineOrder', baseTs: stampOf(copy?.state, 'routineOrder', 'routineOrder'), value: ids })
 
 // The web's speedUnitOf for a pounds profile: mph unless the profile chose km/h.
@@ -212,6 +225,17 @@ export function routineView(state, id, { unit = 'lb', names = {}, routine: given
   })
   const rule = progression.policyFor({}, routine, 'reps')
   return { id: routine.id, name: nameOf(routine), progLabel: `Progression: ${progression.POLICY_NAME[rule]}`, rows }
+}
+
+// Every reps policy as a row. The selected one is the rule the routine uses (linear when prog is
+// unset). Picking one writes that rule; nothing here clears prog.
+export function routineProgChoices(routine) {
+  const selected = progression.policyFor({}, routine, 'reps')
+  return progression.POLICIES_FOR.reps.map(value => ({
+    value,
+    label: progression.POLICY_NAME[value],
+    selected: value === selected,
+  }))
 }
 
 // The routine an edit is made on, as the server holds it: the copy's (paired) or the bundled

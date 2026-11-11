@@ -1,9 +1,10 @@
 import { describe, expect, test } from 'vitest'
 import {
-  MISSING_ROUTINE, UNSAFE_EDIT, baseRoutine, draftChanged, editBase, findRoutine, indexOfKey, movedText, noticeLines, planView, routineView, savedRoutine, sheetView, stepForm, withProg,
+  DELETE_BODY, MISSING_ROUTINE, UNSAFE_EDIT, baseRoutine, deleteTitle, draftChanged, editBase, findRoutine, indexOfKey, movedText, noticeLines, planView, removeTitle, routineAuthoring, routineProgChoices, routineView, savedRoutine, sheetView, stepForm, withProg,
   PAIR_TO_AUTHOR, orderMoved, planNotices, routineCreateEdit, routineDeleteEdit, routineOrderEdit,
 } from './plan-view.js'
 import { slotForm } from './slot-edit.js'
+import { progression } from '../shared/training.js'
 import { ROUTINE_DELETED, applyEdits } from '../sync/edit-guard.js'
 import { createMemoryPendingEdits } from '../sync/pending-edits.js'
 
@@ -401,6 +402,37 @@ describe('planNotices: what each notice was, from its stored row', () => {
   })
 })
 
+describe('the routine screen: delete and remove wording', () => {
+  test('delete asks by name, with the history sentence', () => {
+    expect(deleteTitle('Push A')).toBe('Delete Push A?')
+    expect(DELETE_BODY).toBe("It's removed from your plan and your week. Your history keeps its workouts.")
+  })
+  test('remove asks by the exercise name', () => {
+    expect(removeTitle('Bench Press')).toBe('Remove Bench Press?')
+  })
+})
+
+describe('routineProgChoices: the routine rule as rows', () => {
+  test('unset prog selects linear, and each reps policy keeps its name', () => {
+    expect(routineProgChoices({ id: 'a', ex: [] })).toEqual(progression.POLICIES_FOR.reps.map(value => ({
+      value,
+      label: progression.POLICY_NAME[value],
+      selected: value === 'linear',
+    })))
+  })
+  test("prog double selects Double progression and no other row", () => {
+    const choices = routineProgChoices({ id: 'a', prog: 'double', ex: [] })
+    expect(choices.filter(c => c.selected)).toEqual([{ value: 'double', label: 'Double progression', selected: true }])
+  })
+})
+
+describe('routineAuthoring: duplicate, delete and add need a server copy', () => {
+  test('all three while a copy is held, none when it is null', () => {
+    expect(routineAuthoring({ rev: 3, state: {} })).toEqual({ canDuplicate: true, canDelete: true, canAdd: true })
+    expect(routineAuthoring(null)).toEqual({ canDuplicate: false, canDelete: false, canAdd: false })
+  })
+})
+
 describe('planView: who may add, delete or reorder', () => {
   test('canAuthor only while a server copy is held', () => {
     expect(planView({ routines: [push] }, { copy: { rev: 3, state: {} } }).canAuthor).toBe(true)
@@ -447,10 +479,10 @@ describe('what a create, a delete and an order put in the store', () => {
     const r = { id: 'n1', name: 'Legs', emoji: 'figureStrength', ex: [] }
     expect(routineCreateEdit(r)).toEqual({ kind: 'routine', key: 'n1', baseTs: 0, value: r })
   })
-  test("a delete: the marker on the copy's routine _ts, or null with none", () => {
-    expect(routineDeleteEdit('a', copy.state.routines[0])).toEqual({ kind: 'routine', key: 'a', baseTs: 5, value: ROUTINE_DELETED })
-    expect(routineDeleteEdit('a', { ...push })).toMatchObject({ baseTs: null })
-    expect(routineDeleteEdit('a', null)).toMatchObject({ baseTs: null })
+  test("a delete: the marker on the copy's routine _ts, or null with none, and it starts fresh", () => {
+    expect(routineDeleteEdit('a', copy.state.routines[0])).toEqual({ kind: 'routine', key: 'a', baseTs: 5, value: ROUTINE_DELETED, fresh: true })
+    expect(routineDeleteEdit('a', { ...push })).toEqual({ kind: 'routine', key: 'a', baseTs: null, value: ROUTINE_DELETED, fresh: true })
+    expect(routineDeleteEdit('a', null)).toEqual({ kind: 'routine', key: 'a', baseTs: null, value: ROUTINE_DELETED, fresh: true })
   })
   test("an order: every id on the copy's edited.routineOrder, or null with none", () => {
     expect(routineOrderEdit(['b', 'a'], copy)).toEqual({ kind: 'routineOrder', key: 'routineOrder', baseTs: 9, value: ['b', 'a'] })
@@ -474,17 +506,31 @@ describe('the Plan tab\'s edits through the store and the guard', () => {
     return noticeLines(planNotices(listed, rows, state))
   }
 
-  test('a create then a delete before any sync: base 0 kept, read as done, nothing sent', async () => {
+  test('a create then a fresh delete before any sync: the base becomes null, the row is done, nothing is sent', async () => {
     const edits = createMemoryPendingEdits()
     const r = { id: 'n1', name: 'Legs', ex: [] }
     const copy = { routines: [{ ...push, _ts: 5 }] }
     await edits.put({ ...routineCreateEdit(r), t: 1 })
     await edits.put({ ...routineDeleteEdit('n1', null), t: 2 })
-    expect(await edits.get('routine', 'n1')).toMatchObject({ baseTs: 0 })
+    // The fresh delete replaces the create's base 0. The routine is absent on the copy, and absent
+    // is the marker, which the guard counts as done before it compares stamps, so nothing is applied.
+    expect(await edits.get('routine', 'n1')).toMatchObject({ baseTs: null })
     const result = await settle(edits, copy)
     expect(result.done.map(d => d.key)).toEqual(['n1'])
     expect(result.applied).toEqual([])
     expect(result.state).toBe(copy)
+  })
+  test('a fresh delete of a pending edit whose base is null takes the copy routine _ts and the guard applies it', async () => {
+    const edits = createMemoryPendingEdits()
+    await edits.put({ kind: 'routine', key: 'a', baseTs: null, value: { ...push, name: 'Local' }, t: 1 })
+    await edits.put({ ...routineDeleteEdit('a', { ...push, _ts: 5 }), t: 2 })
+    expect(await edits.get('routine', 'a')).toMatchObject({ baseTs: 5, sent: null })
+    const copy = { routines: [{ ...push, _ts: 5 }, pull] }
+    const result = applyEdits(copy, await edits.listPending())
+    expect(result.applied.map(d => d.key)).toEqual(['a'])
+    expect(result.superseded).toEqual([])
+    expect(result.done).toEqual([])
+    expect(result.state.routines.map(r => r.id)).toEqual(['b'])
   })
   test('a delete the web overtook names the routine the web kept', async () => {
     const edits = createMemoryPendingEdits()

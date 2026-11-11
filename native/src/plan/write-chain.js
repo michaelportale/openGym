@@ -62,5 +62,8 @@ export function createWriteChain(save, onAhead = () => {}) {
       queue = run
       return run.then(settle)
     },
+    // Resolves when every write started so far has finished. It does not write. A delete, once
+    // confirmed, waits on this so a commit already running cannot land after the delete.
+    settled: () => queue,
   }
 }
