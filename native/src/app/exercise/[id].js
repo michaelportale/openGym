@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -6,15 +6,20 @@ import { color, radius, space, touch } from '../../theme/tokens'
 import AppText from '../../ui/AppText'
 import Card from '../../ui/Card'
 import IconButton from '../../ui/IconButton'
+import TextButton from '../../ui/TextButton'
 import LineChart from '../../ui/LineChart'
 import ScaleButton from '../../ui/ScaleButton'
 import ExerciseMedia from '../../exercises/ExerciseMedia'
+import { askDeleteCustom, leaveForExercises } from '../../exercises/delete-custom'
 import { exerciseDetail, findExercise } from '../../exercises/detail-view'
+import { canAuthorCustom } from '../../exercises/exercise-notices'
 import { exerciseHistoryView } from '../../exercises/history-view'
 import { routeId } from '../../exercises/route-id'
 import { useExerciseSource } from '../../exercises/use-exercise-source'
 import { loadExerciseText, exerciseTextLoaded } from '../../shared/exercise-text'
 import { i18nCore } from '../../shared/training'
+import { announce } from '../../plan/announce'
+import { usePushLock } from '../../ui/use-push-lock'
 import WhySheet from '../../workout/WhySheet'
 import { whyEntry } from '../../workout/why-entry'
 
@@ -25,10 +30,34 @@ export default function ExerciseScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const id = routeId(params.id)
-  const { status, state, server, error } = useExerciseSource()
+  const guard = usePushLock()
+  const { status, state, server, copy, openEntries, saveCustom, error } = useExerciseSource()
   const [textReady, setTextReady] = useState(exerciseTextLoaded)
   const [metric, setMetric] = useState('top')
   const [whyOpen, setWhyOpen] = useState(false)
+  const [message, setMessage] = useState(null)
+  const latest = useRef(null)
+  latest.current = { state, copy, openEntries, saveCustom }
+  const storedCustom = status === 'ready' && state
+    ? (state.customEx || []).find(e => e && e.id === id) || null
+    : null
+  const author = canAuthorCustom(copy) && storedCustom != null
+  const show = text => {
+    setMessage(text)
+    announce(text)
+  }
+  const onDelete = () => {
+    const now = latest.current
+    askDeleteCustom({
+      state: now.state,
+      id,
+      openEntries: now.openEntries,
+      copy: now.copy,
+      saveCustom: now.saveCustom,
+      onError: show,
+      onDone: () => leaveForExercises(router),
+    })
+  }
 
   useEffect(() => {
     let mounted = true
@@ -80,6 +109,25 @@ export default function ExerciseScreen() {
           <ExerciseMedia key={detail.media.clip} media={detail.media} style={styles.pad} />
         ) : null}
         {detail.custom ? <AppText variant="value" color={color.accent} style={styles.pad}>Yours</AppText> : null}
+        {author ? (
+          <View style={styles.actions}>
+            <TextButton
+              label="Edit"
+              accessibilityLabel="Edit exercise"
+              accessibilityHint="Opens the form for this exercise."
+              onPress={() => guard(() => router.push('/custom-exercise?id=' + encodeURIComponent(id)))}
+            />
+            <TextButton
+              label="Delete"
+              accessibilityLabel="Delete exercise"
+              accessibilityHint="Asks before deleting this exercise."
+              onPress={onDelete}
+            />
+          </View>
+        ) : null}
+        {message ? (
+          <AppText variant="body" accessibilityRole="alert" accessibilityLiveRegion="polite" style={styles.pad}>{message}</AppText>
+        ) : null}
         {desc ? <AppText variant="body" color={color.textSecondary} style={styles.pad}>{desc}</AppText> : null}
         {detail.best || detail.last ? (
           <Card style={styles.history}>
@@ -157,6 +205,7 @@ const styles = StyleSheet.create({
   content: { paddingBottom: space.xl * 2, gap: space.md },
   back: { paddingHorizontal: space.lg, alignItems: 'flex-start' },
   pad: { marginHorizontal: space.lg },
+  actions: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.lg, gap: space.sm },
   history: { marginHorizontal: space.lg, padding: space.lg, gap: space.xs, borderRadius: radius.md },
   past: { marginHorizontal: space.lg, padding: space.lg, gap: space.md, borderRadius: radius.md },
   toggleRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
