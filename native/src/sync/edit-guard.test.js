@@ -957,9 +957,9 @@ test('schedule: stampOf is the greatest schedule stamp, null when none of them i
 
 // A custom exercise (7E-C): a second list, state.customEx, settled like a routine. A create is
 // base 0 and lands at the end with its stamps off. An edit replaces that id on the copy's stamps.
-// A delete is { deleted: true } and drops only that id. media and url are not put back by the API,
-// so an edit that does not carry the copy's value for either is unsafe; so is any other key the
-// copy holds and the edit omits. A create is not checked for media. A delete is not unsafe.
+// A delete is { deleted: true } and drops only that id. Dropping or replacing media is unsafe.
+// Omitting url is applied. So is any other key the copy holds and the edit omits. A create is
+// not checked for media. A delete is not unsafe.
 const custom = (id, n, extra = {}) => ({ id, n, ...extra })
 const customEdit = (id, value, extra = {}) => ({ kind: 'customEx', key: id, baseTs: null, value, sent: null, t: 1, ...extra })
 const photo = { hash: 'h', kind: 'image' }
@@ -1088,7 +1088,7 @@ test('a custom exercise delete removes that id from customEx and leaves a routin
   expect(stampOf(r.state, 'customEx', 'c1')).toBe(0)
 })
 
-test('an edit that drops media or url the copy holds is superseded as unsafe and the copy is unchanged', () => {
+test('an edit that drops or replaces media the copy holds is superseded as unsafe', () => {
   const copy = custom('c1', 'Curl', { bp: 'arms', media: photo, url: link, _ts: 3 })
   const state = { customEx: [copy], routines: [{ id: 'r', ex: [{ id: 'c1' }] }] }
   const dropMedia = custom('c1', 'Curl', { bp: 'arms', url: link })
@@ -1097,14 +1097,26 @@ test('an edit that drops media or url the copy holds is superseded as unsafe and
   expect(r.applied).toEqual([])
   expect(r.state).toBe(state)
   expect(copy.media).toEqual(photo)
-  const dropUrl = custom('c1', 'Curl', { bp: 'arms', media: photo })
-  const u = applyEdits(state, [customEdit('c1', dropUrl, { baseTs: 3, t: 5 })])
-  expect(u.superseded).toEqual([{ kind: 'customEx', key: 'c1', t: 5, reason: 'unsafe' }])
-  expect(u.state).toBe(state)
-  const replaced = custom('c1', 'Curl', { bp: 'arms', media: { hash: 'other', kind: 'image' }, url: 'https://ex.test/other' })
+  const replaced = custom('c1', 'Curl', { bp: 'arms', media: { hash: 'other', kind: 'image' }, url: link })
   const m = applyEdits(state, [customEdit('c1', replaced, { baseTs: 3, t: 6 })])
   expect(m.superseded).toEqual([{ kind: 'customEx', key: 'c1', t: 6, reason: 'unsafe' }])
   expect(m.state).toBe(state)
+})
+
+test('clearing the link omits url and keeps the photo', () => {
+  const copy = custom('c1', 'Curl', { bp: 'arms', media: photo, url: link, _ts: 3, _f: { n: 1 } })
+  const state = { customEx: [copy] }
+  const cleared = custom('c1', 'Curl', { bp: 'arms', media: photo })
+  const r = applyEdits(state, [customEdit('c1', cleared, { baseTs: 3, t: 5 })])
+  expect(r.applied).toEqual([{ kind: 'customEx', key: 'c1', t: 5 }])
+  expect(r.state.customEx[0]).toEqual({ ...cleared, _ts: 3, _f: { n: 1 } })
+  expect(r.state.customEx[0].media).toEqual(photo)
+  expect('url' in r.state.customEx[0]).toBe(false)
+  const changed = custom('c1', 'Curl', { bp: 'arms', media: photo, url: 'https://ex.test/other' })
+  const next = applyEdits(r.state, [customEdit('c1', changed, { baseTs: 3, t: 6 })])
+  expect(next.applied).toEqual([{ kind: 'customEx', key: 'c1', t: 6 }])
+  expect(next.state.customEx[0].url).toBe('https://ex.test/other')
+  expect(next.state.customEx[0].media).toEqual(photo)
 })
 
 test('a rebased custom exercise edit that drops media is unsafe and is not written', () => {

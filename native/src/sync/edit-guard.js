@@ -5,7 +5,8 @@
 // (superseded). A routine edit that would go but that the API would change on the way in
 // (plan/server-put-back.js: a move or swap whose slots it pairs differently) is superseded as
 // unsafe, never sent. A custom exercise edit is unsafe the same way, and also when it would drop
-// or replace media or url the copy holds. A routine row can also create the routine (base 0) or
+// or replace media the copy holds. Omitting url is a cleared link and is sent. A routine row can
+// also create the routine (base 0) or
 // delete it (its value ROUTINE_DELETED). A customEx row does the same for state.customEx, and a
 // delete removes only that entry. A routineOrder row orders the routines. A schedule row replaces
 // scheduleMode, rotation, queue, week and dayPlan together, and is done once dead routine pins are
@@ -88,7 +89,7 @@ function withoutCustomEx(state, key) {
 }
 
 // True when the copy has no `key`, or the edit carries the same value (key order does not count).
-// A missing key on the edit is not the same: the API would store that drop for media and url.
+// A missing key on the edit is not the same. The API would store a dropped photo.
 function carried(copy, edit, key) {
   if (!isMap(copy) || !Object.hasOwn(copy, key)) return true
   return isMap(edit) && Object.hasOwn(edit, key) && deepEqual(copy[key], edit[key])
@@ -241,8 +242,9 @@ const ADAPTERS = {
   // delete of it is done, and a create (base 0) goes unless the id is tombstoned. A create appends,
   // its stamps taken off. An edit replaces that id on the copy's stamps. A delete filters that id
   // out of customEx and nothing else. Unsafe, besides a value whose id is not the row key: the id
-  // twice, customPutBack changing the value, or media or url the copy holds and the edit does not
-  // carry. A create is not checked for media or url. A delete is not unsafe.
+  // twice, customPutBack changing the value, or media the copy holds and the edit does not carry.
+  // Clearing the link omits url; the server allows that drop. A create is not checked for media.
+  // A delete is not unsafe.
   customEx: {
     read(state, key) {
       const list = Array.isArray(state.customEx) ? state.customEx : []
@@ -266,7 +268,7 @@ const ADAPTERS = {
     },
     unsafe: (entry, value, key) =>
       !isRoutineDeleted(value) && (value?.id !== key || (!entry.absent && (
-        entry.twice || customPutBackChanges(entry.value, value) || !carried(entry.value, value, 'media') || !carried(entry.value, value, 'url')
+        entry.twice || customPutBackChanges(entry.value, value) || !carried(entry.value, value, 'media')
       ))),
   },
   // state.nutritionDays[key], stamped by its _ts (the server stamps a day it changed). A day the copy
