@@ -1,8 +1,10 @@
 # On-device checklist
 
+Archived on 2026-11-11 as `archive/pr-106`. Unless explicitly updated below, this document describes the historical #105 snapshot `ed4fdc288`, not the current app or current work instructions. T2 and T3 subsequently merged in #107 (`11db2ec37`) and #108 (`e1c9a7bf2`), both present at `c5d6e8dbf`. No new implementation or device validation is authorized or claimed by this archive.
+
 Not run for this handoff. No iPhone validation is claimed.
 
-The overnight audit (`docs/reviews/2026-11-06-overnight-pr-audit.md` on open PR #65) says device rendering and real Expo SQLite are unverified. That audit's snapshot stops at #103. `expo-sqlite` is not a dependency. The Workout screen is still the preview and does not mount the session hook. Gus owns that screen. See [ui-handoff.md](ui-handoff.md).
+The overnight audit (`docs/reviews/2026-11-06-overnight-pr-audit.md` preserved by archived PR #65) says device rendering and real Expo SQLite are unverified. Its initial discovery stopped at #103; the final [archived audit](https://github.com/michaelportale/openGym/blob/archive/pr-65/docs/reviews/2026-11-06-overnight-pr-audit.md) covers through #105. `expo-sqlite` is not a dependency. The Workout screen is still the preview and does not mount the session hook. Gus owns that screen. See [ui-handoff.md](ui-handoff.md).
 
 Shell checks that are still open on the phone are listed there: SF Symbols, Liquid Glass labels, focus, the native tab bar versus the dock, Dynamic Type, reduced motion, and haptics. A clean install and the Metro export passed earlier. The export still needed `EXPO_NO_TYPESCRIPT_SETUP=1`.
 
@@ -17,7 +19,7 @@ Run the session checks below only on a build that actually opens a session.
 
 - Cross local midnight in the session's time zone.
 - A short gap, within `REST_MAX_MS` (15 minutes), still counts.
-- A longer overnight gap does not count as session time.
+- An idle overnight return after more than 15 minutes does not add that idle gap. Test this without committing work across the gap. Separately, sets committed at 23:40 and 00:10 count 30 minutes; crossing midnight alone must not erase that work interval.
 - The app offers resume, finish with an explicit end, or discard. It does not finish silently.
 - Resume moves the activity stamp. Sets, rest, notes, and a finish stay as they were.
 

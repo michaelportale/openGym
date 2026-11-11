@@ -1,5 +1,7 @@
 # Session architecture
 
+Archived on 2026-11-11 as `archive/pr-106`. Unless explicitly updated below, this document describes the historical #105 snapshot `ed4fdc288`, not the current app or current work instructions. T2 and T3 subsequently merged in #107 (`11db2ec37`) and #108 (`e1c9a7bf2`), both present at `c5d6e8dbf`. No new implementation or device validation is authorized or claimed by this archive.
+
 Head this describes: `native/phase-1` at `ed4fdc288601dde5504246eeb2131a53b19b69d7` (merge of #105).
 
 Code lives in `native/src/session/`. The Workout tab does not call it yet. See [ui-handoff.md](ui-handoff.md).
@@ -22,7 +24,7 @@ If a command's event would not change `workoutFold`, `#appendNow` does not write
 
 ## One save queue
 
-`#enqueue` is one promise chain. `#append` and `discard` both use it (#101, #104).
+`#enqueue` is one promise chain. Commands enter it and invoke `#appendNow`; `discard` uses the same queue (#104, #105).
 
 - An append waits until the append already in flight has finished its fold check, its storage write, and its cache update.
 - A discard waits for that append, then clears the journal, the in-memory events, the drafts, the base, and `#fold`.
@@ -31,7 +33,7 @@ If a command's event would not change `workoutFold`, `#appendNow` does not write
 
 Model checks such as unknown set, unknown exercise, no rest, and known set run inside the queued task (#105). Argument checks stay argument checks, in the same order.
 
-`putDraft` is not on this chain. An earlier draft write can finish after a later `commitSet` or `removeSet` clears that draft and put it back. The PRD task T3 queues that write with the clear, preserving invocation order. A draft accepted after a commit is newer input and remains saved. `#seenChain` is a separate chain for the last-seen stamp. A failed stamp write is still swallowed there. That is F004 in [open-questions.md](open-questions.md).
+At the #105 snapshot, `putDraft` was not on this chain. An earlier draft write can finish after a later `commitSet` or `removeSet` clears that draft and put it back. The PRD task T3 queues that write with the clear, preserving invocation order. A draft accepted after a commit is newer input and remains saved. `#seenChain` is a separate chain for the last-seen stamp. A failed stamp write is still swallowed there. That was F004 in [open-questions.md](open-questions.md). #107 subsequently made checkpoint failures visible, and #108 put draft writes and in-memory assignments on the same queue. These are completed tasks.
 
 ## First-write-wins zone
 
@@ -57,9 +59,9 @@ The trail copy in the upsert is wrapped in `json()`. The comment in `sqlite-stor
 
 - Rest remaining while running is deadline minus now, clamped to the total. Zero means the rest is over. Nothing there starts the next set.
 - Pause stores the remaining time. While paused, remaining does not read `now`.
-- Elapsed walks stamps in journal order and keeps a high-water mark. A backward step adds nothing.
+- Elapsed walks stamps sorted by time and keeps a high-water mark. A backward step adds nothing.
 - A forward gap longer than `DURATION_GAP_MS` (4 hours) adds nothing.
-- An overnight gap longer than `REST_MAX_MS` (15 minutes) is not session time. A shorter overnight rest still counts (#79, #80).
+- An idle overnight return longer than `REST_MAX_MS` (15 minutes) is excluded. A shorter overnight rest still counts (#79, #80). Committed work across midnight can count longer intervals; `session.test.js` counts 30 minutes between sets at 23:40 and 00:10.
 - Overnight is a local-date change in the session zone, and only when now is later than the last activity. Finish then needs an explicit end. Resume, finish, and discard are the three choices (#77).
 
 `REST_MAX_MS` matches `frontend/src/lib/duration.js` and is copied here. The file says only `native/src/shared/training.js` may import `frontend/`.

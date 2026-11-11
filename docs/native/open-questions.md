@@ -1,5 +1,7 @@
 # Open questions
 
+Archived on 2026-11-11 as `archive/pr-106`. Unless explicitly updated below, this document describes the historical #105 snapshot `ed4fdc288`, not the current app or current work instructions. T2 and T3 subsequently merged in #107 (`11db2ec37`) and #108 (`e1c9a7bf2`), both present at `c5d6e8dbf`. No new implementation or device validation is authorized or claimed by this archive.
+
 Do not decide these in a code PR. They need Michael, or a review that names the choice.
 
 ## Shared web code (#70)
@@ -18,21 +20,19 @@ Do not push to `main` and do not commit on it. `main` waits for Michael's phone 
 
 `docs/sprints/2026-10-30-native-workout-prd.md` says the owner reviews and merges. `docs/science/decisions.md` uses the name Charlie for a later caller of the effort helpers and of `migrateLinearRoutines`. It does not say Charlie is the GitHub reviewer. This handoff was also told that Charlie reviews every PR, including security. Those sources do not name the same person. Agents do not merge while that is unresolved. The PRD states the same question.
 
-## F004 is still open in the code
+## Completed journal tasks (T2 and T3)
 
-`#persistSeen` in `native/src/session/session.js` catches a rejected `putLastSeen`, clears its private marker, and does not report an error. That was the code at the #104 merge `ccf975c`. It was not re-read after #105 merged at `ed4fdc2`. T2 in the PRD is unblocked.
+At #105 (`ed4fdc288`), `#persistSeen` swallowed checkpoint failures and `putDraft` was outside the journal queue. #107 (`11db2ec37`) implemented checkpoint error reporting, and #108 (`e1c9a7bf2`) serialized draft writes and in-memory assignments with the journal. Both are present at `c5d6e8dbf`; do not assign them again.
 
-The write-up is F004 in `docs/reviews/2026-11-06-overnight-pr-audit.md` on open PR #65. That file's discovery snapshot stops at #103. It was not re-read against #104 for this note. The catch itself was re-read at the #104 merge `ccf975c`. It was not re-read after #105 merged at `ed4fdc2`.
-
-T2 in the PRD is to make the failure visible without marking an already-saved set or draft as unsaved. T3 queues `putDraft` on the same chain so an earlier draft write cannot finish after a later commit or remove and bring the cleared draft back. A later accepted draft remains newer input. Whether anything else in the audit changed after #103 was not re-checked.
+The [archived #65 audit](https://github.com/michaelportale/openGym/blob/archive/pr-65/docs/reviews/2026-11-06-overnight-pr-audit.md) preserves F004's status and evidence within its fixed window through 2026-11-07 07:30 EST. This archival correction records the later implementation merges; it does not rerun their tests or change that historical audit disposition.
 
 ## expo-sqlite is not installed
 
 `native/package.json` has no `expo-sqlite` dependency. `storage.js` says not to import it in this phase. `sqlite-storage.js` takes an injected handle. Who adds the real database, and on which sprint phase, is not decided in the session code. Do not add the dependency as a drive-by.
 
-## Open doc PRs
+## Archived doc PRs
 
-These are drafts. Do not merge them as part of the journal lane.
+These historical handoffs are preserved under `archive/pr-65`, `archive/pr-67`, and `archive/pr-106` and closed without merging during the 2026-11-11 cleanup.
 
 - #65 `docs: overnight PR audit for November 6–7`
 - #67 `Overnight merge watch (running log, do not merge)`

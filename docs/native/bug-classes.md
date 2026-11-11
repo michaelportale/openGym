@@ -1,5 +1,7 @@
 # Bug classes
 
+Archived on 2026-11-11 as `archive/pr-106`. Unless explicitly updated below, this document describes the historical #105 snapshot `ed4fdc288`, not the current app or current work instructions. T2 and T3 subsequently merged in #107 (`11db2ec37`) and #108 (`e1c9a7bf2`), both present at `c5d6e8dbf`. No new implementation or device validation is authorized or claimed by this archive.
+
 Each class below showed up more than once on `native/phase-1`. The guard test is what the next change has to keep passing. The suite is `cd native && npm run verify` (`npm test` and `npm run check:shared`).
 
 ## Per-side done drift
@@ -75,6 +77,6 @@ Guard: `a commit queued behind removeSet reports unknown-set` and `an extend que
 
 - Prefer an invariant that discovers every command over another one-off case. `journal-effect.test.js` and `replay.test.js` find commands by reading `eventId` on the prototype.
 - A read-modify-write that awaits in the middle needs one serialized queue. Catch errors so the chain stays alive.
-- Keep fold and `view` pure. `view` does not write the journal.
+- Keep the fold pure. `view` records clock samples in memory for elapsed time and checkpoint trails; it performs no storage I/O. Preserve that sampling.
 - Check a duplicate event id before the model preconditions, and keep that order. #105 runs that sequence inside the queue so it sees the journal after the earlier command. `finish` still checks `discarded` before the duplicate id. Leave that unless a review says otherwise.
 - Merge parallel PRs one at a time. After each merge, run `npm run verify` on the new `native/phase-1` head before branching again.
