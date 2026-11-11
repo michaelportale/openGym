@@ -710,3 +710,211 @@ test('a deleted.routines record of either sign counts as deleted: a create over 
   expect(r.superseded).toEqual([{ kind: 'routine', key: 'a', t: 2, reason: 'deleted' }])
   expect(r.applied).toEqual([])
 })
+
+// The schedule (7E-B): one row, kind and key schedule, whose value is all five keys together
+// (scheduleMode, rotation, queue, week, dayPlan). Its base is the greatest of edited.scheduleMode,
+// edited.rotation, edited.queue and every edited['week.*'] and edited['dayPlan.*']. It settles
+// after the routine rows, on the document they leave, and is done or rebased only when the server's
+// own document holds the same five values. A pin is a routine id in a week array or a dayPlan
+// value; one the document does not hold is dropped on the write, and 'rest' stays.
+const schedule = (value, extra = {}) => ({ kind: 'schedule', key: 'schedule', baseTs: null, value, sent: null, t: 1, ...extra })
+const five = (over = {}) => ({ scheduleMode: 'week', rotation: null, queue: null, week: {}, dayPlan: {}, ...over })
+
+test('schedule: a schedule on the greatest stamp it saw applies: all five keys replaced, edited left as the copy has it', () => {
+  const edited = { scheduleMode: 2, rotation: 5, queue: 1, 'week.1': 4, 'dayPlan.2026-11-01': 3, unit: 100 }
+  const state = {
+    unit: 'lb',
+    routines: listed('a', 'b'),
+    scheduleMode: 'rotation',
+    rotation: { id: 'old', sequence: ['a'], label: 'Old' },
+    queue: { ids: ['a'], since: 1 },
+    week: { 1: ['a'] },
+    dayPlan: { '2026-11-01': 'a' },
+    edited,
+    workouts: [{ id: 'w1' }],
+  }
+  const value = five({
+    rotation: { id: 'old', sequence: ['b', 'a'], label: 'Old' },
+    week: { 1: ['b'], 3: ['a'] },
+    dayPlan: { '2026-11-02': 'b' },
+  })
+  const before = JSON.stringify(state)
+  const r = applyEdits(state, [schedule(value, { baseTs: 5, t: 3 })])
+  expect(r.applied).toEqual([{ kind: 'schedule', key: 'schedule', t: 3 }])
+  expect(r.done).toEqual([])
+  expect(r.rebased).toEqual([])
+  expect(r.superseded).toEqual([])
+  for (const key of ['scheduleMode', 'rotation', 'queue', 'week', 'dayPlan']) expect(r.state[key]).toEqual(value[key])
+  expect(Object.hasOwn(r.state, 'queue')).toBe(true)
+  expect(r.state.queue).toBeNull()
+  expect(r.state.edited).toBe(edited)
+  expect(r.state.workouts).toBe(state.workouts)
+  expect(r.state.routines).toBe(state.routines)
+  expect(r.state._ts).toBeUndefined()
+  expect(r.state._f).toBeUndefined()
+  expect(JSON.stringify(state)).toBe(before)
+  expect(entryValue(r.state, 'schedule', 'schedule')).toEqual(value)
+})
+
+test('schedule: done when the copy holds the same five values, whatever the stamps', () => {
+  const value = five({ week: { 1: ['a'], 3: ['b'] }, dayPlan: { '2026-11-12': 'rest' } })
+  const state = { ...value, routines: listed('a', 'b'), edited: { 'dayPlan.2026-11-12': 40, queue: 2 } }
+  const r = applyEdits(state, [schedule(value, { baseTs: 1, t: 2 })])
+  expect(r.done).toEqual([{ kind: 'schedule', key: 'schedule', t: 2 }])
+  expect(r.applied).toEqual([])
+  expect(r.state).toBe(state)
+})
+
+test('schedule: the copy holding the schedule this phone sent, with a newer stamp, rebases it onto the greatest stamp', () => {
+  const sent = five({ week: { 1: ['a'] } })
+  const value = five({ week: { 1: ['a'], 3: ['b'] }, dayPlan: { '2026-11-13': 'b' } })
+  const state = { ...sent, routines: listed('a', 'b'), edited: { scheduleMode: 4, queue: 3, 'week.1': 12, 'dayPlan.2026-11-12': 6 } }
+  const r = applyEdits(state, [schedule(value, { baseTs: 5, sent, t: 8 })])
+  expect(r.rebased).toEqual([{ kind: 'schedule', key: 'schedule', t: 8, baseTs: 12 }])
+  expect(r.applied).toEqual([])
+  expect(r.state.week).toEqual({ 1: ['a'], 3: ['b'] })
+  expect(r.state.dayPlan).toEqual({ '2026-11-13': 'b' })
+  expect(r.state.scheduleMode).toBe('week')
+  expect(r.state.rotation).toBeNull()
+  expect(r.state.queue).toBeNull()
+  expect(r.state.edited).toBe(state.edited)
+})
+
+test('schedule: a web change to any one of the five stamps since the base supersedes the whole row, and nothing is written', () => {
+  const state = {
+    ...five({ week: { 1: ['a'] }, dayPlan: { '2026-11-12': 'a' } }),
+    routines: listed('a'),
+    edited: { scheduleMode: 5, rotation: 5, queue: 5, 'week.1': 5, 'dayPlan.2026-11-12': 9 },
+  }
+  const value = five({ scheduleMode: 'rotation', rotation: { id: 'r', sequence: ['a'], label: '' }, queue: { ids: ['a'] }, week: { 1: ['a'] } })
+  const r = applyEdits(state, [schedule(value, { baseTs: 5, t: 4 })])
+  expect(r.superseded).toEqual([{ kind: 'schedule', key: 'schedule', t: 4, reason: 'changed' }])
+  expect(r.applied).toEqual([])
+  expect(r.state).toBe(state)
+})
+
+test('schedule: a null base on a document with no schedule stamps applies, and a week it sets is written', () => {
+  const state = { routines: listed('a'), unit: 'lb' }
+  const value = five({ week: { 1: ['a'] } })
+  const r = applyEdits(state, [schedule(value)])
+  expect(r.applied).toEqual([{ kind: 'schedule', key: 'schedule', t: 1 }])
+  expect(r.state.scheduleMode).toBe('week')
+  expect(r.state.rotation).toBeNull()
+  expect(r.state.queue).toBeNull()
+  expect(Object.hasOwn(r.state, 'rotation')).toBe(true)
+  expect(Object.hasOwn(r.state, 'queue')).toBe(true)
+  expect(r.state.week).toEqual({ 1: ['a'] })
+  expect(r.state.dayPlan).toEqual({})
+  expect(Object.hasOwn(r.state, 'edited')).toBe(false)
+  expect(r.state._ts).toBeUndefined()
+  expect(r.state._f).toBeUndefined()
+  expect(r.state.routines).toBe(state.routines)
+  expect(r.state.unit).toBe('lb')
+})
+
+test('schedule: a pin to a routine the document does not hold is dropped, and rest is kept', () => {
+  const state = {
+    ...five({ week: { 1: ['a'], 3: ['rest'] }, dayPlan: { '2026-11-13': 'rest' } }),
+    routines: listed('a'),
+    edited: { scheduleMode: 4, 'week.1': 4 },
+  }
+  const value = five({
+    week: { 1: ['gone', 'a'], 2: ['gone'], 3: ['rest'], 4: [] },
+    dayPlan: { '2026-11-12': 'gone', '2026-11-13': 'rest' },
+  })
+  const before = JSON.stringify(state)
+  const valueBefore = structuredClone(value)
+  const r = applyEdits(state, [schedule(value, { baseTs: 4, t: 6 })])
+  expect(r.applied).toEqual([{ kind: 'schedule', key: 'schedule', t: 6 }])
+  expect(r.done).toEqual([])
+  expect(r.state.week).toEqual({ 1: ['a'], 3: ['rest'] })
+  expect(r.state.dayPlan).toEqual({ '2026-11-13': 'rest' })
+  expect(Object.hasOwn(r.state.week, '2')).toBe(false)
+  expect(Object.hasOwn(r.state.week, '4')).toBe(false)
+  expect(Object.hasOwn(r.state.dayPlan, '2026-11-12')).toBe(false)
+  expect(JSON.stringify(r.state.week)).not.toContain('[]')
+  expect(JSON.stringify(r.state.dayPlan)).not.toContain('[]')
+  expect(r.state._ts).toBeUndefined()
+  expect(r.state._f).toBeUndefined()
+  expect(r.state.edited).toBe(state.edited)
+  expect(JSON.stringify(state)).toBe(before)
+  expect(value).toEqual(valueBefore)
+})
+
+test('schedule: clearing rotation writes null, and the key stays', () => {
+  const state = {
+    ...five({ scheduleMode: 'rotation', rotation: { id: 'r', sequence: ['a'], label: 'Loop' }, queue: { ids: ['a'] }, week: { 1: ['a'] } }),
+    routines: listed('a'),
+    edited: { rotation: 4, scheduleMode: 2 },
+  }
+  const value = five({ week: { 1: ['a'] } })
+  const r = applyEdits(state, [schedule(value, { baseTs: 4, t: 2 })])
+  expect(r.applied).toEqual([{ kind: 'schedule', key: 'schedule', t: 2 }])
+  expect(Object.hasOwn(r.state, 'rotation')).toBe(true)
+  expect(r.state.rotation).toBeNull()
+  expect(Object.hasOwn(r.state, 'queue')).toBe(true)
+  expect(r.state.queue).toBeNull()
+  expect(state.rotation).toEqual({ id: 'r', sequence: ['a'], label: 'Loop' })
+})
+
+test('schedule: it settles after routine rows, on the document they leave, and a pin to a routine they delete is dropped', () => {
+  const state = {
+    ...five({ week: { 1: ['a', 'b'] }, dayPlan: { '2026-11-12': 'a', '2026-11-13': 'rest' } }),
+    routines: listed('a', 'b'),
+    edited: { scheduleMode: 5, 'week.1': 5, 'dayPlan.2026-11-12': 5 },
+  }
+  const value = five({ week: { 1: ['a', 'b'] }, dayPlan: { '2026-11-12': 'a', '2026-11-13': 'rest' } })
+  const r = applyEdits(state, [schedule(value, { baseTs: 5, t: 1 }), edit('a', ROUTINE_DELETED, { baseTs: 1, t: 2 })])
+  expect(r.done).toEqual([])
+  expect(r.applied).toEqual([{ kind: 'routine', key: 'a', t: 2 }, { kind: 'schedule', key: 'schedule', t: 1 }])
+  expect(r.state.routines.map((x) => x.id)).toEqual(['b'])
+  expect(r.state.week).toEqual({ 1: ['b'] })
+  expect(r.state.dayPlan).toEqual({ '2026-11-13': 'rest' })
+  expect(r.state.edited).toBe(state.edited)
+  expect(r.state.rotation).toBeNull()
+  expect(Object.hasOwn(r.state, 'rotation')).toBe(true)
+})
+
+test('schedule: a schedule that holds only on the document the other rows leave is not done, and one the server already holds is', () => {
+  const state = { ...five({ week: { 1: ['a', 'b'] } }), routines: listed('a', 'b'), edited: { 'week.1': 5 } }
+  const value = five({ week: { 1: ['b'] } })
+  const rows = [schedule(value, { baseTs: 5, t: 1 }), edit('a', ROUTINE_DELETED, { baseTs: 1, t: 2 })]
+  const r = applyEdits(state, rows)
+  expect(r.done).toEqual([])
+  expect(r.applied).toEqual([{ kind: 'routine', key: 'a', t: 2 }, { kind: 'schedule', key: 'schedule', t: 1 }])
+  expect(r.state.week).toEqual({ 1: ['b'] })
+  const held = { ...state, routines: listed('b'), week: { 1: ['b'] } }
+  expect(applyEdits(held, rows).done).toEqual([{ kind: 'routine', key: 'a', t: 2 }, { kind: 'schedule', key: 'schedule', t: 1 }])
+})
+
+test('schedule: a sent schedule that holds only on the document the other rows leave is not rebased onto the web stamp', () => {
+  const sent = five({ week: { 1: ['b'] } })
+  const web = { ...five({ week: { 1: ['a', 'b'] } }), routines: listed('a', 'b'), edited: { 'week.1': 9 } }
+  const r = applyEdits(web, [schedule(sent, { baseTs: 5, sent, t: 1 }), edit('a', ROUTINE_DELETED, { baseTs: 1, t: 2 })])
+  expect(r.rebased).toEqual([])
+  expect(r.superseded).toEqual([{ kind: 'schedule', key: 'schedule', t: 1, reason: 'changed' }])
+})
+
+test('schedule: a pin to a routine created in the same push is kept, the schedule settling after the create', () => {
+  const state = { routines: listed('b'), edited: {} }
+  const value = five({ week: { 1: ['n', 'b'] }, dayPlan: { '2026-11-12': 'n' } })
+  const r = applyEdits(state, [schedule(value, { t: 1 }), edit('n', routine('n', 'New'), { baseTs: 0, t: 2 })])
+  expect(r.applied).toEqual([{ kind: 'routine', key: 'n', t: 2 }, { kind: 'schedule', key: 'schedule', t: 1 }])
+  expect(r.state.week).toEqual({ 1: ['n', 'b'] })
+  expect(r.state.dayPlan).toEqual({ '2026-11-12': 'n' })
+  expect(r.state.routines.map((x) => x.id)).toEqual(['b', 'n'])
+})
+
+test('schedule: stampOf is the greatest schedule stamp, null when none of them is a number', () => {
+  expect(stampOf({
+    edited: {
+      scheduleMode: 3, rotation: 8, queue: 5, 'week.1': 4, 'week.3': 11, 'dayPlan.2026-11-12': 7,
+      week: 100, dayPlan: 80, dayPlanExtra: 90, unit: 70, routineOrder: 60,
+    },
+  }, 'schedule', 'schedule')).toBe(11)
+  expect(stampOf({ edited: { scheduleMode: 0, rotation: -3 } }, 'schedule', 'schedule')).toBe(0)
+  expect(stampOf({ edited: { unit: 9, routineOrder: 4 } }, 'schedule', 'schedule')).toBeNull()
+  expect(stampOf({ edited: { scheduleMode: '9', 'week.1': null, rotation: false } }, 'schedule', 'schedule')).toBeNull()
+  expect(stampOf({}, 'schedule', 'schedule')).toBeNull()
+  expect(stampOf(undefined, 'schedule', 'schedule')).toBeNull()
+})

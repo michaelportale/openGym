@@ -351,6 +351,33 @@ describe.each(Object.entries(makers))('%s pending edits', (_, make) => {
     await s.markSent([{ kind: 'routineOrder', key: 'routineOrder', t: 2, baseTs: 5, value: ['b', 'a', 'c'] }])
     expect((await s.get('routineOrder', 'routineOrder')).sent).toEqual(['b', 'a', 'c'])
   })
+
+  // The schedule (edit-guard.js): all five keys, under the one key schedule. week and dayPlan are maps.
+  test('a schedule row holds all five keys under the key schedule; a missing key, a non-map week or dayPlan, or another key throws, and nothing is stored', async () => {
+    const s = make()
+    const good = { scheduleMode: null, rotation: null, queue: null, week: { 1: ['a'] }, dayPlan: { '2026-11-12': 'rest' } }
+    for (const key of ['scheduleMode', 'rotation', 'queue', 'week', 'dayPlan']) {
+      const value = { ...good }
+      delete value[key]
+      await expect(s.put({ kind: 'schedule', key: 'schedule', baseTs: null, value, t: 1 }), key).rejects.toThrow(/schedule/)
+    }
+    for (const value of [
+      { ...good, week: [] }, { ...good, week: null }, { ...good, week: 'mon' },
+      { ...good, dayPlan: [] }, { ...good, dayPlan: null },
+      null, [], 'week',
+    ]) {
+      await expect(s.put({ kind: 'schedule', key: 'schedule', baseTs: null, value, t: 1 }), JSON.stringify(value)).rejects.toThrow(/schedule/)
+    }
+    for (const key of ['week', 'rotation', 'scheduleMode', 'queue', 'dayPlan']) {
+      await expect(s.put({ kind: 'schedule', key, baseTs: null, value: good, t: 1 }), key).rejects.toThrow(/schedule/)
+    }
+    expect(await s.listPending()).toEqual([])
+    await s.put({ kind: 'schedule', key: 'schedule', baseTs: 5, value: good, t: 2 })
+    expect(await s.listPending()).toEqual([{ kind: 'schedule', key: 'schedule', baseTs: 5, value: good, sent: null, t: 2 }])
+    const sent = { ...good, scheduleMode: 'week' }
+    await s.markSent([{ kind: 'schedule', key: 'schedule', t: 2, baseTs: 5, value: sent }])
+    expect((await s.get('schedule', 'schedule')).sent).toEqual(sent)
+  })
 })
 
 test('real sqlite: survives a reopen with value and sent as objects', async () => {
