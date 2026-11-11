@@ -248,7 +248,7 @@ proxies the API and serves exercise media, so its replacement is planned before 
 | 5 | Code done; the owner's device checklist is pending | PR #116 |
 | 6 | Code done; the owner's device checklist is pending | PRs #117 and #118 |
 | 7 | Phase 7 code done, with the device checklist pending | PR #119, PR #120, PR #121 and PR #122 |
-| 7E-A | Code done; device rows pending | the 7E-A PR |
+| 7E-A | Code done; device rows pending | PR #125 |
 | 8 | Code done; the owner's WHOOP setup is pending | PR #123 |
 | 9 | Prepared; the owner's TestFlight run and gym session are pending (results in [the acceptance log](2026-11-native-device-acceptance.md)) | PR #124 |
 | 10 | Not started | |
