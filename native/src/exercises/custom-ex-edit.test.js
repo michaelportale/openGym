@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest'
+import { customUsage } from '../sync/edit-guard.js'
 import { equipment, exercises } from '../shared/training.js'
-import { customDelete, customDraft, customFormEdit, customUsage, muscleSeed } from './custom-ex-edit.js'
+import { customDelete, customDraft, customFormEdit, muscleSeed } from './custom-ex-edit.js'
 
 const CATALOGUE_NAME = 'barbell bench press'
 

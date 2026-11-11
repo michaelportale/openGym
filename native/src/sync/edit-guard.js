@@ -12,7 +12,6 @@
 // scheduleMode, rotation, queue, week and dayPlan together, and is done once dead routine pins are
 // gone. No I/O.
 
-import { customUsage } from '../exercises/custom-ex-edit.js'
 import { customPutBackChanges, putBackChanges } from '../plan/server-put-back.js'
 import { routines as routineLib } from '../shared/training.js'
 
@@ -24,6 +23,27 @@ const isMap = v => isObj(v) && !Array.isArray(v)
 // a row read back holds an equal object, not this one: test with isRoutineDeleted.
 export const ROUTINE_DELETED = Object.freeze({ deleted: true })
 export const isRoutineDeleted = v => isMap(v) && v.deleted === true && Object.keys(v).length === 1
+
+const countWhere = (list, key, id) => {
+  if (!Array.isArray(list)) return 0
+  let n = 0
+  for (const item of list) {
+    const entries = item && item[key]
+    if (Array.isArray(entries) && entries.some(e => e && e.id === id)) n += 1
+  }
+  return n
+}
+
+// How many routines and finished workouts name this id (once each), and whether the open
+// session does. A null routine or workout is skipped.
+export function customUsage(state, id, openEntries) {
+  const source = state || {}
+  return {
+    routines: countWhere(source.routines, 'ex', id),
+    workouts: countWhere(source.workouts, 'entries', id),
+    open: Array.isArray(openEntries) && openEntries.some(e => e === id || (e && typeof e === 'object' && e.id === id)),
+  }
+}
 
 // The routine without its top-level sync stamps, for comparison.
 export function routineContent(r) {

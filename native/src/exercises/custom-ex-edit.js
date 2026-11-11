@@ -1,5 +1,6 @@
 // Pure checks for a custom exercise: the draft the phone can save, where that id is still
 // used, and whether a delete is allowed. Nothing here writes state or invents stamps.
+import { customUsage } from '../sync/edit-guard.js'
 import { equipment, exercises, format, mediaRefs, muscles } from '../shared/training.js'
 
 const NAME_MAX = 80
@@ -54,16 +55,6 @@ const prospectiveId = (input, stored) => {
   if (typeof input.id === 'string' && input.id !== '') return input.id
   if (isStored(stored) && stored.id != null && stored.id !== '') return stored.id
   return undefined
-}
-
-const countWhere = (list, key, id) => {
-  if (!Array.isArray(list)) return 0
-  let n = 0
-  for (const item of list) {
-    const entries = item && item[key]
-    if (Array.isArray(entries) && entries.some(e => e && e.id === id)) n += 1
-  }
-  return n
 }
 
 // The exercise to save, or { error }. `stored` is the copy's row on an edit; a create omits it.
@@ -125,17 +116,6 @@ export function customDraft(state, input, stored) {
   if (input.media !== null && typeof input.media === 'object') exercise.media = input.media
   else delete exercise.media
   return exercise
-}
-
-// How many routines and finished workouts name this id (once each), and whether the open
-// session does. A null routine or workout is skipped.
-export function customUsage(state, id, openEntries) {
-  const source = state || {}
-  return {
-    routines: countWhere(source.routines, 'ex', id),
-    workouts: countWhere(source.workouts, 'entries', id),
-    open: Array.isArray(openEntries) && openEntries.some(e => e === id || (e && typeof e === 'object' && e.id === id)),
-  }
 }
 
 // Refuses while the id is in the open session, then while any routine or workout still has it.
