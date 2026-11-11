@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'vitest'
 import {
   DELETE_BODY, MISSING_ROUTINE, UNSAFE_EDIT, baseRoutine, deleteTitle, draftChanged, editBase, findRoutine, indexOfKey, leaveForPlan, movedText, noticeLines, planView, removeTitle, routineAuthoring, routineProgChoices, routineView, savedRoutine, sheetView, stepForm, withProg,
-  PAIR_TO_AUTHOR, orderMoved, planNotices, routineCreateEdit, routineDeleteEdit, routineOrderEdit,
+  PAIR_TO_AUTHOR, PLAN_NOTICE_KINDS, orderMoved, planNotices, routineCreateEdit, routineDeleteEdit, routineOrderEdit, scheduleEdit, schedulePlan,
 } from './plan-view.js'
 import { slotForm } from './slot-edit.js'
-import { progression } from '../shared/training.js'
+import { format, progression } from '../shared/training.js'
 import { ROUTINE_DELETED, applyEdits } from '../sync/edit-guard.js'
 import { createMemoryPendingEdits } from '../sync/pending-edits.js'
 
@@ -500,6 +500,61 @@ describe('planView: who may add, delete or reorder', () => {
   test('the sentence shown in their place', () => {
     expect(PAIR_TO_AUTHOR).toBe('Pair with your server to add, delete or reorder routines.')
   })
+  test('canEditSchedule only while a server copy is held', () => {
+    expect(planView({ routines: [push] }, { copy: { rev: 3, state: {} } }).canEditSchedule).toBe(true)
+    expect(planView({ routines: [push] }, { copy: null }).canEditSchedule).toBe(false)
+    expect(planView({ routines: [push] }, {}).canEditSchedule).toBe(false)
+  })
+})
+
+describe('PLAN_NOTICE_KINDS: what the Plan tab reads', () => {
+  test('routine, routineOrder and schedule', () => {
+    expect(PLAN_NOTICE_KINDS).toContain('schedule')
+    expect(PLAN_NOTICE_KINDS).toEqual(['routine', 'routineOrder', 'schedule'])
+  })
+})
+
+describe('schedulePlan: the week and the next 14 days', () => {
+  const now = new Date(2026, 10, 11, 15, 30).getTime()
+  const state = {
+    routines: [push, pull, legs],
+    week: { 0: ['c'], 1: ['a'], 3: ['a', 'b'], 4: [], 5: 'b', 6: ['gone'] },
+    dayPlan: { '2026-11-11': 'a', '2026-11-12': 'rest', '2026-11-13': 'gone' },
+  }
+  const isosFrom = (year, monthIndex, day, count) => Array.from({ length: count }, (_, i) => format.isoOf(new Date(year, monthIndex, day + i)))
+
+  test('null when state is not an object', () => {
+    expect(schedulePlan(null, now)).toBeNull()
+    expect(schedulePlan(undefined, now)).toBeNull()
+    expect(schedulePlan('week', now)).toBeNull()
+    expect(schedulePlan([], now)).toBeNull()
+  })
+  test('seven weekdays, Monday first, the same names scheduleOf shows', () => {
+    expect(schedulePlan(state, now).days).toEqual([
+      { day: 1, label: 'Mon', names: ['Push A'] },
+      { day: 2, label: 'Tue', names: null },
+      { day: 3, label: 'Wed', names: ['Push A', 'Pull B'] },
+      { day: 4, label: 'Thu', names: null },
+      { day: 5, label: 'Fri', names: ['Pull B'] },
+      { day: 6, label: 'Sat', names: null },
+      { day: 0, label: 'Sun', names: ['Legs'] },
+    ])
+    expect(planView(state, {}).schedule.days).toEqual(schedulePlan(state, now).days.map(({ label, names }) => ({ label, names })))
+  })
+  test('fourteen local days, a pin named, rest named Rest, and no pin left unnamed', () => {
+    const dates = schedulePlan(state, now).dates
+    expect(dates.map(d => d.iso)).toEqual(isosFrom(2026, 10, 11, 14))
+    expect(dates[0]).toEqual({ iso: '2026-11-11', label: format.fmtDate('2026-11-11'), value: 'a', name: 'Push A' })
+    expect(dates[1]).toEqual({ iso: '2026-11-12', label: format.fmtDate('2026-11-12'), value: 'rest', name: 'Rest' })
+    expect(dates[2]).toEqual({ iso: '2026-11-13', label: format.fmtDate('2026-11-13'), value: 'gone', name: null })
+    expect(dates[3]).toMatchObject({ value: null, name: null })
+    const late = new Date(2026, 10, 20, 23, 30).getTime()
+    expect(schedulePlan({ routines: [] }, late).dates.map(d => d.iso)).toEqual(isosFrom(2026, 10, 20, 14))
+    expect(schedulePlan({ routines: [push] }, now).dates.every(d => d.value === null && d.name === null)).toBe(true)
+  })
+  test('the read-only schedule does not gain a day number', () => {
+    expect(planView(state, {}).schedule.days[0]).toEqual({ label: 'Mon', names: ['Push A'] })
+  })
 })
 
 describe('orderMoved: the order a tap on Move up or Move down saves', () => {
@@ -546,6 +601,14 @@ describe('what a create, a delete and an order put in the store', () => {
     expect(routineOrderEdit(['b', 'a'], copy)).toEqual({ kind: 'routineOrder', key: 'routineOrder', baseTs: 9, value: ['b', 'a'] })
     expect(routineOrderEdit(['b', 'a'], { state: { routines: [] } })).toMatchObject({ baseTs: null })
     expect(routineOrderEdit(['b', 'a'], null)).toMatchObject({ baseTs: null })
+  })
+  test("a schedule: the value on the copy's schedule stamp, with no fresh flag", () => {
+    const value = { scheduleMode: 'week', rotation: null, queue: null, week: { 1: ['a'] }, dayPlan: {} }
+    const held = { rev: 4, state: { edited: { scheduleMode: 3, 'week.1': 8, queue: 4, routineOrder: 9 } } }
+    expect(scheduleEdit(value, held)).toEqual({ kind: 'schedule', key: 'schedule', baseTs: 8, value })
+    expect(scheduleEdit(value, held)).not.toHaveProperty('fresh')
+    expect(scheduleEdit(value, { state: { routines: [] } })).toMatchObject({ baseTs: null, kind: 'schedule', key: 'schedule' })
+    expect(scheduleEdit(value, null)).toMatchObject({ baseTs: null })
   })
 })
 

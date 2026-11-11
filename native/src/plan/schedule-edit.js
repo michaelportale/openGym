@@ -68,6 +68,19 @@ export function stopLoop(state, now) {
   return onReplay(state, now, (copy, today) => rotation.stopPass(copy, today))
 }
 
+// Emptying the loop stops the pass and stays on Rotation, as the web's Plan does, so taking out
+// the last routine never throws you onto the weekday grid. saveLoop refuses an empty list.
+export function loopEdited(state, ids, label, now) {
+  if (!Array.isArray(ids)) return null
+  if (ids.length) return saveLoop(state, ids, label, now)
+  const value = stopLoop(state, now)
+  value.scheduleMode = 'rotation'
+  if (value.rotation && typeof value.rotation === 'object' && !Array.isArray(value.rotation)) {
+    value.rotation = { ...value.rotation, sequence: [] }
+  }
+  return value
+}
+
 export function setWeekday(state, day, ids) {
   if (!Number.isInteger(day) || day < 0 || day > 6) return null
   const clear = ids == null || (Array.isArray(ids) && ids.length === 0)

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { format, queue, rotation } from '../shared/training.js'
-import { saveLoop, setDate, setWeekday, startOver, stopLoop, switchToRotation, switchToWeek } from './schedule-edit.js'
+import { loopEdited, saveLoop, setDate, setWeekday, startOver, stopLoop, switchToRotation, switchToWeek } from './schedule-edit.js'
 
 const localNoon = (year, monthIndex, day, hour = 12) => new Date(year, monthIndex, day, hour).getTime()
 const fiveKeys = ['dayPlan', 'queue', 'rotation', 'scheduleMode', 'week']
@@ -371,6 +371,46 @@ describe('setDate', () => {
     const before = JSON.stringify(state)
     for (const iso of ['2026-11-31', '2026-11-20extra', 'nope', '']) expect(setDate(state, iso, 'a', { today })).toBeNull()
     for (const pin of [[], '', {}, 1]) expect(setDate(state, '2026-11-21', pin, { today })).toBeNull()
+    expect(JSON.stringify(state)).toBe(before)
+  })
+})
+
+describe('loopEdited', () => {
+  test('a list with routines is saveLoop', () => {
+    const state = placeFixture()
+    const before = JSON.stringify(state)
+    expect(loopEdited(state, ['b', 'c'], 'Loop', replayNow)).toEqual(saveLoop(state, ['b', 'c'], 'Loop', replayNow))
+    expect(JSON.stringify(state)).toBe(before)
+  })
+
+  test('an empty list stays on Rotation with an empty sequence and does not call saveLoop', () => {
+    const state = placeFixture()
+    const before = JSON.stringify(state)
+    expect(saveLoop(state, [], 'Loop', replayNow)).toBeNull()
+    const result = loopEdited(state, [], 'Loop', replayNow)
+    expect(JSON.stringify(state)).toBe(before)
+    expectValue(result)
+    expect(result.scheduleMode).toBe('rotation')
+    expect(result.queue).toBeNull()
+    expect(result.rotation).toEqual({ id: 'rot', sequence: [], label: 'Loop' })
+    expect(result.week).toEqual({ 1: ['a'] })
+    expect(result.dayPlan).toEqual(stopLoop(state, replayNow).dayPlan)
+  })
+
+  test('emptying a week-mode loop with no rotation object leaves rotation null', () => {
+    const state = { scheduleMode: 'week', rotation: null, queue: null, week: { 1: ['a'] }, dayPlan: {} }
+    const result = loopEdited(state, [], '', replayNow)
+    expect(result.scheduleMode).toBe('rotation')
+    expect(result.rotation).toBeNull()
+    expect(result.queue).toBeNull()
+    expect(result.week).toEqual({ 1: ['a'] })
+  })
+
+  test('a list that is not a list is refused', () => {
+    const state = placeFixture()
+    const before = JSON.stringify(state)
+    expect(loopEdited(state, null, '', replayNow)).toBeNull()
+    expect(loopEdited(state, 'ab', '', replayNow)).toBeNull()
     expect(JSON.stringify(state)).toBe(before)
   })
 })
