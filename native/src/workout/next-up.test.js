@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { queue, rotation } from '../shared/training.js'
+import { history, queue, rotation } from '../shared/training.js'
 import { nextRoutineId } from './next-up.js'
 
 const since = Date.parse('2026-10-22T00:00:00Z')
@@ -152,8 +152,14 @@ test('a dayPlan override wins over the weekday', () => {
 })
 
 test('a live queue stays on the replay when a weekday is also pinned', () => {
-  const state = fixture([])
-  state.week = { [localDay(now).weekday]: ['push'] }
+  // A finished pass whose stored queue has not been refilled. The week helper would surface
+  // today's pin. The replay starts the next pass at a.
+  const state = fixture([done('a'), done('b'), done('c')])
+  const day = localDay(now)
+  state.week = { [day.weekday]: ['b'] }
+  state.dayPlan = {}
+  const view = { ...state, week: state.week, dayPlan: state.dayPlan, routines: state.routines }
+  expect(history.effectiveRoutineIds(view, day.iso, day.iso)[0]).toBe('b')
   expect(nextRoutineId(state, now)).toBe('a')
 })
 
