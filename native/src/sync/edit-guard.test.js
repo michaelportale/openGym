@@ -812,7 +812,7 @@ test('schedule: a null base on a document with no schedule stamps applies, and a
   expect(r.state.unit).toBe('lb')
 })
 
-test('schedule: a pin to a routine the document does not hold is dropped, and rest is kept', () => {
+test('schedule: dead pins, an emptied day and rest are not a difference, so the row is done and the document is unchanged', () => {
   const state = {
     ...five({ week: { 1: ['a'], 3: ['rest'] }, dayPlan: { '2026-11-13': 'rest' } }),
     routines: listed('a'),
@@ -825,8 +825,9 @@ test('schedule: a pin to a routine the document does not hold is dropped, and re
   const before = JSON.stringify(state)
   const valueBefore = structuredClone(value)
   const r = applyEdits(state, [schedule(value, { baseTs: 4, t: 6 })])
-  expect(r.applied).toEqual([{ kind: 'schedule', key: 'schedule', t: 6 }])
-  expect(r.done).toEqual([])
+  expect(r.done).toEqual([{ kind: 'schedule', key: 'schedule', t: 6 }])
+  expect(r.applied).toEqual([])
+  expect(r.state).toBe(state)
   expect(r.state.week).toEqual({ 1: ['a'], 3: ['rest'] })
   expect(r.state.dayPlan).toEqual({ '2026-11-13': 'rest' })
   expect(Object.hasOwn(r.state.week, '2')).toBe(false)
@@ -857,7 +858,7 @@ test('schedule: clearing rotation writes null, and the key stays', () => {
   expect(state.rotation).toEqual({ id: 'r', sequence: ['a'], label: 'Loop' })
 })
 
-test('schedule: it settles after routine rows, on the document they leave, and a pin to a routine they delete is dropped', () => {
+test('schedule: a schedule that still names a routine deleted in the same push is done; the delete drops the pin', () => {
   const state = {
     ...five({ week: { 1: ['a', 'b'] }, dayPlan: { '2026-11-12': 'a', '2026-11-13': 'rest' } }),
     routines: listed('a', 'b'),
@@ -865,8 +866,10 @@ test('schedule: it settles after routine rows, on the document they leave, and a
   }
   const value = five({ week: { 1: ['a', 'b'] }, dayPlan: { '2026-11-12': 'a', '2026-11-13': 'rest' } })
   const r = applyEdits(state, [schedule(value, { baseTs: 5, t: 1 }), edit('a', ROUTINE_DELETED, { baseTs: 1, t: 2 })])
-  expect(r.done).toEqual([])
-  expect(r.applied).toEqual([{ kind: 'routine', key: 'a', t: 2 }, { kind: 'schedule', key: 'schedule', t: 1 }])
+  // `a` is dead on the document the delete left, and still held on the server's document. The
+  // schedule matches both, so it is done; deleteRoutine is what takes `a` off the week.
+  expect(r.done).toEqual([{ kind: 'schedule', key: 'schedule', t: 1 }])
+  expect(r.applied).toEqual([{ kind: 'routine', key: 'a', t: 2 }])
   expect(r.state.routines.map((x) => x.id)).toEqual(['b'])
   expect(r.state.week).toEqual({ 1: ['b'] })
   expect(r.state.dayPlan).toEqual({ '2026-11-13': 'rest' })
@@ -903,6 +906,39 @@ test('schedule: a pin to a routine created in the same push is kept, the schedul
   expect(r.state.week).toEqual({ 1: ['n', 'b'] })
   expect(r.state.dayPlan).toEqual({ '2026-11-12': 'n' })
   expect(r.state.routines.map((x) => x.id)).toEqual(['b', 'n'])
+})
+
+// The write drops a pin whose routine the document does not hold. The done check has to use that
+// same week, or the row still differs, applies again, and the week is sent on every sync.
+test('schedule: a week the document already holds, plus a pin to a routine it does not, is done and the document is unchanged', () => {
+  const state = {
+    ...five({ week: { 1: ['a'] } }),
+    routines: listed('a'),
+    edited: { 'week.1': 4 },
+  }
+  const value = five({ week: { 1: ['a', 'gone'] } })
+  const r = applyEdits(state, [schedule(value, { baseTs: 4, t: 2 })])
+  expect(r.done).toEqual([{ kind: 'schedule', key: 'schedule', t: 2 }])
+  expect(r.applied).toEqual([])
+  expect(r.state).toBe(state)
+})
+
+test('schedule: an edit that also changes a real day applies once with the dead pin gone, and the same edit is then done', () => {
+  const state = {
+    ...five({ week: { 1: ['a'] } }),
+    routines: listed('a'),
+    edited: { 'week.1': 4 },
+  }
+  const value = five({ week: { 1: ['a', 'gone'], 3: ['a'] } })
+  const row = schedule(value, { baseTs: 4, t: 6 })
+  const first = applyEdits(state, [row])
+  expect(first.applied).toEqual([{ kind: 'schedule', key: 'schedule', t: 6 }])
+  expect(first.done).toEqual([])
+  expect(first.state.week).toEqual({ 1: ['a'], 3: ['a'] })
+  const second = applyEdits(first.state, [row])
+  expect(second.done).toEqual([{ kind: 'schedule', key: 'schedule', t: 6 }])
+  expect(second.applied).toEqual([])
+  expect(second.state).toBe(first.state)
 })
 
 test('schedule: stampOf is the greatest schedule stamp, null when none of them is a number', () => {

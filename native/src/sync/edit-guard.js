@@ -6,7 +6,7 @@
 // (plan/server-put-back.js: a move or swap whose slots it pairs differently) is superseded as
 // unsafe, never sent. A routine row can also create the routine (base 0) or delete it (its value
 // ROUTINE_DELETED). A routineOrder row orders the routines. A schedule row replaces scheduleMode,
-// rotation, queue, week and dayPlan together. No I/O.
+// rotation, queue, week and dayPlan together, and is done once dead routine pins are gone. No I/O.
 
 import { putBackChanges } from '../plan/server-put-back.js'
 import { routines as routineLib } from '../shared/training.js'
@@ -155,13 +155,24 @@ function dayPlanPins(dayPlan, ids) {
   return out
 }
 
+// The five keys with dead pins removed: a pin whose routine `ids` does not hold is gone, and
+// 'rest' stays. A week or a dayPlan that is not a map is left alone, so a missing key stays
+// missing. weekPins still skips a weekday that is not an array.
+function scheduleHeld(value, ids) {
+  const fields = scheduleFields(value)
+  if (isMap(fields.week)) fields.week = weekPins(fields.week, ids)
+  if (isMap(fields.dayPlan)) fields.dayPlan = dayPlanPins(fields.dayPlan, ids)
+  return fields
+}
+
 // How each kind reads from and writes into the server's document. read(state, key) gives the copy's
 // entry { value, stamp } (value undefined when the copy has none); a routine the copy lacks is
 // `absent`, and `tombstoned` when the server deleted it. content(value) is what counts for "the
 // same". write(state, key, value, entry) is a new document with the edit's value in, on the
 // entry's stamps. unsafe(entry, value, key) is the routine's alone. same(a, b), when a kind has
-// one, replaces comparing content. A `late` kind settles after every other row, on the document
-// they leave.
+// one, replaces comparing content. sameOn(held, value, state), when a kind has one, compares on
+// the document that held was read from; every other kind keeps same. A `late` kind settles after
+// every other row, on the document they leave.
 const ADAPTERS = {
   // Matched by id, first routine wins. A routine whose id the list holds twice is malformed, and the
   // API would pair the last of them, not the first: an edit of it that would go is unsafe.
@@ -251,15 +262,22 @@ const ADAPTERS = {
   // The schedule, keyed schedule: all five keys in one row, so a push cannot send a new
   // scheduleMode beside an old queue. Its stamp is the newest of those keys (a weekday and a date
   // are stamped on their own). It settles after the routine rows, on the document they leave, and
-  // is done or rebased only when the server's document holds the same five values. rotation, queue
-  // and scheduleMode are written even when null: omitting one is how the server puts the old value
-  // back. A weekday or a date is cleared by leaving it out, never as []. A pin to a routine the
-  // document does not hold is dropped; 'rest' stays. Nothing here is unsafe, and the write adds
-  // no _ts, _f or edited.
+  // is done or rebased only when the server's document holds the same five values. sameOn is that
+  // comparison: dead pins are removed first, using the routine ids of the document that side was
+  // read from. The late entry comes from the document earlier rows left; the server's own document
+  // is the other half and has its own ids. 'rest' stays. A row the write would only clean is done,
+  // so it is not sent again. rotation, queue and scheduleMode are written even when null: omitting
+  // one is how the server puts the old value back. A weekday or a date is cleared by leaving it
+  // out, never as []. A pin to a routine the document does not hold is dropped. Nothing here is
+  // unsafe, and the write adds no _ts, _f or edited.
   schedule: {
     late: true,
     read: (state) => ({ value: scheduleFields(state), stamp: scheduleStamp(state.edited) }),
     content: scheduleFields,
+    sameOn(held, value, source) {
+      const ids = new Set(routineIds(isMap(source) ? source : {}))
+      return deepEqual(scheduleHeld(held, ids), scheduleHeld(value, ids))
+    },
     write(state, key, value) {
       const ids = new Set(routineIds(state))
       const scalar = (name) => {
@@ -300,15 +318,18 @@ export function applyEdits(state, edits) {
   for (const edit of [...rows.filter((e) => !adapterOf(e)?.late), ...rows.filter((e) => adapterOf(e)?.late)]) {
     const adapter = adapterOf(edit)
     if (!adapter) continue
-    const entry = adapter.read(adapter.late && isMap(next) ? next : doc, edit.key)
+    const entryState = adapter.late && isMap(next) ? next : doc
+    const entry = adapter.read(entryState, edit.key)
     const held = !!entry && entry.value !== undefined
     const same = adapter.same ?? ((a, b) => deepEqual(adapter.content(a), adapter.content(b)))
+    const sameOn = adapter.sameOn ?? ((a, b) => same(a, b))
     const ref = { kind: edit.kind, key: edit.key, t: edit.t }
     // A late row is done or rebased only when the server's document holds the value too: one that
     // holds only on what the other rows leave goes with them, as they may not land (and `sent` is
-    // recorded before a push goes, so it may never have landed).
+    // recorded before a push goes, so it may never have landed). Each side is compared on the
+    // document it was read from, so a schedule's dead pins are the ones that document lacks.
     const stored = adapter.late ? adapter.read(doc, edit.key) : entry
-    const holds = (v) => held && same(entry.value, v) && (stored === entry || same(stored.value, v))
+    const holds = (v) => held && sameOn(entry.value, v, entryState) && (stored === entry || sameOn(stored.value, v, doc))
     // never onto a routine the copy lacks: that would bring back one this phone deleted
     const rebase = held && !entry.absent && !!edit.sent && holds(edit.sent)
     // nothing applies to an entry the server deleted, a create included
