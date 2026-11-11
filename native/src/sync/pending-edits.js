@@ -1,5 +1,6 @@
-// Local edits waiting to sync: routines, their order, nutrition days and settings (edit-guard.js settles each
-// kind). One row per kind and key holding what this phone last saved for it; acked_at is NULL until
+// Local edits waiting to sync: routines, their order, the schedule, nutrition days and settings
+// (edit-guard.js settles each kind). One row per kind and key holding what this phone last saved
+// for it; acked_at is NULL until
 // the push has settled it, superseded_at is set when the server moved on first (the outbox is the
 // rows with both NULL). resent is 1 on an acked row resetAcked put back in the outbox (a resend to
 // a restored server) until a put replaces it: that edit went out long ago, so if it no longer fits
@@ -25,11 +26,15 @@ CREATE TABLE IF NOT EXISTS pending_edits (
 `.trim()
 
 const isMap = v => !!v && typeof v === 'object' && !Array.isArray(v)
+const SCHEDULE_KEYS = ['scheduleMode', 'rotation', 'queue', 'week', 'dayPlan']
+// All five keys, and the two maps. A clear of scheduleMode, rotation or queue is null, which is present.
+const isScheduleValue = v => isMap(v) && SCHEDULE_KEYS.every(k => Object.hasOwn(v, k)) && isMap(v.week) && isMap(v.dayPlan)
 // What each kind's value is: a routine and a day are objects; a setting (nutritionTargets,
-// supplements) an object or a list; the routines' order a list of routine ids.
+// supplements) an object or a list; the routines' order a list of routine ids; the schedule the five keys.
 const VALUE_OK = {
   routine: isMap,
   routineOrder: v => Array.isArray(v) && v.every(id => typeof id === 'string'),
+  schedule: isScheduleValue,
   nutritionDay: isMap,
   setting: v => !!v && typeof v === 'object',
 }
@@ -42,10 +47,14 @@ function normalized(edit) {
   if (!Object.hasOwn(VALUE_OK, edit.kind)) throw new Error('pending edit needs a known kind')
   if (typeof edit.key !== 'string' || edit.key === '') throw new Error('pending edit needs a key')
   if (edit.kind === 'setting' && !SETTING_KEYS.has(edit.key)) throw new Error('pending setting edit needs nutritionTargets or supplements as its key')
-  // one order for all the routines
+  // one order for all the routines; one schedule for the five keys
   if (edit.kind === 'routineOrder' && edit.key !== 'routineOrder') throw new Error('pending routineOrder edit needs routineOrder as its key')
+  if (edit.kind === 'schedule' && edit.key !== 'schedule') throw new Error('pending schedule edit needs schedule as its key')
   if (!VALUE_OK[edit.kind](edit.value)) {
-    throw new Error(`pending ${edit.kind} edit needs ${edit.kind === 'routineOrder' ? 'a list of routine ids as its value' : 'an object value'}`)
+    const need = edit.kind === 'routineOrder' ? 'a list of routine ids as its value'
+      : edit.kind === 'schedule' ? 'scheduleMode, rotation, queue, week and dayPlan, with week and dayPlan as maps'
+        : 'an object value'
+    throw new Error(`pending ${edit.kind} edit needs ${need}`)
   }
   if (!Number.isFinite(edit.t)) throw new Error('pending edit needs a time')
   if (edit.baseTs != null && !Number.isFinite(edit.baseTs)) throw new Error('pending edit baseTs must be a number')

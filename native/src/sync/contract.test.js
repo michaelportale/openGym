@@ -16,7 +16,7 @@ import { boundPort } from '../../../api/test/helpers.mjs'
 import { SQLITE_DRIVERS } from '../../scripts/node-sqlite.mjs'
 import { createSqliteWeighIns } from '../body/weigh-ins.js'
 import { createSqliteMeasurements } from '../body/measurement-store.js'
-import { ROUTINE_DELETED } from './edit-guard.js'
+import { ROUTINE_DELETED, stampOf } from './edit-guard.js'
 import { createSqlitePendingEdits } from './pending-edits.js'
 import { createSqliteFinishedWorkouts } from '../session/finished-workouts.js'
 import { createApiClient } from './api-client.js'
@@ -1055,5 +1055,113 @@ describe.skipIf(!HAS_API_DEPS)(TITLE, { timeout: 30_000 }, () => {
     expect(await source.connectLink()).toEqual({ ok: false, elsewhere: 'localhost:8080' })
     expect(await source.read()).toEqual({ paired: true, payload: { configured: true, connected: false, fetchedAt: null, stale: false, days: [], workouts: [] }, cached: false })
     expect(await app.client.whoopDisconnect(server.api, token)).toEqual({ ok: true, revoked: false, wasConnected: false })
+  })
+
+  // The schedule (7E-B): one pending edit carries scheduleMode, rotation, queue, week and dayPlan.
+  // A clear of rotation or queue is null on the wire. Omitting the key is how the server puts the
+  // old value back (sync-stamps.js keepUnknown). A weekday or a date is cleared by leaving it out.
+  const SEEN = 1730000000000
+  const withSchedule = (over, stamps) => ({
+    ...planned(),
+    ...over,
+    edited: { ...planned().edited, ...stamps },
+  })
+  // A rotation already on the document, so null is a clear and not a key the file never had.
+  const looping = () => withSchedule({
+    scheduleMode: 'rotation',
+    rotation: { id: 'loop', sequence: ['r1', 'r2'], label: 'Loop' },
+    queue: { ids: ['r1', 'r2'], i: 0 },
+    week: { 1: ['r2'] },
+    dayPlan: { '2026-11-12': 'r1' },
+  }, {
+    scheduleMode: SEEN, rotation: SEEN, queue: SEEN, 'week.1': SEEN, 'dayPlan.2026-11-12': SEEN,
+  })
+  // A fixed week, every schedule stamp equal, so week.1 is the greatest the phone's edit stands on.
+  const fixedWeek = () => withSchedule({
+    scheduleMode: 'week',
+    rotation: null,
+    queue: null,
+    week: { 1: ['r1'] },
+    dayPlan: {},
+  }, {
+    scheduleMode: SEEN, rotation: SEEN, queue: SEEN, 'week.1': SEEN,
+  })
+  const scheduleEdit = async (app, value) => {
+    const state = (await app.copy.get()).state
+    await app.edits.put({ kind: 'schedule', key: 'schedule', baseTs: stampOf(state, 'schedule', 'schedule'), value, t: T0 })
+  }
+  const laterStamp = (edited, key) => {
+    expect(Number.isFinite(edited[key]), key).toBe(true)
+    expect(edited[key], key).toBeGreaterThan(SEEN)
+  }
+
+  test('a phone schedule clear reaches the server file, which stamps the keys that changed and keeps rotation null; a later sync sends nothing', async () => {
+    const server = await startServer({ state: looping() })
+    const { client, pushes } = counted(server)
+    const app = await paired(server, undefined, { client })
+    const value = {
+      scheduleMode: 'week',
+      rotation: null,
+      queue: null,
+      week: { 1: ['r1'], 3: ['r2'] },
+      dayPlan: { '2026-11-14': 'rest' },
+    }
+    await scheduleEdit(app, value)
+
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    expect(pushes).toEqual([200])
+    const file = server.file()
+    expect(Object.hasOwn(file, 'rotation')).toBe(true)
+    expect(file.rotation).toBeNull()
+    expect(Object.hasOwn(file, 'queue')).toBe(true)
+    expect(file.queue).toBeNull()
+    expect(file.scheduleMode).toBe('week')
+    expect(file.week).toEqual({ 1: ['r1'], 3: ['r2'] })
+    expect(file.dayPlan).toEqual({ '2026-11-14': 'rest' })
+    expect(Object.hasOwn(file.dayPlan, '2026-11-12')).toBe(false)
+    for (const key of ['scheduleMode', 'rotation', 'queue', 'week.1', 'week.3', 'dayPlan.2026-11-14', 'dayPlan.2026-11-12']) laterStamp(file.edited, key)
+    expect(file.edited.unit).toBe(looping().edited.unit)
+    expect(file.routines).toEqual(looping().routines)
+    expect(file.workouts).toEqual(looping().workouts)
+    expect((await app.copy.get()).state).toEqual(without(file, HIDDEN))
+    expect(await app.db.getAll('SELECT kind, key, acked_at, superseded_at FROM pending_edits')).toEqual([
+      { kind: 'schedule', key: 'schedule', acked_at: AT, superseded_at: null },
+    ])
+    expect(await app.edits.listNotices()).toEqual([])
+
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    expect(pushes).toEqual([200])
+    expect(server.file().rotation).toBeNull()
+    expect(Object.hasOwn(server.file(), 'rotation')).toBe(true)
+    expect(server.file()).toEqual(file)
+  })
+
+  test('the web edits one weekday before the phone pushes a schedule: the phone\'s edit is superseded as changed and never sent', async () => {
+    const seed = fixedWeek()
+    const server = await startServer({ state: seed })
+    const { client, pushes } = counted(server)
+    const app = await paired(server, undefined, { client })
+    await scheduleEdit(app, {
+      scheduleMode: seed.scheduleMode,
+      rotation: seed.rotation,
+      queue: seed.queue,
+      week: { 1: ['r2'] },
+      dayPlan: seed.dayPlan,
+    })
+    await server.webWrites(state => ({
+      ...state,
+      week: { 1: ['r1', 'r2'] },
+      edited: { ...state.edited, 'week.1': T0 + 500 },
+    }))
+    const web = server.file()
+
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    expect(pushes).toEqual([])
+    expect(server.file()).toEqual(web)
+    expect(await app.edits.listNotices()).toEqual([{ kind: 'schedule', key: 'schedule', name: 'schedule', reason: 'changed', at: AT }])
+
+    expect(await app.sync.syncNow()).toMatchObject({ state: 'idle', pendingEdits: 0 })
+    expect(pushes).toEqual([])
+    expect(server.file()).toEqual(web)
   })
 })

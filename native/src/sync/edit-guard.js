@@ -1,11 +1,12 @@
-// Pure guard for edits waiting to sync (pending-edits.js rows): routines, nutrition days and
-// settings. For each pending edit it decides, against the server's copy, whether the edit is
-// already there (done), is the phone's own landed push with newer edits on top (rebased), can go
-// (applied), or was overtaken by a change on the web (superseded). A routine edit that would go
-// but that the API would change on the way in (plan/server-put-back.js: a move or swap whose
-// slots it pairs differently) is superseded as unsafe, never sent. A routine row can also create
-// the routine (base 0) or delete it (its value ROUTINE_DELETED). A routineOrder row orders the
-// routines. No I/O.
+// Pure guard for edits waiting to sync (pending-edits.js rows): routines, nutrition days,
+// settings, the routines' order and the schedule. For each pending edit it decides, against the
+// server's copy, whether the edit is already there (done), is the phone's own landed push with
+// newer edits on top (rebased), can go (applied), or was overtaken by a change on the web
+// (superseded). A routine edit that would go but that the API would change on the way in
+// (plan/server-put-back.js: a move or swap whose slots it pairs differently) is superseded as
+// unsafe, never sent. A routine row can also create the routine (base 0) or delete it (its value
+// ROUTINE_DELETED). A routineOrder row orders the routines. A schedule row replaces scheduleMode,
+// rotation, queue, week and dayPlan together, and is done once dead routine pins are gone. No I/O.
 
 import { putBackChanges } from '../plan/server-put-back.js'
 import { routines as routineLib } from '../shared/training.js'
@@ -106,13 +107,72 @@ function orderWithin(ids, of) {
 // counts where it first stands, which is where the write below puts every copy of it.
 const sameOrder = (a, b) => deepEqual(orderWithin(a, b), orderWithin(b, a))
 
+const SCHEDULE_KEYS = ['scheduleMode', 'rotation', 'queue', 'week', 'dayPlan']
+
+// The five keys a schedule row carries, taken off a document or off an edit value. A missing key
+// stays missing (undefined): null is a clear, and the two are not the same.
+function scheduleFields(source) {
+  const out = {}
+  for (const key of SCHEDULE_KEYS) out[key] = isMap(source) ? source[key] : undefined
+  return out
+}
+
+// edited.scheduleMode, edited.rotation, edited.queue, and every edited['week.*'] / edited['dayPlan.*'].
+// The greatest number among them, or null when none of those is a finite number. A stamp on `week`
+// or `dayPlan` itself, or on any other key, does not count.
+function scheduleStamp(edited) {
+  if (!isMap(edited)) return null
+  let best = null
+  for (const [key, value] of Object.entries(edited)) {
+    const sub = key.startsWith('week.') || key.startsWith('dayPlan.')
+    if (!(key === 'scheduleMode' || key === 'rotation' || key === 'queue' || sub)) continue
+    if (typeof value !== 'number' || !Number.isFinite(value)) continue
+    if (best === null || value > best) best = value
+  }
+  return best
+}
+
+// A pin is a routine id in a week array, or a dayPlan value. The string 'rest' stays in either.
+const keptPin = (pin, ids) => pin === 'rest' || ids.has(pin)
+
+// Weekdays the edit still wants, without a pin the document does not hold. An emptied day is left
+// out: a clear is the absence of the key, never [].
+function weekPins(week, ids) {
+  const out = {}
+  if (!isMap(week)) return out
+  for (const [day, pins] of Object.entries(week)) {
+    if (!Array.isArray(pins)) continue
+    const kept = pins.filter((pin) => keptPin(pin, ids))
+    if (kept.length) out[day] = kept
+  }
+  return out
+}
+
+function dayPlanPins(dayPlan, ids) {
+  const out = {}
+  if (!isMap(dayPlan)) return out
+  for (const [date, pin] of Object.entries(dayPlan)) if (keptPin(pin, ids)) out[date] = pin
+  return out
+}
+
+// The five keys with dead pins removed: a pin whose routine `ids` does not hold is gone, and
+// 'rest' stays. A week or a dayPlan that is not a map is left alone, so a missing key stays
+// missing. weekPins still skips a weekday that is not an array.
+function scheduleHeld(value, ids) {
+  const fields = scheduleFields(value)
+  if (isMap(fields.week)) fields.week = weekPins(fields.week, ids)
+  if (isMap(fields.dayPlan)) fields.dayPlan = dayPlanPins(fields.dayPlan, ids)
+  return fields
+}
+
 // How each kind reads from and writes into the server's document. read(state, key) gives the copy's
 // entry { value, stamp } (value undefined when the copy has none); a routine the copy lacks is
 // `absent`, and `tombstoned` when the server deleted it. content(value) is what counts for "the
 // same". write(state, key, value, entry) is a new document with the edit's value in, on the
 // entry's stamps. unsafe(entry, value, key) is the routine's alone. same(a, b), when a kind has
-// one, replaces comparing content. A `late` kind settles after every other row, on the document
-// they leave.
+// one, replaces comparing content. sameOn(held, value, state), when a kind has one, compares on
+// the document that held was read from; every other kind keeps same. A `late` kind settles after
+// every other row, on the document they leave.
 const ADAPTERS = {
   // Matched by id, first routine wins. A routine whose id the list holds twice is malformed, and the
   // API would pair the last of them, not the first: an edit of it that would go is unsafe.
@@ -199,13 +259,48 @@ const ADAPTERS = {
       return { ...state, routines: [...listed, ...list.filter((r) => !placed(r))] }
     },
   },
+  // The schedule, keyed schedule: all five keys in one row, so a push cannot send a new
+  // scheduleMode beside an old queue. Its stamp is the newest of those keys (a weekday and a date
+  // are stamped on their own). It settles after the routine rows, on the document they leave, and
+  // is done or rebased only when the server's document holds the same five values. sameOn is that
+  // comparison: dead pins are removed first, using the routine ids of the document that side was
+  // read from. The late entry comes from the document earlier rows left; the server's own document
+  // is the other half and has its own ids. 'rest' stays. A row the write would only clean is done,
+  // so it is not sent again. rotation, queue and scheduleMode are written even when null: omitting
+  // one is how the server puts the old value back. A weekday or a date is cleared by leaving it
+  // out, never as []. A pin to a routine the document does not hold is dropped. Nothing here is
+  // unsafe, and the write adds no _ts, _f or edited.
+  schedule: {
+    late: true,
+    read: (state) => ({ value: scheduleFields(state), stamp: scheduleStamp(state.edited) }),
+    content: scheduleFields,
+    sameOn(held, value, source) {
+      const ids = new Set(routineIds(isMap(source) ? source : {}))
+      return deepEqual(scheduleHeld(held, ids), scheduleHeld(value, ids))
+    },
+    write(state, key, value) {
+      const ids = new Set(routineIds(state))
+      const scalar = (name) => {
+        const held = isMap(value) ? value[name] : undefined
+        return held === undefined ? null : held
+      }
+      return {
+        ...state,
+        scheduleMode: scalar('scheduleMode'),
+        rotation: scalar('rotation'),
+        queue: scalar('queue'),
+        week: weekPins(isMap(value) ? value.week : undefined, ids),
+        dayPlan: dayPlanPins(isMap(value) ? value.dayPlan : undefined, ids),
+      }
+    },
+  },
 }
 
 // state: the server's document. edits: from listPending(), of any kind (a kind with no adapter is
-// left alone), settled in their order, a routineOrder row after all the others: it is judged on
-// the document the others leave, a routine created or deleted there included (and is done or
-// rebased only when the server's document holds it as well), where every other row is judged on
-// the server's document as it came. Returns { state, done, rebased, applied,
+// left alone), settled in their order, a late row (routineOrder, schedule) after all the others:
+// it is judged on the document the others leave, a routine created or deleted there included (and
+// is done or rebased only when the server's document holds it as well), where every other row is
+// judged on the server's document as it came. Returns { state, done, rebased, applied,
 // superseded }, each settled edit as
 // { kind, key, t }, a rebased one with the copy's stamp as its new baseTs and a superseded one with
 // its reason ('changed', 'deleted' or 'unsafe'). state is a new document only when something
@@ -223,15 +318,18 @@ export function applyEdits(state, edits) {
   for (const edit of [...rows.filter((e) => !adapterOf(e)?.late), ...rows.filter((e) => adapterOf(e)?.late)]) {
     const adapter = adapterOf(edit)
     if (!adapter) continue
-    const entry = adapter.read(adapter.late && isMap(next) ? next : doc, edit.key)
+    const entryState = adapter.late && isMap(next) ? next : doc
+    const entry = adapter.read(entryState, edit.key)
     const held = !!entry && entry.value !== undefined
     const same = adapter.same ?? ((a, b) => deepEqual(adapter.content(a), adapter.content(b)))
+    const sameOn = adapter.sameOn ?? ((a, b) => same(a, b))
     const ref = { kind: edit.kind, key: edit.key, t: edit.t }
     // A late row is done or rebased only when the server's document holds the value too: one that
     // holds only on what the other rows leave goes with them, as they may not land (and `sent` is
-    // recorded before a push goes, so it may never have landed).
+    // recorded before a push goes, so it may never have landed). Each side is compared on the
+    // document it was read from, so a schedule's dead pins are the ones that document lacks.
     const stored = adapter.late ? adapter.read(doc, edit.key) : entry
-    const holds = (v) => held && same(entry.value, v) && (stored === entry || same(stored.value, v))
+    const holds = (v) => held && sameOn(entry.value, v, entryState) && (stored === entry || sameOn(stored.value, v, doc))
     // never onto a routine the copy lacks: that would bring back one this phone deleted
     const rebase = held && !entry.absent && !!edit.sent && holds(edit.sent)
     // nothing applies to an entry the server deleted, a create included
@@ -256,9 +354,9 @@ export function stampOf(state, kind, key) {
 }
 
 // What a document holds for one edit's kind and key, as the adapter reads it (undefined when it
-// holds none, ROUTINE_DELETED for a routine it lacks, every routine id for routineOrder): after
-// applyEdits, the value as it goes, on the copy's stamps. Never undefined for a routine, so a
-// delete's markSent has a value to store.
+// holds none, ROUTINE_DELETED for a routine it lacks, every routine id for routineOrder, the five
+// schedule keys for schedule): after applyEdits, the value as it goes, on the copy's stamps. Never
+// undefined for a routine, so a delete's markSent has a value to store.
 export function entryValue(state, kind, key) {
   if (!Object.hasOwn(ADAPTERS, kind)) return undefined
   return ADAPTERS[kind].read(isMap(state) ? state : {}, key)?.value

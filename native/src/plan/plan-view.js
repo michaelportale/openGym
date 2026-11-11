@@ -1,7 +1,7 @@
 // The models behind the Plan tab, a routine's screen and its exercise sheet. Pure: the screens
 // render what these return. Read-only over the state the screens are given (the screen source,
 // with this phone's pending routine edits already laid over it).
-import { history, progression, queue, repRange, rotation } from '../shared/training.js'
+import { format, history, progression, queue, repRange, rotation } from '../shared/training.js'
 import { findExercise } from '../exercises/detail-view.js'
 import { cap } from '../sync/source.js'
 import { ROUTINE_DELETED, isRoutineDeleted, sameRoutine, stampOf } from '../sync/edit-guard.js'
@@ -50,6 +50,17 @@ export function findRoutine(state, id) {
 // Monday first. getDay() numbering, as S.week is keyed.
 const WEEK = [[1, 'Mon'], [2, 'Tue'], [3, 'Wed'], [4, 'Thu'], [5, 'Fri'], [6, 'Sat'], [0, 'Sun']]
 
+// Monday-first weekdays. `day` is getDay()'s number, as S.week is keyed. `names` is null when that
+// weekday has no known routine. The read-only schedule drops `day` and is null when every day is.
+function weekTable(state) {
+  const week = isObj(state.week) || Array.isArray(state.week) ? state.week : {}
+  const byId = id => findRoutine(state, id)
+  return WEEK.map(([day, label]) => {
+    const names = [].concat(week[day] || []).map(byId).filter(Boolean).map(nameOf)
+    return { day, label, names: names.length ? names : null }
+  })
+}
+
 // How you train, read-only. Rotation: the loop as the web's Plan shows it (the live queue, else
 // the saved sequence), with `next` on the routine the Workout tab would start. Fixed week: S.week
 // per weekday, as the web's Plan lists it (effectiveRoutineIds is one date's plan, with its
@@ -62,12 +73,33 @@ function scheduleOf(state, nextId) {
     const items = ids.map(byId).filter(Boolean).map(r => ({ id: r.id, name: nameOf(r), next: r.id === nextId }))
     return items.length ? { kind: 'rotation', items } : null
   }
-  const week = isObj(state.week) || Array.isArray(state.week) ? state.week : {}
-  const days = WEEK.map(([d, label]) => {
-    const names = [].concat(week[d] || []).map(byId).filter(Boolean).map(nameOf)
-    return { label, names: names.length ? names : null }
-  })
+  const days = weekTable(state).map(({ label, names }) => ({ label, names }))
   return days.some(d => d.names) ? { kind: 'week', days } : null
+}
+
+// The editor's model: the seven weekdays, and today through the 13th local day after. Null when
+// there is no state object. A date's value is the dayPlan pin, or null when that day has none;
+// its name is the routine's, Rest for a rest pin, or null when nothing is pinned.
+export function schedulePlan(state, now) {
+  if (!isObj(state)) return null
+  const dayPlan = isObj(state.dayPlan) ? state.dayPlan : {}
+  const start = new Date(now)
+  const year = start.getFullYear()
+  const month = start.getMonth()
+  const date = start.getDate()
+  const dates = Array.from({ length: 14 }, (_, i) => {
+    const iso = format.isoOf(new Date(year, month, date + i))
+    const raw = dayPlan[iso]
+    const value = raw == null ? null : raw
+    let name = null
+    if (value === 'rest') name = 'Rest'
+    else if (value != null) {
+      const found = findRoutine(state, value)
+      name = found ? nameOf(found) : null
+    }
+    return { iso, label: format.fmtDate(iso), value, name }
+  })
+  return { days: weekTable(state), dates }
 }
 
 // A notice's sentence by what the edit was (planNotices `op`) and why it was not sent (the guard's
@@ -94,21 +126,25 @@ const NOTICE = {
     changed: () => "Your routine order wasn't sent: it changed on the web first.",
   },
 }
+const SCHEDULE_CHANGED = "Your schedule wasn't sent: it changed on the web first."
 
 const named = name => typeof name === 'string' && name.trim()
 const noticeName = name => (named(name) ? name : 'this routine')
 // The same name opening a sentence.
 const NoticeName = name => (named(name) ? name : 'This routine')
 
-// The Plan's rows of pending-edits.js listNotices() (its routine and routineOrder notices) as the
-// lines the screens show, each with its Dismiss button's VoiceOver label. `op` (planNotices) picks
-// the wording; a notice without one is an edit's. The order's line is dismissed as its own kind
-// (`kind`); a routine's line carries none.
+// The Plan's rows of pending-edits.js listNotices() (its routine, routineOrder and schedule
+// notices) as the lines the screens show, each with its Dismiss button's VoiceOver label. `op`
+// (planNotices) picks a routine's wording; a notice without one is an edit's. The order's line
+// and the schedule's line are dismissed as their own kind (`kind`); a routine's line carries none.
 export function noticeLines(notices) {
   return (notices ?? []).map(n => {
     if (n.kind === 'routineOrder') {
       const text = (NOTICE.order[n.reason] ?? NOTICE.order.changed)()
       return { rid: n.key, kind: n.kind, text, dismissLabel: 'Dismiss notice about your routine order' }
+    }
+    if (n.kind === 'schedule') {
+      return { rid: n.key, kind: n.kind, text: SCHEDULE_CHANGED, dismissLabel: 'Dismiss notice about your schedule' }
     }
     const lines = NOTICE[n.op] ?? NOTICE.edit
     const name = noticeName(n.name)
@@ -116,17 +152,21 @@ export function noticeLines(notices) {
   })
 }
 
-const isPlanNotice = n => n?.kind === 'routine' || n?.kind === 'routineOrder'
+// The kinds usePlan keeps from listNotices. A schedule notice is one of them, so it reaches planNotices.
+export const PLAN_NOTICE_KINDS = ['routine', 'routineOrder', 'schedule']
+const isPlanNotice = n => PLAN_NOTICE_KINDS.includes(n?.kind)
 
-// The Plan's notices (pending-edits.js listNotices: its routine and routineOrder rows, in the
-// store's order), each with what the edit was, read from its stored row (pending-edits.js get,
-// matched by kind and key; `rows` may hold nulls): `op` is 'order', 'delete' (ROUTINE_DELETED),
-// 'create' (a routine row on base 0) or 'edit'. A delete's marker has no name, so it is named from
-// `state`, the screen's, where the routine the web kept still is.
+// The Plan's notices (pending-edits.js listNotices: its routine, routineOrder and schedule rows,
+// in the store's order), each with what the edit was, read from its stored row (pending-edits.js
+// get, matched by kind and key; `rows` may hold nulls): `op` is 'order', 'delete' (ROUTINE_DELETED),
+// 'create' (a routine row on base 0) or 'edit'. A schedule row is one edit of the whole schedule;
+// it has no op. A delete's marker has no name, so it is named from `state`, the screen's, where
+// the routine the web kept still is.
 export function planNotices(notices, rows, state) {
   const stored = (Array.isArray(rows) ? rows : []).filter(isObj)
   return (Array.isArray(notices) ? notices : []).filter(isPlanNotice).map(n => {
     if (n.kind === 'routineOrder') return { ...n, op: 'order' }
+    if (n.kind === 'schedule') return { ...n }
     const row = stored.find(r => r.kind === n.kind && r.key === n.key)
     if (row && isRoutineDeleted(row.value)) return { ...n, op: 'delete', name: nameOf(findRoutine(state, n.key) ?? {}) || n.name }
     return { ...n, op: row?.baseTs === 0 ? 'create' : 'edit' }
@@ -135,13 +175,16 @@ export function planNotices(notices, rows, state) {
 
 // `canAuthor`: whether New and the routines' Move up / Move down are offered. Adding, deleting and
 // reordering need a server copy (PAIR_TO_AUTHOR): made on the snapshot, they would be sent into
-// the real record at pairing.
+// the real record at pairing. `canEditSchedule` is that same gate for the week, the loop and the
+// next 14 days. The sentence stays on the routines card; the schedule card does not repeat it.
 export function planView(state, { nextId = null, notices = [], copy = null } = {}) {
+  const paired = copy != null
   return {
     schedule: scheduleOf(state, nextId),
     routines: routinesOf(state).map(r => ({ id: r.id, name: nameOf(r), count: exOf(r).length })),
     notices: noticeLines(notices),
-    canAuthor: copy != null,
+    canAuthor: paired,
+    canEditSchedule: paired,
   }
 }
 
@@ -173,6 +216,9 @@ export function orderMoved(routines, id, dir) {
 export const routineCreateEdit = routine => ({ kind: 'routine', key: routine.id, baseTs: 0, value: routine })
 export const routineDeleteEdit = (rid, copyRoutine) => ({ kind: 'routine', key: rid, baseTs: copyRoutine?._ts ?? null, value: ROUTINE_DELETED, fresh: true })
 export const routineOrderEdit = (ids, copy) => ({ kind: 'routineOrder', key: 'routineOrder', baseTs: stampOf(copy?.state, 'routineOrder', 'routineOrder'), value: ids })
+// The whole schedule on the stamp the guard reads (edited schedule keys). Not fresh: a later save
+// keeps a pending row's base, as an order does.
+export const scheduleEdit = (value, copy) => ({ kind: 'schedule', key: 'schedule', baseTs: stampOf(copy?.state, 'schedule', 'schedule'), value })
 
 // The web's speedUnitOf for a pounds profile: mph unless the profile chose km/h.
 const speedUnitOf = state => (state?.speedUnit === 'kmh' ? 'kmh' : 'mph')

@@ -12,13 +12,19 @@ import ScreenHeader from '../ui/ScreenHeader'
 import TextButton from '../ui/TextButton'
 import { SAVE_FAILED } from '../ui/messages'
 import { usePushLock } from '../ui/use-push-lock'
+import { queue, rotation } from '../shared/training.js'
 import { nextRoutineId } from '../workout/next-up'
 import { announce } from './announce'
-import { NAME_BLANK, PAIR_TO_AUTHOR, movedText, orderMoved, planView } from './plan-view'
+import { NAME_BLANK, PAIR_TO_AUTHOR, movedText, orderMoved, planView, schedulePlan } from './plan-view'
 import { newRoutine } from './routine-edit'
+import { loopEdited, setDate, setWeekday, startOver, switchToRotation, switchToWeek } from './schedule-edit'
 import { usePlan } from './use-plan'
 
 const exercises = n => (n === 1 ? '1 exercise' : `${n} exercises`)
+const loopIds = state => queue.queueOf(state)?.ids ?? rotation.rotationIds(state)
+const loopLabel = state => queue.queueOf(state)?.label || state?.rotation?.label || ''
+const dayLabel = day => `${day.label} ${day.names ? day.names.join(' + ') : 'Rest'}`
+const dateLabel = date => `${date.label}, ${date.name ?? 'As planned'}`
 
 function Schedule({ schedule }) {
   if (!schedule) return null
@@ -43,6 +49,93 @@ function Schedule({ schedule }) {
   )
 }
 
+function LoopRows({ items, onRemove }) {
+  return items.map((item, i) => (
+    <View key={item.id} style={styles.line}>
+      <AppText variant="value" color={color.textMuted} style={styles.order}>{i + 1}</AppText>
+      <AppText variant="body" style={styles.grow}>{item.name}</AppText>
+      {item.next ? <AppText variant="label" color={color.accent} style={styles.tag}>Next</AppText> : null}
+      {onRemove ? <TextButton label={`Remove ${item.name}`} onPress={() => onRemove(item.id)} /> : null}
+    </View>
+  ))
+}
+
+// The schedule card once a server copy is held. Unpaired, the screen keeps the read-only Schedule
+// above and does not repeat PAIR_TO_AUTHOR. An external queue is shown, not edited.
+function ScheduleEditor({ state, view, days, onFixedWeek, onRotation, onDay, onAdd, onRemove, onStartOver, onStart, onDiscard }) {
+  const external = rotation.isExternalQueue(state)
+  const recovery = rotation.queueRecovery(state)
+  const mode = rotation.scheduleModeOf(state)
+  const live = queue.queueOf(state) != null
+  const items = view.schedule?.kind === 'rotation' ? view.schedule.items : []
+  const canStart = !external && !live && !recovery && rotation.rotationIds(state).length > 0
+  return (
+    <Card style={styles.card}>
+      <AppText variant="heading" accessibilityRole="header">How you train</AppText>
+      {external ? (
+        <AppText variant="label" color={color.textMuted}>Externally managed</AppText>
+      ) : (
+        <View style={styles.modes}>
+          <TextButton label="Fixed Week" accessibilityLabel="Fixed week" onPress={onFixedWeek} />
+          <TextButton label="Rotation" accessibilityLabel="Rotation" onPress={onRotation} />
+        </View>
+      )}
+      {recovery ? (
+        <>
+          <AppText variant="body" color={color.textSecondary}>This rotation couldn't be read. Another device may have written it.</AppText>
+          <TextButton label="Discard it" onPress={onDiscard} />
+        </>
+      ) : null}
+      {mode === 'week' && !external ? days.map(day => (
+        <Pressable
+          key={day.day}
+          accessibilityRole="button"
+          accessibilityLabel={dayLabel(day)}
+          onPress={() => onDay(day)}
+          style={({ pressed }) => [styles.dayHit, pressed && styles.pressed]}
+        >
+          <AppText variant="body" color={day.names ? color.text : color.textSecondary}>
+            {`${day.label} · ${day.names ? day.names.join(' + ') : 'Rest'}`}
+          </AppText>
+        </Pressable>
+      )) : null}
+      {mode === 'rotation' ? (
+        <>
+          <LoopRows items={items} onRemove={external ? null : onRemove} />
+          {external ? null : (
+            <View style={styles.modes}>
+              <TextButton label="Add to the rotation" onPress={onAdd} />
+              {live ? <TextButton label="Start the loop over" onPress={onStartOver} /> : null}
+              {canStart ? <TextButton label="Start the loop" onPress={onStart} /> : null}
+            </View>
+          )}
+        </>
+      ) : null}
+    </Card>
+  )
+}
+
+function DatesCard({ dates, onDate }) {
+  return (
+    <Card style={styles.card}>
+      <AppText variant="heading" accessibilityRole="header">The next 14 days</AppText>
+      {dates.map(date => (
+        <Pressable
+          key={date.iso}
+          accessibilityRole="button"
+          accessibilityLabel={dateLabel(date)}
+          onPress={() => onDate(date)}
+          style={({ pressed }) => [styles.dayHit, pressed && styles.pressed]}
+        >
+          <AppText variant="body" color={date.name ? color.text : color.textSecondary}>
+            {`${date.label} · ${date.name ?? 'As planned'}`}
+          </AppText>
+        </Pressable>
+      ))}
+    </Card>
+  )
+}
+
 // The routine screen's Move up / Move down, for a routine row.
 function MoveButton({ label, hint, glyph, disabled, onPress }) {
   return (
@@ -61,9 +154,9 @@ function MoveButton({ label, hint, glyph, disabled, onPress }) {
 }
 
 // The Plan tab: notices of edits that were not sent, how you train, then every routine. A routine
-// opens its own screen. With a server copy held, New routine adds one (named first, then opened)
-// and each row has Move up and Move down, which save the whole order; without one, a sentence says
-// to pair instead (planView canAuthor).
+// opens its own screen. With a server copy held, New routine adds one (named first, then opened),
+// each row has Move up and Move down, and the schedule can be edited. Without one, a sentence says
+// to pair instead (planView canAuthor). That sentence stays on the routines card.
 export default function PlanScreen() {
   const router = useRouter()
   const guard = usePushLock()
@@ -74,6 +167,10 @@ export default function PlanScreen() {
   const view = useMemo(
     () => (ready ? planView(plan.state, { nextId, notices: plan.notices, copy: plan.copy }) : null),
     [ready, plan.state, plan.notices, plan.copy, nextId]
+  )
+  const editor = useMemo(
+    () => (ready && view?.canEditSchedule ? schedulePlan(plan.state, Date.now()) : null),
+    [ready, view, plan.state]
   )
   // Each row's key (its routine's id, and which of that id it is), so a moved row keeps its
   // VoiceOver focus, and whether Move up / Move down would move it.
@@ -87,7 +184,7 @@ export default function PlanScreen() {
   }, [view])
   // Read when a tap lands or the name prompt answers, not when the handler was made.
   const live = useRef(null)
-  live.current = { view, copy: plan.copy }
+  live.current = { view, copy: plan.copy, state: plan.state, sessionOpen: plan.sessionOpen === true }
 
   // A refusal or a failed save, shown until the next action, and said to VoiceOver (announce).
   const [message, setMessage] = useState(null)
@@ -96,9 +193,10 @@ export default function PlanScreen() {
     announce(text)
   }
 
-  // One move at a time, each built on the order on screen: a tap is ignored while a move saves,
-  // and until the screen has rendered what it saved (the lock opens in an effect after the render
-  // that follows the save; usePlan's reload is done by then).
+  // One move or schedule save at a time, each built on what is on screen: a tap is ignored while
+  // one saves, and until the screen has rendered what it saved (the lock opens in an effect after
+  // the render that follows the save; usePlan's reload is done by then). A helper that returns
+  // null does not save, and the same effect clears the lock.
   const lock = useRef(false)
   const [moves, setMoves] = useState(0)
   useEffect(() => { lock.current = false }, [moves])
@@ -114,6 +212,106 @@ export default function PlanScreen() {
     setMoves(n => n + 1)
     if (result.ok) announce(movedText(name, from, from + dir, ids.length))
     else say(SAVE_FAILED)
+  }
+
+  // A schedule save. The screen passes the copy it is showing. Nothing extra is said when it lands.
+  const commit = async (value) => {
+    if (lock.current || !live.current.view?.canEditSchedule) return
+    lock.current = true
+    setMessage(null)
+    if (value == null) {
+      setMoves(n => n + 1)
+      return
+    }
+    const result = await plan.schedule(value, live.current.copy)
+    setMoves(n => n + 1)
+    if (!result.ok) say(SAVE_FAILED)
+  }
+  const onRotation = () => {
+    if (lock.current) return
+    const state = live.current.state
+    if (rotation.scheduleModeOf(state) === 'rotation') return
+    commit(switchToRotation(state, Date.now()))
+  }
+  const onFixedWeek = () => {
+    if (lock.current) return
+    const state = live.current.state
+    if (rotation.scheduleModeOf(state) === 'week') return
+    if (!queue.queueOf(state)) {
+      commit(switchToWeek(state, Date.now()))
+      return
+    }
+    Alert.alert(
+      'Back to a fixed week?',
+      'The loop stops. Your weekdays stay as they are, and the loop is saved for later.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Use Fixed Week', onPress: () => commit(switchToWeek(live.current.state, Date.now())) },
+      ],
+    )
+  }
+  const onDiscard = () => {
+    if (lock.current) return
+    commit(switchToWeek(live.current.state, Date.now()))
+  }
+  const onDay = day => {
+    if (lock.current) return
+    const routines = live.current.view?.routines ?? []
+    Alert.alert(day.label, day.names ? day.names.join(' + ') : undefined, [
+      ...routines.map(r => ({
+        text: r.name,
+        onPress: () => commit(setWeekday(live.current.state, day.day, [r.id])),
+      })),
+      { text: 'Rest day', onPress: () => commit(setWeekday(live.current.state, day.day, null)) },
+      { text: 'Cancel', style: 'cancel' },
+    ])
+  }
+  const onAdd = () => {
+    if (lock.current) return
+    const choices = (live.current.view?.routines ?? []).filter(r => !loopIds(live.current.state).includes(r.id))
+    Alert.alert('Add to the rotation', undefined, [
+      ...choices.map(r => ({
+        text: r.name,
+        onPress: () => {
+          const state = live.current.state
+          const ids = loopIds(state).filter(id => id !== r.id)
+          commit(loopEdited(state, [...ids, r.id], loopLabel(state), Date.now()))
+        },
+      })),
+      { text: 'Cancel', style: 'cancel' },
+    ])
+  }
+  const onRemove = id => {
+    if (lock.current) return
+    const state = live.current.state
+    commit(loopEdited(state, loopIds(state).filter(x => x !== id), loopLabel(state), Date.now()))
+  }
+  const onStartOver = () => {
+    if (lock.current) return
+    if (live.current.sessionOpen) {
+      say('Finish the open workout before starting the loop over.')
+      return
+    }
+    commit(startOver(live.current.state, { sessionOpen: false, now: Date.now() }))
+  }
+  const onStart = () => {
+    if (lock.current) return
+    commit(switchToRotation(live.current.state, Date.now()))
+  }
+  const onDate = date => {
+    if (lock.current) return
+    const routines = live.current.view?.routines ?? []
+    const pin = value => {
+      const state = live.current.state
+      const today = schedulePlan(state, Date.now())?.dates[0]?.iso
+      return setDate(state, date.iso, value, { today })
+    }
+    Alert.alert(date.label, undefined, [
+      ...routines.map(r => ({ text: r.name, onPress: () => commit(pin(r.id)) })),
+      { text: 'Rest', onPress: () => commit(pin('rest')) },
+      { text: 'Back to weekly plan', onPress: () => commit(pin(null)) },
+      { text: 'Cancel', style: 'cancel' },
+    ])
   }
 
   // The prompt's answer. The copy can go while it is open (Disconnect): then nothing is added.
@@ -159,7 +357,26 @@ export default function PlanScreen() {
       ) : (
         <>
           <Notices lines={view.notices} onDismiss={dismiss} />
-          <Schedule schedule={view.schedule} />
+          {editor ? (
+            <>
+              <ScheduleEditor
+                state={plan.state}
+                view={view}
+                days={editor.days}
+                onFixedWeek={onFixedWeek}
+                onRotation={onRotation}
+                onDay={onDay}
+                onAdd={onAdd}
+                onRemove={onRemove}
+                onStartOver={onStartOver}
+                onStart={onStart}
+                onDiscard={onDiscard}
+              />
+              <DatesCard dates={editor.dates} onDate={onDate} />
+            </>
+          ) : (
+            <Schedule schedule={view.schedule} />
+          )}
           {message ? (
             <AppText variant="body" accessibilityRole="alert" accessibilityLiveRegion="polite" style={[styles.pad, styles.message]}>{message}</AppText>
           ) : null}
@@ -211,6 +428,8 @@ const styles = StyleSheet.create({
   pad: { marginHorizontal: space.lg },
   message: { marginBottom: space.lg },
   card: { marginHorizontal: space.lg, marginBottom: space.lg, padding: space.lg, gap: space.sm },
+  modes: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' },
+  dayHit: { minHeight: touch.min, justifyContent: 'center' },
   line: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   order: { minWidth: 20 },
   grow: { flexShrink: 1, flexGrow: 1 },
