@@ -37,12 +37,10 @@ function routineFromWeek(state, now) {
   return history.nextTrainingDay(view, iso)?.routine?.id ?? null
 }
 
-// The routine to suggest next. A fixed week follows history. Otherwise this is the web's queue:
-// the web saves its queue and runs refillAfter as each finished workout lands; the phone never
-// saves one, so it replays those finishes in date-then-start order. Works on a JSON copy:
-// refillAfter rewrites the queue in place, and the caller's state must stay as it was.
-export function nextRoutineId(state, now) {
-  if (weekInForce(state)) return routineFromWeek(state, now)
+// The queue next-up replays, and the one a rotation edit is built on. A deep copy: refillAfter
+// rewrites the queue in place, and the caller's state must stay as it was. Finishes land in
+// date-then-start order, then refillAfter, as they would have on the web.
+export function replayFinishes(state, now) {
   const copy = JSON.parse(JSON.stringify(state))
   const finished = [...(copy.workouts ?? [])].sort(byDateThenStart)
   copy.workouts = []
@@ -50,5 +48,14 @@ export function nextRoutineId(state, now) {
     copy.workouts.push(w)
     rotation.refillAfter(copy, w, w.d, w.end ?? w.start ?? now)
   }
+  return copy
+}
+
+// The routine to suggest next. A fixed week follows history. Otherwise this is the web's queue:
+// the web saves its queue and runs refillAfter as each finished workout lands; the phone never
+// saves one, so it replays those finishes.
+export function nextRoutineId(state, now) {
+  if (weekInForce(state)) return routineFromWeek(state, now)
+  const copy = replayFinishes(state, now)
   return queue.queueRemaining(copy)[0] ?? copy.routines?.[0]?.id ?? null
 }

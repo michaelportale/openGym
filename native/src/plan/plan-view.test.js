@@ -402,6 +402,41 @@ describe('planNotices: what each notice was, from its stored row', () => {
   })
 })
 
+describe('7E-B: a schedule that changed on the web', () => {
+  const row = { kind: 'schedule', key: 'schedule', name: 'schedule', reason: 'changed' }
+  const scheduleLine = {
+    rid: 'schedule',
+    kind: 'schedule',
+    text: "Your schedule wasn't sent: it changed on the web first.",
+    dismissLabel: 'Dismiss notice about your schedule',
+  }
+  test('the schedule notice is that sentence, dismissed as the schedule', () => {
+    expect(noticeLines([row])).toEqual([scheduleLine])
+    expect(planView({ routines: [] }, { notices: [row] }).notices).toEqual([scheduleLine])
+  })
+  test('planNotices lets the schedule kind through, and the other sentences stay', () => {
+    const notices = [
+      { kind: 'routine', key: 'a', name: 'Push A', reason: 'changed' },
+      row,
+      { kind: 'routineOrder', key: 'routineOrder', name: 'routineOrder', reason: 'changed' },
+      { kind: 'nutritionDay', key: '2026-11-01', name: '2026-11-01', reason: 'changed' },
+    ]
+    const rows = [{ kind: 'schedule', key: 'schedule', baseTs: 0, value: { scheduleMode: 'week' } }]
+    expect(planNotices(notices, rows, { routines: [push] })).toEqual([
+      { kind: 'routine', key: 'a', name: 'Push A', reason: 'changed', op: 'edit' },
+      row,
+      { kind: 'routineOrder', key: 'routineOrder', name: 'routineOrder', reason: 'changed', op: 'order' },
+    ])
+    expect(noticeLines(planNotices([row], rows, { routines: [] }))).toEqual([scheduleLine])
+    expect(noticeLines(notices).map(line => line.text)).toEqual([
+      "Your change to Push A wasn't sent: it was changed on the web first. This shows the web's version.",
+      "Your schedule wasn't sent: it changed on the web first.",
+      "Your routine order wasn't sent: it changed on the web first.",
+      "Your change to 2026-11-01 wasn't sent: it was changed on the web first. This shows the web's version.",
+    ])
+  })
+})
+
 describe('leaveForPlan: a deleted routine returns to the Plan tab', () => {
   const recordingRouter = canDismiss => {
     const calls = []

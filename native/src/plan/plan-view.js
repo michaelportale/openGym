@@ -94,21 +94,25 @@ const NOTICE = {
     changed: () => "Your routine order wasn't sent: it changed on the web first.",
   },
 }
+const SCHEDULE_CHANGED = "Your schedule wasn't sent: it changed on the web first."
 
 const named = name => typeof name === 'string' && name.trim()
 const noticeName = name => (named(name) ? name : 'this routine')
 // The same name opening a sentence.
 const NoticeName = name => (named(name) ? name : 'This routine')
 
-// The Plan's rows of pending-edits.js listNotices() (its routine and routineOrder notices) as the
-// lines the screens show, each with its Dismiss button's VoiceOver label. `op` (planNotices) picks
-// the wording; a notice without one is an edit's. The order's line is dismissed as its own kind
-// (`kind`); a routine's line carries none.
+// The Plan's rows of pending-edits.js listNotices() (its routine, routineOrder and schedule
+// notices) as the lines the screens show, each with its Dismiss button's VoiceOver label. `op`
+// (planNotices) picks a routine's wording; a notice without one is an edit's. The order's line
+// and the schedule's line are dismissed as their own kind (`kind`); a routine's line carries none.
 export function noticeLines(notices) {
   return (notices ?? []).map(n => {
     if (n.kind === 'routineOrder') {
       const text = (NOTICE.order[n.reason] ?? NOTICE.order.changed)()
       return { rid: n.key, kind: n.kind, text, dismissLabel: 'Dismiss notice about your routine order' }
+    }
+    if (n.kind === 'schedule') {
+      return { rid: n.key, kind: n.kind, text: SCHEDULE_CHANGED, dismissLabel: 'Dismiss notice about your schedule' }
     }
     const lines = NOTICE[n.op] ?? NOTICE.edit
     const name = noticeName(n.name)
@@ -116,17 +120,19 @@ export function noticeLines(notices) {
   })
 }
 
-const isPlanNotice = n => n?.kind === 'routine' || n?.kind === 'routineOrder'
+const isPlanNotice = n => n?.kind === 'routine' || n?.kind === 'routineOrder' || n?.kind === 'schedule'
 
-// The Plan's notices (pending-edits.js listNotices: its routine and routineOrder rows, in the
-// store's order), each with what the edit was, read from its stored row (pending-edits.js get,
-// matched by kind and key; `rows` may hold nulls): `op` is 'order', 'delete' (ROUTINE_DELETED),
-// 'create' (a routine row on base 0) or 'edit'. A delete's marker has no name, so it is named from
-// `state`, the screen's, where the routine the web kept still is.
+// The Plan's notices (pending-edits.js listNotices: its routine, routineOrder and schedule rows,
+// in the store's order), each with what the edit was, read from its stored row (pending-edits.js
+// get, matched by kind and key; `rows` may hold nulls): `op` is 'order', 'delete' (ROUTINE_DELETED),
+// 'create' (a routine row on base 0) or 'edit'. A schedule row is one edit of the whole schedule;
+// it has no op. A delete's marker has no name, so it is named from `state`, the screen's, where
+// the routine the web kept still is.
 export function planNotices(notices, rows, state) {
   const stored = (Array.isArray(rows) ? rows : []).filter(isObj)
   return (Array.isArray(notices) ? notices : []).filter(isPlanNotice).map(n => {
     if (n.kind === 'routineOrder') return { ...n, op: 'order' }
+    if (n.kind === 'schedule') return { ...n }
     const row = stored.find(r => r.kind === n.kind && r.key === n.key)
     if (row && isRoutineDeleted(row.value)) return { ...n, op: 'delete', name: nameOf(findRoutine(state, n.key) ?? {}) || n.name }
     return { ...n, op: row?.baseTs === 0 ? 'create' : 'edit' }
