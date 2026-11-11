@@ -106,6 +106,25 @@ test('a newer read of the store that does not hold the write clears ahead: the s
   expect(chain.ahead()).toBeNull()
 })
 
+test('settled resolves after the in-flight commits, not before, and writes nothing itself', async () => {
+  const { calls, save } = manualSave()
+  const chain = createWriteChain(save)
+  chain.commit(stored('r1', 'b'))
+  chain.commit(stored('r2', 'b'))
+  let resolved = false
+  const done = chain.settled().then(() => { resolved = true })
+  await tick()
+  expect(resolved).toBe(false)
+  expect(calls.map(c => c.next.routine)).toEqual(['r1'])
+  calls[0].resolve({ ok: true })
+  await tick()
+  expect(resolved).toBe(false)
+  calls[1].resolve({ ok: true })
+  await done
+  expect(resolved).toBe(true)
+  expect(calls).toHaveLength(2)
+})
+
 test('a failed write mid-chain resolves not ok, the later writes still go; a failed last write clears ahead at once', async () => {
   const saved = []
   const chain = createWriteChain(async next => {

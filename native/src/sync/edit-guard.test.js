@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { applyEdits, routineContent, sameRoutine, stampOf } from './edit-guard.js'
+import { ROUTINE_DELETED, applyEdits, entryValue, isRoutineDeleted, routineContent, sameRoutine, stampOf } from './edit-guard.js'
 
 // The routine edits among `edits` over a routines list (a non-array reads as empty), in 7C's shape:
 // { next, done, rebased, applied, superseded }, next being the list itself when nothing applies or
@@ -419,4 +419,294 @@ test('stampOf is the stamp the guard compares a base with, null when there is no
   // the same stamp the guard applies an edit on
   const edit = { kind: 'nutritionDay', key: '2026-11-09', baseTs: stampOf(state, 'nutritionDay', '2026-11-09'), value: { kcal: 2 }, sent: null, t: 1 }
   expect(applyEdits(state, [edit]).applied).toEqual([{ kind: 'nutritionDay', key: '2026-11-09', t: 1 }])
+})
+
+// Creating and deleting a routine (7E-A). A create is a routine row on base 0: it goes while the
+// copy lacks the id and the server never deleted it ("tombstoned": deleted.routines or
+// resetIds.routines holds it). A delete is a routine row holding ROUTINE_DELETED on the routine's
+// _ts. One test per row of the behaviour table.
+const verdictOf = (r) => {
+  const kinds = ['applied', 'done', 'rebased'].filter((k) => r[k].length)
+  return [...kinds, ...r.superseded.map((s) => `superseded ${s.reason}`)].join(', ')
+}
+const R = routine('a', 'Mine')
+const doc = (routines, extra = {}) => ({ routines, ...extra })
+const gone = { deleted: { routines: { a: 6 } } }
+const wiped = { resetIds: { routines: ['a'] } }
+
+test.each([
+  ['an edit on the base it saw applies', edit('a', R, { baseTs: 5 }), doc([routine('a', 'Old', { _ts: 5 })]), 'applied'],
+  ['an edit the copy already holds is done', edit('a', R, { baseTs: 5 }), doc([{ ...R, _ts: 9 }]), 'done'],
+  ['an edit whose sent the copy holds is rebased', edit('a', R, { baseTs: 5, sent: routine('a', 'Sent') }), doc([routine('a', 'Sent', { _ts: 9 })]), 'rebased'],
+  ['an edit over a web change is superseded as changed', edit('a', R, { baseTs: 5 }), doc([routine('a', 'Web', { _ts: 9 })]), 'superseded changed'],
+  ['an edit of a routine the copy lacks is superseded as deleted', edit('a', R, { baseTs: 5 }), doc([]), 'superseded deleted'],
+  ['an edit of a routine the server deleted is superseded as deleted', edit('a', R, { baseTs: 5 }), doc([], gone), 'superseded deleted'],
+  ['a seed routine edit (base null) of a routine the server deleted is superseded as deleted', edit('a', R), doc([], gone), 'superseded deleted'],
+  ['a create applies while the id is absent and never deleted', edit('a', R, { baseTs: 0 }), doc([routine('b', 'B', { _ts: 1 })]), 'applied'],
+  ['a create of an id the server deleted is superseded as deleted', edit('a', R, { baseTs: 0 }), doc([], gone), 'superseded deleted'],
+  ['a create of an id a reset wiped is superseded as deleted', edit('a', R, { baseTs: 0 }), doc([], wiped), 'superseded deleted'],
+  ['a create the copy already holds is done', edit('a', R, { baseTs: 0 }), doc([{ ...R, _ts: 9 }]), 'done'],
+  ['a create whose sent the copy holds is rebased', edit('a', routine('a', 'Newer'), { baseTs: 0, sent: R }), doc([{ ...R, _ts: 9 }]), 'rebased'],
+  ['a create over another routine with that id is superseded as changed', edit('a', R, { baseTs: 0 }), doc([routine('a', 'Web', { _ts: 9 })]), 'superseded changed'],
+  ['a delete of a routine the copy lacks is done', edit('a', ROUTINE_DELETED, { baseTs: 5 }), doc([]), 'done'],
+  ['a delete of a routine the server deleted is done', edit('a', ROUTINE_DELETED, { baseTs: 5 }), doc([], gone), 'done'],
+  ['a delete on the base it saw applies', edit('a', ROUTINE_DELETED, { baseTs: 5 }), doc([routine('a', 'Old', { _ts: 5 })]), 'applied'],
+  ['a delete over a web change is superseded as changed', edit('a', ROUTINE_DELETED, { baseTs: 5 }), doc([routine('a', 'Web', { _ts: 7 })]), 'superseded changed'],
+  ['a delete of a seed routine (base null, no _ts) applies', edit('a', ROUTINE_DELETED), doc([routine('a', 'Old')]), 'applied'],
+  ['a create then a delete before any sync is done', edit('a', ROUTINE_DELETED, { baseTs: 0 }), doc([]), 'done'],
+  ['a seed routine edit (base null) of a routine with no _ts applies', edit('a', R), doc([routine('a', 'Old')]), 'applied'],
+])('%s', (_name, row, state, verdict) => {
+  expect(verdictOf(applyEdits(state, [row]))).toBe(verdict)
+})
+
+test('a create goes in at the end of the list with its _ts, _f and _u taken off; the copy is not changed', () => {
+  const list = [routine('b', 'B', { _ts: 1 }), null, 'x']
+  const state = { unit: 'lb', routines: list }
+  const before = JSON.stringify(state)
+  // a copied routine carries its source's stamps (routines.js copyRoutine)
+  const made = { ...routine('n', 'New'), _ts: 4, _f: { name: 4 }, _u: { name: [1] } }
+  const r = applyEdits(state, [edit('n', made, { baseTs: 0, t: 3 })])
+  expect(r.applied).toEqual([{ kind: 'routine', key: 'n', t: 3 }])
+  expect(r.state.routines).toEqual([...list, routine('n', 'New')])
+  expect(r.state.routines[0]).toBe(list[0])
+  expect(JSON.stringify(state)).toBe(before)
+  expect(entryValue(r.state, 'routine', 'n')).toEqual(routine('n', 'New'))
+  // a document with no routines yet starts the list
+  expect(applyEdits({ unit: 'lb' }, [edit('n', made, { baseTs: 0 })]).state).toEqual({ unit: 'lb', routines: [routine('n', 'New')] })
+})
+
+test('a delete runs the shared deleteRoutine on a clone: the routine, its weekdays (an emptied one dropped) and its dayPlan pins go; the loop and the queue stay', () => {
+  const state = {
+    unit: 'lb',
+    routines: [routine('a', 'Old', { _ts: 5 }), routine('b', 'B', { _ts: 2 })],
+    week: { 1: ['a', 'b'], 3: ['a'], 5: 'b' },
+    dayPlan: { '2026-11-12': 'a', '2026-11-13': 'b', '2026-11-14': 'rest' },
+    rotation: { id: 'loop', sequence: ['a', 'b'] },
+    queue: { ids: ['a', 'b'], since: '2026-11-01' },
+  }
+  const before = structuredClone(state)
+  const r = applyEdits(state, [edit('a', ROUTINE_DELETED, { baseTs: 5, t: 2 })])
+  expect(r.applied).toEqual([{ kind: 'routine', key: 'a', t: 2 }])
+  expect(r.state).toEqual({
+    ...before,
+    routines: [before.routines[1]],
+    week: { 1: ['b'], 5: 'b' },
+    dayPlan: { '2026-11-13': 'b', '2026-11-14': 'rest' },
+  })
+  expect(state).toEqual(before)
+  expect(entryValue(r.state, 'routine', 'a')).toBe(ROUTINE_DELETED)
+})
+
+test('a delete keeps every entry that is not a routine where it was', () => {
+  const list = [null, routine('a', 'A', { _ts: 1 }), 'x', routine('b', 'B')]
+  const r = applyEdits({ routines: list }, [edit('a', ROUTINE_DELETED, { baseTs: 1 })])
+  expect(r.state.routines).toEqual([null, 'x', routine('b', 'B')])
+})
+
+// A delete takes a routine out of the list: a later edit in the same call must still land on its
+// own routine, not on the one that moved into its place.
+test('a delete, an edit and a create in one call each land on their own routine', () => {
+  const state = { routines: [routine('a', 'A', { _ts: 1 }), routine('b', 'B', { _ts: 2 }), routine('c', 'C', { _ts: 3 })] }
+  const r = applyEdits(state, [
+    edit('a', ROUTINE_DELETED, { baseTs: 1, t: 1 }),
+    edit('c', routine('c', 'C2'), { baseTs: 3, t: 2 }),
+    edit('n', routine('n', 'N'), { baseTs: 0, t: 3 }),
+  ])
+  expect(r.applied.map((x) => x.key)).toEqual(['a', 'c', 'n'])
+  expect(r.state.routines).toEqual([routine('b', 'B', { _ts: 2 }), routine('c', 'C2', { _ts: 3 }), routine('n', 'N')])
+})
+
+test('unsafe is false for a create and for a delete: a create of any routine goes, and a delete takes every copy of an id held twice', () => {
+  const twinsFirst = withEx([backoff, heavy, row])
+  expect(applyEdits({ routines: [] }, [edit('a', twinsFirst, { baseTs: 0 })]).applied).toHaveLength(1)
+  const list = [routine('a', 'First', { _ts: 1 }), routine('b', 'B'), routine('a', 'Second', { _ts: 1 })]
+  const r = applyEdits({ routines: list }, [edit('a', ROUTINE_DELETED, { baseTs: 1, t: 4 })])
+  expect(r.applied).toEqual([{ kind: 'routine', key: 'a', t: 4 }])
+  expect(r.state.routines).toEqual([routine('b', 'B')])
+})
+
+test('entryValue of a routine the document lacks is the marker, never undefined; stampOf it is 0, deleted on the server or not', () => {
+  for (const state of [{ routines: [] }, {}, { routines: [], ...gone }, { routines: [], ...wiped }]) {
+    expect(entryValue(state, 'routine', 'a')).toBe(ROUTINE_DELETED)
+    expect(stampOf(state, 'routine', 'a')).toBe(0)
+  }
+  expect(entryValue({ routines: [R] }, 'routine', 'a')).toBe(R)
+})
+
+test('isRoutineDeleted knows the marker, and a copy of it read back from the store, and nothing else', () => {
+  expect(isRoutineDeleted(ROUTINE_DELETED)).toBe(true)
+  expect(isRoutineDeleted(JSON.parse(JSON.stringify(ROUTINE_DELETED)))).toBe(true)
+  expect(Object.isFrozen(ROUTINE_DELETED)).toBe(true)
+  for (const v of [R, { id: 'a', deleted: true }, { deleted: 'yes' }, [], null, undefined, true]) expect(isRoutineDeleted(v)).toBe(false)
+})
+
+// The routines' order (7E-A): one row, kind and key routineOrder, whose value is every routine id
+// as the phone lists them, on edited.routineOrder (the server moves that stamp when the routines
+// both sides hold change order: api/sync-stamps.js orderMoved). It settles after every routine row,
+// on the document they leave, so it can place a routine created in the same push.
+const order = (ids, extra = {}) => ({ kind: 'routineOrder', key: 'routineOrder', baseTs: null, value: ids, sent: null, t: 1, ...extra })
+const listed = (...ids) => ids.map((id) => routine(id, id.toUpperCase(), { _ts: 1 }))
+const idsIn = (state) => state.routines.map((r) => (r && typeof r === 'object' ? r.id : r))
+
+test('routineOrder: an order on the stamp it saw applies: the routines in its order, each the same object, edited left to the server', () => {
+  const state = { unit: 'lb', routines: listed('a', 'b', 'c'), edited: { routineOrder: 5 }, workouts: [{ id: 'w1' }] }
+  const before = JSON.stringify(state)
+  const r = applyEdits(state, [order(['c', 'a', 'b'], { baseTs: 5, t: 3 })])
+  expect(r.applied).toEqual([{ kind: 'routineOrder', key: 'routineOrder', t: 3 }])
+  expect(r.state.routines).toEqual([state.routines[2], state.routines[0], state.routines[1]])
+  r.state.routines.forEach((x) => expect(state.routines).toContain(x))
+  expect(r.state.edited).toBe(state.edited)
+  expect(r.state.workouts).toBe(state.workouts)
+  expect(JSON.stringify(state)).toBe(before)
+  // what markSent records: every id, as the order goes
+  expect(entryValue(r.state, 'routineOrder', 'routineOrder')).toEqual(['c', 'a', 'b'])
+  // with no stamp on record, a null base applies
+  expect(applyEdits({ routines: listed('a', 'b') }, [order(['b', 'a'])]).applied).toHaveLength(1)
+})
+
+test('routineOrder: done when the copy holds the listed routines it has in the order listed, whatever else it holds or lacks', () => {
+  const state = { routines: listed('a', 'x', 'b'), edited: { routineOrder: 9 } }
+  const r = applyEdits(state, [order(['a', 'gone', 'b'], { baseTs: 5, t: 2 })])
+  expect(r.done).toEqual([{ kind: 'routineOrder', key: 'routineOrder', t: 2 }])
+  expect(r.state).toBe(state)
+  // nothing to order is nothing to do
+  expect(applyEdits({}, [order(['a'], { baseTs: 5 })]).done).toHaveLength(1)
+})
+
+test('routineOrder: the copy holding the order this phone sent, with a newer order waiting, rebases it onto the landed stamp', () => {
+  const state = { routines: listed('b', 'a', 'c'), edited: { routineOrder: 12 } }
+  const r = applyEdits(state, [order(['c', 'b', 'a'], { baseTs: 5, sent: ['b', 'a', 'c'], t: 8 })])
+  expect(r.rebased).toEqual([{ kind: 'routineOrder', key: 'routineOrder', t: 8, baseTs: 12 }])
+  expect(r.applied).toEqual([])
+  expect(idsIn(r.state)).toEqual(['c', 'b', 'a'])
+})
+
+test('routineOrder: an order the web moved since the base is superseded as changed, and nothing moves', () => {
+  const state = { routines: listed('b', 'a', 'c'), edited: { routineOrder: 9 } }
+  const r = applyEdits(state, [order(['c', 'a', 'b'], { baseTs: 5, t: 4 })])
+  expect(r.superseded).toEqual([{ kind: 'routineOrder', key: 'routineOrder', t: 4, reason: 'changed' }])
+  expect(r.state).toBe(state)
+})
+
+test('routineOrder: the order places a routine created in the same push, settling after it whatever order the rows come in', () => {
+  const state = { routines: listed('a', 'b'), edited: { routineOrder: 5 } }
+  const r = applyEdits(state, [order(['a', 'n', 'b'], { baseTs: 5, t: 1 }), edit('n', routine('n', 'New'), { baseTs: 0, t: 2 })])
+  expect(r.applied).toEqual([{ kind: 'routine', key: 'n', t: 2 }, { kind: 'routineOrder', key: 'routineOrder', t: 1 }])
+  expect(r.state.routines).toEqual([state.routines[0], routine('n', 'New'), state.routines[1]])
+})
+
+// b moved above a, then a deleted: without a the order already holds, but the server's copy holds
+// it only once the delete lands, and the delete may yet lose to the web.
+test('routineOrder: an order that holds only on the document the other rows leave is not done: it goes with them', () => {
+  const state = { routines: listed('a', 'b', 'c'), edited: { routineOrder: 5 } }
+  const rows = [order(['b', 'a', 'c'], { baseTs: 5, t: 1 }), edit('a', ROUTINE_DELETED, { baseTs: 1, t: 2 })]
+  const r = applyEdits(state, rows)
+  expect(r.done).toEqual([])
+  expect(r.applied).toEqual([{ kind: 'routine', key: 'a', t: 2 }, { kind: 'routineOrder', key: 'routineOrder', t: 1 }])
+  expect(idsIn(r.state)).toEqual(['b', 'c'])
+  // the delete refused (the web changed a first): the order still goes, b above a
+  const web = { routines: [routine('a', 'Web', { _ts: 9 }), ...listed('b', 'c')], edited: { routineOrder: 5 } }
+  const refused = applyEdits(web, rows)
+  expect(refused.superseded).toEqual([{ kind: 'routine', key: 'a', t: 2, reason: 'changed' }])
+  expect(refused.applied).toEqual([{ kind: 'routineOrder', key: 'routineOrder', t: 1 }])
+  expect(idsIn(refused.state)).toEqual(['b', 'a', 'c'])
+  // once the server's copy holds it, it is done
+  expect(applyEdits({ ...state, routines: listed('b', 'c') }, rows).done).toEqual([{ kind: 'routine', key: 'a', t: 2 }, { kind: 'routineOrder', key: 'routineOrder', t: 1 }])
+})
+
+// sent is recorded before the push goes, so it can name an order that never landed: the server's
+// copy must hold it for a rebase, or the phone's order would stand on the web's stamp.
+test('routineOrder: a sent order that holds only on the document the other rows leave is not rebased onto the web\'s stamp', () => {
+  // the phone sent b above a (it did not land); the web then put a first; a delete of a waits
+  const web = { routines: listed('a', 'b', 'c'), edited: { routineOrder: 9 } }
+  const r = applyEdits(web, [order(['b', 'a', 'c'], { baseTs: 5, sent: ['b', 'a', 'c'], t: 1 }), edit('a', ROUTINE_DELETED, { baseTs: 1, t: 2 })])
+  expect(r.rebased).toEqual([])
+  expect(r.superseded).toEqual([{ kind: 'routineOrder', key: 'routineOrder', t: 1, reason: 'changed' }])
+})
+
+test('routineOrder: an id the copy does not hold is skipped', () => {
+  const state = { routines: listed('a', 'b') }
+  const r = applyEdits(state, [order(['gone', 'b', 'a'])])
+  expect(r.applied).toHaveLength(1)
+  expect(r.state.routines).toEqual([state.routines[1], state.routines[0]])
+})
+
+test('routineOrder: a routine the copy has and the order lacks keeps its place after the listed ones, entries that are not routines too', () => {
+  const state = { routines: [routine('w1', 'W1'), routine('a', 'A'), null, routine('w2', 'W2'), 'x', routine('b', 'B')] }
+  const r = applyEdits(state, [order(['b', 'a'])])
+  expect(idsIn(r.state)).toEqual(['b', 'a', 'w1', null, 'w2', 'x'])
+  // once there, the same order is done
+  expect(applyEdits(r.state, [order(['b', 'a'])]).done).toHaveLength(1)
+})
+
+test('routineOrder: an id the copy holds twice moves as one, nothing lost or doubled, and then reads as done', () => {
+  const list = [routine('a', 'First'), routine('b', 'B'), routine('a', 'Second')]
+  const r = applyEdits({ routines: list }, [order(['b', 'a'])])
+  expect(r.state.routines).toEqual([list[1], list[0], list[2]])
+  expect(applyEdits(r.state, [order(['b', 'a'])]).done).toHaveLength(1)
+  expect(applyEdits(r.state, [order(['b', 'a', 'b'])]).done).toHaveLength(1)
+})
+
+test('routineOrder: stampOf is edited.routineOrder, null when there is none', () => {
+  expect(stampOf({ edited: { routineOrder: 7, unit: 3 } }, 'routineOrder', 'routineOrder')).toBe(7)
+  expect(stampOf({ edited: { unit: 3 } }, 'routineOrder', 'routineOrder')).toBeNull()
+  expect(stampOf({}, 'routineOrder', 'routineOrder')).toBeNull()
+})
+
+// Guards on the routine kind's create and delete (Task 1's review).
+test('a routine saved again after its own delete went out is never brought back by a rebase, deleted on the server or not', () => {
+  const back = routine('a', 'Back')
+  for (const state of [doc([], gone), doc([])]) {
+    const r = applyEdits(state, [edit('a', back, { baseTs: 5, sent: ROUTINE_DELETED, t: 3 })])
+    expect(verdictOf(r)).toBe('superseded deleted')
+    expect(r.state).toBe(state)
+  }
+})
+
+test('an edit whose routine is no longer in the document being written is not written at all', () => {
+  // two rows for one routine, which only a caller's own list can hold (the store keeps one per
+  // key): the delete has taken the routine out by the time the edit is written
+  const state = doc([routine('a', 'A', { _ts: 5 }), routine('b', 'B')])
+  const r = applyEdits(state, [edit('a', ROUTINE_DELETED, { baseTs: 5, t: 1 }), edit('a', R, { baseTs: 5, t: 2 })])
+  expect(r.state.routines).toEqual([routine('b', 'B')])
+  expect(Object.keys(r.state.routines)).toEqual(['0'])
+})
+
+test('a routine row whose routine has another id than its key is never sent: a create would go again on every sync, an edit would remove its routine', () => {
+  const state = doc([routine('b', 'B', { _ts: 1 })])
+  for (const value of [routine('x', 'Other'), { name: 'No id' }]) {
+    const r = applyEdits(state, [edit('a', value, { baseTs: 0, t: 3 })])
+    expect(r.superseded).toEqual([{ kind: 'routine', key: 'a', t: 3, reason: 'unsafe' }])
+    expect(r.state).toBe(state)
+  }
+  const edited = applyEdits(state, [edit('b', routine('x', 'B2'), { baseTs: 1, t: 4 })])
+  expect(edited.superseded).toEqual([{ kind: 'routine', key: 'b', t: 4, reason: 'unsafe' }])
+  expect(edited.state).toBe(state)
+})
+
+test('a delete clones only what it cleans: every other part of the document keeps its identity, and no key is added', () => {
+  const state = {
+    unit: 'lb',
+    routines: [routine('a', 'A', { _ts: 5 }), routine('b', 'B')],
+    week: { 1: ['a', 'b'] },
+    dayPlan: { '2026-11-12': 'a' },
+    workouts: [{ id: 'w1', entries: [{ id: 'bench', sets: [{ w: 60, r: 5 }] }] }],
+    rotation: { id: 'loop', sequence: ['a', 'b'] },
+    queue: { ids: ['a', 'b'] },
+    exWeights: { bench: { w: 60 } },
+  }
+  const before = structuredClone(state)
+  const r = applyEdits(state, [edit('a', ROUTINE_DELETED, { baseTs: 5 })])
+  for (const k of ['workouts', 'rotation', 'queue', 'exWeights']) expect(r.state[k], k).toBe(state[k])
+  expect(r.state).toEqual({ ...before, routines: [routine('b', 'B')], week: { 1: ['b'] }, dayPlan: {} })
+  expect(state).toEqual(before)
+  const bare = applyEdits({ routines: [routine('a', 'A', { _ts: 5 })] }, [edit('a', ROUTINE_DELETED, { baseTs: 5 })]).state
+  expect(bare).toEqual({ routines: [] })
+  expect(Object.keys(bare)).toEqual(['routines'])
+})
+
+test('a deleted.routines record of either sign counts as deleted: a create over an add-back on record (negative) is not sent', () => {
+  const r = applyEdits(doc([], { deleted: { routines: { a: -6 } } }), [edit('a', R, { baseTs: 0, t: 2 })])
+  expect(r.superseded).toEqual([{ kind: 'routine', key: 'a', t: 2, reason: 'deleted' }])
+  expect(r.applied).toEqual([])
 })

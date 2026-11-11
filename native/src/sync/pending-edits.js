@@ -1,4 +1,4 @@
-// Local edits waiting to sync: routines, nutrition days and settings (edit-guard.js settles each
+// Local edits waiting to sync: routines, their order, nutrition days and settings (edit-guard.js settles each
 // kind). One row per kind and key holding what this phone last saved for it; acked_at is NULL until
 // the push has settled it, superseded_at is set when the server moved on first (the outbox is the
 // rows with both NULL). resent is 1 on an acked row resetAcked put back in the outbox (a resend to
@@ -26,8 +26,13 @@ CREATE TABLE IF NOT EXISTS pending_edits (
 
 const isMap = v => !!v && typeof v === 'object' && !Array.isArray(v)
 // What each kind's value is: a routine and a day are objects; a setting (nutritionTargets,
-// supplements) an object or a list.
-const VALUE_OK = { routine: isMap, nutritionDay: isMap, setting: v => !!v && typeof v === 'object' }
+// supplements) an object or a list; the routines' order a list of routine ids.
+const VALUE_OK = {
+  routine: isMap,
+  routineOrder: v => Array.isArray(v) && v.every(id => typeof id === 'string'),
+  nutritionDay: isMap,
+  setting: v => !!v && typeof v === 'object',
+}
 // A setting row replaces state[key] whole in a push (edit-guard.js): only the two the Nutrition
 // screen owns, never a container such as routines, nutritionDays or edited.
 const SETTING_KEYS = new Set(['nutritionTargets', 'supplements'])
@@ -37,7 +42,11 @@ function normalized(edit) {
   if (!Object.hasOwn(VALUE_OK, edit.kind)) throw new Error('pending edit needs a known kind')
   if (typeof edit.key !== 'string' || edit.key === '') throw new Error('pending edit needs a key')
   if (edit.kind === 'setting' && !SETTING_KEYS.has(edit.key)) throw new Error('pending setting edit needs nutritionTargets or supplements as its key')
-  if (!VALUE_OK[edit.kind](edit.value)) throw new Error(`pending ${edit.kind} edit needs an object value`)
+  // one order for all the routines
+  if (edit.kind === 'routineOrder' && edit.key !== 'routineOrder') throw new Error('pending routineOrder edit needs routineOrder as its key')
+  if (!VALUE_OK[edit.kind](edit.value)) {
+    throw new Error(`pending ${edit.kind} edit needs ${edit.kind === 'routineOrder' ? 'a list of routine ids as its value' : 'an object value'}`)
+  }
   if (!Number.isFinite(edit.t)) throw new Error('pending edit needs a time')
   if (edit.baseTs != null && !Number.isFinite(edit.baseTs)) throw new Error('pending edit baseTs must be a number')
   return { kind: edit.kind, key: edit.key, baseTs: edit.baseTs ?? null, value: JSON.parse(JSON.stringify(edit.value)), t: edit.t, fresh: edit.fresh === true }

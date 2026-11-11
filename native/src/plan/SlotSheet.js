@@ -59,11 +59,12 @@ function Stepper({ field, disabled, onStep }) {
 // One exercise of a routine. Mounted per open (the caller keys it), so the draft starts from the
 // slot each time. Save hands the draft (slotForm) to onSave; Cancel writes nothing. Swap acts at
 // once through the caller; while the draft has changes it waits for Save or Cancel, so typed
-// numbers are never dropped. (Move up and Move down are on the routine screen's rows.) `message`
-// is a failed save. While the draft's Step is invalid (the web's rule), Save is refused and the
-// web's message shows under the rules. `onDismiss` runs once the sheet has gone (the caller
+// numbers are never dropped. Remove asks the caller, which confirms before anything is written.
+// (Move up and Move down are on the routine screen's rows.) `message` is a failed save or a
+// removal the caller refused. While the draft's Step is invalid (the web's rule), Save is refused
+// and the web's message shows under the rules. `onDismiss` runs once the sheet has gone (the caller
 // pushes the picker then).
-export default function SlotSheet({ visible, title, slot, routine, message, busy, onSave, onSwap, onClose, onDismiss }) {
+export default function SlotSheet({ visible, title, slot, routine, message, busy, onSave, onSwap, onRemove, onClose, onDismiss }) {
   const [initial] = useState(() => slotForm(slot, routine))
   const [form, setForm] = useState(initial)
   const view = sheetView(form, slot, routine)
@@ -129,6 +130,7 @@ export default function SlotSheet({ visible, title, slot, routine, message, busy
           ) : (
             <SecondaryButton label="Close" accessibilityHint="Closes this sheet." disabled={busy} onPress={close} />
           )}
+          <SecondaryButton label="Remove from routine" accessibilityHint="Asks before removing this exercise from the routine." disabled={busy} onPress={onRemove} />
         </ScrollView>
       </View>
     </Modal>

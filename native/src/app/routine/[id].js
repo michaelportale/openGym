@@ -1,27 +1,41 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { Alert, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { color, radius, space, touch } from '../../theme/tokens'
+import { color, radius, size, space, touch } from '../../theme/tokens'
 import AppText from '../../ui/AppText'
 import Card from '../../ui/Card'
 import IconButton from '../../ui/IconButton'
+import NativeSymbol from '../../ui/NativeSymbol'
 import { SAVE_FAILED } from '../../ui/messages'
 import Notices from '../../ui/Notices'
 import ScaleButton from '../../ui/ScaleButton'
+import SecondaryButton from '../../ui/SecondaryButton'
 import { usePushLock } from '../../ui/use-push-lock'
 import { routeId } from '../../exercises/route-id'
 import SlotSheet from '../../plan/SlotSheet'
 import { announce } from '../../plan/announce'
 import { waitForPick } from '../../plan/pick-relay'
+import {
+  DELETE_BODY, DELOAD_SUBTITLE, DELOAD_TITLE, MISSING_ROUTINE, NAME_BLANK, PAIR_TO_AUTHOR,
+  REFUSED_SUPERSET, REFUSED_TWIN, UNSAFE_EDIT, deleteTitle, findRoutine, indexOfKey, leaveForPlan, movedText,
+  noticeLines, removeTitle, routineAuthoring, routineProgChoices, routineView, savedRoutine,
+} from '../../plan/plan-view'
+import { duplicateRoutine, renamedRoutine, routineWithDeload, routineWithProg, routineWithSlotAdded, routineWithSlotRemoved } from '../../plan/routine-edit'
 import { createWriteChain } from '../../plan/write-chain'
-import { MISSING_ROUTINE, UNSAFE_EDIT, findRoutine, indexOfKey, movedText, noticeLines, routineView, savedRoutine } from '../../plan/plan-view'
 import { moveSlot, stepInvalid, swapSlot } from '../../plan/slot-edit'
 import { usePlan } from '../../plan/use-plan'
+import { sameRoutine } from '../../sync/edit-guard'
 
 const slotAt = (routine, index) => {
   const slot = Array.isArray(routine?.ex) ? routine.ex[index] : null
   return slot && typeof slot === 'object' ? slot : null
+}
+
+const refusalText = refused => {
+  if (refused === 'superset') return REFUSED_SUPERSET
+  if (refused === 'twin') return REFUSED_TWIN
+  return UNSAFE_EDIT
 }
 
 function MoveButton({ label, hint, glyph, disabled, onPress }) {
@@ -40,9 +54,11 @@ function MoveButton({ label, hint, glyph, disabled, onPress }) {
   )
 }
 
-// One routine: its name, its own progression rule, and one row per exercise with Move up and Move
-// down. The row opens the exercise sheet (Swap and the fields). Every write lands on the routine as
-// this screen shows it, with the copy's or the snapshot's routine as the base the guard checks.
+// One routine: its name, its progression rule, deload, and one row per exercise with Move up and
+// Move down. The row opens the exercise sheet (Swap, Remove, and the fields). Every write lands
+// on the routine as this screen shows it, with the copy's or the snapshot's routine as the base
+// the guard checks. Duplicate, delete and add exercise need a server copy; rename, remove, the
+// rule and deload do not.
 export default function RoutineScreen() {
   const params = useLocalSearchParams()
   const router = useRouter()
@@ -67,17 +83,22 @@ export default function RoutineScreen() {
   // Each stored routine this screen renders: the chain's last write stays ahead until one holds it.
   useEffect(() => { chain.seen({ routine: stored }) }, [chain, stored])
   const routine = stored ? ahead?.routine ?? stored : null
-  // Read when a tap lands or the picker answers, not when the handler was made.
+  // Read when a tap lands or the picker answers, not when the handler was made. remove and baseOf
+  // are read after a delete has waited out the chain, so they are this render's, not the alert's.
   const latest = useRef(null)
-  latest.current = { stored: { routine: stored, base, fresh }, state: plan.state }
+  latest.current = { stored: { routine: stored, base, fresh }, state: plan.state, copy: plan.copy, create: plan.create, remove: plan.remove, baseOf: plan.baseOf }
   // The routine the next edit builds on, with its base: the chain's while one runs, else the store's.
   const current = () => chain.from(latest.current.stored)
+  // Set once Delete is confirmed, before the chain is waited out. Later commits are not started,
+  // so one cannot land after the delete and put the routine back.
+  const deleting = useRef(false)
 
   const view = useMemo(
     () => (ready ? routineView(plan.state, id, { unit: 'lb', names: plan.names, routine: ahead?.routine ?? null }) : null),
     [ready, plan.state, plan.names, id, ahead]
   )
   const notices = useMemo(() => noticeLines(plan.notices).filter(n => n.rid === id), [plan.notices, id])
+  const authoring = routineAuthoring(plan.copy)
 
   // A refusal or a failed write, shown until the next action, and said to VoiceOver (announce).
   // A failed write's message goes once a later write in the chain lands.
@@ -90,11 +111,22 @@ export default function RoutineScreen() {
     if (r.ok) setMessage(m => (m === SAVE_FAILED ? null : m))
     else say(SAVE_FAILED)
   }
+  const landedUnlessDeleting = r => {
+    if (!deleting.current) landed(r)
+  }
+  // Null once a delete is confirmed: the chain is not asked to write.
+  const startCommit = next => (deleting.current ? null : chain.commit(next))
+  // A whole-routine edit on what is on screen. Skipped when nothing changed, and once Delete is confirmed.
+  const commitRoutine = (from, next) => {
+    if (!next || !from?.routine || sameRoutine(from.routine, next)) return null
+    return startCommit({ routine: next, base: from.base, fresh: from.fresh })
+  }
 
   // Saved at once; an unsafe result is never saved. The row's buttons carry its slot's key, and the
   // slot is found where it is when the tap lands (a VoiceOver user's second tap on the same button
   // moves the same exercise, not whichever moved into its place); gone, the tap does nothing.
   const onRowMove = (key, name, dir) => {
+    if (deleting.current) return
     setMessage(null)
     const from = current()
     const index = indexOfKey(from.routine, key)
@@ -104,7 +136,9 @@ export default function RoutineScreen() {
       say(UNSAFE_EDIT)
       return
     }
-    chain.commit({ routine: result.routine, base: from.base, fresh: from.fresh }).then(landed)
+    const pending = startCommit({ routine: result.routine, base: from.base, fresh: from.fresh })
+    if (!pending) return
+    pending.then(landedUnlessDeleting)
     announce(movedText(name, index, result.at, result.routine.ex.length))
   }
 
@@ -142,6 +176,7 @@ export default function RoutineScreen() {
 
   const onSave = async form => {
     // The sheet refuses Save while the Step is invalid; nothing is written then either way.
+    if (deleting.current) return
     if (!live || stepInvalid(form, slotAt(sheet.routine, sheet.index), sheet.routine)) return
     const next = savedRoutine(sheet.routine, sheet.index, form)
     if (!next) {
@@ -149,7 +184,16 @@ export default function RoutineScreen() {
       return
     }
     patch({ busy: true, message: null })
-    const result = await chain.commit({ routine: next, base: sheet.base, fresh: sheet.fresh })
+    const pending = startCommit({ routine: next, base: sheet.base, fresh: sheet.fresh })
+    if (!pending) {
+      patch({ busy: false })
+      return
+    }
+    const result = await pending
+    if (deleting.current) {
+      patch({ busy: false })
+      return
+    }
     if (result.ok) {
       patch({ busy: false, open: false })
       setMessage(m => (m === SAVE_FAILED ? null : m))
@@ -160,21 +204,170 @@ export default function RoutineScreen() {
   }
 
   const onSwap = () => {
-    if (!live) return
+    if (!live || deleting.current) return
     const { index, slotId, title } = sheet
     const token = waitForPick(exId => {
+      if (deleting.current) return 'gone'
       const now = current()
       if (slotAt(now.routine, index)?.id !== slotId) return 'gone'
       const result = swapSlot(now.routine, index, exId, latest.current.state, now.base)
       if (!result) return 'same'
       if (result.unsafe) return 'unsafe'
-      chain.commit({ routine: result.routine, base: now.base, fresh: now.fresh }).then(landed)
+      const pending = startCommit({ routine: result.routine, base: now.base, fresh: now.fresh })
+      if (!pending) return 'gone'
+      pending.then(landedUnlessDeleting)
       return 'saved'
     })
     afterClose.current = () => guard(() => router.push({ pathname: '/routine-pick', params: { token, name: title } }))
     close()
     clearTimeout(fallback.current)
     fallback.current = setTimeout(runAfterClose, 700)
+  }
+
+  // The confirm and the refusal live here. The button lives on the sheet. A removal that lands
+  // closes the sheet; one the shared edit refuses is said, and shown on the sheet while it is up.
+  const onAskRemove = () => {
+    if (!sheet?.open || sheet.busy || deleting.current) return
+    const { index, slotId, title } = sheet
+    Alert.alert(removeTitle(title), undefined, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: () => confirmRemove(index, slotId) },
+    ])
+  }
+  const confirmRemove = async (index, slotId) => {
+    if (deleting.current) return
+    const now = current()
+    if (slotAt(now.routine, index)?.id !== slotId) return
+    const result = routineWithSlotRemoved(now.routine, index, now.base)
+    if (!result?.routine) {
+      const text = refusalText(result?.refused)
+      say(text)
+      patch({ message: text })
+      return
+    }
+    patch({ busy: true, message: null })
+    const pending = startCommit({ routine: result.routine, base: now.base, fresh: now.fresh })
+    if (!pending) {
+      patch({ busy: false })
+      return
+    }
+    const saved = await pending
+    if (deleting.current) {
+      patch({ busy: false })
+      return
+    }
+    if (saved.ok) {
+      patch({ busy: false, open: false })
+      setMessage(null)
+    } else {
+      patch({ busy: false, message: SAVE_FAILED })
+      announce(SAVE_FAILED)
+    }
+  }
+
+  const shownName = () => {
+    const name = current().routine?.name
+    return typeof name === 'string' ? name : ''
+  }
+  const applyRename = name => {
+    if (deleting.current) return
+    const from = current()
+    if (!from.routine) return
+    setMessage(null)
+    const next = renamedRoutine(from.routine, name)
+    if (!next) {
+      say(NAME_BLANK)
+      return
+    }
+    const pending = commitRoutine(from, next)
+    if (pending) pending.then(landedUnlessDeleting)
+  }
+  const onRename = () => {
+    if (deleting.current) return
+    Alert.prompt('Rename', undefined, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Rename', onPress: applyRename },
+    ], 'plain-text', shownName())
+  }
+  // A new routine, not an edit of this one: it does not go through the write chain.
+  const onDuplicate = async () => {
+    const live = latest.current
+    if (deleting.current || !routineAuthoring(live.copy).canDuplicate) return
+    const from = current()
+    if (!from.routine) return
+    setMessage(null)
+    const copy = duplicateRoutine(from.routine)
+    const result = await live.create(copy)
+    if (deleting.current) return
+    if (result.ok) guard(() => router.push('/routine/' + encodeURIComponent(copy.id)))
+    else say(SAVE_FAILED)
+  }
+  const confirmDelete = async () => {
+    if (deleting.current) return
+    deleting.current = true
+    setMessage(null)
+    await chain.settled()
+    const { remove, baseOf } = latest.current
+    const result = await remove(id, baseOf(id).base)
+    if (result.ok) {
+      leaveForPlan(router)
+      return
+    }
+    deleting.current = false
+    say(SAVE_FAILED)
+  }
+  const onAskDelete = () => {
+    if (deleting.current || !routineAuthoring(latest.current.copy).canDelete) return
+    const name = shownName()
+    Alert.alert(deleteTitle(name), DELETE_BODY, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: confirmDelete },
+    ])
+  }
+  const onMenu = () => {
+    if (deleting.current) return
+    const buttons = [{ text: 'Rename', onPress: onRename }]
+    if (authoring.canDuplicate) buttons.push({ text: 'Duplicate', onPress: onDuplicate })
+    if (authoring.canDelete) buttons.push({ text: 'Delete', style: 'destructive', onPress: onAskDelete })
+    buttons.push({ text: 'Cancel', style: 'cancel' })
+    Alert.alert(shownName() || 'Routine', undefined, buttons)
+  }
+
+  const onAdd = () => {
+    if (deleting.current || !routineAuthoring(latest.current.copy).canAdd) return
+    setMessage(null)
+    guard(() => {
+      // The swap picker is reused, with no mode of its own. An empty name hides its "Replacing …"
+      // line: an add replaces nothing, and the pick is appended.
+      const name = ''
+      const token = waitForPick(exId => {
+        if (deleting.current || !routineAuthoring(latest.current.copy).canAdd) return 'gone'
+        const now = current()
+        if (!now.routine) return 'gone'
+        const next = routineWithSlotAdded(now.routine, exId)
+        const pending = startCommit({ routine: next, base: now.base, fresh: now.fresh })
+        if (!pending) return 'gone'
+        pending.then(landedUnlessDeleting)
+        return 'saved'
+      })
+      router.push({ pathname: '/routine-pick', params: { token, name } })
+    })
+  }
+  const onProg = value => {
+    if (deleting.current) return
+    const from = current()
+    if (!from.routine) return
+    setMessage(null)
+    const pending = commitRoutine(from, routineWithProg(from.routine, value))
+    if (pending) pending.then(landedUnlessDeleting)
+  }
+  const onDeload = on => {
+    if (deleting.current) return
+    const from = current()
+    if (!from.routine) return
+    setMessage(null)
+    const pending = commitRoutine(from, routineWithDeload(from.routine, on))
+    if (pending) pending.then(landedUnlessDeleting)
   }
 
   const body = () => {
@@ -190,10 +383,39 @@ export default function RoutineScreen() {
         ) : (
           <>
             <AppText variant="title" accessibilityRole="header" style={styles.pad}>{view.name}</AppText>
-            <AppText variant="body" color={color.textSecondary} style={styles.pad}>{view.progLabel}</AppText>
+            {authoring.canAdd ? null : (
+              <AppText variant="body" color={color.textSecondary} style={styles.pad}>{PAIR_TO_AUTHOR}</AppText>
+            )}
             {message ? (
               <AppText variant="body" accessibilityRole="alert" accessibilityLiveRegion="polite" style={styles.pad}>{message}</AppText>
             ) : null}
+            <Card style={styles.list}>
+              <View style={styles.rules}>
+                <AppText variant="label" color={color.textSecondary} accessibilityRole="header">Progression</AppText>
+                {routineProgChoices(routine).map(c => (
+                  <Pressable
+                    key={c.value}
+                    accessibilityRole="button"
+                    accessibilityLabel={c.label}
+                    accessibilityState={{ selected: c.selected }}
+                    onPress={() => onProg(c.value)}
+                    style={[styles.choice, c.selected && styles.choiceOn]}
+                  >
+                    <AppText variant="body" style={styles.grow}>{c.label}</AppText>
+                    {c.selected ? <NativeSymbol name="checkmark.circle.fill" tintColor={color.accent} size={size.icon} /> : null}
+                  </Pressable>
+                ))}
+              </View>
+            </Card>
+            <Card style={styles.list}>
+              <View style={styles.deload}>
+                <View style={styles.grow}>
+                  <AppText variant="heading">{DELOAD_TITLE}</AppText>
+                  <AppText variant="body" color={color.textSecondary}>{DELOAD_SUBTITLE}</AppText>
+                </View>
+                <Switch accessibilityLabel={DELOAD_TITLE} value={routine.excludeFromProgression === true} onValueChange={onDeload} />
+              </View>
+            </Card>
             <Card style={styles.list}>
               {view.rows.length ? view.rows.map((row, i) => (
                 <View key={row.key} style={[styles.row, i > 0 && styles.divided]}>
@@ -217,6 +439,11 @@ export default function RoutineScreen() {
                 <AppText variant="body" color={color.textSecondary} style={styles.empty}>No exercises in this routine.</AppText>
               )}
             </Card>
+            {authoring.canAdd ? (
+              <View style={styles.pad}>
+                <SecondaryButton label="Add exercise" accessibilityLabel="Add exercise" accessibilityHint="Opens the exercise list to add one at the end." onPress={onAdd} />
+              </View>
+            ) : null}
           </>
         )}
       </>
@@ -228,6 +455,9 @@ export default function RoutineScreen() {
       <ScrollView style={styles.scroll} contentContainerStyle={[styles.content, { paddingTop: insets.top + space.sm }]}>
         <View style={styles.back}>
           <IconButton label="Back" accessibilityLabel="Back" onPress={() => router.back()} />
+          {view ? (
+            <IconButton symbol="ellipsis" accessibilityLabel="Routine actions" accessibilityHint="Opens actions for this routine." onPress={onMenu} />
+          ) : null}
         </View>
         {body()}
       </ScrollView>
@@ -242,6 +472,7 @@ export default function RoutineScreen() {
           busy={sheet.busy}
           onSave={onSave}
           onSwap={onSwap}
+          onRemove={onAskRemove}
           onClose={close}
           onDismiss={runAfterClose}
         />
@@ -253,9 +484,24 @@ export default function RoutineScreen() {
 const styles = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: color.bg },
   content: { paddingBottom: space.xl * 2, gap: space.md },
-  back: { paddingHorizontal: space.lg, alignItems: 'flex-start' },
+  back: { paddingHorizontal: space.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   pad: { marginHorizontal: space.lg },
   list: { marginHorizontal: space.lg, borderRadius: radius.md },
+  rules: { gap: space.sm, padding: space.md },
+  choice: {
+    minHeight: touch.row,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: color.stroke,
+    backgroundColor: color.control
+  },
+  choiceOn: { borderColor: color.accent, backgroundColor: color.surfaceActive },
+  deload: { flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md },
   row: { flexDirection: 'row', alignItems: 'center', paddingRight: space.xs },
   divided: { borderTopColor: color.stroke, borderTopWidth: StyleSheet.hairlineWidth },
   rowBody: { flex: 1, minHeight: touch.row, flexDirection: 'row', alignItems: 'center', gap: space.md, paddingHorizontal: space.md, paddingVertical: space.sm },
