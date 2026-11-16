@@ -116,5 +116,9 @@ export default defineConfig({
       } : {})
     }
   },
-  build: { chunkSizeWarningLimit: 1500 }
+  build: { chunkSizeWarningLimit: 1500 },
+  // Node 25+ ships its own Web Storage: a `localStorage` getter on globalThis that returns
+  // undefined without --localstorage-file. It shadows happy-dom's, so every test touching
+  // localStorage failed on a current Node while CI (Node 22) stayed green. Off in the workers.
+  test: { execArgv: ['--no-experimental-webstorage'] }
 })
