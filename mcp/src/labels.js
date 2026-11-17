@@ -4,7 +4,7 @@ import { MUSCLE_NAME, MUSCLES } from '../../frontend/src/lib/muscles.js'
 import { modeOf, fmtSec, setLabel } from '../../frontend/src/lib/history.js'
 import { POLICY_NAME } from '../../frontend/src/lib/progression.js'
 import { isPyramid, pyramidLabel } from '../../frontend/src/lib/pyramid.js'
-import { fmtDate, fmtNum, fmtDur } from '../../frontend/src/lib/format.js'
+import { fmtNum, fmtDur } from '../../frontend/src/lib/format.js'
 
 // Apply {0},{1},… substitutions to the template strings the lib returns.
 export function fmt(template, args) {
@@ -37,11 +37,6 @@ export function muscleName(slug) {
 
 export function policyName(policy) {
   return POLICY_NAME[policy] || policy
-}
-
-export function friendlyDate(iso) {
-  if (!iso) return null
-  return fmtDate(iso)
 }
 
 export function friendlyDuration(ms) {
