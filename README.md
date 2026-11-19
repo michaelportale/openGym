@@ -3,6 +3,24 @@
 A self-hosted gym and body-weight tracker, forked from
 [DuarteSantos8/openGym](https://github.com/DuarteSantos8/openGym).
 
+## What I built
+
+openGym is [Duarte Santos's project](https://github.com/DuarteSantos8/openGym), and this repository
+is a fork of it. The parts below are mine and do not exist upstream:
+
+- [`native/`](native): an iPhone app built with Expo and React Native.
+  - Apple Health sync ([`native/src/health`](native/src/health)): writes finished workouts and
+    weigh-ins to Apple Health and imports body-weight readings.
+  - WHOOP ([`native/src/whoop`](native/src/whoop)): a card showing recovery, strain and recent cardio.
+  - Training rules ([`native/src/science`](native/src/science)): warm-ups, rep ranges, effort and
+    progression. Each rule has a matching entry in [`docs/science`](docs/science/README.md), and a
+    test fails if the two differ.
+- `api/whoop-client.js`, `api/whoop-vault.js`, `api/whoop-view.js` and the `/api/whoop` routes:
+  WHOOP OAuth with rotating-token refresh, and each user's tokens kept in their own AES-256-GCM
+  encrypted file.
+
+`native/` has 2,596 tests: `cd api && npm ci --omit=optional`, then `cd native && npm ci && npm test`.
+
 ## Running it
 
 ```sh
