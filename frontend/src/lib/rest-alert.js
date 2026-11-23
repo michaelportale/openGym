@@ -212,9 +212,6 @@ export function askNotifPermissionOnce() {
   return askP
 }
 
-// Test seam: a fresh launch.
-export function _resetNotifAsk() { askP = null }
-
 async function deliver(alert) {
   // The end passed while the call waited its turn (a slow bridge, a frozen WebView): nothing to
   // ring any more, and the plugin would refuse it ("at must be in the future").
